@@ -678,8 +678,8 @@ export class ProjectImportBase {
     free(): void;
     [Symbol.dispose](): void;
     /**
-     * Consumes the upload on every outcome. `bed` is empty or `[width, depth]`
-     * in millimetres. Production IDs come from a 32-byte random `id_seed`;
+     * Consumes the upload on every outcome. `bed` is empty or the printable
+     * area `[x_min, y_min, x_max, y_max]` in printer millimetres. Production IDs come from a 32-byte random `id_seed`;
      * `id_namespace` selects deterministic `import:<namespace>:<kind>-<n>` IDs.
      */
     prepare_model(upload: ProjectModelUpload, filename: Uint16Array, imported_at: Uint16Array, bed: Float64Array, drop_to_bed: boolean, id_seed: Uint8Array, id_namespace?: string | null): ProjectImportPreview;

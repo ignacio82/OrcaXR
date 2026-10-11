@@ -7,7 +7,7 @@
     },
     {
       "path": "web/src/workspace/ProfilePreflightConstraints.ts",
-      "sha256": "f06a7ddfa8b7d4fdbbcd6fa264c2cb513294c3cc51c26f27cb351ccf1d55c45e"
+      "sha256": "77db44fc917e073c2f53df27c0285eab7a3038f39aac09605b86544c3dc4b945"
     },
     {
       "path": "web/src/workspace/AuthoredSlicingTarget.ts",
@@ -27,7 +27,7 @@
     },
     {
       "path": "contracts/project-intents.json",
-      "sha256": "84411431c35f1dab9c447564782e31436e16d286df571769489dbb04402945f2"
+      "sha256": "05903db367fa9d2d9257e2a5cb48613c39601a4f8574dd1522e76618154322fd"
     }
   ],
   "stringVectorKeys": [

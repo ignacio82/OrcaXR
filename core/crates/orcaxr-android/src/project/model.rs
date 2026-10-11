@@ -111,10 +111,11 @@ pub(super) fn import_prepare_model(
 ) -> Result<()> {
     let filename = chars(env, &filename)?;
     let imported_at = chars(env, &imported_at)?;
-    let bed_size_mm = match env.get_array_length(&bed).map_err(|_| "invalid_options")? {
+    // The printable area `[x_min, y_min, x_max, y_max]`, or none.
+    let bed_area_mm = match env.get_array_length(&bed).map_err(|_| "invalid_options")? {
         0 => None,
-        2 => {
-            let mut values = [0.0; 2];
+        4 => {
+            let mut values = [0.0; 4];
             env.get_double_array_region(&bed, 0, &mut values)
                 .map_err(|_| "invalid_options")?;
             if !values.iter().all(|v| v.is_finite()) {
@@ -171,7 +172,7 @@ pub(super) fn import_prepare_model(
             filename,
             imported_at,
             placement: Placement {
-                bed_size_mm,
+                bed_area_mm,
                 drop_to_bed: drop_to_bed != 0,
             },
             ids,

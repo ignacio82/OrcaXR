@@ -7,8 +7,10 @@
 //   the canonical mesh payload `CanonicalWorkspaceController` stores — read
 //   back from a real controller's repository;
 // - plans: what a primitive or a helper volume becomes in a project — the
-//   object (`importGeometry` through `prepareGeometryObject`, placed on the
-//   bed by `geometryBedPlacement` as `OrcaWorkspace.addPrimitive` places it,
+//   object (`importGeometry` through `prepareGeometryObject`, centred on the
+//   printable area — from the bed corner, the U1's offset 0.5 × 1 mm or one
+//   far from the corner — by `geometryBedPlacement` as
+//   `OrcaWorkspace.addPrimitive` places it,
 //   its mesh shared with an asset the project already holds) or the volume
 //   added to the selected object, with the IDs drawn in the browser's order —
 //   each run on a real controller in a recorded state, then undone;
@@ -87,14 +89,20 @@ function findVolume(project, volumeId) {
 }
 const descriptorOf = (project, assetId) => project.sourceAssets.find((asset) => asset.id === assetId);
 
-/** `OrcaWorkspace.addPrimitive` on [bed]: the shape, named after its file, centred on the bed and resting on it. */
-async function addPrimitive(controller, kind, sizeMm, bed, plateId) {
+/** A printable area: `WorkspaceBed.areaMm`. */
+const area = (xMin, yMin, xMax, yMax) => ({ xMin, yMin, xMax, yMax });
+const BED = area(0, 0, 200, 200);
+const U1 = area(0.5, 1, 270.5, 271);
+const FAR = area(180, 150, 300, 260);
+
+/** `OrcaWorkspace.addPrimitive` on [area]: the shape, named after its file, centred on the printable area and resting on the bed. */
+async function addPrimitive(controller, kind, sizeMm, area, plateId) {
   const geometry = primitiveGeometry(kind, sizeMm);
   const name = primitiveFileName(kind);
   return controller.importGeometry(geometry, {
     name,
     sourceFilename: name,
-    transform: geometryBedPlacement(geometry, { x: bed[0], y: bed[1] }),
+    transform: geometryBedPlacement(geometry, area),
     ...(plateId ? { plateId } : {}),
   });
 }
@@ -116,12 +124,12 @@ async function meshCase(kind, sizeMm) {
   try {
     let assetId;
     if (kind === "helper-cube") {
-      const block = await addPrimitive(controller, "cube", 20, [200, 200]);
+      const block = await addPrimitive(controller, "cube", 20, BED);
       controller.selectInstance(block.instanceId);
       const added = await controller.addHelperVolume("parameter-modifier", sizeMm);
       assetId = findVolume(state(controller), added.volumeId).source.assetId;
     } else {
-      assetId = (await addPrimitive(controller, kind, sizeMm, [200, 200])).assetId;
+      assetId = (await addPrimitive(controller, kind, sizeMm, BED)).assetId;
     }
     const payload = controller.assets.get(assetId);
     const isDefault = kind === "helper-cube" ? sizeMm === 10 : sizeMm === 20;
@@ -197,7 +205,7 @@ async function plan(entry, controller, ids, kind, fields, run) {
 async function primitivePlan(entry, controller, ids, fields) {
   await plan(entry, controller, ids, "primitive", fields, async (request) => {
     clockValue = request.importedAt;
-    const result = await addPrimitive(controller, request.kind, request.sizeMm, request.bedMm, request.plateId ?? undefined);
+    const result = await addPrimitive(controller, request.kind, request.sizeMm, request.areaMm, request.plateId ?? undefined);
     const project = state(controller);
     return {
       assetJson: canonicalStringify(descriptorOf(project, result.assetId)),
@@ -222,29 +230,31 @@ async function helperPlan(entry, controller, ids, fields) {
   });
 }
 
-const U1 = [270.5, 271];
 const ROLES = ["parameter-modifier", "support-enforcer", "support-blocker", "negative-volume"];
 
-// An empty project: every shape on a default and a U1 bed, an unknown plate, no target.
+// An empty project: every shape on a default bed, the U1's area and a far one, an unknown plate, no target.
 {
   const ids = new QueuedIds(0xe0);
   const controller = controllerFor(ids);
   const entry = record("empty", controller);
   const plateId = state(controller).activePlateId;
   for (const kind of PRIMITIVE_KINDS)
-    await primitivePlan(entry, controller, ids, { kind, sizeMm: 20, bedMm: [200, 200], plateId: null, importedAt: clockValue });
-  await primitivePlan(entry, controller, ids, { kind: "cube", sizeMm: 20, bedMm: U1, plateId, importedAt: "2026-10-10T08:30:15.250Z" });
-  await primitivePlan(entry, controller, ids, { kind: "disc", sizeMm: 7.25, bedMm: [0.5, 1e6], plateId: null, importedAt: clockValue });
-  await primitivePlan(entry, controller, ids, { kind: "torus", sizeMm: 123.456, bedMm: [-40, 33.3], plateId: null, importedAt: clockValue });
+    await primitivePlan(entry, controller, ids, { kind, sizeMm: 20, areaMm: BED, plateId: null, importedAt: clockValue });
+  await primitivePlan(entry, controller, ids, { kind: "cube", sizeMm: 20, areaMm: U1, plateId, importedAt: "2026-10-10T08:30:15.250Z" });
+  await primitivePlan(entry, controller, ids, { kind: "disc", sizeMm: 7.25, areaMm: area(0, 0, 0.5, 1e6), plateId: null, importedAt: clockValue });
+  await primitivePlan(entry, controller, ids, { kind: "torus", sizeMm: 123.456, areaMm: area(0, 0, -40, 33.3), plateId: null, importedAt: clockValue });
   await primitivePlan(entry, controller, ids, {
     kind: "cube",
     sizeMm: 20,
-    bedMm: [200, 200],
+    areaMm: BED,
     plateId: "import:plate:missing",
     importedAt: clockValue,
   });
   await helperPlan(entry, controller, ids, { role: "parameter-modifier", sizeMm: 10, primary: null });
   await helperPlan(entry, controller, ids, { role: "support-blocker", sizeMm: 10, primary: { kind: "plate", id: plateId } });
+  // Areas offset from the bed corner: centred on the midpoint of their corners.
+  await primitivePlan(entry, controller, ids, { kind: "cone", sizeMm: 20, areaMm: FAR, plateId: null, importedAt: clockValue });
+  await primitivePlan(entry, controller, ids, { kind: "sphere", sizeMm: 9.5, areaMm: area(-120.25, -80.5, 99.75, 120.5), plateId: null, importedAt: clockValue });
   controller.dispose();
 }
 
@@ -253,7 +263,7 @@ const ROLES = ["parameter-modifier", "support-enforcer", "support-blocker", "neg
   const ids = new QueuedIds(0xe1);
   const controller = controllerFor(ids);
   const plateOne = state(controller).activePlateId;
-  const cube = await addPrimitive(controller, "cube", 20, [200, 200]);
+  const cube = await addPrimitive(controller, "cube", 20, BED);
   const torus = await addPrimitive(controller, "torus", 20, U1);
   await controller.addPlate(undefined, { activate: false });
   const plates = state(controller).plates;
@@ -266,13 +276,13 @@ const ROLES = ["parameter-modifier", "support-enforcer", "support-blocker", "neg
   assert.equal(state(controller).activePlateId, plateOne);
   const entry = record("primitives", controller);
   for (const kind of PRIMITIVE_KINDS)
-    await primitivePlan(entry, controller, ids, { kind, sizeMm: 20, bedMm: [200, 200], plateId: null, importedAt: clockValue });
-  await primitivePlan(entry, controller, ids, { kind: "torus", sizeMm: 20, bedMm: U1, plateId: null, importedAt: clockValue });
-  await primitivePlan(entry, controller, ids, { kind: "cube", sizeMm: 19.999, bedMm: U1, plateId: null, importedAt: clockValue });
+    await primitivePlan(entry, controller, ids, { kind, sizeMm: 20, areaMm: BED, plateId: null, importedAt: clockValue });
+  await primitivePlan(entry, controller, ids, { kind: "torus", sizeMm: 20, areaMm: U1, plateId: null, importedAt: clockValue });
+  await primitivePlan(entry, controller, ids, { kind: "cube", sizeMm: 19.999, areaMm: U1, plateId: null, importedAt: clockValue });
   if (plates.length > 1)
-    await primitivePlan(entry, controller, ids, { kind: "cube", sizeMm: 20, bedMm: U1, plateId: plates[1].id, importedAt: clockValue });
+    await primitivePlan(entry, controller, ids, { kind: "cube", sizeMm: 20, areaMm: U1, plateId: plates[1].id, importedAt: clockValue });
   // Fewer IDs than a new asset needs are enough when the mesh is shared.
-  await primitivePlan(entry, controller, ids, { kind: "cube", sizeMm: 20, bedMm: U1, plateId: null, importedAt: clockValue, idCount: 3 });
+  await primitivePlan(entry, controller, ids, { kind: "cube", sizeMm: 20, areaMm: U1, plateId: null, importedAt: clockValue, idCount: 3 });
   for (const role of ROLES) {
     await helperPlan(entry, controller, ids, { role, sizeMm: 10, primary: { kind: "instance", id: cube.instanceId } });
   }
@@ -347,8 +357,8 @@ function objectFor(project, objectId, assetPayload, triangleCount) {
       objectFor(project, objectId, payload, 12);
     }
   });
-  await primitivePlan(entry, controller, ids, { kind: "cube", sizeMm: 20, bedMm: [200, 200], plateId: null, importedAt: clockValue });
-  await primitivePlan(entry, controller, ids, { kind: "cone", sizeMm: 20, bedMm: [200, 200], plateId: null, importedAt: clockValue });
+  await primitivePlan(entry, controller, ids, { kind: "cube", sizeMm: 20, areaMm: BED, plateId: null, importedAt: clockValue });
+  await primitivePlan(entry, controller, ids, { kind: "cone", sizeMm: 20, areaMm: BED, plateId: null, importedAt: clockValue });
   controller.dispose();
 }
 
@@ -374,20 +384,23 @@ for (const [name, seed, compatible] of [
       objectFor(project, "import:object:indexed", indexed, 12);
     }
   });
-  await primitivePlan(entry, controller, ids, { kind: "cube", sizeMm: 20, bedMm: [200, 200], plateId: null, importedAt: clockValue });
+  await primitivePlan(entry, controller, ids, { kind: "cube", sizeMm: 20, areaMm: BED, plateId: null, importedAt: clockValue });
   controller.dispose();
 }
 
 // Requests the exchange itself refuses (shape, IDs, kinds), whatever the state.
 const planRefusals = [
   ["primitive", "not JSON", "{"],
-  ["primitive", "helper kind", { kind: "helper-cube", sizeMm: 10, bedMm: [200, 200], plateId: null, importedAt: clockValue, ids: [] }],
-  ["primitive", "too few IDs", { kind: "sphere", sizeMm: 20, bedMm: [200, 200], plateId: null, importedAt: clockValue, ids: ["import:id:1"] }],
-  ["primitive", "unstable ID", { kind: "sphere", sizeMm: 20, bedMm: [200, 200], plateId: null, importedAt: clockValue, ids: ["a", "b", "c", "d"] }],
-  ["primitive", "bed of one side", { kind: "cube", sizeMm: 20, bedMm: [200], plateId: null, importedAt: clockValue, ids: [] }],
-  ["primitive", "infinite bed", { kind: "cube", sizeMm: 20, bedMm: [200, null], plateId: null, importedAt: clockValue, ids: [] }],
-  ["primitive", "missing time", { kind: "cube", sizeMm: 20, bedMm: [200, 200], plateId: null, ids: [] }],
-  ["primitive", "numeric plate", { kind: "cube", sizeMm: 20, bedMm: [200, 200], plateId: 1, importedAt: clockValue, ids: [] }],
+  ["primitive", "helper kind", { kind: "helper-cube", sizeMm: 10, areaMm: BED, plateId: null, importedAt: clockValue, ids: [] }],
+  ["primitive", "too few IDs", { kind: "sphere", sizeMm: 20, areaMm: BED, plateId: null, importedAt: clockValue, ids: ["import:id:1"] }],
+  ["primitive", "unstable ID", { kind: "sphere", sizeMm: 20, areaMm: BED, plateId: null, importedAt: clockValue, ids: ["a", "b", "c", "d"] }],
+  ["primitive", "area without a corner", { kind: "cube", sizeMm: 20, areaMm: { xMin: 0, yMin: 0, xMax: 200 }, plateId: null, importedAt: clockValue, ids: [] }],
+  ["primitive", "infinite area", { kind: "cube", sizeMm: 20, areaMm: { ...BED, yMax: null }, plateId: null, importedAt: clockValue, ids: [] }],
+  ["primitive", "area as a list", { kind: "cube", sizeMm: 20, areaMm: [0, 0, 200, 200], plateId: null, importedAt: clockValue, ids: [] }],
+  ["primitive", "area with an extra corner", { kind: "cube", sizeMm: 20, areaMm: { ...BED, zMin: 0 }, plateId: null, importedAt: clockValue, ids: [] }],
+  ["primitive", "bed size", { kind: "cube", sizeMm: 20, bedMm: [200, 200], plateId: null, importedAt: clockValue, ids: [] }],
+  ["primitive", "missing time", { kind: "cube", sizeMm: 20, areaMm: BED, plateId: null, ids: [] }],
+  ["primitive", "numeric plate", { kind: "cube", sizeMm: 20, areaMm: BED, plateId: 1, importedAt: clockValue, ids: [] }],
   ["helper", "unknown role", { role: "model", sizeMm: 10, primary: null, ids: [] }],
   ["helper", "zero size", { role: "support-blocker", sizeMm: 0, primary: null, ids: [] }],
   ["helper", "unknown kind", { role: "support-blocker", sizeMm: 10, primary: { kind: "thing", id: "x" }, ids: [] }],
@@ -434,7 +447,9 @@ const journey = await (async () => {
   assert.deepEqual(await controller.openCanonical3mf(serialized.bytes), []);
   const opened = controller.captureProjectExportGuard();
   const config = controller.getSlicingConfiguration().config;
+  // The bed the workspace draws, and the area it places and fills on (`OrcaWorkspace.placementBed`).
   const bed = workspaceBed(config).sizeMm;
+  const { areaMm } = workspaceBed(config);
   const plateId = state(controller).activePlateId;
 
   const observe = () => {
@@ -457,7 +472,7 @@ const journey = await (async () => {
   }
   const primitive = (kind) =>
     step({ kind: "primitive", primitive: kind }, async () => {
-      const added = await addPrimitive(controller, kind, 20, bed);
+      const added = await addPrimitive(controller, kind, 20, areaMm);
       return { objectId: added.objectId, instanceId: added.instanceId, reusedAsset: added.reusedAsset };
     });
   const choose = (instanceId) =>
@@ -491,7 +506,7 @@ const journey = await (async () => {
       if (!primary) return null;
       const plate = controller.getSummary().plates.find((candidate) => candidate.id === plateId);
       const keepOut = wipeTowerKeepOut(controller.getSlicingConfiguration().config, plate?.wipeTower);
-      return controller.fillPlateWithInstances(primary, { bedSizeMm: bed, ...(keepOut ? { exclusions: [keepOut] } : {}) });
+      return controller.fillPlateWithInstances(primary, { bedAreaMm: areaMm, ...(keepOut ? { exclusions: [keepOut] } : {}) });
     });
   await choose(made.disc.instanceId);
   await fill();
@@ -542,6 +557,7 @@ const sources = [
   "web/src/workspace/geometryPlacement.ts",
   "web/src/workspace/CanonicalWorkspaceController.ts",
   "web/src/workspace/WorkspaceBed.ts",
+  "web/src/workspace/ProfilePreflightConstraints.ts",
   "web/src/project/meshCodec.ts",
   "web/src/project/commands.ts",
   "web/src/project/objects/commands.ts",

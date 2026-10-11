@@ -61,7 +61,7 @@ fn arrangements_and_fills_match_the_browser() {
         };
         assert_eq!(actual, case["reply"].as_str().unwrap(), "{name}");
     }
-    assert_eq!((arranged, filled), (14, 14));
+    assert_eq!((arranged, filled), (18, 17));
     let request = wire::decode_arrange_request(f["cases"][0]["arrange"].as_str().unwrap()).unwrap();
     session.dispose();
     assert_eq!(

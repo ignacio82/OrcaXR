@@ -35,8 +35,11 @@ impl IdKind {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Placement {
-    /// Printable area in millimetres; the import is centred on it as a group.
-    pub bed_size_mm: Option<[f64; 2]>,
+    /// The printable area in printer millimetres, `[x_min, y_min, x_max,
+    /// y_max]` (`ModelImportPlacement.bedAreaMm`); the import is centred on
+    /// the midpoint of its corners as a group. A printer may offset it from
+    /// the bed corner.
+    pub bed_area_mm: Option<[f64; 4]>,
     /// Rest the import on the bed instead of keeping its source Z.
     pub drop_to_bed: bool,
 }
@@ -616,9 +619,9 @@ pub fn stage(
 
 fn place(transform: &Transform, bounds: &Bounds, scale: f64, placement: Placement) -> Transform {
     let mut translation = transform.translation_mm.map(|v| v * scale);
-    if let Some([width, depth]) = placement.bed_size_mm {
-        translation[0] += width / 2.0 - (bounds.min_x + bounds.max_x) / 2.0;
-        translation[1] += depth / 2.0 - (bounds.min_y + bounds.max_y) / 2.0;
+    if let Some([x_min, y_min, x_max, y_max]) = placement.bed_area_mm {
+        translation[0] += (x_min + x_max) / 2.0 - (bounds.min_x + bounds.max_x) / 2.0;
+        translation[1] += (y_min + y_max) / 2.0 - (bounds.min_y + bounds.max_y) / 2.0;
     }
     if placement.drop_to_bed {
         translation[2] -= bounds.min_z;

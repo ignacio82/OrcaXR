@@ -3498,8 +3498,8 @@ export class ProjectImportBase {
         wasm.__wbg_projectimportbase_free(ptr, 0);
     }
     /**
-     * Consumes the upload on every outcome. `bed` is empty or `[width, depth]`
-     * in millimetres. Production IDs come from a 32-byte random `id_seed`;
+     * Consumes the upload on every outcome. `bed` is empty or the printable
+     * area `[x_min, y_min, x_max, y_max]` in printer millimetres. Production IDs come from a 32-byte random `id_seed`;
      * `id_namespace` selects deterministic `import:<namespace>:<kind>-<n>` IDs.
      * @param {ProjectModelUpload} upload
      * @param {Uint16Array} filename

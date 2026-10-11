@@ -2624,15 +2624,17 @@ mesh digest fails the comparison, and a cancellation test publishes nothing.
 `models::stage::stage` then ports `ModelImportParser`'s merge staging: positions
 scaled to millimetres, packed mesh assets (`mesh::encode`) deduplicated against
 the project's existing meshes by digest and mesh layout, unique object names
-(`name (2)` …), group placement centred on the bed and/or dropped to it from the
-bounds of every instance, `orcaxr:importSource`/`orcaxr:sourceMaterial`
+(`name (2)` …), group placement centred on the printable area (`bedAreaMm`, the
+midpoint of its corners; JNI and WASM take it as `[xMin, yMin, xMax, yMax]`)
+and/or dropped to the bed from the bounds of every instance, `orcaxr:importSource`/`orcaxr:sourceMaterial`
 extension data, and every decoder notice as an import repair, dropped field or
 diagnostic with the browser's identifiers. The host supplies the stable-ID source
 and timestamp; staging is private and returns the candidate state, the new asset
 payloads and the notices. `model-stage-vectors.mjs` stages every decoded corpus
 case into an empty project (with and without bed placement), plus chained imports
 into projects that already hold the same mesh and names and into a non-first
-active plate: **237 cases** (235 staged, 2 Float32-overflow refusals) agree on
+active plate, on areas from the bed corner, the U1's and one far from it:
+**241 cases** (239 staged, 2 Float32-overflow refusals) agree on
 ID requests, complete state, asset descriptors and bytes, imported IDs and
 notices.
 
@@ -2649,7 +2651,7 @@ order (blocked, missing acknowledgements, stale base) and executes one undoable
 `Import <filename>` command that replaces the project and asset repository; redo
 restores the exact repository version it produced, undo the previous one.
 `model-transaction-vectors.mjs` runs the real coordinator and parser over a real
-`CommandBus`: **21 transactions** agree on preview, staged bundle, confirmation
+`CommandBus`: **23 transactions** agree on preview, staged bundle, confirmation
 refusals, committed state, ID-ordered assets and history, and undo/redo through
 the session wire protocol restore the exact base and committed states, including
 a deliberately colliding ID namespace that blocks the commit and a stale base.
@@ -3617,7 +3619,12 @@ the wrapper.
 submit — mirror, rotation and scale resets (separately or together), centring
 on the printable area, scale-to-fit, lay flat by a local normal or by a picked
 facet, and drop to bed — from the browser's `transformOperations.ts` through
-`placementExchange.ts`. A `PlacementRequest` answers a `PlacementReply`: a plan
+`placementExchange.ts`. Centring takes the printable area (`areaMm`, its
+corners) and centres on their midpoint; scale-to-fit takes the build volume
+(`volumeMm`, its lowest and highest corners), fits the selection's bounds plus
+upstream's 0.02 mm tolerance into the volume's extents, centres it on the
+volume's centre and rests it on its floor (upstream's
+`print_volume.center()`). Neither assumes the area starts at the bed corner. A `PlacementRequest` answers a `PlacementReply`: a plan
 whose changes are one `setInstanceTransforms` intent (drop to bed also reports
 each instance's lowest point and move), or the operation's own refusal code
 and message, in the browser's order. Bounds walk the browser's way — instances
@@ -3632,13 +3639,15 @@ order rather than the nearest; workspace regression tests cover both.
 Bindings: WASM `ProjectSession.plan_placement`, the JNI export
 `sessionPlacement` and Kotlin `ProjectSession.planPlacement`.
 
-`placement-vectors.mjs` plans 67 requests over the picking scene's plain,
+`placement-vectors.mjs` plans 90 requests over the picking scene's plain,
 rotated and non-uniformly scaled, and mirrored instances — every operation,
-lay flat by five normals per instance and by facets of the sphere, the
-modifier and the terrain — and 17 refusals (empty and repeated selections,
-unknown instances and volumes, facets past a mesh, unusable normals, no
-printable area). Rust, WASM in Node and Chrome and JNI answer all 67 byte for
-byte; 135 Kotlin checks cover the wrapper.
+centring and scale-to-fit on areas and volumes from the bed corner, the U1's
+(offset 0.5 × 1 mm), one far from the corner and a raised floor, lay flat by
+five normals per instance and by facets of the sphere, the modifier and the
+terrain — and 20 refusals (empty and repeated selections, unknown instances
+and volumes, facets past a mesh, unusable normals, no or an inverted area or
+volume). Rust, WASM in Node and Chrome and JNI answer all 90 byte for byte;
+181 Kotlin checks cover the wrapper.
 
 ### Plate arrangement and bed fill
 
@@ -3648,7 +3657,9 @@ instance's canonical footprint (by default the model and support volumes;
 any role set on request). It sorts by depth, then width, then UTF-16 ID; it
 slides past reserved space; it keeps locked and non-printable instances and
 every keep-out region clear; and it centres the packed block when nothing else
-reserves space. An `ArrangeRequest` answers an `ArrangeReply`: the moved
+reserves space. Footprints stay inside the printable area (`bedAreaMm`, its
+corners, which a printer may offset from the bed corner) inset by the bed
+margin. An `ArrangeRequest` answers an `ArrangeReply`: the moved
 instances (one `setInstanceTransforms` intent) with their footprints, those
 that did not fit and those kept in place. "Fill bed with instances" lays copies
 of one instance into the free space row by row without moving anything, up to
@@ -3663,9 +3674,10 @@ Kotlin `ProjectSession.planArrangement` / `planBedFill`.
 `arrange-vectors.mjs` arranges and fills a two-plate scene — the picking
 scene's instances plus boxes of several scaled footprints and a non-printable
 box — with default, tight and roomy spacing, a keep-out region, locked
-instances, a too-small bed and other role sets, and every refusal: 14
-arrangement and 14 fill requests (12 refusals). Rust, WASM in Node and Chrome
-and JNI answer all 28 byte for byte; 57 Kotlin checks cover the wrapper.
+instances, a too-small bed, the U1's area and one far from the bed corner (with
+a tower there) and other role sets, and every refusal: 18 arrangement and 17
+fill requests (14 refusals). Rust, WASM in Node and Chrome and JNI answer all
+35 byte for byte; 71 Kotlin checks cover the wrapper.
 
 ### Wipe-tower auto-placement
 
@@ -3704,33 +3716,46 @@ is the far corner of `printable_area` — the polygon as the profile's flattened
 text (a string as is, a list of strings joined with commas, anything else
 empty), split on `,` and `x` and read with `Number`
 (`bedSizeFromProfile`), each side 200 mm when zero; the plate is drawn from
-the bed corner to it, and models are placed, centred, scaled to fit and
-arranged on it. The printable area is the rectangle the polygon encloses
+the bed corner to it and printer space is mapped with it. A far corner is not
+a size: the printable area is the rectangle the polygon encloses
 (`printableAreaRect`, shared with wipe-tower placement), whose origin a
 printer may offset from the bed corner (the U1's sits at 0.5 × 1 mm). The
 printable height is `parseFloat(String(printable_height))` (a list's first
-entry) when positive. An enabled plate tower keeps a square of its drawn
+entry) when positive. Placements use one box, the one the slice preflight
+checks: the placement area (`areaMm`, where models are placed, centred,
+arranged and filled) is the printable rectangle the preflight reads from the
+configuration's engine strings (`preflightPrintableArea` /
+`slicing::profile::preflight_printable_area`, its exact four-corner rectangle),
+else the printable area, else the bed from its corner; the build volume
+(`volumeMm`, which scale-to-fit fills) is that area from the bed up to the
+height the preflight reads (`preflightPrintableHeight`), else the printable
+height, and none without either. Where the preflight finds no rectangle or
+height it refuses to slice, so a placement never leaves a volume the
+preflight accepts. An enabled plate tower keeps a square of its drawn
 width (`Number(prime_tower_width ?? wipe_tower_width) || 60`) clear when its
 plate is arranged or filled. A project answers from the configuration the
 workspace reads (`getSlicingConfiguration().config`): its base profile when it
 records one, else its configuration — so a project-level override of
 `printable_area` does not move the browser's bed. Requests are canonical JSON
-(`{"config","wipeTower"}` → `{"keepOut","printableArea","printableHeightMm",
-"sizeMm"}`, an absent value or a keep-out edge JSON cannot carry `null`);
+(`{"config","wipeTower"}` → `{"areaMm","keepOut","printableArea",
+"printableHeightMm","sizeMm","volumeMm"}`, the volume as `{"maxMm","minMm"}`
+corners, an absent value or a keep-out edge JSON cannot carry `null`);
 `state_bed_json` answers for one plate of a project. Bindings: WASM
 `workspace_bed` and `CapturedProject.workspace_bed`, the JNI exports
 `workspaceBed`/`projectWorkspaceBed`, Kotlin `WorkspaceBeds.of` and
-`ProjectSnapshot.workspaceBed`.
+`ProjectSnapshot.workspaceBed` (`WorkspaceBed.areaMm`, `volumeMm`).
 
-`workspace-bed-vectors.mjs` reads 74 configurations through the production
+`workspace-bed-vectors.mjs` reads 85 configurations through the production
 module — the bundled printers' areas and heights (as lists and as text), every
 coercion (`;` separators, upper-case `X` read as hexadecimal by `Number`,
 whitespace, exponents, non-string entries, lone surrogates, infinite and huge
-coordinates), 16 height spellings and 21 tower widths — refuses 14 malformed
+coordinates; rectangles the preflight reads and the polygon reader does not,
+polygons only the latter reads, an area far from the bed corner), 16 height
+spellings and 21 tower widths — refuses 14 malformed
 requests, and opens three projects through the real controller (a fresh one,
 towers on two plates, a base profile under an overriding configuration) for
 12 plate beds. Rust, WASM in Node and Chrome and JNI answer all of it byte for
-byte; 178 Kotlin checks cover the wrapper.
+byte; 201 Kotlin checks cover the wrapper.
 
 ### Transform inspector fields
 
@@ -3783,8 +3808,8 @@ acknowledged state: a primitive (`addPrimitive` → `importGeometry` →
 model part and one instance on the active plate (or a requested one, an
 unknown plate refused as `Unknown plate …`), translated by
 `geometryBedPlacement` — now its own module, which `OrcaWorkspace` calls —
-to the bed's centre and onto it from three's Float32 bounds (`Math.min`/`max`
-signed zeros kept); its mesh is shared with an asset the project already
+to the printable area's centre (the midpoint of its corners) and onto the bed
+from three's Float32 bounds (`Math.min`/`max` signed zeros kept); its mesh is shared with an asset the project already
 holds with the same digest, layout and bytes, the first in code-unit ID
 order, or else a new asset recording the file and `importedAt`; a matching
 digest that is not this mesh refuses in the browser's words. A helper volume
@@ -3795,7 +3820,8 @@ such a selection it refuses as the browser does. IDs are drawn in the
 browser's order from the request's list — a primitive's asset only when no
 asset is shared — and the reply says how many it took. The exchange is
 canonical JSON: `{"kind","sizeMm"}` → the payload's bytes;
-`{"bedMm","ids","importedAt","kind","plateId","sizeMm"}` →
+`{"areaMm","ids","importedAt","kind","plateId","sizeMm"}` (the area
+`{"xMax","xMin","yMax","yMin"}`) →
 `{"assetJson","idsUsed","objectJson","plateId","reusedAsset"}`;
 `{"ids","primary","role","sizeMm"}` →
 `{"assetJson","idsUsed","objectId","volumeJson"}`; a refusal is
@@ -3813,12 +3839,13 @@ Bindings: WASM `primitive_payload` and `ProjectSession.plan_primitive_object`
 `primitive-vectors.mjs` reads every payload from a real controller's
 repository — the six shapes at seven sizes and the helper cube at six, 48
 meshes (the seven default ones byte for byte, the rest by length and digest)
-and 11 malformed requests — and runs 35 plans on real controllers in five
+and 11 malformed requests — and runs 37 plans (on areas from the bed corner,
+the U1's and others offset from it) on real controllers in five
 recorded states (an empty project, primitives on two plates with helper
 volumes and a height range, two assets holding the cube's bytes under `a` and
 `B`, and a foreign layout of the same bytes with and without a compatible
-twin; 6 browser refusals), each undone, plus 13 malformed plans. Rust, WASM in
-Node and Chrome and JNI answer all of them byte for byte; 214 Kotlin checks
+twin; 6 browser refusals), each undone, plus 16 malformed plans. Rust, WASM in
+Node and Chrome and JNI answer all of them byte for byte; 221 Kotlin checks
 cover the wrapper. The same corpus records a creation journey a native workspace replays.
 
 ### Paint palette
@@ -5134,15 +5161,16 @@ every project effect (`ProjectSnapshot.workspaceBed` for the active plate, see
 [Workspace bed](#workspace-bed)), so opening a U1 project draws its 270.5 ×
 271 mm plate and a profile choice redraws it; a side the renderer cannot draw
 is held within 1–5000 mm (`PreviewFraming.drawable`). Imports land centred on
-that bed and dropped onto it, as the browser places them, and Preview draws
-the toolpaths on it.
+its placement area and dropped onto the bed, as the browser places them, and
+Preview draws the toolpaths on it.
 
 `ProjectWorkspace` carries out the browser workspace's placement actions over
 the shared planners: `dropToBed`, `mirror`, `resetTransforms` (rotation,
-scale or both), `centerOnPlate`, `scaleToFit` (the bed and the printable
-height; a project stating none refuses with the browser's status words),
-`layOnFace` (a local normal), `layOnFacet` (a picked facet) and
-`arrangePlate` (the bed, keeping the plate's tower clear). Each plans on the
+scale or both), `centerOnPlate` (the bed's placement area), `scaleToFit`
+(its build volume; a project stating no printable height refuses with the
+browser's status words), `layOnFace` (a local normal), `layOnFacet` (a picked
+facet) and `arrangePlate` (the placement area, keeping the plate's tower
+clear). Each plans on the
 actor's authority against exactly the state the current guard names (another
 edit landing first refuses as changed) and submits the plan as one guarded
 `setInstanceTransforms` under the browser's gesture — `mirror:<axis>`,
@@ -5156,18 +5184,72 @@ as an inverted rectangle, which it refuses in the browser's words as it
 refuses that edge.
 
 `placement-edit-vectors.mjs` runs the production `CanonicalWorkspaceController`
-over the browser's canonical 3MF of the picking scene (a U1 printable area,
-its height and a plate tower): 24 placement steps — repeated mirrors that
-coalesce, every reset, a centre that changes nothing, scale to fit twice,
-lay flat by a normal and by two facets, arrange twice, drop to bed twice and
-four refusals — recording after each the semantic hash, undo label and count
-and what the workspace reports, then undoing all 14 entries.
-`ProjectPlacementEditChecks` (127 checks over JNI) opens the same bytes in a
-`ProjectWorkspace` with the browser's hash and bed, applies every step
-through the wrappers with the browser's hash, label, report or refusal after
-each, and undoes back through every recorded state to the opened one; the
-empty project refuses to scale to fit for want of a printable height. Their
-UI and the inspector follow.
+over the browser's canonical 3MF of the picking scene in two scenes — a U1
+printable area (offset 0.5 × 1 mm from the bed corner), and one far from the
+corner (180–300 × 150–260 mm, 100 mm high) where every model starts outside
+it — each with its height and a plate tower: 26 placement steps — repeated
+mirrors that coalesce, every reset, a centre that changes nothing, scale to
+fit twice, lay flat by a normal and by two facets, arrange twice, drop to bed
+twice, scale everything to fit and centre two, and four refusals — recording
+after each the semantic hash, undo label and count, what the workspace
+reports and the instances the live slice preflight (the project as authored)
+finds outside its build volume (none after any placement; the generator
+asserts it), then undoing all 16 entries. `ProjectPlacementEditChecks` (181
+checks over JNI per scene) opens the same bytes in a `ProjectWorkspace` with
+the browser's hash and bed, applies every step through the wrappers with the
+browser's hash, label, report or refusal and the core preflight's verdict
+after each, and undoes back through every recorded state to the opened one;
+the empty project refuses to scale to fit for want of a printable height.
+Their UI and the inspector follow.
+
+### Android placements inside the build volume
+
+A printer's printable area need not start at the bed corner: the Snapmaker
+U1's starts at 0.5 × 1 mm, and the bed's far corner (270.5 × 271 mm) is not its
+size. "Scale to build volume" fitted the selection into a box from the bed
+corner to that far corner and centred it on half the far corner, so a 20 mm
+cube scaled to the U1's 270.05 mm height spanned [0.36, 0.61]–[270.14, 270.39]
+mm and the slice preflight refused it as outside [0.5, 1, 0]–[270.5, 271,
+270.05] mm, in the browser and on Android alike. Every placement now uses the
+box the preflight checks, read once by the workspace bed (see
+[Workspace bed](#workspace-bed)): its placement area (`areaMm`) and build
+volume (`volumeMm`). Scale to fit fills the volume (one factor, upstream's
+0.02 mm tolerance kept as the margin), centred on its centre and resting on
+its floor; Centre on Plate centres on the area's centre; Arrange and Fill Bed
+with Instances lay footprints inside the area inset by the 2 mm margin (on the
+U1 the margin hid the offset; an area farther from the corner was left
+entirely); a model import and the primitives are centred on the area (a
+geometry-only 3MF import too, browser only). Drop to bed and lay flat move
+only Z onto the bed's floor, which the preflight's volume shares, and copies,
+pastes and added instances keep their source's placement: those were already
+right. The wire carries the box: `PlacementCenter.areaMm`,
+`PlacementScaleToFit.volumeMm` (`{minMm,maxMm}`), `ArrangeConstraintsInput.bedAreaMm`,
+the primitive request's `areaMm` and the model import's
+`[xMin, yMin, xMax, yMax]`; `OrcaWorkspace.placementBed` and Android's
+`ProjectWorkspace` (from `ProjectView.bed` / `ProjectSnapshot.workspaceBed`)
+pass the same `areaMm` and `volumeMm`. The drawn plate and XR drag clamps still
+run from the bed corner to the far corner.
+
+`build-volume-vectors.mjs` runs the production controller on an empty
+project per bed — the U1's bundled printable area and 270.05 mm height, and
+the far area with a plate tower — with seeded IDs: three primitives, an
+arrangement, a 64-copy (U1) or 11-copy bed fill, centring the plate, scaling
+the cube and then the plate to the build volume, and a cube import, recording
+after each the semantic hash, undo label, the workspace's report and the
+preflight's verdict (asserted to find nothing outside), then undoing all nine
+entries. `ProjectBuildVolumeChecks` (74 checks over JNI per bed) replays each
+journey in a `ProjectWorkspace` with the browser's IDs through `addPrimitive`,
+`arrangeActivePlate`, `fillBed`, `centerSelectedOnPlate`, `scaleSelectedToFit`
+and `prepareImport`/`commitImport` (its IDs are the device's own, so only its
+label and verdict compare): the browser's hash and label after each, the
+core's live preflight finding no model outside its build volume, and undo
+back to the opened project. The browser's `placement-build-volume.test.ts`
+scales a cube to the U1's bundled build volume and checks the live preflight
+accepts it (and refuses the corner-based box), then places, arranges, fills,
+centres, scales and imports on both beds. There is no new emulator smoke:
+`android-local-slice-smoke.py` scales a cube to the U1's build volume and
+slices it (the preflight refused that slice before this fix). No emulator
+smoke has run for this change.
 
 ### Android transform inspector
 
@@ -7349,6 +7431,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slicin
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/workspace-bed-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/transform-field-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/placement-edit-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/build-volume-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/primitive-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/filament-assignment-vectors.mjs
 node tools/cross-platform/generate-bbs-filament-keys.mjs

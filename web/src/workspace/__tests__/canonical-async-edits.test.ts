@@ -60,9 +60,9 @@ const operations = {
   drop: ({ controller, first }: ReturnType<typeof setup>) => controller.dropInstancesToBed([first.instanceId]),
   mirror: ({ controller, first }: ReturnType<typeof setup>) => controller.mirrorInstances([first.instanceId], 'x'),
   center: ({ controller, first }: ReturnType<typeof setup>) =>
-    controller.centerInstancesOnPlate([first.instanceId], [270, 270]),
+    controller.centerInstancesOnPlate([first.instanceId], { xMin: 0, yMin: 0, xMax: 270, yMax: 270 }),
   fit: ({ controller, first }: ReturnType<typeof setup>) =>
-    controller.scaleInstancesToFitPrintVolume([first.instanceId], { x: 270, y: 270, z: 250 }),
+    controller.scaleInstancesToFitPrintVolume([first.instanceId], { minMm: [0, 0, 0], maxMm: [270, 270, 250] }),
 };
 for (const [name, operation] of Object.entries(operations)) {
   await test(`${name} waits for acknowledgement and retains exact undo/redo and mesh identity`, async () => {

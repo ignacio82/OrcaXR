@@ -3,6 +3,7 @@ import { canonicalStringify, cloneProjectState } from '../domain/canonical';
 import type { AssetId, IdSource } from '../domain/ids';
 import { emptyFacetAnnotations, type ProjectObject, type ProjectVolume, type Transform } from '../domain/model';
 import { encodeIndexedMeshAsset } from '../meshCodec';
+import type { AabbXY } from '../objects/wipeTowerPlacement';
 import {
   MalformedModelSourceError,
   UnsupportedModelFormatError,
@@ -24,8 +25,12 @@ import {
 import type { CancellationToken } from '../ports';
 
 export interface ModelImportPlacement {
-  /** Printable area in millimetres; imported objects are centred on it. */
-  readonly bedSizeMm?: readonly [number, number];
+  /**
+   * The printable area in printer millimetres (`WorkspaceBed.areaMm`);
+   * imported objects are centred on it as a group. A printer may offset it
+   * from the bed corner, so its centre is the midpoint of its corners.
+   */
+  readonly bedAreaMm?: Readonly<AabbXY>;
   /** Rest each imported object on the bed instead of keeping its source Z. */
   readonly dropToBed?: boolean;
 }
@@ -215,9 +220,10 @@ export class ModelImportParser implements ProjectImportParserPort {
       transform.translationMm[1] * unitScaleToMm,
       transform.translationMm[2] * unitScaleToMm,
     ];
-    if (placement?.bedSizeMm) {
-      translation[0] += placement.bedSizeMm[0] / 2 - (bounds.minX + bounds.maxX) / 2;
-      translation[1] += placement.bedSizeMm[1] / 2 - (bounds.minY + bounds.maxY) / 2;
+    if (placement?.bedAreaMm) {
+      const area = placement.bedAreaMm;
+      translation[0] += (area.xMin + area.xMax) / 2 - (bounds.minX + bounds.maxX) / 2;
+      translation[1] += (area.yMin + area.yMax) / 2 - (bounds.minY + bounds.maxY) / 2;
     }
     if (placement?.dropToBed) translation[2] -= bounds.minZ;
     return {

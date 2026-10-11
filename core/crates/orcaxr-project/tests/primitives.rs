@@ -138,9 +138,9 @@ fn plans_match_the_browser() {
             refused += usize::from(reply.starts_with(r#"{"refusal""#));
         }
     }
-    assert_eq!((primitives, helpers, refused), (24, 11, 6));
+    assert_eq!((primitives, helpers, refused), (26, 11, 6));
     let refusals = corpus["planRefusals"].as_array().unwrap();
-    assert_eq!(refusals.len(), 13);
+    assert_eq!(refusals.len(), 16);
     for case in refusals {
         let name = case["state"].as_str().unwrap_or("empty");
         let entry = states.iter().find(|s| s["name"] == name).unwrap();

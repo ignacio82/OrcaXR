@@ -4938,26 +4938,50 @@ object ProjectIntents {
             w.field("axis") { writePlacementAxis(w, v.axis) }
         }
     }
-    data class PlacementCenter(val instanceIds: List<List<Int>>, val bedSizeMm: List<Double>)
+    data class PlacementArea(val xMin: Double, val yMin: Double, val xMax: Double, val yMax: Double)
+    private fun readPlacementArea(v: Any): PlacementArea {
+        val obj = ProjectIntentJson.fields(v, setOf("xMin", "yMin", "xMax", "yMax"), false)
+        return PlacementArea(readFinite(obj.get("xMin")), readFinite(obj.get("yMin")), readFinite(obj.get("xMax")), readFinite(obj.get("yMax")))
+    }
+    private fun writePlacementArea(w: ProjectIntentWriter, v: PlacementArea) {
+        w.obj {
+            w.field("xMin") { writeFinite(w, v.xMin) }
+            w.field("yMin") { writeFinite(w, v.yMin) }
+            w.field("xMax") { writeFinite(w, v.xMax) }
+            w.field("yMax") { writeFinite(w, v.yMax) }
+        }
+    }
+    data class PlacementVolume(val minMm: List<Double>, val maxMm: List<Double>)
+    private fun readPlacementVolume(v: Any): PlacementVolume {
+        val obj = ProjectIntentJson.fields(v, setOf("minMm", "maxMm"), false)
+        return PlacementVolume(readVector(obj.get("minMm")), readVector(obj.get("maxMm")))
+    }
+    private fun writePlacementVolume(w: ProjectIntentWriter, v: PlacementVolume) {
+        w.obj {
+            w.field("minMm") { writeVector(w, v.minMm) }
+            w.field("maxMm") { writeVector(w, v.maxMm) }
+        }
+    }
+    data class PlacementCenter(val instanceIds: List<List<Int>>, val areaMm: PlacementArea)
     private fun readPlacementCenter(v: Any): PlacementCenter {
-        val obj = ProjectIntentJson.fields(v, setOf("instanceIds", "bedSizeMm"), false)
-        return PlacementCenter(readIds(obj.get("instanceIds")), readPlanarPosition(obj.get("bedSizeMm")))
+        val obj = ProjectIntentJson.fields(v, setOf("instanceIds", "areaMm"), false)
+        return PlacementCenter(readIds(obj.get("instanceIds")), readPlacementArea(obj.get("areaMm")))
     }
     private fun writePlacementCenter(w: ProjectIntentWriter, v: PlacementCenter) {
         w.obj {
             w.field("instanceIds") { writeIds(w, v.instanceIds) }
-            w.field("bedSizeMm") { writePlanarPosition(w, v.bedSizeMm) }
+            w.field("areaMm") { writePlacementArea(w, v.areaMm) }
         }
     }
-    data class PlacementScaleToFit(val instanceIds: List<List<Int>>, val volumeMm: List<Double>)
+    data class PlacementScaleToFit(val instanceIds: List<List<Int>>, val volumeMm: PlacementVolume)
     private fun readPlacementScaleToFit(v: Any): PlacementScaleToFit {
         val obj = ProjectIntentJson.fields(v, setOf("instanceIds", "volumeMm"), false)
-        return PlacementScaleToFit(readIds(obj.get("instanceIds")), readVector(obj.get("volumeMm")))
+        return PlacementScaleToFit(readIds(obj.get("instanceIds")), readPlacementVolume(obj.get("volumeMm")))
     }
     private fun writePlacementScaleToFit(w: ProjectIntentWriter, v: PlacementScaleToFit) {
         w.obj {
             w.field("instanceIds") { writeIds(w, v.instanceIds) }
-            w.field("volumeMm") { writeVector(w, v.volumeMm) }
+            w.field("volumeMm") { writePlacementVolume(w, v.volumeMm) }
         }
     }
     data class PlacementLayOnFace(val instanceId: List<Int>, val localNormal: List<Double>)
@@ -5133,14 +5157,14 @@ object ProjectIntents {
             is OptionalVolumeRoleNames.Value -> w.field("value") { writeVolumeRoleNames(w, v.value) }
         } }
     }
-    data class ArrangeConstraintsInput(val bedSizeMm: List<Double>, val spacingMm: OptionalFinite, val bedMarginMm: OptionalFinite, val exclusions: List<ArrangeRegion>, val lockedInstanceIds: List<List<Int>>, val volumeRoles: OptionalVolumeRoleNames)
+    data class ArrangeConstraintsInput(val bedAreaMm: PlacementArea, val spacingMm: OptionalFinite, val bedMarginMm: OptionalFinite, val exclusions: List<ArrangeRegion>, val lockedInstanceIds: List<List<Int>>, val volumeRoles: OptionalVolumeRoleNames)
     private fun readArrangeConstraintsInput(v: Any): ArrangeConstraintsInput {
-        val obj = ProjectIntentJson.fields(v, setOf("bedSizeMm", "spacingMm", "bedMarginMm", "exclusions", "lockedInstanceIds", "volumeRoles"), false)
-        return ArrangeConstraintsInput(readPlanarPosition(obj.get("bedSizeMm")), readOptionalFinite(obj.get("spacingMm")), readOptionalFinite(obj.get("bedMarginMm")), readArrangeRegions(obj.get("exclusions")), readIds(obj.get("lockedInstanceIds")), readOptionalVolumeRoleNames(obj.get("volumeRoles")))
+        val obj = ProjectIntentJson.fields(v, setOf("bedAreaMm", "spacingMm", "bedMarginMm", "exclusions", "lockedInstanceIds", "volumeRoles"), false)
+        return ArrangeConstraintsInput(readPlacementArea(obj.get("bedAreaMm")), readOptionalFinite(obj.get("spacingMm")), readOptionalFinite(obj.get("bedMarginMm")), readArrangeRegions(obj.get("exclusions")), readIds(obj.get("lockedInstanceIds")), readOptionalVolumeRoleNames(obj.get("volumeRoles")))
     }
     private fun writeArrangeConstraintsInput(w: ProjectIntentWriter, v: ArrangeConstraintsInput) {
         w.obj {
-            w.field("bedSizeMm") { writePlanarPosition(w, v.bedSizeMm) }
+            w.field("bedAreaMm") { writePlacementArea(w, v.bedAreaMm) }
             w.field("spacingMm") { writeOptionalFinite(w, v.spacingMm) }
             w.field("bedMarginMm") { writeOptionalFinite(w, v.bedMarginMm) }
             w.field("exclusions") { writeArrangeRegions(w, v.exclusions) }

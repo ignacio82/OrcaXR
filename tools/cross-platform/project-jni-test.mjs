@@ -339,7 +339,7 @@ try {
     (path) => new Uint8Array(readFileSync(new URL(path, root))),
     (text) => new Uint8Array(Buffer.from(text, "base64")),
   );
-  assert.deepEqual([models.cases, models.committed], [21, 15]);
+  assert.deepEqual([models.cases, models.committed], [23, 17]);
   const decodeRows = new Map((await json("testdata/cross-platform/model-import-vectors.json")).cases.map((c) => [c.name, c]));
   const decodeBytes = (name) => Buffer.from(decodeRows.get(name).bytesBase64, "base64");
   const actorImportChecks = jvm.call(
@@ -425,7 +425,7 @@ try {
   // The workspace bed through the JNI exports, then the Kotlin wrapper.
   const bedFixture = await json("testdata/cross-platform/workspace-bed-vectors.json");
   const workspaceBeds = replayWorkspaceBeds(projectJniCore(jvm.call), bedFixture, layout);
-  assert.deepEqual([workspaceBeds.beds, workspaceBeds.bedRefusals, workspaceBeds.projectBeds], [74, 14, 12]);
+  assert.deepEqual([workspaceBeds.beds, workspaceBeds.bedRefusals, workspaceBeds.projectBeds], [85, 14, 12]);
   const workspaceBedChecks = jvm.call(
     "workspaceBedChecks",
     [
@@ -434,7 +434,7 @@ try {
       ...bedFixture.states.flatMap((p) => [`P\t${p.stateJson}`, ...p.beds.map((b) => `Q\t${b.request}\t${b.reply}`)]),
     ].join("\n"),
   );
-  assert.equal(workspaceBedChecks, 178);
+  assert.equal(workspaceBedChecks, 201);
   // The transform inspector's fields through the JNI exports, then the Kotlin wrapper.
   const fieldFixture = await json("testdata/cross-platform/transform-field-vectors.json");
   const transformFields = replayTransformFields(projectJniCore(jvm.call), fieldFixture);
@@ -466,7 +466,7 @@ try {
   // Primitives and helper volumes through the JNI exports, then the Kotlin wrapper.
   const primitiveFixture = await json("testdata/cross-platform/primitive-vectors.json");
   const primitives = replayPrimitives(projectJniCore(jvm.call), primitiveFixture, layout, (text) => Uint8Array.from(Buffer.from(text, "base64")));
-  assert.deepEqual(Object.values(primitives), [48, 7, 11, 35, 13]);
+  assert.deepEqual(Object.values(primitives), [48, 7, 11, 37, 16]);
   const primitiveChecks = jvm.call(
     "primitiveChecks",
     [
@@ -483,7 +483,7 @@ try {
       ]),
     ].join("\n"),
   );
-  assert.equal(primitiveChecks, 214);
+  assert.equal(primitiveChecks, 221);
   // Creation through ProjectWorkspace on a real session: the browser's hash,
   // undo label and count after every primitive, helper volume, instance, fill,
   // copy, cut and paste, then undo back to the opened project.
@@ -501,21 +501,46 @@ try {
     Buffer.from(primitiveFixture.journey.archive, "base64"),
   );
   assert.equal(createEditChecks, 145);
-  // Placement edits through ProjectWorkspace on a real session: the browser's
-  // hash, undo label and report after every edit, and undo back to the start.
+  // Placement edits through ProjectWorkspace on a real session, on the U1's
+  // printable area and on one far from the bed corner: the browser's hash, undo
+  // label, report and preflight verdict after every edit, and undo back to the start.
   const editFixture = await json("testdata/cross-platform/placement-edit-vectors.json");
-  const placementEditChecks = jvm.call(
-    "placementEditChecks",
-    JSON.stringify({
-      bed: editFixture.bed,
-      opened: editFixture.opened,
-      plateId: editFixture.plateId,
-      steps: editFixture.steps,
-      undo: editFixture.undo,
-    }),
-    Buffer.from(editFixture.archive, "base64"),
+  const placementEditChecks = editFixture.scenes.map((scene) =>
+    jvm.call(
+      "placementEditChecks",
+      JSON.stringify({
+        bed: scene.bed,
+        opened: scene.opened,
+        plateId: scene.plateId,
+        steps: scene.steps,
+        undo: scene.undo,
+      }),
+      Buffer.from(scene.archive, "base64"),
+    ),
   );
-  assert.equal(placementEditChecks, 127);
+  assert.deepEqual(placementEditChecks, [181, 181]);
+  // Placements inside the slice preflight's build volume through ProjectWorkspace,
+  // on the U1's bundled area and on a far one: primitives, arrange, bed fill,
+  // centre, scale to fit and an import, none outside, then undo to the start.
+  const volumeFixture = await json("testdata/cross-platform/build-volume-vectors.json");
+  const buildVolumeChecks = volumeFixture.journeys.map((journey) =>
+    jvm.call(
+      "buildVolumeChecks",
+      JSON.stringify({
+        bed: journey.bed,
+        importedAt: journey.importedAt,
+        opened: journey.opened,
+        plateId: journey.plateId,
+        seed: journey.seed,
+        skippedIds: journey.skippedIds,
+        steps: journey.steps,
+        undo: journey.undo,
+      }),
+      Buffer.from(journey.archive, "base64"),
+      decodeBytes("stl-binary/cube"),
+    ),
+  );
+  assert.deepEqual(buildVolumeChecks, [74, 74]);
   // Filament assignment through the JNI exports, then the project's filaments on
   // real sessions: the browser's snapshot, hash and undo label after every
   // assignment of its journey and every undo, and the filament list's slot edits.
@@ -918,19 +943,19 @@ try {
   const placementFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/placement-vectors.json", root)),
   );
-  assert.equal(replayPlacements(projectJniCore(jvm.call), placementFixture, layout).placements, 67);
+  assert.equal(replayPlacements(projectJniCore(jvm.call), placementFixture, layout).placements, 90);
   const placementChecks = jvm.call(
     "placementChecks",
     placementFixture.stateJson,
     ...placementFixture.assets.map((a) => Uint8Array.from(a.bytes)),
     placementFixture.cases.map((c) => `${c.request}\t${c.reply}`).join("\n"),
   );
-  assert.equal(placementChecks, 135);
+  assert.equal(placementChecks, 181);
   // Arrangement and bed fill over a live session, then the Kotlin wrapper.
   const arrangeFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/arrange-vectors.json", root)),
   );
-  assert.equal(replayArrangements(projectJniCore(jvm.call), arrangeFixture, layout).arrangements, 28);
+  assert.equal(replayArrangements(projectJniCore(jvm.call), arrangeFixture, layout).arrangements, 35);
   const arrangeChecks = jvm.call(
     "arrangeChecks",
     arrangeFixture.stateJson,
@@ -939,7 +964,7 @@ try {
       .map((c) => ("arrange" in c ? `A\t${c.arrange}\t${c.reply}` : `F\t${c.fill}\t${c.reply}`))
       .join("\n"),
   );
-  assert.equal(arrangeChecks, 57);
+  assert.equal(arrangeChecks, 71);
   // Wipe-tower auto-placement over a live session, then the Kotlin wrapper.
   const towerFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/wipe-tower-vectors.json", root)),
@@ -1686,6 +1711,7 @@ try {
     transformFields,
     transformFieldChecks,
     placementEditChecks,
+    buildVolumeChecks,
     transformEditChecks,
     ...splitSources,
     splitSourceChecks,

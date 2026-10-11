@@ -818,7 +818,7 @@ try {
     [result.hostile.hostileArchives, result.hostile.hostileAccepted, result.hostile.hostileRefused, result.hostile.hostileUntouched],
     [469, 55, 414, 414],
   );
-  assert.deepEqual([result.models.cases, result.models.committed], [21, 15]);
+  assert.deepEqual([result.models.cases, result.models.committed], [23, 17]);
   assert.deepEqual(
     [result.preflightCases, result.preflightItems, result.preflightRefusals],
     [7, 59, 42],
@@ -864,8 +864,8 @@ try {
     [14, 22, 5, 14, 13, 51, 51],
   );
   assert.deepEqual([result.picks, result.pickRefusals], [486, 1]);
-  assert.equal(result.placements, 67);
-  assert.equal(result.arrangements, 28);
+  assert.equal(result.placements, 90);
+  assert.equal(result.arrangements, 35);
   assert.equal(result.wipeTowers, 27);
   assert.deepEqual(
     [
@@ -994,12 +994,12 @@ try {
   // points, Match searches, edits, refusals and malformed requests.
   assert.deepEqual(result.virtualFilamentAnswers, [6, 27, 197, 12, 12, 51, 13, 20]);
   // The workspace bed and the transform inspector's fields.
-  assert.deepEqual(result.workspaceBedAnswers, [74, 14, 12]);
+  assert.deepEqual(result.workspaceBedAnswers, [85, 14, 12]);
   assert.deepEqual(result.transformFieldAnswers, [101, 1720, 94, 19]);
   // The painter's settings and paint colours.
   assert.deepEqual(result.paintToolAnswers, [427, 34, 775]);
   // Primitives and helper volumes: meshes, refusals, plans and malformed plans.
-  assert.deepEqual(result.primitiveAnswers, [48, 7, 11, 35, 13]);
+  assert.deepEqual(result.primitiveAnswers, [48, 7, 11, 37, 16]);
   assert.deepEqual(
     result.owned,
     JSON.parse(fixtureText).traces.at(-1).asset.bytes,

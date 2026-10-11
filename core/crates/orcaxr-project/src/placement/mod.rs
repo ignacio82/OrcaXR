@@ -107,17 +107,17 @@ pub fn plan(
                 ..pose
             })?
         }
-        wire::PlacementRequest::CenterOnPlate(c) => center(
-            state,
-            &assets,
-            &c.instance_ids,
-            [c.bed_size_mm[0], c.bed_size_mm[1]],
-        )?,
+        wire::PlacementRequest::CenterOnPlate(c) => {
+            center(state, &assets, &c.instance_ids, Area::of(&c.area_mm))?
+        }
         wire::PlacementRequest::ScaleToFit(s) => scale_to_fit(
             state,
             &assets,
             &s.instance_ids,
-            [s.volume_mm[0], s.volume_mm[1], s.volume_mm[2]],
+            Volume {
+                min: [0, 1, 2].map(|k| s.volume_mm.min_mm[k]),
+                max: [0, 1, 2].map(|k| s.volume_mm.max_mm[k]),
+            },
         )?,
         wire::PlacementRequest::LayOnFace(l) => lay_on_face(
             state,
@@ -330,25 +330,61 @@ fn bounds(
     bounds_with(state, assets, ids, probe, &[VolumeRole::Model])
 }
 
-/// `centerInstancesOnPlate`.
+/// A printable area in printer millimetres (`AabbXY`, `WorkspaceBed.areaMm`):
+/// a printer may offset it from the bed corner.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Area {
+    pub x_min: f64,
+    pub y_min: f64,
+    pub x_max: f64,
+    pub y_max: f64,
+}
+impl Area {
+    pub fn of(wire: &wire::PlacementArea) -> Self {
+        Self {
+            x_min: wire.x_min,
+            y_min: wire.y_min,
+            x_max: wire.x_max,
+            y_max: wire.y_max,
+        }
+    }
+    /// `validArea`: finite corners and a positive width and depth.
+    pub fn valid(&self) -> bool {
+        [self.x_min, self.y_min, self.x_max, self.y_max]
+            .iter()
+            .all(|v| v.is_finite())
+            && self.x_max > self.x_min
+            && self.y_max > self.y_min
+    }
+}
+
+/// A build volume's lowest and highest corners (`PrintVolumeMm`,
+/// `WorkspaceBed.volumeMm`), in printer millimetres.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Volume {
+    pub min: Vec3,
+    pub max: Vec3,
+}
+
+/// `centerInstancesOnPlate`: on the midpoint of the area's corners.
 fn center(
     state: &ProjectState,
     assets: &AssetSnapshot,
     ids: &[Vec<u16>],
-    [bed_x, bed_y]: [f64; 2],
+    area: Area,
 ) -> Result<Vec<(InstanceId, Pose)>, Refusal> {
     if ids.is_empty() {
         return Err(refuse(Code::EmptySelection, "Nothing is selected"));
     }
-    if !bed_x.is_finite() || !bed_y.is_finite() || bed_x <= 0.0 || bed_y <= 0.0 {
+    if !area.valid() {
         return Err(refuse(
             Code::InvalidBed,
             "Centring needs a positive printable area",
         ));
     }
     let b = bounds(state, assets, &unique(ids), None)?;
-    let delta_x = bed_x / 2.0 - (b.min[0] + b.max[0]) / 2.0;
-    let delta_y = bed_y / 2.0 - (b.min[1] + b.max[1]) / 2.0;
+    let delta_x = (area.x_min + area.x_max) / 2.0 - (b.min[0] + b.max[0]) / 2.0;
+    let delta_y = (area.y_min + area.y_max) / 2.0 - (b.min[1] + b.max[1]) / 2.0;
     each_instance(state, ids, |pose| Pose {
         translation: [
             pose.translation[0] + delta_x,
@@ -370,19 +406,20 @@ fn js_min3(a: f64, b: f64, c: f64) -> f64 {
 /// The pinned tolerance: a hundredth of a millimetre on every side.
 const FIT_TOLERANCE_MM: f64 = 0.02;
 
-/// `scaleInstancesToFitPrintVolume`.
+/// `scaleInstancesToFitPrintVolume`: centred on the midpoint of the
+/// volume's corners and resting on its floor.
 fn scale_to_fit(
     state: &ProjectState,
     assets: &AssetSnapshot,
     ids: &[Vec<u16>],
-    [volume_x, volume_y, volume_z]: Vec3,
+    Volume { min, max }: Volume,
 ) -> Result<Vec<(InstanceId, Pose)>, Refusal> {
     if ids.is_empty() {
         return Err(refuse(Code::EmptySelection, "Nothing is selected"));
     }
-    if ![volume_x, volume_y, volume_z]
-        .iter()
-        .all(|size| size.is_finite() && *size > 0.0)
+    let span = [0, 1, 2].map(|k| max[k] - min[k]);
+    if !min.iter().chain(&max).all(|corner| corner.is_finite())
+        || !span.iter().all(|side| side.is_finite() && *side > 0.0)
     {
         return Err(refuse(
             Code::InvalidBed,
@@ -401,7 +438,7 @@ fn scale_to_fit(
             "The selection has no measurable size",
         ));
     }
-    let factor = js_min3(volume_x / size[0], volume_y / size[1], volume_z / size[2]);
+    let factor = js_min3(span[0] / size[0], span[1] / size[1], span[2] / size[2]);
     if !factor.is_finite() || factor <= 0.0 {
         return Err(refuse(
             Code::DegenerateSelection,
@@ -414,9 +451,9 @@ fn scale_to_fit(
     let centre = [0, 1, 2].map(|k| (b.min[k] + b.max[k]) / 2.0);
     let scaled_min_z = centre[2] - ((b.max[2] - b.min[2]) * factor) / 2.0;
     let delta = [
-        volume_x / 2.0 - centre[0],
-        volume_y / 2.0 - centre[1],
-        -scaled_min_z,
+        (min[0] + max[0]) / 2.0 - centre[0],
+        (min[1] + max[1]) / 2.0 - centre[1],
+        min[2] - scaled_min_z,
     ];
     each_instance(state, &unique, |pose| Pose {
         translation: [0, 1, 2]

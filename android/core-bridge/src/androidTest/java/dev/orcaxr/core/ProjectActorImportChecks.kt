@@ -28,7 +28,7 @@ object ProjectActorImportChecks {
         result(owner.prepareImport(checkNotNull(query(owner).authority)) { scope, base ->
             check(Thread.currentThread().name == "orcaxr-prepare")
             val upload = ProjectDocuments.stageModel(scope, Bytes(bytes), ProjectModelImportOptions(), resolver, ProjectIntegerProfile.CHROMIUM)
-            base.prepareModel(upload, filename, IMPORTED_AT, ProjectModelPlacement(220.0, 220.0, true), ProjectImportIds.Counter(namespace))
+            base.prepareModel(upload, filename, IMPORTED_AT, ProjectModelPlacement(PrintableArea(0.0, 0.0, 220.0, 220.0), true), ProjectImportIds.Counter(namespace))
         })
     private fun required(preview: String): List<String> =
         Regex("\"requiredAcknowledgementIds\":\\[([^\\]]*)]").find(preview)!!.groupValues[1]

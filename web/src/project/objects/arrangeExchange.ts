@@ -97,7 +97,12 @@ const ROLES: Readonly<Record<ProjectVolumeRoleNameWire, VolumeRole>> = {
 
 function constraints(wire: ProjectArrangeConstraintsInputWire): ArrangeConstraints {
   return {
-    bedSizeMm: [wire.bedSizeMm[0], wire.bedSizeMm[1]],
+    bedAreaMm: {
+      xMin: wire.bedAreaMm.xMin,
+      yMin: wire.bedAreaMm.yMin,
+      xMax: wire.bedAreaMm.xMax,
+      yMax: wire.bedAreaMm.yMax,
+    },
     ...('value' in wire.spacingMm ? { spacingMm: wire.spacingMm.value } : {}),
     ...('value' in wire.bedMarginMm ? { bedMarginMm: wire.bedMarginMm.value } : {}),
     exclusions: wire.exclusions.map((region) => ({ ...region })),

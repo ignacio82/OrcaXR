@@ -4,7 +4,7 @@
 //! rotates anything; an arrangement moves only instances whose placement
 //! changes and reports those that do not fit, and a fill never moves an
 //! existing instance. Each refusal carries the browser's code and message.
-use super::{Pose, Refusal, bounds_with, text};
+use super::{Area, Pose, Refusal, bounds_with, text};
 use crate::assets::AssetRepository;
 use crate::model::{ProjectState, Transform, VolumeRole};
 use orcaxr_contracts::project_intent_types as wire;
@@ -82,7 +82,8 @@ impl Region {
 }
 
 struct Constraints {
-    bed: [f64; 2],
+    /// The printable area (`bedAreaMm`), whose corner a printer may offset from the bed's.
+    area: Area,
     spacing: f64,
     margin: f64,
     exclusions: Vec<Region>,
@@ -96,8 +97,8 @@ fn constraints(
     operation: &str,
     check_exclusions: bool,
 ) -> Result<Constraints, wire::ArrangeRefusal> {
-    let [bed_x, bed_y] = [wire.bed_size_mm[0], wire.bed_size_mm[1]];
-    if !bed_x.is_finite() || !bed_y.is_finite() || bed_x <= 0.0 || bed_y <= 0.0 {
+    let area = Area::of(&wire.bed_area_mm);
+    if !area.valid() {
         return Err(refuse(
             Code::InvalidBed,
             format!("{operation} needs a positive printable area"),
@@ -153,7 +154,7 @@ fn constraints(
         wire::OptionalVolumeRoleNames::Absent(_) => PRINTABLE_ROLES.to_vec(),
     };
     Ok(Constraints {
-        bed: [bed_x, bed_y],
+        area,
         spacing,
         margin,
         exclusions,
@@ -271,10 +272,10 @@ fn plan_arrangement(
     });
 
     let usable = Region {
-        min_x: c.margin,
-        min_y: c.margin,
-        max_x: c.bed[0] - c.margin,
-        max_y: c.bed[1] - c.margin,
+        min_x: c.area.x_min + c.margin,
+        min_y: c.area.y_min + c.margin,
+        max_x: c.area.x_max - c.margin,
+        max_y: c.area.y_max - c.margin,
     };
     let mut placements: Vec<Placement> = Vec::new();
     let mut unplaced: Vec<Vec<u16>> = Vec::new();
@@ -513,10 +514,10 @@ fn plan_fill(
         }
     }
     let usable = Region {
-        min_x: c.margin,
-        min_y: c.margin,
-        max_x: c.bed[0] - c.margin,
-        max_y: c.bed[1] - c.margin,
+        min_x: c.area.x_min + c.margin,
+        min_y: c.area.y_min + c.margin,
+        max_x: c.area.x_max - c.margin,
+        max_y: c.area.y_max - c.margin,
     };
     let mut placements = Vec::new();
     let mut withheld = 0u64;

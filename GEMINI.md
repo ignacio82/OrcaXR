@@ -320,10 +320,10 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Smart Paint is a validated, bounded proposal plus operator correction and one
   canonical transaction. Check per-provider/payload consent before sending data.
 - Wipe towers reserve their complete printed footprint against the printable rectangle's actual origin,
-  including brim/ribs. A bed's far corner is not its size; planning, ghosts and preflight share the same
-  footprint authority. The workspace three.js world is scaled, Y-up and bed-centred: geometry tools read
-  printer mm via `root.matrixWorld⁻¹ × display.matrixWorld`; brim ears are object-local (all model
-  parts, instance transform only). Shared bed/inspector fields/Android placement: [native-core](docs/engineering/native-core.md#workspace-bed); Android inspector: [§](docs/engineering/native-core.md#android-transform-inspector).
+  including brim/ribs; planning, ghosts and preflight share one footprint authority. A bed's far corner is
+  not its size: every placement uses `WorkspaceBed` `areaMm`/`volumeMm`, the box the slice preflight checks
+  ([§](docs/engineering/native-core.md#android-placements-inside-the-build-volume)). The workspace three.js world is scaled, Y-up and bed-centred: geometry tools read
+  printer mm via `root.matrixWorld⁻¹ × display.matrixWorld`; brim ears are object-local (all model parts, instance transform only). Shared bed/inspector fields/Android placement: [native-core](docs/engineering/native-core.md#workspace-bed); Android inspector: [§](docs/engineering/native-core.md#android-transform-inspector).
 
 ## Surface and startup ownership
 

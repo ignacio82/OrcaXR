@@ -3,7 +3,8 @@
 // scene's sphere, terrain and modifier instances plus boxes of several scaled
 // footprints, a non-printable box and a second plate, arranged and filled
 // under default and explicit spacing and margins, keep-out regions, locked
-// instances, a too-small bed and other role sets — with every refusal.
+// instances, a too-small bed, printable areas offset from the bed corner (the
+// U1's and a far one) and other role sets — with every refusal.
 // Replayed by Rust, by WASM in Node and Chrome, and over JNI.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -90,8 +91,11 @@ for (const payload of fixture.assets)
   assets.put(payload.descriptor, payload.bytes);
 
 const absent = { absent: {} };
+const area = (xMin, yMin, xMax, yMax) => ({ xMin, yMin, xMax, yMax });
+const U1 = area(0.5, 1, 270.5, 271);
+const FAR = area(180, 150, 300, 260);
 const constraints = (extra = {}) => ({
-  bedSizeMm: [270, 270],
+  bedAreaMm: area(0, 0, 270, 270),
   spacingMm: absent,
   bedMarginMm: absent,
   exclusions: [],
@@ -144,7 +148,13 @@ arrange("around a tower", plate.id, { exclusions: [tower] });
 arrange("around locked parts", plate.id, {
   lockedInstanceIds: [units(sphereInstance), units(squareInstance)],
 });
-arrange("on a small bed", plate.id, { bedSizeMm: [60, 45] });
+arrange("on a small bed", plate.id, { bedAreaMm: area(0, 0, 60, 45) });
+arrange("on the U1's area", plate.id, { bedAreaMm: U1 });
+arrange("on a far area", plate.id, { bedAreaMm: FAR });
+arrange("on a far area around a tower", plate.id, {
+  bedAreaMm: FAR,
+  exclusions: [{ minX: 250, minY: 210, maxX: 300, maxY: 260 }],
+});
 arrange("by modifiers", plate.id, {
   volumeRoles: { value: ["parameterModifier"] },
 });
@@ -152,7 +162,8 @@ arrange("by models and negatives", plate.id, {
   volumeRoles: { value: ["model", "negativeVolume"] },
 });
 arrange("second plate", second.id);
-arrange("no bed", plate.id, { bedSizeMm: [0, 270] });
+arrange("no bed", plate.id, { bedAreaMm: area(0, 0, 0, 270) });
+arrange("inverted area", plate.id, { bedAreaMm: area(300, 150, 180, 260) });
 arrange("negative spacing", plate.id, { spacingMm: { value: -1 } });
 arrange("negative margin", plate.id, { bedMarginMm: { value: -0.5 } });
 arrange("inverted exclusion", plate.id, {
@@ -167,14 +178,17 @@ fill("tight", plate.id, turnedInstance, {
   spacingMm: { value: 0 },
   bedMarginMm: { value: 0 },
 });
-fill("on a small bed", plate.id, squareInstance, { bedSizeMm: [80, 70] });
+fill("on a small bed", plate.id, squareInstance, { bedAreaMm: area(0, 0, 80, 70) });
+fill("on the U1's area", plate.id, squareInstance, { bedAreaMm: U1 });
+fill("on a far area", plate.id, squareInstance, { bedAreaMm: FAR });
 fill("onto the second plate", second.id, squareInstance);
 fill("by modifiers", plate.id, sphereInstance, {
   volumeRoles: { value: ["parameterModifier"] },
 });
 fill("no limit", plate.id, sphereInstance, {}, { value: 0 });
 fill("fractional limit", plate.id, sphereInstance, {}, { value: 2.5 });
-fill("no bed", plate.id, sphereInstance, { bedSizeMm: [270, -1] });
+fill("no bed", plate.id, sphereInstance, { bedAreaMm: area(0, 0, 270, -1) });
+fill("inverted area", plate.id, sphereInstance, { bedAreaMm: area(0, 260, 270, 150) });
 fill("negative spacing", plate.id, sphereInstance, {
   spacingMm: { value: -2 },
 });

@@ -75,10 +75,14 @@ object ProjectPrimitiveChecks {
                         if (entry[1] == "primitive") {
                             val expected = Primitives.primitiveReply(entry[3])
                             check(live.planPrimitiveObject(entry[2]) == expected, "primitive_${entry[2]}")
-                            val bed = list(request.get("bedMm")).map { it as Double }
+                            val corners = request.get("areaMm") as ProjectJsonObject
+                            val area = PrintableArea(
+                                corners.get("xMin") as Double, corners.get("yMin") as Double,
+                                corners.get("xMax") as Double, corners.get("yMax") as Double,
+                            )
                             val shape = PrimitiveShape.entries.first { it.wire == request.get("kind") }
                             val typed = Primitives.primitiveRequest(
-                                shape, bed[0], bed[1], ids, request.get("importedAt") as String,
+                                shape, area, ids, request.get("importedAt") as String,
                                 request.get("plateId") as? String, request.get("sizeMm") as Double,
                             )
                             check(live.planPrimitiveObject(typed) == expected, "primitive_typed_${entry[2]} $typed")

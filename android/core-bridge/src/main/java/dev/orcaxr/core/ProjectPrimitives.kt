@@ -82,16 +82,20 @@ object Primitives {
     fun payload(shape: PrimitiveShape, sizeMm: Double = if (shape == PrimitiveShape.HELPER_CUBE) HELPER_SIZE_MM else SIDE_MM): ByteArray =
         NativeProject.primitivePayload("{\"kind\":\"${shape.wire}\",\"sizeMm\":${number(sizeMm)}}")
 
-    /** The request a [ProjectSession.planPrimitiveObject] answers. */
+    /**
+     * The request a [ProjectSession.planPrimitiveObject] answers: the shape
+     * centred on [area] (printer mm, the workspace bed's [WorkspaceBed.areaMm])
+     * and resting on the bed.
+     */
     fun primitiveRequest(
         shape: PrimitiveShape,
-        bedWidthMm: Double,
-        bedDepthMm: Double,
+        area: PrintableArea,
         ids: List<String>,
         importedAt: String,
         plateId: String? = null,
         sizeMm: Double = SIDE_MM,
-    ): String = "{\"bedMm\":[${number(bedWidthMm)},${number(bedDepthMm)}],\"ids\":${ids(ids)}" +
+    ): String = "{\"areaMm\":{\"xMax\":${number(area.xMax)},\"xMin\":${number(area.xMin)}" +
+        ",\"yMax\":${number(area.yMax)},\"yMin\":${number(area.yMin)}},\"ids\":${ids(ids)}" +
         ",\"importedAt\":${CanonicalJson.quote(importedAt)},\"kind\":\"${shape.wire}\"" +
         ",\"plateId\":${plateId?.let(CanonicalJson::quote) ?: "null"},\"sizeMm\":${number(sizeMm)}}"
 

@@ -13,21 +13,35 @@
 //!   corner;
 //! - the printable height is `parseFloat(String(printable_height))` (its
 //!   first entry for a list) when positive;
+//! - the placement area, where models are placed, centred, arranged and
+//!   filled, is the printable rectangle the slice preflight checks, read from
+//!   the configuration's engine strings exactly as the preflight reads it
+//!   ([`preflight_printable_area`]); where the preflight finds none (and
+//!   refuses to slice), the printable area, else the bed from its corner;
+//! - the build volume scale-to-fit fills is the placement area from the bed
+//!   (Z = 0) up to the printable height the preflight checks
+//!   ([`preflight_printable_height`]), else the workspace's; none without a
+//!   height. A placement on it never leaves the volume the preflight accepts;
 //! - an enabled wipe tower keeps a square of its drawn width
 //!   (`Number(prime_tower_width ?? wipe_tower_width) || 60`) clear when its
 //!   plate is arranged or filled.
 //!
 //! The exchange is canonical JSON: `{"config","wipeTower"}` answers
-//! `{"keepOut","printableArea","printableHeightMm","sizeMm"}`, an absent value
-//! (or a keep-out edge JSON cannot carry) `null`. A session's project answers
+//! `{"areaMm","keepOut","printableArea","printableHeightMm","sizeMm","volumeMm"}`
+//! (the volume as `{"maxMm","minMm"}` corners), an absent value (or a
+//! keep-out edge JSON cannot carry) `null`. A session's project answers
 //! for one of its plates ([`state_bed_json`]) from the configuration the
 //! workspace reads: its base profile when it records one, else its own.
 use super::wipe_tower::printable_area;
+use super::{Area, Volume};
 use crate::js_math::{
     self,
     convert::{parse_float, utf16_number, value_to_number, value_to_string},
 };
 use crate::model::{ProjectState, WipeTowerState};
+use crate::slicing::profile::{
+    WireConfig, engine_wire_value, preflight_printable_area, preflight_printable_height,
+};
 use orcaxr_contracts::canonical::{Value, parse};
 use std::collections::BTreeMap;
 
@@ -67,6 +81,12 @@ pub struct WorkspaceBed {
     pub size_mm: [f64; 2],
     pub printable_area: Option<PrintableArea>,
     pub printable_height_mm: Option<f64>,
+    /// Where models are placed, centred, arranged and filled: the
+    /// preflight's printable rectangle, else the printable area, else the bed.
+    pub area_mm: Area,
+    /// The box scale-to-fit fills: the placement area from the bed up to the
+    /// printable height; none without a height.
+    pub volume_mm: Option<Volume>,
 }
 
 const COMMA: u16 = b',' as u16;
@@ -142,15 +162,41 @@ pub fn printable_height_mm(config: &Value) -> Option<f64> {
 /// `workspaceBed`.
 pub fn workspace_bed(config: &Value) -> WorkspaceBed {
     let area = field(config, "printable_area");
+    let size_mm = bed_size(&printable_area_text(area));
+    let printable = printable_area(area);
+    let printable_height_mm = printable_height_mm(config);
+    // The two facts the preflight checks, from the engine strings it reads them from.
+    let mut engine = WireConfig::new();
+    for name in ["printable_area", "printable_height"] {
+        let key = units(name);
+        if let Some(text) = field(config, name).and_then(|value| engine_wire_value(&key, value)) {
+            engine.insert(key, text);
+        }
+    }
+    let [x_min, y_min, x_max, y_max] = preflight_printable_area(&engine)
+        .or(printable)
+        .unwrap_or([0.0, 0.0, size_mm[0], size_mm[1]]);
+    let area_mm = Area {
+        x_min,
+        y_min,
+        x_max,
+        y_max,
+    };
+    let top = preflight_printable_height(&engine).or(printable_height_mm);
     WorkspaceBed {
-        size_mm: bed_size(&printable_area_text(area)),
-        printable_area: printable_area(area).map(|[x_min, y_min, x_max, y_max]| PrintableArea {
+        size_mm,
+        printable_area: printable.map(|[x_min, y_min, x_max, y_max]| PrintableArea {
             x_min,
             y_min,
             x_max,
             y_max,
         }),
-        printable_height_mm: printable_height_mm(config),
+        printable_height_mm,
+        area_mm,
+        volume_mm: top.map(|top| Volume {
+            min: [x_min, y_min, 0.0],
+            max: [x_max, y_max, top],
+        }),
     }
 }
 
@@ -196,7 +242,18 @@ fn object(members: impl IntoIterator<Item = (&'static str, Value)>) -> Value {
 
 /// The reply document for a bed and a keep-out.
 pub fn reply(bed: &WorkspaceBed, keep_out: Option<KeepOut>) -> Value {
+    let corner = |point: [f64; 3]| Value::Array(point.map(number).to_vec());
+    let area = bed.area_mm;
     object([
+        (
+            "areaMm",
+            object([
+                ("xMax", number(area.x_max)),
+                ("xMin", number(area.x_min)),
+                ("yMax", number(area.y_max)),
+                ("yMin", number(area.y_min)),
+            ]),
+        ),
         (
             "keepOut",
             keep_out.map_or(Value::Null, |k| {
@@ -226,6 +283,12 @@ pub fn reply(bed: &WorkspaceBed, keep_out: Option<KeepOut>) -> Value {
         (
             "sizeMm",
             Value::Array(vec![number(bed.size_mm[0]), number(bed.size_mm[1])]),
+        ),
+        (
+            "volumeMm",
+            bed.volume_mm.map_or(Value::Null, |v| {
+                object([("maxMm", corner(v.max)), ("minMm", corner(v.min))])
+            }),
         ),
     ])
 }

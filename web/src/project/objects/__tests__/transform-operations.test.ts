@@ -127,9 +127,14 @@ test('resets rotation and scale independently', () => {
   assert.deepEqual(scaleReset.transform.rotation, spun.plates[0].objects[0].instances[0].transform.rotation);
 });
 
+/** A build volume from the bed corner: [x, y, z] mm. */
+function box(x: number, y: number, z: number) {
+  return { minMm: [0, 0, 0], maxMm: [x, y, z] } as const;
+}
+
 test('centres a multi-instance selection while preserving relative layout', () => {
   const { state, assets, instanceIds } = createProject(2);
-  const changes = centerInstancesOnPlate(state, assets, instanceIds, [200, 200]);
+  const changes = centerInstancesOnPlate(state, assets, instanceIds, { xMin: 0, yMin: 0, xMax: 200, yMax: 200 });
   assert.equal(changes.length, 2);
   const deltas = changes.map((change, index) => change.transform.translationMm[0] - index * 40);
   assert.ok(Math.abs(deltas[0] - deltas[1]) < 1e-9, 'every instance moves by the same delta');
@@ -140,9 +145,28 @@ test('centres a multi-instance selection while preserving relative layout', () =
   assert.ok(Math.abs((bounds.min[0] + bounds.max[0]) / 2 - 100) < 1e-6);
   assert.ok(Math.abs((bounds.min[1] + bounds.max[1]) / 2 - 100) < 1e-6);
   assert.throws(
-    () => centerInstancesOnPlate(state, assets, instanceIds, [0, 200]),
+    () => centerInstancesOnPlate(state, assets, instanceIds, { xMin: 0, yMin: 0, xMax: 0, yMax: 200 }),
     (error: unknown) => error instanceof TransformOperationError && error.code === 'invalid-bed',
   );
+  assert.throws(
+    () => centerInstancesOnPlate(state, assets, instanceIds, { xMin: 10, yMin: 0, xMax: 5, yMax: 200 }),
+    (error: unknown) => error instanceof TransformOperationError && error.code === 'invalid-bed',
+    'an inverted area is no printable area',
+  );
+});
+
+test('centres on a printable area offset from the bed corner, not on half its far corner', () => {
+  const { state, assets, instanceIds } = createProject(2);
+  // A printer whose printable area starts well away from the bed corner.
+  const area = { xMin: 100, yMin: 60, xMax: 300, yMax: 260 };
+  let centred = state;
+  for (const change of centerInstancesOnPlate(state, assets, instanceIds, area)) {
+    centred = applyChange(centred, change.instanceId, change.transform);
+  }
+  const bounds = computeCanonicalInstanceBounds(centred, assets, instanceIds, { volumeRoles: ['model'] });
+  assert.ok(Math.abs((bounds.min[0] + bounds.max[0]) / 2 - 200) < 1e-6, 'centred on the area in X');
+  assert.ok(Math.abs((bounds.min[1] + bounds.max[1]) / 2 - 160) < 1e-6, 'centred on the area in Y');
+  assert.ok(bounds.min[0] >= area.xMin && bounds.min[1] >= area.yMin, 'and inside it');
 });
 
 test('lays a chosen facet on the bed and rests the instance on Z=0', () => {
@@ -194,7 +218,7 @@ test('quaternionBetween produces a deterministic 180-degree turn for opposite ve
 
 test('scale to build volume fills the volume, centres it, and sits it on the bed', () => {
   const { state, assets, instanceIds } = createProject();
-  const volume = { x: 200, y: 200, z: 250 };
+  const volume = box(200, 200, 250);
   const changes = scaleInstancesToFitPrintVolume(state, assets, instanceIds, volume);
   assert.equal(changes.length, 1);
 
@@ -205,33 +229,66 @@ test('scale to build volume fills the volume, centres it, and sits it on the bed
   // The 20 mm cube grows until its limiting axis fills the volume. Upstream
   // adds a hundredth of a millimetre on each side before dividing, so the
   // result lands just inside rather than exactly on the wall.
-  assert.ok(size[0] < volume.x && size[0] > volume.x - 0.5, `x filled to ${size[0]}`);
-  assert.ok(size[1] < volume.y && size[1] > volume.y - 0.5, `y filled to ${size[1]}`);
-  assert.ok(size[2] <= volume.z, `z stayed inside at ${size[2]}`);
+  assert.ok(size[0] < 200 && size[0] > 200 - 0.5, `x filled to ${size[0]}`);
+  assert.ok(size[1] < 200 && size[1] > 200 - 0.5, `y filled to ${size[1]}`);
+  assert.ok(size[2] <= 250, `z stayed inside at ${size[2]}`);
   assert.ok(Math.abs(size[0] - size[1]) < 1e-6 && Math.abs(size[1] - size[2]) < 1e-6, 'the scale stayed uniform');
 
   assert.ok(Math.abs(bounds.min[2]) < 1e-6, `the result sits on the bed, not at ${bounds.min[2]}`);
-  assert.ok(Math.abs((bounds.min[0] + bounds.max[0]) / 2 - volume.x / 2) < 1e-6, 'centred in X');
-  assert.ok(Math.abs((bounds.min[1] + bounds.max[1]) / 2 - volume.y / 2) < 1e-6, 'centred in Y');
+  assert.ok(Math.abs((bounds.min[0] + bounds.max[0]) / 2 - 100) < 1e-6, 'centred in X');
+  assert.ok(Math.abs((bounds.min[1] + bounds.max[1]) / 2 - 100) < 1e-6, 'centred in Y');
+});
+
+test('scale to build volume fits a volume offset from the bed corner (the U1 regression)', () => {
+  const { state, assets, instanceIds } = createProject();
+  // The Snapmaker U1's printable box: its area starts at 0.5 × 1 mm. Centred on
+  // half the far corner (135.25, 135.5) the cube overhung the area's near edges
+  // by 0.14 and 0.39 mm, and the slice preflight refused it.
+  const volume = { minMm: [0.5, 1, 0], maxMm: [270.5, 271, 270.05] } as const;
+  const [change] = scaleInstancesToFitPrintVolume(state, assets, instanceIds, volume);
+  const scaled = applyChange(state, instanceIds[0], change.transform);
+  const bounds = computeCanonicalInstanceBounds(scaled, assets, instanceIds, { volumeRoles: ['model'] });
+  for (let axis = 0; axis < 3; axis += 1) {
+    assert.ok(bounds.min[axis] >= volume.minMm[axis], `axis ${axis} starts inside at ${bounds.min[axis]}`);
+    assert.ok(bounds.max[axis] <= volume.maxMm[axis], `axis ${axis} ends inside at ${bounds.max[axis]}`);
+  }
+  assert.ok(Math.abs((bounds.min[0] + bounds.max[0]) / 2 - 135.5) < 1e-6, 'centred on the area in X');
+  assert.ok(Math.abs((bounds.min[1] + bounds.max[1]) / 2 - 136) < 1e-6, 'centred on the area in Y');
+  assert.ok(Math.abs(bounds.min[2]) < 1e-9, 'resting on the bed');
+  assert.ok(bounds.max[2] > 270.05 - 0.5, 'the height limited the factor');
+
+  // A box whose floor is not the bed: the result rests on that floor.
+  const raised = { minMm: [100, 60, 5], maxMm: [300, 260, 105] } as const;
+  const [lifted] = scaleInstancesToFitPrintVolume(state, assets, instanceIds, raised);
+  const placed = computeCanonicalInstanceBounds(
+    applyChange(state, instanceIds[0], lifted.transform),
+    assets,
+    instanceIds,
+    {
+      volumeRoles: ['model'],
+    },
+  );
+  assert.ok(Math.abs(placed.min[2] - 5) < 1e-9, 'resting on the box floor');
+  assert.ok(placed.min[0] >= 100 && placed.max[0] <= 300 && placed.min[1] >= 60 && placed.max[1] <= 260);
 });
 
 test('a short machine limits the factor, and the model still fits', () => {
   const { state, assets, instanceIds } = createProject();
   // The reason the build height is read from the profile rather than assumed: a
   // factor computed against a taller machine scales a model into the gantry.
-  const volume = { x: 300, y: 300, z: 60 };
+  const volume = box(300, 300, 60);
   const [change] = scaleInstancesToFitPrintVolume(state, assets, instanceIds, volume);
   const scaled = applyChange(state, instanceIds[0], change.transform);
   const bounds = computeCanonicalInstanceBounds(scaled, assets, instanceIds, { volumeRoles: ['model'] });
-  assert.ok(bounds.max[2] <= volume.z, `height ${bounds.max[2]} exceeds the ${volume.z} mm ceiling`);
-  assert.ok(bounds.max[2] > volume.z - 0.5, 'and it is the axis that limited the factor');
-  assert.ok(bounds.max[0] - bounds.min[0] < volume.x, 'so the footprint is well inside the bed');
+  assert.ok(bounds.max[2] <= 60, `height ${bounds.max[2]} exceeds the 60 mm ceiling`);
+  assert.ok(bounds.max[2] > 60 - 0.5, 'and it is the axis that limited the factor');
+  assert.ok(bounds.max[0] - bounds.min[0] < 300, 'so the footprint is well inside the bed');
 });
 
 test('several models keep their layout, and scale about the selection', () => {
   const { state, assets, instanceIds } = createProject(3);
   const before = computeCanonicalInstanceBounds(state, assets, instanceIds, { volumeRoles: ['model'] });
-  const volume = { x: 200, y: 200, z: 250 };
+  const volume = box(200, 200, 250);
   const changes = scaleInstancesToFitPrintVolume(state, assets, instanceIds, volume);
   assert.equal(changes.length, 3);
 
@@ -243,7 +300,7 @@ test('several models keep their layout, and scale about the selection', () => {
   const widthBefore = before.max[0] - before.min[0];
   const widthAfter = after.max[0] - after.min[0];
   assert.ok(Math.abs(widthAfter - widthBefore * factor) < 1e-6, 'the whole selection scaled by one factor');
-  assert.ok(widthAfter < volume.x + 1e-6, 'and the row still fits the bed');
+  assert.ok(widthAfter < 200 + 1e-6, 'and the row still fits the bed');
   for (const change of changes) {
     assert.deepEqual(change.transform.scale, changes[0].transform.scale, 'every instance took the same factor');
   }
@@ -257,13 +314,15 @@ test('several models keep their layout, and scale about the selection', () => {
 test('an exact fit produces no changes, and a bad volume is refused', () => {
   const { state, assets, instanceIds } = createProject();
   // 20 mm cube plus upstream's 0.02 mm tolerance: the factor is exactly 1.
-  const exact = scaleInstancesToFitPrintVolume(state, assets, instanceIds, { x: 20.02, y: 20.02, z: 20.02 });
+  const exact = scaleInstancesToFitPrintVolume(state, assets, instanceIds, box(20.02, 20.02, 20.02));
   assert.deepEqual(exact, [], 'an undo entry that restores the same project teaches people undo is unreliable');
 
   for (const volume of [
-    { x: 0, y: 200, z: 200 },
-    { x: 200, y: -1, z: 200 },
-    { x: 200, y: 200, z: Number.NaN },
+    box(0, 200, 200),
+    box(200, -1, 200),
+    box(200, 200, Number.NaN),
+    { minMm: [10, 0, 0], maxMm: [5, 200, 200] } as const,
+    { minMm: [0, 0, Number.NEGATIVE_INFINITY], maxMm: [200, 200, 200] } as const,
   ]) {
     assert.throws(
       () => scaleInstancesToFitPrintVolume(state, assets, instanceIds, volume),
@@ -272,7 +331,7 @@ test('an exact fit produces no changes, and a bad volume is refused', () => {
     );
   }
   assert.throws(
-    () => scaleInstancesToFitPrintVolume(state, assets, [], { x: 200, y: 200, z: 200 }),
+    () => scaleInstancesToFitPrintVolume(state, assets, [], box(200, 200, 200)),
     (error: unknown) => error instanceof TransformOperationError && error.code === 'empty-selection',
   );
 });

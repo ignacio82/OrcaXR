@@ -6,15 +6,17 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 
 /** Placement edits on a real session, as the browser's workspace applies them
- * (`placement-edit-vectors.json`): the browser's canonical 3MF of the picking
- * scene opens in a [ProjectWorkspace] with the browser's semantic hash and
- * bed; every edit — drop to bed, mirror, the resets, centre, scale to fit, lay
+ * (one scene of `placement-edit-vectors.json`: the U1's printable area, or one
+ * far from the bed corner): the browser's canonical 3MF of the picking scene
+ * opens in a [ProjectWorkspace] with the browser's semantic hash and bed;
+ * every edit — drop to bed, mirror, the resets, centre, scale to fit, lay
  * flat by a normal and by a facet, arrange — leaves the project with the
  * browser's hash and undo label after it (repeated gestures coalescing, edits
  * that change nothing leaving history alone, refusals in the browser's
- * words), and undoing every entry passes back through each earlier state to
- * the one opened. A project stating no printable height refuses to scale to
- * fit as the browser does. */
+ * words) and the instances the core's live preflight finds outside its build
+ * volume are the browser's, and undoing every entry passes back through each
+ * earlier state to the one opened. A project stating no printable height
+ * refuses to scale to fit as the browser does. */
 object ProjectPlacementEditChecks {
     private const val WAIT_S = 60L
 
@@ -43,7 +45,15 @@ object ProjectPlacementEditChecks {
         (value as ProjectJsonArray).let { list -> List(list.length()) { list.get(it) as Double } }
     private fun text(value: Any): String? = value as? String
 
-    /** [corpus] is `{"bed","opened","plateId","steps","undo"}` of the corpus; [archive] its 3MF. */
+    /** The instances the core's live preflight of plate [plateId] (the project as authored) finds outside its build volume. */
+    internal fun outside(workspace: ProjectWorkspace, plateId: String): List<String> =
+        workspace.preflight(plateId).get(WAIT_S, TimeUnit.SECONDS).issues
+            .filter { it.code == ProjectIntents.PreflightCode.InstanceOutsideBuildVolume }
+            .flatMap { issue -> issue.entities.mapNotNull { (it as? ProjectIntents.PreflightEntity.Instance)?.value } }
+            .map { units -> String(CharArray(units.size) { units[it].toChar() }) }
+            .sorted()
+
+    /** [corpus] is one scene's `{"bed","opened","plateId","steps","undo"}`; [archive] its 3MF. */
     @JvmStatic fun run(corpus: String, archive: ByteArray): Long {
         var checks = 0L
         fun check(condition: Boolean, label: String) {
@@ -63,6 +73,7 @@ object ProjectPlacementEditChecks {
             check(workspace.view.revision?.semanticHash == opened, "opened_hash ${workspace.view.revision}")
             val bed = WorkspaceBeds.read(reference.get("bed") as String)
             check(until(workspace) { it.bed == bed }.bed == bed, "opened_bed")
+            val plateId = reference.get("plateId") as String
 
             val steps = reference.get("steps") as ProjectJsonArray
             for (index in 0 until steps.length()) {
@@ -95,6 +106,7 @@ object ProjectPlacementEditChecks {
                 val view = workspace.view
                 check(view.revision?.semanticHash == step.get("semanticHash"), "step_${index}_hash ${operation.get("kind")}")
                 check(view.undo == text(step.get("undoLabel")), "step_${index}_label ${view.undo}")
+                check(outside(workspace, plateId) == strings(step.get("outside")), "step_${index}_outside ${operation.get("kind")}")
             }
             val undo = reference.get("undo") as ProjectJsonArray
             for (index in 0 until undo.length()) {
@@ -102,6 +114,7 @@ object ProjectPlacementEditChecks {
                 done(workspace.undo())
                 check(workspace.view.revision?.semanticHash == entry.get("semanticHash"), "undo_${index}_hash")
                 check(workspace.view.undo == text(entry.get("undoLabel")), "undo_${index}_label ${workspace.view.undo}")
+                check(outside(workspace, plateId) == strings(entry.get("outside")), "undo_${index}_outside")
             }
             check(workspace.view.undo == null && workspace.view.revision?.semanticHash == opened, "undone_to_opened")
         }

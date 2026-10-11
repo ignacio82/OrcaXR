@@ -109,9 +109,9 @@ fn limits(value: Option<&Json>) -> Limits {
 }
 fn placement(value: &Json) -> Placement {
     Placement {
-        bed_size_mm: value["bedSizeMm"]
-            .as_array()
-            .map(|v| [v[0].as_f64().unwrap(), v[1].as_f64().unwrap()]),
+        bed_area_mm: value["bedAreaMm"].as_object().map(|area| {
+            ["xMin", "yMin", "xMax", "yMax"].map(|corner| area[corner].as_f64().unwrap())
+        }),
         drop_to_bed: value["dropToBed"].as_bool().unwrap_or(false),
     }
 }

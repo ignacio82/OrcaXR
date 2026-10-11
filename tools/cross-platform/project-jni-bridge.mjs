@@ -77,6 +77,7 @@ export function startProjectJni(profile = "debug") {
   signatures.workspaceBedChecks = ["String"];
   signatures.transformFieldChecks = ["String"];
   signatures.placementEditChecks = ["String", "byte[]"];
+  signatures.buildVolumeChecks = ["String", "byte[]", "byte[]"];
   signatures.transformEditChecks = ["byte[]", "String"];
   signatures.splitSourceChecks = ["String", "byte[]", "byte[]", "byte[]", "byte[]", "String"];
   signatures.modelToolChecks = ["String", "byte[]"];

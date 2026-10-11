@@ -247,7 +247,7 @@ import {
   type WorkspaceProfileSelectionRequest,
 } from './CatalogSlicingConfiguration';
 import { bedSizeFromProfile, ProfileCatalog, type SlicerProfile } from '../slicer/ProfileLoader';
-import { printableHeightMm, wipeTowerKeepOut, wipeTowerWidthMm, workspaceBed } from './WorkspaceBed';
+import { wipeTowerKeepOut, wipeTowerWidthMm, workspaceBed, type WorkspaceBed } from './WorkspaceBed';
 import { eulerFromQuaternion, withTransformFieldInput } from './TransformFields';
 import { SlicerClient, type AttestedProjectRoute } from '../slicer/SlicerClient';
 import { engineSupports } from '../slicer/pinnedEngineProvenance';
@@ -5301,7 +5301,7 @@ export class OrcaWorkspace extends xb.Script {
       const prepared = await this.canonicalProject.prepareModelImport(
         source,
         { filename: name },
-        { placement: { bedSizeMm: [this.bedMm.x, this.bedMm.y], dropToBed: true } },
+        { placement: { bedAreaMm: this.placementBed().areaMm, dropToBed: true } },
       );
       const preview = prepared.preview;
       let committed = false;
@@ -5366,7 +5366,7 @@ export class OrcaWorkspace extends xb.Script {
       const prepared = await this.canonicalProject.prepareGeometryImport(
         source,
         { filename: name },
-        { bedSizeMm: [this.bedMm.x, this.bedMm.y] },
+        { bedAreaMm: this.placementBed().areaMm },
       );
       const preview = prepared.preview;
       let committed = false;
@@ -6352,7 +6352,7 @@ export class OrcaWorkspace extends xb.Script {
     options: GeometryLoadOptions = {},
     name?: string,
   ) {
-    const transform = geometryBedPlacement(raw, this.bedMm, options);
+    const transform = geometryBedPlacement(raw, this.placementBed().areaMm, options);
     const imported = await this.canonicalProject.importGeometry(raw, {
       name,
       sourceFilename: name,
@@ -8166,7 +8166,7 @@ export class OrcaWorkspace extends xb.Script {
     }
     try {
       const result = await this.canonicalProject.fillPlateWithInstances(primary, {
-        bedSizeMm: [this.bedMm.x, this.bedMm.y],
+        bedAreaMm: this.placementBed().areaMm,
         ...(this.wipeTowerExclusion() ? { exclusions: [this.wipeTowerExclusion() as ArrangeRegion] } : {}),
       });
       if (this.disposed) return result.created;
@@ -8267,11 +8267,24 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /**
+   * The bed placements use, read from the project's configuration as the
+   * action runs: models are placed, centred, arranged and filled in its
+   * `areaMm` and scaled into its `volumeMm` — the printable box the slice
+   * preflight checks, which a printer may offset from the bed corner (the
+   * drawn plate and `bedMm` start at the corner; the U1's area starts at
+   * 0.5 × 1 mm).
+   */
+  private placementBed(): WorkspaceBed {
+    return workspaceBed(this.canonicalProject.getSlicingConfiguration().config);
+  }
+
+  /**
    * Scale the selection to fill the printable volume, then place it on the bed.
    *
-   * The build height comes from the live profile rather than a constant: a
-   * factor computed against an assumed 100 mm ceiling would confidently scale a
-   * model into the gantry of a shorter machine.
+   * The box comes from the project's own configuration rather than a constant:
+   * a factor computed against an assumed 100 mm ceiling would confidently scale
+   * a model into the gantry of a shorter machine, and one centred on half the
+   * bed's far corner overhangs a printable area offset from the bed corner.
    */
   public async scaleSelectionToFitPrintVolume(): Promise<boolean> {
     let instances = this.selectedInstanceIdsForTransform();
@@ -8282,8 +8295,8 @@ export class OrcaWorkspace extends xb.Script {
       );
       return false;
     }
-    const height = printableHeightMm(this.canonicalProject.getSlicingConfiguration().config);
-    if (height === undefined) {
+    const volume = this.placementBed().volumeMm;
+    if (volume === undefined) {
       this.setStatus(
         t(
           'workspace.orcaWorkspace.thisPrinterProfileStatesNo',
@@ -8293,11 +8306,7 @@ export class OrcaWorkspace extends xb.Script {
       return false;
     }
     try {
-      const changed = await this.canonicalProject.scaleInstancesToFitPrintVolume(instances, {
-        x: this.bedMm.x,
-        y: this.bedMm.y,
-        z: height,
-      });
+      const changed = await this.canonicalProject.scaleInstancesToFitPrintVolume(instances, volume);
       if (this.disposed) return changed > 0;
       this.recomputePreflight();
       this.setStatus(
@@ -8353,7 +8362,7 @@ export class OrcaWorkspace extends xb.Script {
       return false;
     }
     try {
-      await this.canonicalProject.centerInstancesOnPlate(instances, [this.bedMm.x, this.bedMm.y]);
+      await this.canonicalProject.centerInstancesOnPlate(instances, this.placementBed().areaMm);
       if (this.disposed) return true;
       this.recomputePreflight();
       this.setStatus(`Centred ${instances.length} model(s) on the plate.`);
@@ -9199,7 +9208,7 @@ export class OrcaWorkspace extends xb.Script {
     }
     try {
       const result = await this.canonicalProject.arrangePlate(this.activePlateId, {
-        bedSizeMm: [this.bedMm.x, this.bedMm.y],
+        bedAreaMm: this.placementBed().areaMm,
         ...(this.wipeTowerExclusion() ? { exclusions: [this.wipeTowerExclusion() as ArrangeRegion] } : {}),
       });
       if (this.disposed) return result.placements.length;

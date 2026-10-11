@@ -378,12 +378,25 @@ fn nozzle_map(config: &WireConfig, tool_count: usize) -> Option<Vec<f64>> {
 }
 fn build_volume(config: &WireConfig) -> Option<BuildVolume> {
     let area = rectangular_area(get(config, "printable_area"))?;
-    let height = positive_scalar(get(config, "printable_height"))?;
+    let height = preflight_printable_height(config)?;
     Some(BuildVolume {
         min_z_mm: Some(0.0),
         max_z_mm: height,
         ..area
     })
+}
+/// `preflightPrintableArea`: the printable rectangle the preflight checks
+/// every model against — `printable_area` as exactly one axis-aligned
+/// rectangle — as `[x_min, y_min, x_max, y_max]`, else none (and the
+/// preflight refuses to slice). The workspace places models inside it
+/// (`placement::bed`'s area).
+pub fn preflight_printable_area(config: &WireConfig) -> Option<[f64; 4]> {
+    rectangular_area(get(config, "printable_area"))
+        .map(|area| [area.min_x_mm, area.min_y_mm, area.max_x_mm, area.max_y_mm])
+}
+/// `preflightPrintableHeight`: `printable_height` as one positive number.
+pub fn preflight_printable_height(config: &WireConfig) -> Option<f64> {
+    positive_scalar(get(config, "printable_height"))
 }
 /// `parsePoint`: `<x>x<y>` with ASCII decimal coordinates.
 fn point(value: &[u16]) -> Option<[f64; 2]> {
@@ -663,25 +676,27 @@ pub fn engine_wire_config(config: &ConfigMap) -> WireConfig {
     };
     fields
         .iter()
-        .filter_map(|(key, value)| {
-            let wire = match value {
-                Value::Null => return None,
-                Value::Array(items) => {
-                    let mut out = Vec::new();
-                    for (index, item) in items.iter().enumerate() {
-                        if index > 0 {
-                            out.push(collection_delimiter(key));
-                        }
-                        out.extend(value_to_string(item));
-                    }
-                    out
-                }
-                Value::Object(_) => json_stringify(value),
-                other => value_to_string(other),
-            };
-            Some((key.clone(), wire))
-        })
+        .filter_map(|(key, value)| Some((key.clone(), engine_wire_value(key, value)?)))
         .collect()
+}
+
+/// One value of [`engine_wire_config`]: its engine wire string, none for `null`.
+pub fn engine_wire_value(key: &[u16], value: &Value) -> Option<Vec<u16>> {
+    Some(match value {
+        Value::Null => return None,
+        Value::Array(items) => {
+            let mut out = Vec::new();
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    out.push(collection_delimiter(key));
+                }
+                out.extend(value_to_string(item));
+            }
+            out
+        }
+        Value::Object(_) => json_stringify(value),
+        other => value_to_string(other),
+    })
 }
 
 fn text_value(text: &str) -> Value {

@@ -3292,18 +3292,34 @@ const shapes = {
       "axis": "PlacementAxis"
     }
   },
+  "PlacementArea": {
+    "kind": "object",
+    "fields": {
+      "xMin": "Finite",
+      "yMin": "Finite",
+      "xMax": "Finite",
+      "yMax": "Finite"
+    }
+  },
+  "PlacementVolume": {
+    "kind": "object",
+    "fields": {
+      "minMm": "Vector",
+      "maxMm": "Vector"
+    }
+  },
   "PlacementCenter": {
     "kind": "object",
     "fields": {
       "instanceIds": "Ids",
-      "bedSizeMm": "PlanarPosition"
+      "areaMm": "PlacementArea"
     }
   },
   "PlacementScaleToFit": {
     "kind": "object",
     "fields": {
       "instanceIds": "Ids",
-      "volumeMm": "Vector"
+      "volumeMm": "PlacementVolume"
     }
   },
   "PlacementLayOnFace": {
@@ -3419,7 +3435,7 @@ const shapes = {
   "ArrangeConstraintsInput": {
     "kind": "object",
     "fields": {
-      "bedSizeMm": "PlanarPosition",
+      "bedAreaMm": "PlacementArea",
       "spacingMm": "OptionalFinite",
       "bedMarginMm": "OptionalFinite",
       "exclusions": "ArrangeRegions",
@@ -7653,8 +7669,10 @@ export type ProjectPickReplyWire = {readonly hit:ProjectPickHitWire} | {readonly
 export type ProjectPlacementAxisWire = "x" | "y" | "z";
 export interface ProjectPlacementSelectionWire {readonly instanceIds: ProjectIdsWire;}
 export interface ProjectPlacementMirrorWire {readonly instanceIds: ProjectIdsWire;readonly axis: ProjectPlacementAxisWire;}
-export interface ProjectPlacementCenterWire {readonly instanceIds: ProjectIdsWire;readonly bedSizeMm: ProjectPlanarPositionWire;}
-export interface ProjectPlacementScaleToFitWire {readonly instanceIds: ProjectIdsWire;readonly volumeMm: ProjectVectorWire;}
+export interface ProjectPlacementAreaWire {readonly xMin: ProjectFiniteWire;readonly yMin: ProjectFiniteWire;readonly xMax: ProjectFiniteWire;readonly yMax: ProjectFiniteWire;}
+export interface ProjectPlacementVolumeWire {readonly minMm: ProjectVectorWire;readonly maxMm: ProjectVectorWire;}
+export interface ProjectPlacementCenterWire {readonly instanceIds: ProjectIdsWire;readonly areaMm: ProjectPlacementAreaWire;}
+export interface ProjectPlacementScaleToFitWire {readonly instanceIds: ProjectIdsWire;readonly volumeMm: ProjectPlacementVolumeWire;}
 export interface ProjectPlacementLayOnFaceWire {readonly instanceId: ProjectIdWire;readonly localNormal: ProjectVectorWire;}
 export interface ProjectPlacementLayOnFacetWire {readonly instanceId: ProjectIdWire;readonly volumeId: ProjectIdWire;readonly triangle: ProjectCounterWire;}
 export type ProjectPlacementRequestWire = {readonly mirror:ProjectPlacementMirrorWire} | {readonly resetRotation:ProjectPlacementSelectionWire} | {readonly resetScale:ProjectPlacementSelectionWire} | {readonly resetTransform:ProjectPlacementSelectionWire} | {readonly centerOnPlate:ProjectPlacementCenterWire} | {readonly scaleToFit:ProjectPlacementScaleToFitWire} | {readonly layOnFace:ProjectPlacementLayOnFaceWire} | {readonly layOnFacet:ProjectPlacementLayOnFacetWire} | {readonly dropToBed:ProjectPlacementSelectionWire};
@@ -7668,7 +7686,7 @@ export interface ProjectArrangeRegionWire {readonly minX: ProjectFiniteWire;read
 export type ProjectArrangeRegionsWire = readonly ProjectArrangeRegionWire[];
 export type ProjectVolumeRoleNamesWire = readonly ProjectVolumeRoleNameWire[];
 export type ProjectOptionalVolumeRoleNamesWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectVolumeRoleNamesWire};
-export interface ProjectArrangeConstraintsInputWire {readonly bedSizeMm: ProjectPlanarPositionWire;readonly spacingMm: ProjectOptionalFiniteWire;readonly bedMarginMm: ProjectOptionalFiniteWire;readonly exclusions: ProjectArrangeRegionsWire;readonly lockedInstanceIds: ProjectIdsWire;readonly volumeRoles: ProjectOptionalVolumeRoleNamesWire;}
+export interface ProjectArrangeConstraintsInputWire {readonly bedAreaMm: ProjectPlacementAreaWire;readonly spacingMm: ProjectOptionalFiniteWire;readonly bedMarginMm: ProjectOptionalFiniteWire;readonly exclusions: ProjectArrangeRegionsWire;readonly lockedInstanceIds: ProjectIdsWire;readonly volumeRoles: ProjectOptionalVolumeRoleNamesWire;}
 export interface ProjectArrangeRequestWire {readonly plateId: ProjectIdWire;readonly constraints: ProjectArrangeConstraintsInputWire;}
 export interface ProjectArrangePlacementWire {readonly instanceId: ProjectIdWire;readonly transform: ProjectTransformWire;readonly footprint: ProjectArrangeRegionWire;}
 export type ProjectArrangePlacementsWire = readonly ProjectArrangePlacementWire[];

@@ -50,7 +50,7 @@ type Fixture = Awaited<ReturnType<typeof setup>>;
 const operations = {
   duplicate: ({ controller }: Fixture) => controller.duplicateSelectedInstance(),
   fill: ({ controller, first }: Fixture) =>
-    controller.fillPlateWithInstances(first.instanceId, { bedSizeMm: [270, 270] }, 70),
+    controller.fillPlateWithInstances(first.instanceId, { bedAreaMm: { xMin: 0, yMin: 0, xMax: 270, yMax: 270 } }, 70),
 };
 let passed = 0;
 async function test(name: string, run: () => Promise<void>) {
@@ -243,7 +243,11 @@ await test('the production pool bounds concurrent inputs and settles stale neigh
 await test('a one-copy fill preserves its transaction label and reports withheld slots', async () => {
   const { controller, first } = await setup();
   try {
-    const result = await controller.fillPlateWithInstances(first.instanceId, { bedSizeMm: [270, 270] }, 1);
+    const result = await controller.fillPlateWithInstances(
+      first.instanceId,
+      { bedAreaMm: { xMin: 0, yMin: 0, xMax: 270, yMax: 270 } },
+      1,
+    );
     assert.equal(result.created, 1);
     assert.ok(result.withheld > 0);
     assert.equal(controller.getSummary().history.undoLabel, 'Duplicate instance');
@@ -260,7 +264,9 @@ await test('a later member failure rolls back the entire fill and releases stagi
     const collision = next('instance');
     idSource.next = (family) =>
       family === 'instance' ? (collision as ReturnType<typeof idSource.next<typeof family>>) : next(family);
-    await assert.rejects(controller.fillPlateWithInstances(first.instanceId, { bedSizeMm: [270, 270] }, 2));
+    await assert.rejects(
+      controller.fillPlateWithInstances(first.instanceId, { bedAreaMm: { xMin: 0, yMin: 0, xMax: 270, yMax: 270 } }, 2),
+    );
     assert.equal(controller.captureProjectExportGuard().semanticHash, before.identity.semanticHash);
     assert.equal(controller.captureProjectExportGuard().assetFingerprint, before.identity.assetFingerprint);
     assert.deepEqual(controller.getObjectsTree().selection, before.tree.selection);
@@ -276,15 +282,27 @@ await test('no selection, a full bed and over-budget or missing targets leave st
     controller.clearSelection();
     const before = footprint(controller);
     assert.equal(await controller.duplicateSelectedInstance(), undefined);
-    assert.deepEqual(await controller.fillPlateWithInstances(first.instanceId, { bedSizeMm: [1, 1] }), {
-      created: 0,
-      withheld: 0,
-    });
-    await assert.rejects(controller.fillPlateWithInstances(first.instanceId, { bedSizeMm: [270, 270] }, 4097), {
-      code: 'resourceLimit',
-    });
+    assert.deepEqual(
+      await controller.fillPlateWithInstances(first.instanceId, { bedAreaMm: { xMin: 0, yMin: 0, xMax: 1, yMax: 1 } }),
+      {
+        created: 0,
+        withheld: 0,
+      },
+    );
     await assert.rejects(
-      controller.fillPlateWithInstances(entityId<'instance'>('import:missing:instance'), { bedSizeMm: [270, 270] }),
+      controller.fillPlateWithInstances(
+        first.instanceId,
+        { bedAreaMm: { xMin: 0, yMin: 0, xMax: 270, yMax: 270 } },
+        4097,
+      ),
+      {
+        code: 'resourceLimit',
+      },
+    );
+    await assert.rejects(
+      controller.fillPlateWithInstances(entityId<'instance'>('import:missing:instance'), {
+        bedAreaMm: { xMin: 0, yMin: 0, xMax: 270, yMax: 270 },
+      }),
       /Unknown instance/,
     );
     assert.deepEqual(footprint(controller), before);

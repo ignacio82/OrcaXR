@@ -1,8 +1,11 @@
 // Workspace bed references from the production browser (`WorkspaceBed.ts`
-// through `WorkspaceBedExchange.ts`): the bed size the workspace maps, places
-// and arranges on (`bedSizeFromProfile` over `printable_area` as flattened
-// text), the printable rectangle (`printableAreaRect`), the printable height
-// scale-to-fit reads and a plate wipe tower's arrange keep-out. Inputs cover
+// through `WorkspaceBedExchange.ts`): the bed size the workspace draws and
+// maps (`bedSizeFromProfile` over `printable_area` as flattened text), the
+// printable rectangle (`printableAreaRect`), the printable height, the
+// placement area and build volume models are placed in and scaled into (the
+// slice preflight's own reading of the area and height from engine strings,
+// else the workspace's, else the bed from its corner) and a plate wipe
+// tower's arrange keep-out. Inputs cover
 // the bundled printers' values, every JavaScript coercion these reads make
 // (`Number`, `parseFloat`, `String`, `??`, `||`, both separators, hex and
 // exponent spellings, whitespace, non-string entries) and malformed requests,
@@ -83,6 +86,18 @@ bed("three parts", { printable_area: "0x0x9,240x0x9,240x235x9" });
 bed("lone surrogate", { printable_area: ["\ud800x5", "100x100", "0x0"] });
 bed("huge coordinates", { printable_area: ["0x0", "1e300x1e300"] });
 bed("plate keys elsewhere", { bed_shape: "0x0,500x500", printable_area: "0x0,180x180" });
+// The placement area and volume: the preflight's rectangle and height first.
+bed("far offset area", { printable_area: ["180x150", "300x150", "300x260", "180x260"], printable_height: "100" });
+bed("closing repeat", { printable_area: "0x0,200x0,200x200,0x200,0x0", printable_height: "200" });
+bed("clockwise rectangle", { printable_area: "10x10,10x210,230x210,230x10", printable_height: "180" });
+bed("signed corners", { printable_area: ["+0.5x+1", "270.5x+1", "270.5x271", "+0.5x271"], printable_height: "+250" });
+bed("negative zero corners", { printable_area: "-0x-0,200x-0,200x200,-0x200", printable_height: "200" });
+bed("padded corners", { printable_area: [" 5x5", "205x5 ", "205x205", "5x205"], printable_height: " 120 " });
+bed("diamond polygon", { printable_area: "-100x0,0x-100,100x0,0x100", printable_height: "250mm" });
+bed("trapezoid", { printable_area: "0x0,200x0,150x200,50x200", printable_height: "200" });
+bed("five corners", { printable_area: "0x0,100x0,200x0,200x200,0x200", printable_height: "200" });
+bed("rectangle and garbage height", { printable_area: "0x0,220x0,220x220,0x220", printable_height: "abc" });
+bed("garbage area with height", { printable_area: "garbage", printable_height: "150" });
 // printable_height as scale-to-fit reads it.
 for (const [name, height] of [
   ["number", 250],
@@ -201,6 +216,9 @@ const sources = [
   "tools/cross-platform/workspace-bed-vectors.mjs",
   "web/src/workspace/WorkspaceBed.ts",
   "web/src/workspace/WorkspaceBedExchange.ts",
+  "web/src/workspace/ProfilePreflightConstraints.ts",
+  "web/src/workspace/AuthoredSlicingTarget.ts",
+  "web/src/settings/configSerialization.ts",
   "web/src/slicer/ProfileLoader.ts",
   "web/src/project/objects/wipeTowerPlacement.ts",
   "web/src/project/domain/canonical.ts",
@@ -218,9 +236,10 @@ const output =
 const path = new URL("testdata/cross-platform/workspace-bed-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);
 else assert.equal(readFileSync(path, "utf8"), output, "Workspace bed reference drift");
-const keepOuts = cases.filter((c) => !c.reply.startsWith('{"keepOut":null')).length;
+const keepOuts = cases.filter((c) => !c.reply.includes('"keepOut":null')).length;
 const areas = cases.filter((c) => !c.reply.includes('"printableArea":null')).length;
+const volumes = cases.filter((c) => !c.reply.includes('"volumeMm":null')).length;
 console.log(
-  `Workspace bed references: ${cases.length} beds (${areas} printable areas, ${keepOuts} keep-outs), ` +
+  `Workspace bed references: ${cases.length} beds (${areas} printable areas, ${volumes} build volumes, ${keepOuts} keep-outs), ` +
     `${refusals.length} refusals, ${states.length} projects (${states.flatMap((p) => p.beds).length} plate beds)`,
 );

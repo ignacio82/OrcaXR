@@ -2,6 +2,7 @@ import type { AssetPayload } from '../assets';
 import { canonicalStringify, cloneJson, cloneProjectState } from '../domain/canonical';
 import type { AssetId, IdSource } from '../domain/ids';
 import type { ProjectObject, ProjectState, SourceAssetDescriptor, Transform } from '../domain/model';
+import type { AabbXY } from '../objects/wipeTowerPlacement';
 import { Bbs3mfProjectSerializer } from '../serialization/Bbs3mfProjectSerializer';
 import {
   ImportCancelledError,
@@ -18,8 +19,8 @@ export interface GeometryMergeParserOptions {
   readonly idSource: IdSource;
   readonly clock?: () => string;
   readonly serializer?: Bbs3mfProjectSerializer;
-  /** Printable area used to centre the merged objects; omit to keep source XY. */
-  readonly bedSizeMm?: readonly [number, number];
+  /** Printable area (printer mm) the merged objects are centred on; omit to keep source XY. */
+  readonly bedAreaMm?: Readonly<AabbXY>;
 }
 
 /**
@@ -158,7 +159,7 @@ export class GeometryMergeParser implements ProjectImportParserPort {
 
     if (merged.length === 0) throw new Error(`${request.source.filename} contains no importable geometry`);
     plate.objects.push(...merged);
-    if (this.options.bedSizeMm) centerMerged(merged, this.options.bedSizeMm, parsed.state, assets);
+    if (this.options.bedAreaMm) centerMerged(merged, this.options.bedAreaMm, parsed.state, assets);
     state.updatedAt = importedAt;
 
     // Everything geometry-only leaves behind is reported, never silent.
@@ -204,7 +205,7 @@ export class GeometryMergeParser implements ProjectImportParserPort {
 /** Shift merged objects as one group so they land on the target plate. */
 function centerMerged(
   merged: readonly ProjectObject[],
-  bedSizeMm: readonly [number, number],
+  area: Readonly<AabbXY>,
   _sourceState: ProjectState,
   _assets: readonly AssetPayload[],
 ): void {
@@ -221,8 +222,8 @@ function centerMerged(
     }
   }
   if (!Number.isFinite(minX) || !Number.isFinite(minY)) return;
-  const deltaX = bedSizeMm[0] / 2 - (minX + maxX) / 2;
-  const deltaY = bedSizeMm[1] / 2 - (minY + maxY) / 2;
+  const deltaX = (area.xMin + area.xMax) / 2 - (minX + maxX) / 2;
+  const deltaY = (area.yMin + area.yMax) / 2 - (minY + maxY) / 2;
   for (const object of merged) {
     for (const instance of object.instances) {
       instance.transform = {

@@ -48,14 +48,20 @@ export function planPlacement(
     else if ('resetScale' in request) changes = resetInstanceScales(state, ids(request.resetScale.instanceIds));
     else if ('resetTransform' in request)
       changes = resetInstanceTransforms(state, ids(request.resetTransform.instanceIds));
-    else if ('centerOnPlate' in request)
-      changes = centerInstancesOnPlate(state, assets, ids(request.centerOnPlate.instanceIds), [
-        request.centerOnPlate.bedSizeMm[0],
-        request.centerOnPlate.bedSizeMm[1],
-      ]);
-    else if ('scaleToFit' in request) {
-      const [x, y, z] = request.scaleToFit.volumeMm;
-      changes = scaleInstancesToFitPrintVolume(state, assets, ids(request.scaleToFit.instanceIds), { x, y, z });
+    else if ('centerOnPlate' in request) {
+      const { xMin, yMin, xMax, yMax } = request.centerOnPlate.areaMm;
+      changes = centerInstancesOnPlate(state, assets, ids(request.centerOnPlate.instanceIds), {
+        xMin,
+        yMin,
+        xMax,
+        yMax,
+      });
+    } else if ('scaleToFit' in request) {
+      const { minMm, maxMm } = request.scaleToFit.volumeMm;
+      changes = scaleInstancesToFitPrintVolume(state, assets, ids(request.scaleToFit.instanceIds), {
+        minMm: vector(minMm),
+        maxMm: vector(maxMm),
+      });
     } else if ('layOnFace' in request)
       changes = layInstanceOnFace(state, assets, {
         instanceId: wireText(request.layOnFace.instanceId) as InstanceId,

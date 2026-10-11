@@ -55,8 +55,8 @@ pub struct ProjectImportBase {
 }
 #[wasm_bindgen]
 impl ProjectImportBase {
-    /// Consumes the upload on every outcome. `bed` is empty or `[width, depth]`
-    /// in millimetres. Production IDs come from a 32-byte random `id_seed`;
+    /// Consumes the upload on every outcome. `bed` is empty or the printable
+    /// area `[x_min, y_min, x_max, y_max]` in printer millimetres. Production IDs come from a 32-byte random `id_seed`;
     /// `id_namespace` selects deterministic `import:<namespace>:<kind>-<n>` IDs.
     #[allow(clippy::too_many_arguments)]
     pub fn prepare_model(
@@ -71,9 +71,12 @@ impl ProjectImportBase {
     ) -> Result<ProjectImportPreview, JsValue> {
         let bytes = upload.input.finish().map_err(error)?;
         let placement = Placement {
-            bed_size_mm: match bed {
+            // The printable area `[x_min, y_min, x_max, y_max]`, or none.
+            bed_area_mm: match bed {
                 [] => None,
-                [width, depth] if width.is_finite() && depth.is_finite() => Some([*width, *depth]),
+                [x_min, y_min, x_max, y_max] if bed.iter().all(|v| v.is_finite()) => {
+                    Some([*x_min, *y_min, *x_max, *y_max])
+                }
                 _ => return Err(error("invalid_options")),
             },
             drop_to_bed,

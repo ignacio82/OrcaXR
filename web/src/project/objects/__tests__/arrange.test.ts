@@ -71,7 +71,9 @@ function createProject(sizes: readonly { size: number; at: readonly [number, num
   return { state, assets, instanceIds, plateId: state.plates[0].id };
 }
 
-const BED: readonly [number, number] = [200, 200];
+const BED = { xMin: 0, yMin: 0, xMax: 200, yMax: 200 } as const;
+/** A printable area well away from the bed corner, as some printers declare one. */
+const OFFSET = { xMin: 100, yMin: 60, xMax: 300, yMax: 260 } as const;
 
 test('packs overlapping instances into a deterministic non-overlapping layout', () => {
   const { state, assets, plateId } = createProject([
@@ -79,8 +81,8 @@ test('packs overlapping instances into a deterministic non-overlapping layout', 
     { size: 30, at: [12, 12] },
     { size: 50, at: [14, 14] },
   ]);
-  const first = planPlateArrangement(state, assets, plateId, { bedSizeMm: BED });
-  const again = planPlateArrangement(state, assets, plateId, { bedSizeMm: BED });
+  const first = planPlateArrangement(state, assets, plateId, { bedAreaMm: BED });
+  const again = planPlateArrangement(state, assets, plateId, { bedAreaMm: BED });
   assert.deepEqual(first, again, 'the same project always produces the same layout');
   assert.equal(first.unplacedInstanceIds.length, 0);
   assert.equal(first.placements.length, 3);
@@ -105,7 +107,7 @@ test('centres the packed block on an otherwise empty plate', () => {
     { size: 40, at: [0, 0] },
     { size: 40, at: [1, 1] },
   ]);
-  const result = planPlateArrangement(state, assets, plateId, { bedSizeMm: BED });
+  const result = planPlateArrangement(state, assets, plateId, { bedAreaMm: BED });
   const block = result.placements.reduce(
     (bounds, placement) => ({
       minX: Math.min(bounds.minX, placement.footprint.minX),
@@ -126,7 +128,7 @@ test('keeps locked instances and exclusion zones clear', () => {
   ]);
   const locked = instanceIds[0];
   const result = planPlateArrangement(state, assets, plateId, {
-    bedSizeMm: BED,
+    bedAreaMm: BED,
     lockedInstanceIds: [locked],
     exclusions: [{ minX: 0, minY: 0, maxX: 120, maxY: 60 }],
   });
@@ -153,7 +155,7 @@ test('reports instances that cannot fit instead of moving them off the bed', () 
     { size: 90, at: [3, 3] },
     { size: 90, at: [4, 4] },
   ]);
-  const result = planPlateArrangement(state, assets, plateId, { bedSizeMm: [200, 200] });
+  const result = planPlateArrangement(state, assets, plateId, { bedAreaMm: BED });
   assert.ok(result.unplacedInstanceIds.length > 0, 'over-full plates report the remainder');
   assert.equal(
     result.placements.length + result.unplacedInstanceIds.length <= 5,
@@ -169,7 +171,7 @@ test('preserves rotation, scale, and Z, and emits an exact transform batch', () 
   const { state, assets, plateId, instanceIds } = createProject([{ size: 20, at: [150, 150] }]);
   const instance = state.plates[0].objects[0].instances[0];
   instance.transform = { translationMm: [150, 150, 7], rotation: [0, 0, 0.7071, 0.7071], scale: [1, 2, 1] };
-  const result = planPlateArrangement(state, assets, plateId, { bedSizeMm: BED });
+  const result = planPlateArrangement(state, assets, plateId, { bedAreaMm: BED });
   const change = arrangementTransformChanges(result)[0];
   assert.equal(change.instanceId, instanceIds[0]);
   assert.deepEqual(change.transform.rotation, [0, 0, 0.7071, 0.7071], 'orientation is untouched');
@@ -180,30 +182,30 @@ test('preserves rotation, scale, and Z, and emits an exact transform batch', () 
 test('rejects invalid beds, spacing, and exclusion rectangles', () => {
   const { state, assets, plateId } = createProject([{ size: 20, at: [0, 0] }]);
   assert.throws(
-    () => planPlateArrangement(state, assets, plateId, { bedSizeMm: [0, 200] }),
+    () => planPlateArrangement(state, assets, plateId, { bedAreaMm: { xMin: 0, yMin: 0, xMax: 0, yMax: 200 } }),
     (error: unknown) => error instanceof ArrangeConstraintError && error.code === 'invalid-bed',
   );
   assert.throws(
-    () => planPlateArrangement(state, assets, plateId, { bedSizeMm: BED, spacingMm: -1 }),
+    () => planPlateArrangement(state, assets, plateId, { bedAreaMm: BED, spacingMm: -1 }),
     (error: unknown) => error instanceof ArrangeConstraintError && error.code === 'invalid-spacing',
   );
   assert.throws(
     () =>
       planPlateArrangement(state, assets, plateId, {
-        bedSizeMm: BED,
+        bedAreaMm: BED,
         exclusions: [{ minX: 10, minY: 10, maxX: 5, maxY: 20 }],
       }),
     (error: unknown) => error instanceof ArrangeConstraintError && error.code === 'invalid-exclusion',
   );
   assert.throws(
-    () => planPlateArrangement(state, assets, entityId<'plate'>('import:test:missing'), { bedSizeMm: BED }),
+    () => planPlateArrangement(state, assets, entityId<'plate'>('import:test:missing'), { bedAreaMm: BED }),
     (error: unknown) => error instanceof ArrangeConstraintError && error.code === 'unknown-plate',
   );
 });
 
 test('fills the free bed space with copies without moving what is already placed', () => {
   const { state, assets, plateId, instanceIds } = createProject([{ size: 40, at: [4, 4] }]);
-  const fill = planBedFill(state, assets, plateId, { instanceId: instanceIds[0] }, { bedSizeMm: BED });
+  const fill = planBedFill(state, assets, plateId, { instanceId: instanceIds[0] }, { bedAreaMm: BED });
   assert.ok(fill.placements.length >= 8, 'a 200 mm bed fits several 40 mm copies');
   assert.equal(fill.sourceInstanceId, instanceIds[0]);
 
@@ -223,7 +225,7 @@ test('fills the free bed space with copies without moving what is already placed
     assert.deepEqual(placement.transform.rotation, [0, 0, 0, 1], 'copies keep the source orientation');
   }
   assert.deepEqual(
-    planBedFill(state, assets, plateId, { instanceId: instanceIds[0] }, { bedSizeMm: BED }),
+    planBedFill(state, assets, plateId, { instanceId: instanceIds[0] }, { bedAreaMm: BED }),
     fill,
     'the plan is deterministic',
   );
@@ -236,12 +238,12 @@ test('respects the copy limit and reports withheld slots', () => {
     assets,
     plateId,
     { instanceId: instanceIds[0], maxNewInstances: 3 },
-    { bedSizeMm: BED },
+    { bedAreaMm: BED },
   );
   assert.equal(capped.placements.length, 3);
   assert.ok(capped.withheldSlotCount > 0, 'the remaining free slots are reported, not silently dropped');
   assert.throws(
-    () => planBedFill(state, assets, plateId, { instanceId: instanceIds[0], maxNewInstances: 0 }, { bedSizeMm: BED }),
+    () => planBedFill(state, assets, plateId, { instanceId: instanceIds[0], maxNewInstances: 0 }, { bedAreaMm: BED }),
     (error: unknown) => error instanceof ArrangeConstraintError && error.code === 'invalid-limit',
   );
 });
@@ -255,9 +257,60 @@ test('bed fill names an unknown instance as such, not as an unknown plate', () =
         assets,
         plateId,
         { instanceId: entityId<'instance'>('import:test:missing') },
-        { bedSizeMm: BED },
+        { bedAreaMm: BED },
       ),
     (error: unknown) => error instanceof ArrangeConstraintError && error.code === 'unknown-instance',
+  );
+});
+
+test('arranges inside a printable area offset from the bed corner', () => {
+  const { state, assets, plateId } = createProject([
+    { size: 40, at: [0, 0] },
+    { size: 30, at: [1, 1] },
+    { size: 50, at: [2, 2] },
+  ]);
+  const result = planPlateArrangement(state, assets, plateId, { bedAreaMm: OFFSET });
+  assert.equal(result.unplacedInstanceIds.length, 0);
+  for (const { footprint } of result.placements) {
+    assert.ok(footprint.minX >= 102 && footprint.minY >= 62, 'the margin is kept from the area, not the bed corner');
+    assert.ok(footprint.maxX <= 298 && footprint.maxY <= 258, 'placements stay inside the offset area');
+  }
+  const block = result.placements.reduce(
+    (bounds, { footprint }) => ({
+      minX: Math.min(bounds.minX, footprint.minX),
+      maxX: Math.max(bounds.maxX, footprint.maxX),
+      minY: Math.min(bounds.minY, footprint.minY),
+      maxY: Math.max(bounds.maxY, footprint.maxY),
+    }),
+    { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+  );
+  assert.ok(Math.abs((block.minX + block.maxX) / 2 - 200) < 1e-6, 'the block is centred on the area in X');
+  assert.ok(Math.abs((block.minY + block.maxY) / 2 - 160) < 1e-6, 'the block is centred on the area in Y');
+  assert.throws(
+    () => planPlateArrangement(state, assets, plateId, { bedAreaMm: { xMin: 300, yMin: 60, xMax: 100, yMax: 260 } }),
+    (error: unknown) => error instanceof ArrangeConstraintError && error.code === 'invalid-bed',
+    'an inverted area is no printable area',
+  );
+});
+
+test('fills a printable area offset from the bed corner, and only it', () => {
+  const { state, assets, plateId, instanceIds } = createProject([{ size: 40, at: [150, 100] }]);
+  const fill = planBedFill(state, assets, plateId, { instanceId: instanceIds[0] }, { bedAreaMm: OFFSET });
+  assert.ok(fill.placements.length >= 8, 'a 200 mm area fits several 40 mm copies');
+  for (const { footprint } of fill.placements) {
+    assert.ok(footprint.minX >= 102 && footprint.minY >= 62, 'copies start at the area, inside its margin');
+    assert.ok(footprint.maxX <= 298 && footprint.maxY <= 258, 'copies stay inside the offset area');
+  }
+  assert.throws(
+    () =>
+      planBedFill(
+        state,
+        assets,
+        plateId,
+        { instanceId: instanceIds[0] },
+        { bedAreaMm: { xMin: 0, yMin: 0, xMax: Infinity, yMax: 200 } },
+      ),
+    (error: unknown) => error instanceof ArrangeConstraintError && error.code === 'invalid-bed',
   );
 });
 

@@ -3296,18 +3296,34 @@
         "axis": "PlacementAxis"
       }
     },
+    "PlacementArea": {
+      "kind": "object",
+      "fields": {
+        "xMin": "Finite",
+        "yMin": "Finite",
+        "xMax": "Finite",
+        "yMax": "Finite"
+      }
+    },
+    "PlacementVolume": {
+      "kind": "object",
+      "fields": {
+        "minMm": "Vector",
+        "maxMm": "Vector"
+      }
+    },
     "PlacementCenter": {
       "kind": "object",
       "fields": {
         "instanceIds": "Ids",
-        "bedSizeMm": "PlanarPosition"
+        "areaMm": "PlacementArea"
       }
     },
     "PlacementScaleToFit": {
       "kind": "object",
       "fields": {
         "instanceIds": "Ids",
-        "volumeMm": "Vector"
+        "volumeMm": "PlacementVolume"
       }
     },
     "PlacementLayOnFace": {
@@ -3423,7 +3439,7 @@
     "ArrangeConstraintsInput": {
       "kind": "object",
       "fields": {
-        "bedSizeMm": "PlanarPosition",
+        "bedAreaMm": "PlacementArea",
         "spacingMm": "OptionalFinite",
         "bedMarginMm": "OptionalFinite",
         "exclusions": "ArrangeRegions",

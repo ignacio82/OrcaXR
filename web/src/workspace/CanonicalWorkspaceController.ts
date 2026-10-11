@@ -222,6 +222,7 @@ import {
 } from '../project/objects/arrange';
 import {
   planWipeTowerPlacement,
+  type AabbXY,
   type WipeTowerPick,
   type WipeTowerPlanOptions,
 } from '../project/objects/wipeTowerPlacement';
@@ -4165,14 +4166,11 @@ export class CanonicalWorkspaceController {
     await this.setInstanceTransforms(changes, `reset:${target}`);
   }
 
-  /** Centre an exact instance selection on the printable area. */
-  async centerInstancesOnPlate(
-    instanceIds: readonly InstanceId[],
-    bedSizeMm: readonly [number, number],
-  ): Promise<void> {
+  /** Centre an exact instance selection on the printable area (printer mm, `WorkspaceBed.areaMm`). */
+  async centerInstancesOnPlate(instanceIds: readonly InstanceId[], area: Readonly<AabbXY>): Promise<void> {
     this.assertActive();
     const state = this.session.project.getSnapshot().state;
-    await this.setInstanceTransforms(centerInstancesOnPlate(state, this.assets, instanceIds, bedSizeMm), 'center');
+    await this.setInstanceTransforms(centerInstancesOnPlate(state, this.assets, instanceIds, area), 'center');
   }
 
   /** Scale the selection to fill the printable volume, then place it on the bed. */
@@ -4545,7 +4543,7 @@ export class CanonicalWorkspaceController {
   async prepareGeometryImport(
     bytes: Uint8Array,
     source: ProjectImportSource,
-    options: { bedSizeMm?: readonly [number, number]; cancellation?: CancellationToken } = {},
+    options: { bedAreaMm?: Readonly<AabbXY>; cancellation?: CancellationToken } = {},
   ): Promise<PreparedProjectImport> {
     this.assertActive();
     const lifecycle = new ImportCancellationController();
@@ -4553,7 +4551,7 @@ export class CanonicalWorkspaceController {
     const parser = new GeometryMergeParser({
       idSource: this.options.idSource,
       clock: () => readClock(this.options.clock),
-      ...(options.bedSizeMm ? { bedSizeMm: options.bedSizeMm } : {}),
+      ...(options.bedAreaMm ? { bedAreaMm: options.bedAreaMm } : {}),
     });
     const coordinator = new ProjectImportCoordinator({
       parser: {

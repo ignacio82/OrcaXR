@@ -34,7 +34,7 @@ fn reference_sources_are_current() {
 fn beds_match_the_browser() {
     let corpus = corpus();
     let cases = corpus["cases"].as_array().unwrap();
-    assert_eq!(cases.len(), 74);
+    assert_eq!(cases.len(), 85);
     for case in cases {
         let reply = bed_json(case["request"].as_str().unwrap()).unwrap();
         assert_eq!(reply, case["reply"].as_str().unwrap(), "{}", case["name"]);

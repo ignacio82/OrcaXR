@@ -6,7 +6,8 @@
 //!
 //! - a primitive is a new object (`importGeometry` → `prepareGeometryObject`)
 //!   named after its file (`cube.stl`), its one model part and one instance
-//!   centred on the bed and resting on it (`geometryBedPlacement`), its mesh
+//!   centred on the printable area and resting on the bed
+//!   (`geometryBedPlacement`), its mesh
 //!   shared with an asset the project already holds with the same bytes and
 //!   layout — the first such asset in code-unit ID order — or else a new asset
 //!   recording its file and import time;
@@ -28,6 +29,7 @@ use crate::ids::{AssetId, is_stable_entity_id};
 use crate::js_math;
 use crate::mesh::{self, Coordinates, EncodeOptions};
 use crate::model::{AssetOrigin, AssetProvenance, ProjectState, Text, VolumeRole};
+use crate::placement::Area;
 use orcaxr_contracts::canonical::{Value, parse};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -192,15 +194,17 @@ pub fn bounds(positions: &[f32]) -> ([f64; 3], [f64; 3]) {
     (min, max)
 }
 
-/// `geometryBedPlacement`: the translation that centres the bounds on a bed of
-/// `bed_mm` (width, depth) and rests them on it.
-pub fn bed_placement(positions: &[f32], bed_mm: [f64; 2]) -> [f64; 3] {
+/// `geometryBedPlacement`: the translation that centres the bounds on the
+/// printable `area` (printer mm, `WorkspaceBed.areaMm`: the midpoint of its
+/// corners, which a printer may offset from the bed corner) and rests them on
+/// the bed.
+pub fn bed_placement(positions: &[f32], area: Area) -> [f64; 3] {
     let (min, max) = bounds(positions);
     let center_x = (min[0] + max[0]) / 2.0;
     let center_y = (min[1] + max[1]) / 2.0;
     [
-        bed_mm[0] / 2.0 - center_x,
-        bed_mm[1] / 2.0 - center_y,
+        (area.x_min + area.x_max) / 2.0 - center_x,
+        (area.y_min + area.y_max) / 2.0 - center_y,
         -min[2],
     ]
 }
@@ -458,7 +462,8 @@ fn reusable(assets: &AssetRepository, staged: &AssetPayload) -> Result<Option<As
 }
 
 /// A primitive on a plate (`addPrimitive` → `importGeometry`):
-/// `{"bedMm","ids","importedAt","kind","plateId","sizeMm"}` →
+/// `{"areaMm","ids","importedAt","kind","plateId","sizeMm"}` (the area as
+/// `{"xMax","xMin","yMax","yMin"}`) →
 /// `{"assetJson","idsUsed","objectJson","plateId","reusedAsset"}`, or
 /// `{"refusal"}` in the browser's words.
 pub fn primitive_object_json(
@@ -468,17 +473,23 @@ pub fn primitive_object_json(
 ) -> Result<String, &'static str> {
     let mut fields = members(
         read(request)?,
-        &["bedMm", "ids", "importedAt", "kind", "plateId", "sizeMm"],
+        &["areaMm", "ids", "importedAt", "kind", "plateId", "sizeMm"],
         &[],
     )?;
     let shape = Shape::parse(&text(take(&mut fields, "kind"))?).ok_or(INVALID_REQUEST)?;
     let file = shape.file_name().ok_or(INVALID_REQUEST)?;
     let size = size(take(&mut fields, "sizeMm"))?;
-    let Value::Array(bed) = take(&mut fields, "bedMm") else {
-        return Err(INVALID_REQUEST);
+    let mut area = members(
+        take(&mut fields, "areaMm"),
+        &["xMax", "xMin", "yMax", "yMin"],
+        &[],
+    )?;
+    let area = Area {
+        x_min: finite(take(&mut area, "xMin"))?,
+        y_min: finite(take(&mut area, "yMin"))?,
+        x_max: finite(take(&mut area, "xMax"))?,
+        y_max: finite(take(&mut area, "yMax"))?,
     };
-    let [width, depth]: [Value; 2] = bed.try_into().map_err(|_| INVALID_REQUEST)?;
-    let bed = [finite(width)?, finite(depth)?];
     let imported_at = text(take(&mut fields, "importedAt"))?;
     let plate_id = match take(&mut fields, "plateId") {
         Value::Null => None,
@@ -500,7 +511,7 @@ pub fn primitive_object_json(
     if mesh.positions.iter().any(|v| !v.is_finite()) {
         return Err(INVALID_REQUEST);
     }
-    let translation = bed_placement(&mesh.positions, bed);
+    let translation = bed_placement(&mesh.positions, area);
     let staging = AssetId::try_from_str("import:orcaxr:canonical-workspace-staging")
         .map_err(|_| OUTPUT_LIMIT)?;
     let staged = encode(&mesh, staging, None, None)?;

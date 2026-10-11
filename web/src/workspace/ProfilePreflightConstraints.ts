@@ -301,10 +301,27 @@ function parseBuildVolume(config: Readonly<Record<string, string>>):
       maxZmm: number;
     }
   | undefined {
-  const area = parseRectangularArea(config['printable_area']);
-  const height = parsePositiveScalar(config['printable_height']);
+  const area = preflightPrintableArea(config);
+  const height = preflightPrintableHeight(config);
   if (!area || height === undefined) return undefined;
   return { ...area, minZmm: 0, maxZmm: height };
+}
+
+/**
+ * The printable rectangle the slice preflight checks every model against, read
+ * from engine strings as the preflight reads it: `printable_area` as exactly
+ * one axis-aligned rectangle, else none (and the preflight refuses to slice).
+ * The workspace places models inside it (`WorkspaceBed.areaMm`).
+ */
+export function preflightPrintableArea(
+  config: Readonly<Record<string, string>>,
+): { minXmm: number; maxXmm: number; minYmm: number; maxYmm: number } | undefined {
+  return parseRectangularArea(config['printable_area']);
+}
+
+/** The printable height the slice preflight checks: `printable_height` as one positive number, else none. */
+export function preflightPrintableHeight(config: Readonly<Record<string, string>>): number | undefined {
+  return parsePositiveScalar(config['printable_height']);
 }
 
 function parseRectangularArea(value: string | undefined):

@@ -63,7 +63,7 @@ fn placements_match_the_browser() {
             "{name}"
         );
     }
-    assert_eq!((plans, refusals), (50, 17));
+    assert_eq!((plans, refusals), (70, 20));
     let request =
         wire::decode_placement_request(f["cases"][0]["request"].as_str().unwrap()).unwrap();
     session.dispose();

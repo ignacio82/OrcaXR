@@ -3,13 +3,17 @@ package dev.orcaxr.core
 import java.io.InputStream
 import java.security.SecureRandom
 
-/** Bed placement for a model import, in millimetres. */
-data class ProjectModelPlacement(val bedWidthMm: Double? = null, val bedDepthMm: Double? = null, val dropToBed: Boolean = false) {
+/**
+ * Bed placement for a model import: centred on [bedArea] (printer mm, the
+ * workspace bed's [WorkspaceBed.areaMm]: the midpoint of its corners, which a
+ * printer may offset from the bed corner), or kept where the source put it.
+ */
+data class ProjectModelPlacement(val bedArea: PrintableArea? = null, val dropToBed: Boolean = false) {
     internal fun encode(): DoubleArray {
-        require((bedWidthMm == null) == (bedDepthMm == null)) { "invalid_options" }
-        if (bedWidthMm == null || bedDepthMm == null) return DoubleArray(0)
-        require(bedWidthMm.isFinite() && bedDepthMm.isFinite()) { "invalid_options" }
-        return doubleArrayOf(bedWidthMm, bedDepthMm)
+        val area = bedArea ?: return DoubleArray(0)
+        val corners = doubleArrayOf(area.xMin, area.yMin, area.xMax, area.yMax)
+        require(corners.all(Double::isFinite)) { "invalid_options" }
+        return corners
     }
 }
 

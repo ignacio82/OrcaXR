@@ -6877,28 +6877,58 @@ fn read_placement_mirror(v: &Value) -> Result<PlacementMirror, InvalidIntent> {
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PlacementArea {
+    pub x_min: Finite,
+    pub y_min: Finite,
+    pub x_max: Finite,
+    pub y_max: Finite,
+}
+fn read_placement_area(v: &Value) -> Result<PlacementArea, InvalidIntent> {
+    let object = fields(v, &["xMin", "yMin", "xMax", "yMax"], false)?;
+    Ok(PlacementArea {
+        x_min: read_finite(&object["xMin"])?,
+        y_min: read_finite(&object["yMin"])?,
+        x_max: read_finite(&object["xMax"])?,
+        y_max: read_finite(&object["yMax"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlacementVolume {
+    pub min_mm: Vector,
+    pub max_mm: Vector,
+}
+fn read_placement_volume(v: &Value) -> Result<PlacementVolume, InvalidIntent> {
+    let object = fields(v, &["minMm", "maxMm"], false)?;
+    Ok(PlacementVolume {
+        min_mm: read_vector(&object["minMm"])?,
+        max_mm: read_vector(&object["maxMm"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PlacementCenter {
     pub instance_ids: Ids,
-    pub bed_size_mm: PlanarPosition,
+    pub area_mm: PlacementArea,
 }
 fn read_placement_center(v: &Value) -> Result<PlacementCenter, InvalidIntent> {
-    let object = fields(v, &["instanceIds", "bedSizeMm"], false)?;
+    let object = fields(v, &["instanceIds", "areaMm"], false)?;
     Ok(PlacementCenter {
         instance_ids: read_ids(&object["instanceIds"])?,
-        bed_size_mm: read_planar_position(&object["bedSizeMm"])?,
+        area_mm: read_placement_area(&object["areaMm"])?,
     })
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlacementScaleToFit {
     pub instance_ids: Ids,
-    pub volume_mm: Vector,
+    pub volume_mm: PlacementVolume,
 }
 fn read_placement_scale_to_fit(v: &Value) -> Result<PlacementScaleToFit, InvalidIntent> {
     let object = fields(v, &["instanceIds", "volumeMm"], false)?;
     Ok(PlacementScaleToFit {
         instance_ids: read_ids(&object["instanceIds"])?,
-        volume_mm: read_vector(&object["volumeMm"])?,
+        volume_mm: read_placement_volume(&object["volumeMm"])?,
     })
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -7131,7 +7161,7 @@ fn read_optional_volume_role_names(v: &Value) -> Result<OptionalVolumeRoleNames,
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArrangeConstraintsInput {
-    pub bed_size_mm: PlanarPosition,
+    pub bed_area_mm: PlacementArea,
     pub spacing_mm: OptionalFinite,
     pub bed_margin_mm: OptionalFinite,
     pub exclusions: ArrangeRegions,
@@ -7142,7 +7172,7 @@ fn read_arrange_constraints_input(v: &Value) -> Result<ArrangeConstraintsInput, 
     let object = fields(
         v,
         &[
-            "bedSizeMm",
+            "bedAreaMm",
             "spacingMm",
             "bedMarginMm",
             "exclusions",
@@ -7152,7 +7182,7 @@ fn read_arrange_constraints_input(v: &Value) -> Result<ArrangeConstraintsInput, 
         false,
     )?;
     Ok(ArrangeConstraintsInput {
-        bed_size_mm: read_planar_position(&object["bedSizeMm"])?,
+        bed_area_mm: read_placement_area(&object["bedAreaMm"])?,
         spacing_mm: read_optional_finite(&object["spacingMm"])?,
         bed_margin_mm: read_optional_finite(&object["bedMarginMm"])?,
         exclusions: read_arrange_regions(&object["exclusions"])?,

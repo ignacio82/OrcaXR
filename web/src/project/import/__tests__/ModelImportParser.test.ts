@@ -8,7 +8,7 @@ import { CommandBus } from '../../history/commandBus';
 import { SelectionStore } from '../../selection';
 import { ProjectStore } from '../../store';
 import { decodeIndexedMeshAsset } from '../../meshCodec';
-import { ModelImportParser } from '../ModelImportParser';
+import { ModelImportParser, type ModelImportPlacement } from '../ModelImportParser';
 import { ProjectImportCoordinator } from '../ProjectImportCoordinator';
 import { ImportPreparationError } from '../types';
 
@@ -30,10 +30,7 @@ function createHarness(seed = 0x5106) {
   return { ids, project, selection, assets, commands };
 }
 
-function coordinatorFor(
-  harness: ReturnType<typeof createHarness>,
-  placement?: { bedSizeMm?: readonly [number, number]; dropToBed?: boolean },
-) {
+function coordinatorFor(harness: ReturnType<typeof createHarness>, placement?: ModelImportPlacement) {
   return new ProjectImportCoordinator({
     parser: new ModelImportParser({
       idSource: harness.ids,
@@ -44,6 +41,9 @@ function coordinatorFor(
     now: () => '2026-08-07T12:00:00.000Z',
   });
 }
+
+/** A bed from its corner: 200 × 200 mm. */
+const BED = { xMin: 0, yMin: 0, xMax: 200, yMax: 200 } as const;
 
 const TRIANGLE_STL = binaryStl([
   [
@@ -104,7 +104,7 @@ await test('stages an STL as one canonical object and commits it as a single und
 
 await test('centres and drops imported geometry when a bed placement is supplied', async () => {
   const harness = createHarness();
-  const coordinator = coordinatorFor(harness, { bedSizeMm: [200, 200], dropToBed: true });
+  const coordinator = coordinatorFor(harness, { bedAreaMm: BED, dropToBed: true });
   const prepared = await coordinator.prepare({ bytes: TRIANGLE_STL, source: { filename: 'wedge.stl' } });
   prepared.confirm({ confirmed: true, acknowledgedNoticeIds: prepared.preview.requiredAcknowledgementIds });
 
@@ -114,7 +114,7 @@ await test('centres and drops imported geometry when a bed placement is supplied
 
 await test('places a multi-object import as one group so its relative layout survives', async () => {
   const harness = createHarness();
-  const coordinator = coordinatorFor(harness, { bedSizeMm: [200, 200], dropToBed: true });
+  const coordinator = coordinatorFor(harness, { bedAreaMm: BED, dropToBed: true });
   const obj = `o Left
 v 0 0 0
 v 10 0 0
@@ -136,6 +136,21 @@ f 4 5 6
   // Group bounds span 0..50 mm in X, so the shared offset centres the pair.
   assert.equal(leftX, 75);
   assert.equal(left.instances[0].transform.translationMm[1], 95);
+});
+
+await test('centres an import on a printable area offset from the bed corner', async () => {
+  const harness = createHarness();
+  // The U1's printable area starts at 0.5 × 1 mm: its centre is (135.5, 136),
+  // not half its far corner (135.25, 135.5).
+  const coordinator = coordinatorFor(harness, {
+    bedAreaMm: { xMin: 0.5, yMin: 1, xMax: 270.5, yMax: 271 },
+    dropToBed: true,
+  });
+  const prepared = await coordinator.prepare({ bytes: TRIANGLE_STL, source: { filename: 'wedge.stl' } });
+  prepared.confirm({ confirmed: true, acknowledgedNoticeIds: prepared.preview.requiredAcknowledgementIds });
+
+  const instance = harness.project.getSnapshot().state.plates[0].objects[0].instances[0];
+  assert.deepEqual(instance.transform.translationMm, [130.5, 131, -4]);
 });
 
 await test('preserves OBJ object and material part structure with source provenance', async () => {

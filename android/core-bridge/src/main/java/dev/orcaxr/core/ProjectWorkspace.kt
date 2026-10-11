@@ -777,8 +777,8 @@ class ProjectWorkspace(
 
     /** Prepares a model import (STL/OBJ/AMF/ZIP) against the current project; nothing changes until it is committed. */
     fun prepareImport(input: ProjectDocumentInput, filename: String): CompletableFuture<ProjectActorImport> = run({ guard, record ->
-        // Centred on the project's own bed and dropped onto it, as the browser places an import.
-        val placement = view.bed.let { ProjectModelPlacement(it.widthMm, it.depthMm, dropToBed = true) }
+        // Centred on the project's own printable area and dropped onto the bed, as the browser places an import.
+        val placement = ProjectModelPlacement(view.bed.areaMm, dropToBed = true)
         actor.prepareImport(guard) { scope, base ->
             capturing(record) {
                 val upload = ProjectDocuments.stageModel(scope, input, ProjectModelImportOptions(), resolver, ProjectIntegerProfile.CHROMIUM)
@@ -1017,22 +1017,23 @@ class ProjectWorkspace(
             }
         }) { }
 
-    /** "Center on plate": the selection's bounds centred on the project's bed. */
+    /** "Center on plate": the selection's bounds centred on the project's printable area ([WorkspaceBed.areaMm]). */
     fun centerOnPlate(instanceIds: List<String>): CompletableFuture<Unit> =
         placement({ PlacementGestures.CENTER }, { bed ->
-            ProjectIntents.PlacementRequest.CenterOnPlate(ProjectIntents.PlacementCenter(ids(instanceIds), listOf(bed.widthMm, bed.depthMm)))
+            ProjectIntents.PlacementRequest.CenterOnPlate(ProjectIntents.PlacementCenter(ids(instanceIds), bed.areaMm.wire()))
         }) { }
 
     /**
-     * "Scale to fit the build volume" (the bed and the project's printable
-     * height), then placed on the bed; answers how many instances changed (0
-     * when the selection already fills it, committing nothing). A project that
-     * states no printable height is refused in the browser's words.
+     * "Scale to fit the build volume" ([WorkspaceBed.volumeMm]: the printable
+     * box the slice preflight checks), centred on it and resting on the bed;
+     * answers how many instances changed (0 when the selection already fills
+     * it, committing nothing). A project that states no printable height is
+     * refused in the browser's words.
      */
     fun scaleToFit(instanceIds: List<String>): CompletableFuture<Int> =
         placement({ PlacementGestures.SCALE_TO_FIT }, { bed ->
-            val height = bed.printableHeightMm ?: throw ProjectFailure(PlacementGestures.NO_PRINTABLE_HEIGHT)
-            ProjectIntents.PlacementRequest.ScaleToFit(ProjectIntents.PlacementScaleToFit(ids(instanceIds), listOf(bed.widthMm, bed.depthMm, height)))
+            val volume = bed.volumeMm ?: throw ProjectFailure(PlacementGestures.NO_PRINTABLE_HEIGHT)
+            ProjectIntents.PlacementRequest.ScaleToFit(ProjectIntents.PlacementScaleToFit(ids(instanceIds), volume.wire()))
         }) { it.changes.size }
 
     /** "Lay on face": the instance turned so the face with [localNormal] (in its own frame) rests on the bed. */
@@ -1048,7 +1049,7 @@ class ProjectWorkspace(
         }) { }
 
     /**
-     * "Arrange" plate [plateId] on the project's bed, keeping its wipe tower
+     * "Arrange" plate [plateId] in the project's printable area ([WorkspaceBed.areaMm]), keeping its wipe tower
      * clear, as one entry; answers the arrangement (what moved, what did not
      * fit, what stayed). An arrangement that moves nothing commits nothing.
      */
@@ -1067,7 +1068,7 @@ class ProjectWorkspace(
         val request = ProjectIntents.ArrangeRequest(
             units(plateId),
             ProjectIntents.ArrangeConstraintsInput(
-                listOf(bed.widthMm, bed.depthMm), absent, absent, exclusions, emptyList(),
+                bed.areaMm.wire(), absent, absent, exclusions, emptyList(),
                 ProjectIntents.OptionalVolumeRoleNames.Absent(ProjectIntents.Empty),
             ),
         )
@@ -1130,7 +1131,7 @@ class ProjectWorkspace(
     fun centerSelectedOnPlate(): CompletableFuture<Int?> = place { session, bed ->
         val ids = selectedOrPlate(session)
         if (ids.isEmpty()) return@place nothing()
-        val plan = planned(session, ProjectIntents.PlacementRequest.CenterOnPlate(ProjectIntents.PlacementCenter(ids(ids), listOf(bed.widthMm, bed.depthMm))))
+        val plan = planned(session, ProjectIntents.PlacementRequest.CenterOnPlate(ProjectIntents.PlacementCenter(ids(ids), bed.areaMm.wire())))
         Planned(plan.changes, PlacementGestures.CENTER, ids.size)
     }
 
@@ -1143,8 +1144,8 @@ class ProjectWorkspace(
     fun scaleSelectedToFit(): CompletableFuture<Int?> = place { session, bed ->
         val ids = selectedOrPlate(session)
         if (ids.isEmpty()) return@place nothing()
-        val height = bed.printableHeightMm ?: throw ProjectFailure(PlacementGestures.NO_PRINTABLE_HEIGHT)
-        val plan = planned(session, ProjectIntents.PlacementRequest.ScaleToFit(ProjectIntents.PlacementScaleToFit(ids(ids), listOf(bed.widthMm, bed.depthMm, height))))
+        val volume = bed.volumeMm ?: throw ProjectFailure(PlacementGestures.NO_PRINTABLE_HEIGHT)
+        val plan = planned(session, ProjectIntents.PlacementRequest.ScaleToFit(ProjectIntents.PlacementScaleToFit(ids(ids), volume.wire())))
         Planned(plan.changes, PlacementGestures.SCALE_TO_FIT, plan.changes.size)
     }
 
@@ -1723,7 +1724,7 @@ class ProjectWorkspace(
     /**
      * A primitive (`add_primitive_*`, the browser's `addPrimitive`): a new
      * object named after its file (`cube.stl`) on the active plate, centred on
-     * the project's bed and resting on it, its mesh shared with an asset the
+     * the project's printable area and resting on the bed, its mesh shared with an asset the
      * project already holds with the same bytes — one "Add cube.stl".
      */
     fun addPrimitive(shape: PrimitiveShape): CompletableFuture<ProjectPrimitiveAdded?> = later {
@@ -1731,7 +1732,7 @@ class ProjectWorkspace(
         create { session, snapshot ->
             val bed = snapshot.workspaceBed(null)
             val drawn = ids.next(Primitives.PRIMITIVE_IDS)
-            val request = Primitives.primitiveRequest(shape, bed.widthMm, bed.depthMm, drawn, NewProjects.timestamp(clock()))
+            val request = Primitives.primitiveRequest(shape, bed.areaMm, drawn, NewProjects.timestamp(clock()))
             when (val plan = session.planPrimitiveObject(request)) {
                 is PrimitivePlan.Refused -> {
                     ids.giveBack(drawn)
@@ -1782,7 +1783,7 @@ class ProjectWorkspace(
     /**
      * Fill Bed with Instances (`fill_bed_with_instances`, the browser's
      * `fillPlateWithSelection`): copies of the last selected instance laid into
-     * its plate's free space on the project's bed, keeping the active plate's
+     * its plate's free space in the project's printable area, keeping the active plate's
      * tower clear, as one "Fill n instances" (one copy: "Duplicate instance").
      * Answers how many were added (none commits nothing) and how many free
      * slots the copy limit left; null without a selected instance.
@@ -1804,7 +1805,7 @@ class ProjectWorkspace(
         val request = ProjectIntents.BedFillRequest(
             units(facts.plateId), units(instanceId), absent,
             ProjectIntents.ArrangeConstraintsInput(
-                listOf(bed.widthMm, bed.depthMm), absent, absent, exclusions, emptyList(),
+                bed.areaMm.wire(), absent, absent, exclusions, emptyList(),
                 ProjectIntents.OptionalVolumeRoleNames.Absent(ProjectIntents.Empty),
             ),
         )

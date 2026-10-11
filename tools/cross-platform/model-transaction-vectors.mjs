@@ -161,6 +161,8 @@ const selected = [
   ["stl-binary/limit-triangles", "empty", "bed"],
   ["detect/step", "empty", "bed"],
   ["real/web/public/models/3dbenchy.stl", "holding", "bed"],
+  ["stl-binary/cube", "empty", "u1"],
+  ["obj/groups-and-materials", "holding", "far"],
 ];
 for (const [index, [decode, base, placement]] of selected.entries()) {
   const namespace = `tx${index}`;

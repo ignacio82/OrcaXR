@@ -143,9 +143,9 @@ if (isMainThread) {
     // Ray picking over a live session, in both scenes.
     assert.deepEqual([result.picks, result.pickRefusals], [486, 1]);
     // Placement planning over a live session.
-    assert.equal(result.placements, 67);
+    assert.equal(result.placements, 90);
     // Arrangement and bed fill over a live session.
-    assert.equal(result.arrangements, 28);
+    assert.equal(result.arrangements, 35);
     // Wipe-tower auto-placement over a live session.
     assert.equal(result.wipeTowers, 27);
     // Volume splits over a live session, staged and executed.
@@ -326,7 +326,7 @@ if (isMainThread) {
     // those refused in the browser's words, and malformed requests.
     assert.deepEqual(result.virtualFilamentAnswers, [6, 27, 197, 12, 12, 51, 13, 20]);
     // The workspace bed: configurations, refusals and opened projects' plates.
-    assert.deepEqual([result.beds, result.bedRefusals, result.projectBeds], [74, 14, 12]);
+    assert.deepEqual([result.beds, result.bedRefusals, result.projectBeds], [85, 14, 12]);
     // The transform inspector's fields: reads, rotations, edits and refusals.
     assert.deepEqual(
       [result.fieldReads, result.rotations, result.fieldEdits, result.fieldRefusals],
@@ -341,7 +341,7 @@ if (isMainThread) {
     // plans in recorded states and malformed plans.
     assert.deepEqual(
       [result.primitiveMeshes, result.exactPrimitiveMeshes, result.primitiveMeshRefusals, result.primitivePlans, result.primitivePlanRefusals],
-      [48, 7, 11, 35, 13],
+      [48, 7, 11, 37, 16],
     );
     // What a split would split: every instance under both splits and several
     // limits (61 refused in the workspace's words), and malformed requests.
@@ -352,7 +352,7 @@ if (isMainThread) {
       [7, 59, 42],
     );
     // The browser's model import transactions, including undo/redo.
-    assert.deepEqual([result.models.cases, result.models.committed], [21, 15]);
+    assert.deepEqual([result.models.cases, result.models.committed], [23, 17]);
     assert.ok(
       result.ownedQueryText instanceof Uint16Array &&
         result.ownedQueryText.length > 0,

@@ -3,8 +3,10 @@
 // centring, scale-to-fit, lay-flat by normal and by picked facet, and drop to
 // bed, over a sphere (with a modifier) on a plain and a rotated, non-uniformly
 // scaled instance and an open terrain on a mirrored instance — with every
-// refusal the operations report over a valid project. Replayed by Rust, by
-// WASM in Node and Chrome, and over JNI.
+// refusal the operations report over a valid project. Centring and
+// scale-to-fit run on areas and volumes from the bed corner, on the U1's
+// (offset 0.5 × 1 mm), on one far from the corner and on a raised floor.
+// Replayed by Rust, by WASM in Node and Chrome, and over JNI.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -41,6 +43,20 @@ const modifierVolume = objects[0].volumes[1].id;
 const terrainVolume = objects[1].volumes[0].id;
 const all = [plainId, turnedId, mirroredId];
 const ids = (list) => list.map(units);
+const area = (xMin, yMin, xMax, yMax) => ({ xMin, yMin, xMax, yMax });
+const box = (minMm, maxMm) => ({ minMm, maxMm });
+const AREAS = [
+  ["the bed corner", area(0, 0, 270, 250)],
+  ["the U1", area(0.5, 1, 270.5, 271)],
+  ["a far offset", area(180, 150, 300, 260)],
+];
+const VOLUMES = [
+  ["270×270×250", box([0, 0, 0], [270, 270, 250])],
+  ["10×12×8", box([0, 0, 0], [10, 12, 8])],
+  ["the U1", box([0.5, 1, 0], [270.5, 271, 270.05])],
+  ["a far offset", box([180, 150, 0], [300, 260, 100])],
+  ["a raised floor", box([10, 20, 5], [110, 90, 65])],
+];
 
 const cases = [];
 function plan(name, request) {
@@ -75,32 +91,39 @@ for (const [name, list] of [
   ["mirrored", [mirroredId]],
   ["all", [...all, plainId]],
 ]) {
-  plan(`centre ${name}`, {
-    centerOnPlate: { instanceIds: ids(list), bedSizeMm: [270, 250] },
-  });
-  for (const volumeMm of [
-    [270, 270, 250],
-    [10, 12, 8],
-  ])
-    plan(`scale ${name} to ${volumeMm.join("×")}`, {
+  for (const [where, areaMm] of AREAS)
+    plan(`centre ${name} on ${where}`, {
+      centerOnPlate: { instanceIds: ids(list), areaMm },
+    });
+  for (const [what, volumeMm] of VOLUMES)
+    plan(`scale ${name} to ${what}`, {
       scaleToFit: { instanceIds: ids(list), volumeMm },
     });
   plan(`drop ${name}`, { dropToBed: { instanceIds: ids(list.slice(0, 3)) } });
 }
 plan("centre on no bed", {
-  centerOnPlate: { instanceIds: ids([plainId]), bedSizeMm: [0, 250] },
+  centerOnPlate: { instanceIds: ids([plainId]), areaMm: area(0, 0, 0, 250) },
+});
+plan("centre on an inverted area", {
+  centerOnPlate: { instanceIds: ids([plainId]), areaMm: area(10, 0, 5, 250) },
 });
 plan("centre nothing", {
-  centerOnPlate: { instanceIds: [], bedSizeMm: [1, 1] },
+  centerOnPlate: { instanceIds: [], areaMm: area(0, 0, 1, 1) },
 });
 plan("centre unknown", {
   centerOnPlate: {
     instanceIds: ids(["import:instance:missing"]),
-    bedSizeMm: [270, 250],
+    areaMm: area(0, 0, 270, 250),
   },
 });
 plan("scale into no volume", {
-  scaleToFit: { instanceIds: ids([plainId]), volumeMm: [1, 0, 1] },
+  scaleToFit: { instanceIds: ids([plainId]), volumeMm: box([0, 0, 0], [1, 0, 1]) },
+});
+plan("scale into an inverted volume", {
+  scaleToFit: { instanceIds: ids([plainId]), volumeMm: box([0, 0, 10], [100, 100, 5]) },
+});
+plan("scale nothing", {
+  scaleToFit: { instanceIds: [], volumeMm: box([0.5, 1, 0], [270.5, 271, 270.05]) },
 });
 plan("drop duplicates", {
   dropToBed: { instanceIds: ids([plainId, plainId]) },

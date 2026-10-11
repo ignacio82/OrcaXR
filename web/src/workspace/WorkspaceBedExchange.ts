@@ -6,9 +6,10 @@
  *
  * A request is `{"config": object, "wipeTower": WipeTowerState | null}`: a
  * project configuration and the tower of the plate being arranged. The reply
- * is `{"keepOut", "printableArea", "printableHeightMm", "sizeMm"}`, each
- * absent value `null`; a keep-out edge JSON cannot carry (an infinite tower
- * width) is `null` too. A malformed request is refused as `invalid_request`.
+ * is `{"areaMm", "keepOut", "printableArea", "printableHeightMm", "sizeMm",
+ * "volumeMm"}` — the volume as `{"maxMm", "minMm"}` corners — each absent
+ * value `null`; a keep-out edge JSON cannot carry (an infinite tower width) is
+ * `null` too. A malformed request is refused as `invalid_request`.
  */
 import { canonicalStringify } from '../project/domain/canonical';
 import type { WipeTowerState } from '../project/domain/model';
@@ -59,7 +60,7 @@ function wipeTower(value: Json | undefined): WipeTowerState | undefined {
 
 const edge = (value: number): number | null => (Number.isFinite(value) ? value : null);
 
-/** `{"config","wipeTower"}` → the bed, its printable area and height, and the tower's keep-out. */
+/** `{"config","wipeTower"}` → the bed, its printable area and height, where models go, and the tower's keep-out. */
 export function workspaceBedExchange(requestJson: string): string {
   const request = object(read(requestJson), ['config', 'wipeTower']);
   const config = request.config;
@@ -67,11 +68,13 @@ export function workspaceBedExchange(requestJson: string): string {
   const bed = workspaceBed(config);
   const keepOut = wipeTowerKeepOut(config, wipeTower(request.wipeTower));
   return canonicalStringify({
+    areaMm: bed.areaMm,
     keepOut: keepOut
       ? { minX: edge(keepOut.minX), minY: edge(keepOut.minY), maxX: edge(keepOut.maxX), maxY: edge(keepOut.maxY) }
       : null,
     printableArea: bed.printableArea ?? null,
     printableHeightMm: bed.printableHeightMm ?? null,
     sizeMm: [bed.sizeMm[0], bed.sizeMm[1]],
+    volumeMm: bed.volumeMm ? { minMm: [...bed.volumeMm.minMm], maxMm: [...bed.volumeMm.maxMm] } : null,
   });
 }

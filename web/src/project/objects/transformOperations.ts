@@ -5,6 +5,7 @@ import { findInstance } from '../domain/selectors';
 import { decodeIndexedMeshAsset } from '../meshCodec';
 import { computeCanonicalInstanceBounds } from './bounds';
 import type { InstanceTransformChange } from './transformCommands';
+import type { AabbXY } from './wipeTowerPlacement';
 
 export type MirrorAxis = 'x' | 'y' | 'z';
 
@@ -86,23 +87,25 @@ export function resetInstanceTransforms(
 /**
  * Centre the selection's combined footprint on the printable area, moving
  * every instance by the same delta so their relative layout is preserved.
+ * The area is a rectangle in printer millimetres (`WorkspaceBed.areaMm`): a
+ * printer may offset it from the bed corner, so its centre is the midpoint of
+ * its corners, never half its far corner.
  */
 export function centerInstancesOnPlate(
   state: ProjectState,
   assets: AssetRepository,
   instanceIds: readonly InstanceId[],
-  bedSizeMm: readonly [number, number],
+  area: Readonly<AabbXY>,
 ): InstanceTransformChange[] {
   if (instanceIds.length === 0) throw new TransformOperationError('Nothing is selected', 'empty-selection');
-  const [bedX, bedY] = bedSizeMm;
-  if (!Number.isFinite(bedX) || !Number.isFinite(bedY) || bedX <= 0 || bedY <= 0) {
+  if (!validArea(area)) {
     throw new TransformOperationError('Centring needs a positive printable area', 'invalid-bed');
   }
   const bounds = computeCanonicalInstanceBounds(state, assets, [...new Set(instanceIds)], {
     volumeRoles: ['model'],
   });
-  const deltaX = bedX / 2 - (bounds.min[0] + bounds.max[0]) / 2;
-  const deltaY = bedY / 2 - (bounds.min[1] + bounds.max[1]) / 2;
+  const deltaX = (area.xMin + area.xMax) / 2 - (bounds.min[0] + bounds.max[0]) / 2;
+  const deltaY = (area.yMin + area.yMax) / 2 - (bounds.min[1] + bounds.max[1]) / 2;
   return eachInstance(state, instanceIds, (transform) => ({
     ...transform,
     translationMm: [
@@ -113,11 +116,23 @@ export function centerInstancesOnPlate(
   }));
 }
 
-/** The printable box a selection is fitted into, in millimetres. */
+/** A rectangle with finite corners and a positive width and depth. */
+function validArea(area: Readonly<AabbXY>): boolean {
+  return (
+    [area.xMin, area.yMin, area.xMax, area.yMax].every((value) => Number.isFinite(value)) &&
+    area.xMax > area.xMin &&
+    area.yMax > area.yMin
+  );
+}
+
+/**
+ * The printable box a selection is fitted into: its lowest and highest
+ * corners in printer millimetres (`WorkspaceBed.volumeMm`, the box the slice
+ * preflight checks).
+ */
 export interface PrintVolumeMm {
-  readonly x: number;
-  readonly y: number;
-  readonly z: number;
+  readonly minMm: readonly [number, number, number];
+  readonly maxMm: readonly [number, number, number];
 }
 
 /**
@@ -133,9 +148,11 @@ const FIT_TOLERANCE_MM = 0.02;
  * factor, the smallest of the three axis ratios, applied about the selection's
  * own centre so a multi-model layout keeps its relative arrangement. It scales
  * **up** as readily as down — "fit" here means fill the volume, not merely stop
- * overflowing it — and it finishes by centring the result on the bed and
- * dropping it to Z = 0, because a model scaled about its centre would otherwise
- * end up half underground.
+ * overflowing it — and it finishes by centring the result on the volume's
+ * centre (`print_volume.center()`: the midpoint of its corners, which a
+ * printer may offset from the bed corner) and resting it on the volume's
+ * floor, because a model scaled about its centre would otherwise end up half
+ * underground.
  *
  * A factor of exactly 1 produces no changes rather than a no-op transaction: an
  * undo entry that restores the same project teaches people that undo is
@@ -148,8 +165,12 @@ export function scaleInstancesToFitPrintVolume(
   volume: PrintVolumeMm,
 ): InstanceTransformChange[] {
   if (instanceIds.length === 0) throw new TransformOperationError('Nothing is selected', 'empty-selection');
-  const { x: volumeX, y: volumeY, z: volumeZ } = volume;
-  if (![volumeX, volumeY, volumeZ].every((size) => Number.isFinite(size) && size > 0)) {
+  const { minMm, maxMm } = volume;
+  const span = [maxMm[0] - minMm[0], maxMm[1] - minMm[1], maxMm[2] - minMm[2]];
+  if (
+    ![...minMm, ...maxMm].every((corner) => Number.isFinite(corner)) ||
+    !span.every((side) => Number.isFinite(side) && side > 0)
+  ) {
     throw new TransformOperationError('Scaling to fit needs a positive printable volume', 'invalid-bed');
   }
   const unique = [...new Set(instanceIds)];
@@ -162,7 +183,7 @@ export function scaleInstancesToFitPrintVolume(
   if (!size.every((extent) => Number.isFinite(extent) && extent > 0)) {
     throw new TransformOperationError('The selection has no measurable size', 'degenerate-selection');
   }
-  const factor = Math.min(volumeX / size[0], volumeY / size[1], volumeZ / size[2]);
+  const factor = Math.min(span[0] / size[0], span[1] / size[1], span[2] / size[2]);
   if (!Number.isFinite(factor) || factor <= 0) {
     throw new TransformOperationError('The selection cannot be scaled to this volume', 'degenerate-selection');
   }
@@ -177,7 +198,7 @@ export function scaleInstancesToFitPrintVolume(
   // every extent multiplied. Computed rather than re-measured, so this stays a
   // pure function of the bounds it already has.
   const scaledMinZ = centre[2] - ((bounds.max[2] - bounds.min[2]) * factor) / 2;
-  const delta = [volumeX / 2 - centre[0], volumeY / 2 - centre[1], -scaledMinZ];
+  const delta = [(minMm[0] + maxMm[0]) / 2 - centre[0], (minMm[1] + maxMm[1]) / 2 - centre[1], minMm[2] - scaledMinZ];
 
   return eachInstance(state, unique, (transform) => ({
     ...transform,

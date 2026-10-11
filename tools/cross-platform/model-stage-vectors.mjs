@@ -94,11 +94,15 @@ function expectation({ ids, parsed, error }) {
   };
 }
 
+// The import is centred on a printable area: from the bed corner, or offset
+// from it as the U1's (0.5 × 1 mm) and a far one are.
 const PLACEMENTS = {
   source: undefined,
-  bed: { bedSizeMm: [220, 220], dropToBed: true },
-  centre: { bedSizeMm: [256.5, 180] },
+  bed: { bedAreaMm: { xMin: 0, yMin: 0, xMax: 220, yMax: 220 }, dropToBed: true },
+  centre: { bedAreaMm: { xMin: 0, yMin: 0, xMax: 256.5, yMax: 180 } },
   drop: { dropToBed: true },
+  u1: { bedAreaMm: { xMin: 0.5, yMin: 1, xMax: 270.5, yMax: 271 }, dropToBed: true },
+  far: { bedAreaMm: { xMin: 180, yMin: 150, xMax: 300, yMax: 260 } },
 };
 const cases = [];
 const empty = { state: EMPTY, assets: [] };
@@ -126,6 +130,10 @@ for (const [decode, base, placement] of [
   ["amf/metadata-and-materials", "holding", "bed"],
   ["obj/groups-and-materials", "second-active", "bed"],
   ["stl-binary/cube", "second-active", "source"],
+  ["stl-binary/cube", "holding", "u1"],
+  ["obj/objects", "empty", "u1"],
+  ["amf/constellation", "holding", "far"],
+  ["obj/groups-and-materials", "second-active", "far"],
 ]) {
   const result = await stage(bases[base], find(decode), PLACEMENTS[placement]);
   cases.push({ name: `chain/${decode}#${base}#${placement}`, decode, base, placement, expected: expectation(result) });

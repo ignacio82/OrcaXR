@@ -23,16 +23,45 @@ function test(name: string, run: () => void): void {
 const u1 = ['0.5x1', '270.5x1', '270.5x271', '0.5x271'];
 
 test('the bed is the far corner of the printable area, which keeps its own origin', () => {
+  const area = { xMin: 0.5, yMin: 1, xMax: 270.5, yMax: 271 };
   assert.deepEqual(workspaceBed({ printable_area: u1, printable_height: '250' }), {
     sizeMm: [270.5, 271],
-    printableArea: { xMin: 0.5, yMin: 1, xMax: 270.5, yMax: 271 },
+    printableArea: area,
     printableHeightMm: 250,
+    areaMm: area,
+    volumeMm: { minMm: [0.5, 1, 0], maxMm: [270.5, 271, 250] },
   });
   assert.deepEqual(workspaceBed({ printable_area: u1.join(',') }).sizeMm, [270.5, 271]);
 });
 
+test('placements use the box the slice preflight checks, wherever it starts', () => {
+  // The preflight reads one exact rectangle and one exact height from engine strings.
+  const offset = workspaceBed({ printable_area: '100x60,300x60,300x260,100x260', printable_height: ' 180 ' });
+  assert.deepEqual(offset.areaMm, { xMin: 100, yMin: 60, xMax: 300, yMax: 260 });
+  assert.deepEqual(offset.volumeMm, { minMm: [100, 60, 0], maxMm: [300, 260, 180] });
+  // Signs the preflight reads and the workspace's polygon reader skips: the preflight's rectangle wins.
+  assert.deepEqual(workspaceBed({ printable_area: ['+0.5x+1', '270.5x+1', '270.5x271', '+0.5x271'] }).areaMm, {
+    xMin: 0.5,
+    yMin: 1,
+    xMax: 270.5,
+    yMax: 271,
+  });
+  // A height the preflight reads as a number (hexadecimal) and parseFloat as zero.
+  assert.deepEqual(workspaceBed({ printable_area: u1, printable_height: '0x100' }).volumeMm, {
+    minMm: [0.5, 1, 0],
+    maxMm: [270.5, 271, 256],
+  });
+  // A polygon the preflight refuses to slice: its bounding rectangle, and the workspace's height.
+  const polygon = workspaceBed({ printable_area: '-100x0,0x-100,100x0,0x100', printable_height: '250mm' });
+  assert.deepEqual(polygon.areaMm, { xMin: -100, yMin: -100, xMax: 100, yMax: 100 });
+  assert.deepEqual(polygon.volumeMm, { minMm: [-100, -100, 0], maxMm: [100, 100, 250] });
+  // Nothing readable: the bed from its corner, and no volume without a height.
+  assert.deepEqual(workspaceBed({ printable_area: 'garbage' }).areaMm, { xMin: 0, yMin: 0, xMax: 200, yMax: 200 });
+  assert.equal(workspaceBed({ printable_area: u1 }).volumeMm, undefined);
+});
+
 test('without a printable area the plate is 200 mm, and no height is none', () => {
-  assert.deepEqual(workspaceBed({}), { sizeMm: [200, 200] });
+  assert.deepEqual(workspaceBed({}), { sizeMm: [200, 200], areaMm: { xMin: 0, yMin: 0, xMax: 200, yMax: 200 } });
   assert.equal(printableAreaText(['0x0', 5]), '');
   assert.equal(printableHeightMm({ printable_height: '0' }), undefined);
   assert.equal(printableHeightMm({ printable_height: [' 42mm'] }), 42);

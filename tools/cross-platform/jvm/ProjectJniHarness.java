@@ -158,6 +158,9 @@ public final class ProjectJniHarness {
     public static long placementEditChecks(String corpus, byte[] archive) {
         return ProjectPlacementEditChecks.run(corpus, archive);
     }
+    public static long buildVolumeChecks(String corpus, byte[] archive, byte[] cube) {
+        return ProjectBuildVolumeChecks.run(corpus, archive, cube);
+    }
     public static long filamentChecks(String journey, byte[] archive, byte[] cube, byte[] catalog) {
         return ProjectFilamentChecks.run(journey, archive, cube, catalog);
     }
@@ -436,6 +439,7 @@ public final class ProjectJniHarness {
             if (name.equals("workspaceBedChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("transformFieldChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("placementEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
+            if (name.equals("buildVolumeChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class);
             if (name.equals("transformEditChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, String.class);
             if (name.equals("splitSourceChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class, byte[].class, String.class);
             if (name.equals("modelToolChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);

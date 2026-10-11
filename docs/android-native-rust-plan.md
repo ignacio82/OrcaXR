@@ -1501,8 +1501,8 @@ painting, and FullSpectrum operations that can support real native projects.
     replayed over 1,341 browser archives in three hosts.
   - [x] Port STL/OBJ/AMF/ZIP detection and decoding with exact browser parity
     on 260 cases.
-  - [x] Stage decoded models as merges with exact browser parity (237 cases).
-  - [x] Port the import preview and undoable commit (21 transactions agree).
+  - [x] Stage decoded models as merges with exact browser parity (241 cases).
+  - [x] Port the import preview and undoable commit (23 transactions agree).
   - [x] Bind model import to WASM/JNI host tasks and the Kotlin actor.
   - [ ] Provider lifetimes and import UI in the application (Phase 7).
 - [ ] Port canonical-envelope and BBS authoring, scoped overrides, plate origins,
@@ -1624,19 +1624,23 @@ painting, and FullSpectrum operations that can support real native projects.
     486 picks agree in every binding.
   - [x] Port placement planning (`placement`): mirror, resets, centring,
     scale-to-fit, lay flat by normal or picked facet and drop to bed, as one
-    `setInstanceTransforms` plan or the browser's refusal (67 requests exact in
-    every binding); two browser placement defects fixed with regressions.
+    `setInstanceTransforms` plan or the browser's refusal (90 requests exact in
+    every binding); two browser placement defects fixed with regressions, and
+    centring and scale-to-fit now take the printable area and build volume by
+    their corners, which a printer may offset from the bed corner.
   - [x] Port plate arrangement and bed fill (`placement::arrange`): the shelf
     packer and free-slot fill with keep-out regions, locked instances and copy
-    limits (28 requests exact in every binding); two fill error codes fixed.
+    limits in the printable area by its corners (35 requests exact in every
+    binding); two fill error codes fixed.
   - [x] Port wipe-tower auto-placement (`placement::wipe_tower`) with the
     browser's configuration coercions (27 requests exact in every binding).
   - [x] Port the workspace bed (`placement::bed`, from the browser's new
     `WorkspaceBed.ts`): the bed size (the far corner of `printable_area`,
-    else 200 mm), the printable rectangle, the printable height and a plate
-    tower's arrange keep-out, read from the configuration the workspace reads
-    (74 configurations, 14 refusals and 12 plate beds of opened projects
-    exact in every binding; 178 Kotlin checks).
+    else 200 mm), the printable rectangle, the printable height, the placement
+    area and build volume every placement uses (the box the slice preflight
+    checks) and a plate tower's arrange keep-out, read from the configuration
+    the workspace reads (85 configurations, 14 refusals and 12 plate beds of
+    opened projects exact in every binding; 201 Kotlin checks).
   - [x] Port the transform inspector's fields (`placement::fields`, from the
     browser's new `TransformFields.ts`): Move/Rotate/Scale values and texts
     (mm, degrees of three.js's XYZ Euler angles, percent), field edits for one
@@ -2010,9 +2014,17 @@ storage journeys on phone, tablet, and desktop-sized windows.
   own bed (`ProjectView.bed`), imports land on it, and `ProjectWorkspace`
   carries out drop to bed, mirror, the resets, centre, scale to fit, lay flat
   and arrange as the browser's guarded, coalescing transform edits (a
-  127-check JNI journey matches the browser controller's hash, undo label and
-  report after every step and undo). The Project area's transform inspector
-  (Move/Rotate/Scale fields of the selected instance, each edit one
+  181-check JNI journey per bed matches the browser controller's hash, undo
+  label, report and preflight verdict after every step and undo). Every
+  placement — scale to fit, centre, arrange, bed fill, imports and primitives,
+  in the browser and on Android — now fits the box the slice preflight checks
+  (the bed's `areaMm`/`volumeMm`), which a printer may offset from the bed
+  corner: scaling a cube to the U1's volume had overhung its 0.5 × 1 mm offset
+  and been refused. A 74-check JNI journey per bed (the U1's bundled area and
+  one far from the corner) finds nothing outside the volume after any
+  placement; `android-local-slice-smoke.py` scales a cube to the U1's volume
+  and slices it (not run for this change). The Project area's transform
+  inspector (Move/Rotate/Scale fields of the selected instance, each edit one
   `ProjectWorkspace.editTransform` step with the browser's label, never
   coalescing, as its field edits draw `single:<n>`/`batch:<n>`) and the Edit
   menu's placement entries (Lay flat as a Workspace tap tool, mirror, resets,

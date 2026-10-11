@@ -4,6 +4,7 @@ import type { InstanceId, PlateId } from '../domain/ids';
 import type { ProjectState, Transform, VolumeRole } from '../domain/model';
 import { computeCanonicalInstanceBounds } from './bounds';
 import type { InstanceTransformChange } from './transformCommands';
+import type { AabbXY } from './wipeTowerPlacement';
 
 /** Axis-aligned keep-out rectangle in plate millimetres. */
 export interface ArrangeRegion {
@@ -14,8 +15,12 @@ export interface ArrangeRegion {
 }
 
 export interface ArrangeConstraints {
-  /** Printable area, matching the canonical `printable_area` origin at (0, 0). */
-  readonly bedSizeMm: readonly [number, number];
+  /**
+   * The printable area models are laid out in, in printer millimetres
+   * (`WorkspaceBed.areaMm`). Its lowest corner is the printer's own, which may
+   * be offset from the bed corner (the U1's is at 0.5 × 1 mm).
+   */
+  readonly bedAreaMm: Readonly<AabbXY>;
   /** Clear gap kept between placed footprints. */
   readonly spacingMm?: number;
   /** Clear gap kept from the printable-area border. */
@@ -80,8 +85,8 @@ export function planPlateArrangement(
 ): ArrangeResult {
   const plate = state.plates.find((candidate) => candidate.id === plateId);
   if (!plate) throw new ArrangeConstraintError(`Unknown plate ${plateId}`, 'unknown-plate');
-  const [bedX, bedY] = constraints.bedSizeMm;
-  if (!Number.isFinite(bedX) || !Number.isFinite(bedY) || bedX <= 0 || bedY <= 0) {
+  const area = constraints.bedAreaMm;
+  if (!validArea(area)) {
     throw new ArrangeConstraintError('Arrangement needs a positive printable area', 'invalid-bed');
   }
   const spacing = constraints.spacingMm ?? DEFAULT_ARRANGE_SPACING_MM;
@@ -144,7 +149,7 @@ export function planPlateArrangement(
       right.depth - left.depth || right.width - left.width || compareCanonicalText(left.instanceId, right.instanceId),
   );
 
-  const usable: ArrangeRegion = { minX: margin, minY: margin, maxX: bedX - margin, maxY: bedY - margin };
+  const usable = usableRegion(area, margin);
   const placements: ArrangePlacement[] = [];
   const unplaced: InstanceId[] = [];
   let shelfMinY = usable.minY;
@@ -289,6 +294,20 @@ function centrePlacements(placements: readonly ArrangePlacement[], usable: Arran
   );
 }
 
+/** A rectangle with finite corners and a positive width and depth. */
+function validArea(area: Readonly<AabbXY>): boolean {
+  return (
+    [area.xMin, area.yMin, area.xMax, area.yMax].every((value) => Number.isFinite(value)) &&
+    area.xMax > area.xMin &&
+    area.yMax > area.yMin
+  );
+}
+
+/** The printable area inset by the bed margin: where footprints may lie. */
+function usableRegion(area: Readonly<AabbXY>, margin: number): ArrangeRegion {
+  return { minX: area.xMin + margin, minY: area.yMin + margin, maxX: area.xMax - margin, maxY: area.yMax - margin };
+}
+
 function inflate(region: ArrangeRegion, amount: number): ArrangeRegion {
   return {
     minX: region.minX - amount,
@@ -343,8 +362,8 @@ export function planBedFill(
 ): BedFillResult {
   const plate = state.plates.find((candidate) => candidate.id === plateId);
   if (!plate) throw new ArrangeConstraintError(`Unknown plate ${plateId}`, 'unknown-plate');
-  const [bedX, bedY] = constraints.bedSizeMm;
-  if (!Number.isFinite(bedX) || !Number.isFinite(bedY) || bedX <= 0 || bedY <= 0) {
+  const area = constraints.bedAreaMm;
+  if (!validArea(area)) {
     throw new ArrangeConstraintError('Bed fill needs a positive printable area', 'invalid-bed');
   }
   const spacing = constraints.spacingMm ?? DEFAULT_ARRANGE_SPACING_MM;
@@ -386,7 +405,7 @@ export function planBedFill(
     }
   }
 
-  const usable: ArrangeRegion = { minX: margin, minY: margin, maxX: bedX - margin, maxY: bedY - margin };
+  const usable = usableRegion(area, margin);
   const placements: BedFillPlacement[] = [];
   let withheld = 0;
   for (let y = usable.minY; y + depth <= usable.maxY + MIN_FOOTPRINT_MM; y += depth + spacing) {
