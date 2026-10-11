@@ -4,7 +4,9 @@
 // out and one repeating another's geometry; open sheets, a collinear sliver
 // and a three-way fan; a connected ball; a mesh that repeats a vertex; a
 // painted pair — under rotated, scaled and offset volume transforms, plus a
-// spare asset that already holds one component's exact bytes. A host script
+// spare asset that already holds one component's exact bytes, and an
+// imported pair whose provenance (`orcaxr:importSource`) every object split
+// from it keeps, alone or beside an unknown key that refuses the promotion. A host script
 // prepares splits (with every reachable refusal), stages them under its own
 // IDs as parts or as objects (with every naming refusal and a stale stage),
 // executes them through the session endpoint and walks undo and redo,
@@ -255,6 +257,15 @@ const object = (name, volumes, instances = 1, extra = {}) => ({
   ...extra,
 });
 const { physical1, mixed } = fixture.ids;
+// What `ModelImportParser` gives an imported object.
+const provenance = {
+  "orcaxr:importSource": {
+    filename: "pair.stl",
+    format: "stl",
+    unit: "mm",
+    importedAt: "2026-10-10T00:00:00.000Z",
+  },
+};
 state.plates[0].objects = [
   object("compound", [
     volume("trio", trio, {
@@ -290,6 +301,10 @@ state.plates[0].objects = [
     }),
   ]),
   object("spare", [volume("spare", spare)]),
+  object("imported", [volume("imported", pair)], 1, { extensionData: provenance }),
+  object("unknown", [volume("unknown", pair)], 1, {
+    extensionData: { ...provenance, "orcaxr:owner": "host" },
+  }),
 ];
 state.sourceAssets = [trio, sheets, pair, ball, broken, spare].map(
   (a) => a.descriptor,
@@ -548,6 +563,22 @@ const paintedIds = named(paintedSplit, "painted");
 await stage("painted", paintedIds, separated(paintedIds, "painted", 1));
 // A split part of an earlier split splits no further.
 prepare("part", "import:host:volume-sheets-0");
+
+// An imported pair as objects: each takes a copy of its provenance. An
+// unknown key beside it refuses the promotion when it runs; the same pair
+// still splits to parts, its object keeping everything.
+const importedIds = named(prepare("imported", "import:volume:split-imported"), "imported");
+await stage("imported", importedIds, separated(importedIds, "imported", 1));
+for (const objectId of ["import:host:object-imported-0", "import:host:object-imported-1"]) {
+  const promoted = session.project
+    .getSnapshot()
+    .state.plates[0].objects.find((o) => o.id === objectId);
+  assert.deepEqual(promoted.extensionData, provenance, objectId);
+}
+const unknownIds = named(prepare("unknown", "import:volume:split-unknown"), "unknown");
+await stage("unknown", unknownIds, separated(unknownIds, "unknown", 1));
+const unknownParts = named(prepare("unknown parts", "import:volume:split-unknown"), "unknown-parts");
+await stage("unknown parts", unknownParts);
 session.dispose();
 
 // Sources no valid session holds, prepared directly from a state and its

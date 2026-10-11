@@ -1127,6 +1127,26 @@ for (const [label, budget] of [["exact", splitBytes], ["short", splitBytes - 1]]
     assert.equal(state().plates[0].objects.length, 8);
     run({ kind: "undo" }); run({ kind: "undo" }); run({ kind: "redo" }); run({ kind: "redo" });
   });
+// An import's provenance (`orcaxr:importSource`, as a model import and a geometry
+// merge write it) is copied to every promoted object; an unknown key beside it
+// still refuses the promotion.
+const provenance = (filename, extra) => ({ "orcaxr:importSource": { filename, ...extra, importedAt: "2026-10-10T00:00:00.000Z" } });
+scenario("split-to-objects-provenance", {}, (s, f) => {
+  splitFixture(s, f);
+  const object = s.plates[0].objects[0];
+  s.plates[0].objects.push(
+    splitSource(object, "imported", o => { o.extensionData = provenance("pair.stl", { format: "stl", unit: "mm" }); }),
+    splitSource(object, "merged", o => { o.extensionData = provenance("parts.3mf", { format: "project-3mf", mode: "geometry-only" }); }),
+    splitSource(object, "mixed", o => { o.extensionData = { ...provenance("pair.stl", { format: "stl", unit: "mm" }), "orcaxr:owner": "host" }; }));
+}, ({ execute, run, state, snapshot }) => {
+  const objectAt = id => state().plates[0].objects.find(o => o.id === id);
+  for (const suffix of ["mixed", "imported", "merged"])
+    execute(separateVolumes(settingsGuard(snapshot()), `import:object:${suffix}`, splitIdentities(objectAt(`import:object:${suffix}`), `${suffix}-out`)));
+  assert.ok(objectAt("import:object:mixed"), "an unknown key refuses the promotion");
+  for (const [suffix, expected] of [["imported", provenance("pair.stl", { format: "stl", unit: "mm" })], ["merged", provenance("parts.3mf", { format: "project-3mf", mode: "geometry-only" })]])
+    for (const i of [0, 1]) assert.deepEqual(objectAt(`import:object:${suffix}-out${i}`).extensionData, expected, `${suffix} ${i}`);
+  run({ kind: "undo" }); run({ kind: "undo" }); run({ kind: "redo" });
+});
 scenario("split-to-objects-small-facets", {}, s => {
   const object = s.plates[0].objects[0];
   object.volumes.push({ ...cloneJson(object.volumes[0]), id: "import:volume:second", name: "Second" });

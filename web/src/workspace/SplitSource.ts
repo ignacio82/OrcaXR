@@ -11,6 +11,7 @@ import { facetAnnotationsHaveAssignments } from '../project/domain/facetRefineme
 import type { InstanceId, ObjectId, PlateId, VolumeId } from '../project/domain/ids';
 import type { ProjectObject, ProjectState } from '../project/domain/model';
 import { findInstance } from '../project/domain/selectors';
+import { hasUndistributedObjectExtension } from '../project/objects/splitToObjectsCommands';
 
 const CORE_FACET_ATTRIBUTES_KEY = 'https://orcaxr.martinez.fyi/3mf/project/1/core-facet-attributes';
 
@@ -44,11 +45,29 @@ export class CanonicalSplitToObjectsTriangleLimitError extends Error {
 }
 
 /**
- * The workspace's refusals before either split, in its order: an object it
- * would have to drop data from, or a single volume whose connected bodies are
- * analysed synchronously beyond [synchronousTriangleLimit].
+ * The workspace's refusals before Split to Objects, in its order: an object
+ * it would have to drop data from, or a single volume whose connected bodies
+ * are analysed synchronously beyond [synchronousTriangleLimit].
  */
 export function assertSplitToObjectsSource(object: ProjectObject, synchronousTriangleLimit: number): void {
+  assertSplitSource(object, 'objects', synchronousTriangleLimit);
+}
+
+/**
+ * The workspace's refusals before [target]'s split, in its order. Both
+ * splits refuse what the volumes would lose: a volume that is not a model
+ * or is below three facets, and — for a single volume — one past the
+ * synchronous limit, painted, or carrying opaque per-facet 3MF metadata.
+ * Only Split to Objects, which replaces the object, refuses what the object
+ * itself carries and no promotion distributes: height ranges, and extension
+ * data other than an import's provenance. Split to Parts keeps the object,
+ * and all it carries with it.
+ */
+export function assertSplitSource(
+  object: ProjectObject,
+  target: SplitSourceTarget,
+  synchronousTriangleLimit: number,
+): void {
   if (object.volumes.length === 0) throw new Error('Split to Objects requires at least one model volume');
   if (object.volumes.some((volume) => volume.role !== 'model')) {
     throw new Error('Split to Objects cannot discard modifier, negative, support-enforcer, or support-blocker volumes');
@@ -56,10 +75,10 @@ export function assertSplitToObjectsSource(object: ProjectObject, synchronousTri
   if (object.volumes.some((volume) => volume.source.triangleCount < 3)) {
     throw new Error('Split to Objects cannot preserve volumes or connected components below three facets');
   }
-  if (object.layerRanges.length > 0) {
+  if (target === 'objects' && object.layerRanges.length > 0) {
     throw new Error('Split to Objects requires an explicit layer-range distribution before promotion');
   }
-  if (object.extensionData && Object.keys(object.extensionData).length > 0) {
+  if (target === 'objects' && hasUndistributedObjectExtension(object)) {
     throw new Error('Split to Objects requires an explicit object-extension distribution before promotion');
   }
   if (object.volumes.length !== 1) return;
@@ -101,7 +120,7 @@ export function splitSourceOf(
     );
   }
   const { plate, object } = found;
-  assertSplitToObjectsSource(object, synchronousTriangleLimit);
+  assertSplitSource(object, target, synchronousTriangleLimit);
   if (target === 'parts' && object.volumes.length !== 1) {
     throw new Error(`Object "${object.name}" already has ${object.volumes.length} parts`);
   }

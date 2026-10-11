@@ -7,11 +7,14 @@
 //   cover each of the workspace's refusals (a modifier, a volume below three
 //   facets, height ranges, object extension data, paint, opaque 3MF facet
 //   metadata, a volume over the synchronous triangle limit, an object that
-//   already has parts), under both splits and several limits, with malformed
-//   requests. Replayed by Rust, by WASM in Node and over JNI;
+//   already has parts) and the provenance an import gives every object
+//   (`orcaxr:importSource`, as a model import and a geometry merge write it,
+//   alone and beside an unknown key), under both splits and several limits,
+//   with malformed requests. Replayed by Rust, by WASM in Node and over JNI;
 // - a journey: the production `CanonicalWorkspaceController` opens a
 //   canonical 3MF (a U1 bed) and splits to parts and to objects — both
-//   strategies, across an object's instances, and every refusal the
+//   strategies, across an object's instances, imported models whose
+//   provenance every resulting object keeps, and every refusal the
 //   confirmation and the commit raise —, previews and applies simplifications
 //   by count and by error, finds nothing to simplify, simplifies an object at
 //   once, and measures features of a scaled, turned instance and of split
@@ -183,6 +186,13 @@ const pairMesh = asset("import:asset:model-tools-pair", merged(box([0, 0, 0], [1
 const quadMesh = asset("import:asset:model-tools-quad", quad);
 const big = asset("import:asset:model-tools-big", sphere(10, 48, 32));
 const CORE_FACET_ATTRIBUTES_KEY = "https://orcaxr.martinez.fyi/3mf/project/1/core-facet-attributes";
+// The provenance `ModelImportParser` and `GeometryMergeParser` give every object they import.
+const imported = (filename) => ({
+  "orcaxr:importSource": { filename, format: "stl", unit: "mm", importedAt: NOW },
+});
+const merged3mf = (filename) => ({
+  "orcaxr:importSource": { filename, format: "project-3mf", mode: "geometry-only", importedAt: NOW },
+});
 const sourceProject = project(
   0x5917,
   [
@@ -216,6 +226,17 @@ const sourceProject = project(
       object("tiny", "Tiny", [part("tiny", "Tiny", quadMesh)], [at(90, 190)]),
       object("big", "Big", [part("big", "Big", big)], [at(140, 190)]),
       object("wurfel", "Würfel ☃ 𝔘", [part("wurfel", "Würfel", cube)], [at(190, 190), at(220, 190), at(220, 220)]),
+      object("imported", "pair.stl", [part("imported", "pair.stl", pairMesh)], [at(140, 40)], { extensionData: imported("pair.stl") }),
+      object(
+        "merged",
+        "Merged",
+        [part("merged-a", "A", cube), part("merged-b", "B", cube, { transform: at(20, 0) })],
+        [at(190, 40)],
+        { extensionData: merged3mf("parts.3mf") },
+      ),
+      object("unknown", "Unknown", [part("unknown", "Unknown", pairMesh)], [at(190, 90)], {
+        extensionData: { ...imported("unknown.stl"), "https://example.org/kept": { note: "kept" } },
+      }),
     ],
     [object("elsewhere", "Elsewhere", [part("elsewhere", "Elsewhere", cube)], [at(60, 60)])],
   ],
@@ -270,6 +291,11 @@ const start = project(
       object("duo", "Duo", [part("duo", "Duo", pairMesh)], [at(120, 140)]),
       object("guarded", "Guarded", [part("guarded", "Body", cube), part("guarded-modifier", "Modifier", cube, { role: "parameter-modifier" })], [at(60, 140)]),
       object("ball", "Ball", [part("ball", "Ball", ball)], [at(200, 200, 10)]),
+      object("stl", "pair.stl", [part("stl", "pair.stl", pairMesh)], [at(60, 220)], { extensionData: imported("pair.stl") }),
+      object("model", "twins.stl", [part("model", "twins.stl", pairMesh)], [at(120, 220)], { extensionData: imported("twins.stl") }),
+      object("kept", "Kept", [part("kept", "Kept", pairMesh)], [at(200, 120)], {
+        extensionData: { ...imported("kept.stl"), "https://example.org/kept": { note: "kept" } },
+      }),
     ],
   ],
   { printable_area: ["0.5x1", "270.5x1", "270.5x271", "0.5x271"], printable_height: "250" },
@@ -476,6 +502,17 @@ await measurePick(instanceOf("duo"), duo.volumes[0].id, 2);
 await measurePick(instanceOf("duo"), duo.volumes[1].id, 8);
 await measure(4, 5);
 await splitToObjects();
+// Imported models keep their provenance: two bodies as objects at once, each taking a
+// copy; two as parts (the object keeps it), then promoted; an unknown key beside it
+// refuses the promotion alone, while the parts split keeps everything.
+await choose("instance", instanceOf("stl"));
+await splitToObjects();
+await choose("instance", instanceOf("model"));
+await splitToParts();
+await splitToObjects();
+await choose("instance", instanceOf("kept"));
+await splitToObjects();
+await splitToParts();
 // Simplify the ball: a preview applied by count, one by error, one with nothing to do,
 // a preview cancelled, then at once by its object.
 await choose("instance", instanceOf("ball"));

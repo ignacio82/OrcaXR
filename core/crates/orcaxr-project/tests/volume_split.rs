@@ -239,11 +239,11 @@ fn volume_splits_match_the_browser_over_a_live_session() {
         counts,
         BTreeMap::from(
             [
-                ("prepared", 10),
+                ("prepared", 13),
                 ("refused", 6),
                 ("invalidRequest", 7),
-                ("commandFailed", 5),
-                ("applied", 5),
+                ("commandFailed", 6),
+                ("applied", 7),
                 ("stale", 2),
                 ("edit", 1),
                 ("undo", 4),

@@ -589,7 +589,7 @@ try {
   // measurements through ProjectWorkspace on a real session.
   const toolFixture = await json("testdata/cross-platform/model-tool-vectors.json");
   const splitSources = replaySplitSources(projectJniCore(jvm.call), toolFixture, layout, (text) => Uint8Array.from(Buffer.from(text, "base64")));
-  assert.deepEqual([splitSources.splitSources, splitSources.splitSourceRefusals], [100, 12]);
+  assert.deepEqual([splitSources.splitSources, splitSources.splitSourceRefusals], [118, 12]);
   const declaredAssets = JSON.parse(toolFixture.splitSources.stateJson).sourceAssets.map((declared) =>
     Buffer.from(toolFixture.splitSources.assets.find((a) => JSON.parse(a.descriptorJson).id === declared.id).bytes, "base64"),
   );
@@ -599,7 +599,7 @@ try {
     ...declaredAssets,
     toolFixture.splitSources.cases.map((c) => `C\t${c.request}\t${c.reply}`).join("\n"),
   );
-  assert.equal(splitSourceChecks, 143);
+  assert.equal(splitSourceChecks, 176);
   const modelToolChecks = jvm.call(
     "modelToolChecks",
     JSON.stringify({
@@ -611,7 +611,7 @@ try {
     }),
     Buffer.from(toolFixture.journey.archive, "base64"),
   );
-  assert.equal(modelToolChecks, 155);
+  assert.equal(modelToolChecks, 191);
   // The renderer's view of a real session: render deltas and mesh packets into the scene.
   const projectSceneChecks = jvm.call("projectSceneChecks", decodeBytes("stl-binary/cube"));
   assert.equal(projectSceneChecks, 13);
@@ -819,7 +819,7 @@ try {
   );
   assert.deepEqual(
     [capabilities.capabilityPages, capabilities.capabilityRefusals],
-    [366, 183],
+    [384, 192],
   );
   const capabilityState = capabilityFixture.states[0];
   const capabilityChecks = jvm.call(
@@ -840,7 +840,7 @@ try {
   const renders = replayRender(projectJniCore(jvm.call), renderFixture, layout);
   assert.deepEqual(
     [renders.renderPages, renders.renderRefusals, renders.renderRequests],
-    [313, 57, 265],
+    [331, 60, 278],
   );
   const renderState = renderFixture.states[0];
   const renderChecks = jvm.call(
@@ -996,7 +996,7 @@ try {
       splits.volumeSplitsApplied,
       splits.volumeSplitHistory,
     ],
-    [16, 6, 19, 5, 6],
+    [19, 6, 22, 7, 6],
   );
   const label = (s) => (s.undoLabel ? String.fromCharCode(...s.undoLabel) : "");
   const volumeSplitChecks = jvm.call(
@@ -1015,7 +1015,7 @@ try {
       )
       .join("\n"),
   );
-  assert.equal(volumeSplitChecks, 105);
+  assert.equal(volumeSplitChecks, 120);
   // Mesh simplification over a live session, staged and executed, then the
   // Kotlin wrapper.
   const simplifyFixture = JSON.parse(

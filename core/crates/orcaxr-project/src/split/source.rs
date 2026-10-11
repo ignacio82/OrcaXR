@@ -5,9 +5,12 @@
 //! it commits — or the workspace's refusal in its own words, in its order:
 //!
 //! - an instance the project no longer has (worded per split);
-//! - an object with no volume, a volume that is not a model, a volume below
-//!   three facets, height ranges, or object extension data, none of which a
-//!   split could keep;
+//! - an object with no volume, a volume that is not a model, or a volume
+//!   below three facets, none of which a split could keep; and, splitting to
+//!   objects, which replaces the object, height ranges or object extension
+//!   data no promotion distributes (an import's `orcaxr:importSource`
+//!   provenance is copied to every object; Split to Parts keeps the object
+//!   and all it carries);
 //! - a single volume beyond the workspace's synchronous triangle limit
 //!   (counts written as `toLocaleString('en-US')` writes them), painted, or
 //!   carrying opaque triangle-indexed 3MF metadata;
@@ -16,6 +19,7 @@
 //! The exchange is canonical JSON over a captured project:
 //! `{"instanceId","target","triangleLimit"}` answers `{"source": {...}}` or
 //! `{"refusal": message}`.
+use crate::commands::has_undistributed_object_extension;
 use crate::model::{ProjectObject, ProjectPlate, ProjectState, VolumeRole};
 use crate::validation::has_assignments;
 use orcaxr_contracts::canonical::{Value, parse};
@@ -87,8 +91,15 @@ fn grouped(value: f64) -> Vec<u16> {
     u(&out)
 }
 
-/// `assertSplitToObjectsSource`: the workspace's refusals before either split.
-pub fn check_object(object: &ProjectObject, triangle_limit: f64) -> Result<(), Vec<u16>> {
+/// `assertSplitSource`: the workspace's refusals before `target`'s split.
+/// Both refuse what the volumes would lose; only Split to Objects, which
+/// replaces the object, refuses what the object carries and no promotion
+/// distributes.
+pub fn check_object(
+    object: &ProjectObject,
+    target: Target,
+    triangle_limit: f64,
+) -> Result<(), Vec<u16>> {
     if object.volumes.is_empty() {
         return Err(u("Split to Objects requires at least one model volume"));
     }
@@ -106,16 +117,12 @@ pub fn check_object(object: &ProjectObject, triangle_limit: f64) -> Result<(), V
             "Split to Objects cannot preserve volumes or connected components below three facets",
         ));
     }
-    if !object.layer_ranges.is_empty() {
+    if target == Target::Objects && !object.layer_ranges.is_empty() {
         return Err(u(
             "Split to Objects requires an explicit layer-range distribution before promotion",
         ));
     }
-    if object
-        .extension_data
-        .as_ref()
-        .is_some_and(|data| matches!(data.value(), Value::Object(fields) if !fields.is_empty()))
-    {
+    if target == Target::Objects && has_undistributed_object_extension(object) {
         return Err(u(
             "Split to Objects requires an explicit object-extension distribution before promotion",
         ));
@@ -176,7 +183,7 @@ pub fn source<'a>(
             Target::Parts => text(&[&u("Selected instance "), instance_id, &u(" not found")]),
         });
     };
-    check_object(object, triangle_limit)?;
+    check_object(object, target, triangle_limit)?;
     let volumes = object.volumes.len();
     if target == Target::Parts && volumes != 1 {
         return Err(text(&[

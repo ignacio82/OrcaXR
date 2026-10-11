@@ -32,7 +32,9 @@ pub use facet_stroke::FacetRefinement;
 pub use lifecycle::IndependentObjectIds;
 pub use mixed::filament_dependent_paths;
 use orcaxr_contracts::{canonical::Value, project_intent_types as wire};
-pub use split_objects::SeparatedObject;
+pub use split_objects::{
+    DISTRIBUTED_OBJECT_EXTENSION_KEYS, SeparatedObject, has_undistributed_object_extension,
+};
 pub use split_parts::{SplitPart, VolumeSplitGuard};
 use std::{collections::BTreeSet, fmt, sync::Arc};
 pub use topology::{BooleanGuard, BooleanOp, TopologyGuard};

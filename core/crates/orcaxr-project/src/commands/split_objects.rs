@@ -8,6 +8,48 @@ use crate::selection::SelectionSnapshot;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::io::{self, Write};
 
+/// `DISTRIBUTED_OBJECT_EXTENSION_KEYS`: the object extension data a
+/// promotion knows how to distribute. An imported object's
+/// `orcaxr:importSource` (the file, its format and when it was imported) is
+/// the provenance of every object split from it, so each receives a copy, as
+/// a duplicated object keeps its own. Any other key is data no split here
+/// understands: a promotion refuses it rather than drop it or guess which
+/// object it belongs to.
+pub const DISTRIBUTED_OBJECT_EXTENSION_KEYS: [&str; 1] = ["orcaxr:importSource"];
+
+fn distributed(key: &[u16]) -> bool {
+    DISTRIBUTED_OBJECT_EXTENSION_KEYS
+        .iter()
+        .any(|known| known.encode_utf16().eq(key.iter().copied()))
+}
+
+/// `hasUndistributedObjectExtension`: whether `object` carries object
+/// extension data a promotion cannot distribute.
+pub fn has_undistributed_object_extension(object: &ProjectObject) -> bool {
+    object.extension_data.as_ref().is_some_and(
+        |data| matches!(data.value(), Value::Object(fields) if fields.keys().any(|key| !distributed(key))),
+    )
+}
+
+/// `distributedObjectExtension`: what each object promoted from `source`
+/// carries of its extension data — a copy of every distributed key, or none.
+fn distributed_extension<E>(source: &ProjectObject) -> Result<Option<JsonObject>, CommandError<E>> {
+    let Some(Value::Object(fields)) = source.extension_data.as_ref().map(JsonObject::value) else {
+        return Ok(None);
+    };
+    let kept: BTreeMap<Vec<u16>, Value> = fields
+        .iter()
+        .filter(|(key, _)| distributed(key))
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    if kept.is_empty() {
+        return Ok(None);
+    }
+    JsonObject::new(Value::Object(kept))
+        .map(Some)
+        .map_err(|_| non_serializable())
+}
+
 #[derive(Clone)]
 struct Identity {
     source: VolumeId,
@@ -299,9 +341,7 @@ fn validate_source<E>(object: &ProjectObject) -> Result<(), CommandError<E>> {
             "Split to objects requires an explicit layer-range distribution before promotion",
         ));
     }
-    if let Some(extension) = &object.extension_data
-        && matches!(extension.value(), Value::Object(fields) if !fields.is_empty())
-    {
+    if has_undistributed_object_extension(object) {
         return Err(CommandError::domain(
             "Split to objects requires an explicit object-extension distribution before promotion",
         ));
@@ -425,7 +465,7 @@ fn promoted_object<E>(
         layer_ranges: Arc::from([]),
         brim_ears: None,
         layer_height_profile: None,
-        extension_data: None,
+        extension_data: distributed_extension(source)?,
         extra: ExtraFields::default(),
     }))
 }

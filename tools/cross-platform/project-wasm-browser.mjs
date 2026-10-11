@@ -841,11 +841,11 @@ try {
   );
   assert.deepEqual(
     [result.capabilityPages, result.capabilityRefusals],
-    [366, 183],
+    [384, 192],
   );
   assert.deepEqual(
     [result.renderPages, result.renderRefusals, result.renderRequests],
-    [313, 57, 265],
+    [331, 60, 278],
   );
   assert.deepEqual(
     [result.facetRegionReplies, result.facetRegionRefusals],
@@ -875,7 +875,7 @@ try {
       result.volumeSplitsApplied,
       result.volumeSplitHistory,
     ],
-    [16, 6, 19, 5, 6],
+    [19, 6, 22, 7, 6],
   );
   assert.deepEqual(
     [

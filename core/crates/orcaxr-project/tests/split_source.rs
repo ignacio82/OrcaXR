@@ -40,7 +40,7 @@ fn split_sources_match_the_browser() {
     let corpus = corpus();
     let state = state(&corpus);
     let cases = corpus["splitSources"]["cases"].as_array().unwrap();
-    assert_eq!(cases.len(), 100);
+    assert_eq!(cases.len(), 118);
     let mut refused = 0;
     for case in cases {
         let reply = source_json(&state, case["request"].as_str().unwrap()).unwrap();
@@ -52,7 +52,7 @@ fn split_sources_match_the_browser() {
         );
         refused += usize::from(reply.starts_with("{\"refusal\""));
     }
-    assert_eq!(refused, 61);
+    assert_eq!(refused, 64);
 }
 
 #[test]
@@ -79,8 +79,8 @@ fn the_typed_source_names_the_object_and_its_placements() {
     let found = source(&state, &id, Target::Objects, 50_000.0).unwrap();
     assert_eq!(found.object.instances.len(), 2);
     assert_eq!(found.triangle_count, 24.0);
-    assert!(check_object(found.object, 23.0).is_err());
-    assert!(check_object(found.object, 24.0).is_ok());
+    assert!(check_object(found.object, Target::Objects, 23.0).is_err());
+    assert!(check_object(found.object, Target::Objects, 24.0).is_ok());
     let missing: Vec<u16> = "import:instance:none".encode_utf16().collect();
     let refusal = source(&state, &missing, Target::Parts, 1.0).err().unwrap();
     assert_eq!(

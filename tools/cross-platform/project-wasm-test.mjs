@@ -115,12 +115,12 @@ if (isMainThread) {
     // Capability pages over live sessions, selected and edited.
     assert.deepEqual(
       [result.capabilityPages, result.capabilityRefusals],
-      [366, 183],
+      [384, 192],
     );
     // Render deltas over live sessions, edited and paged.
     assert.deepEqual(
       [result.renderPages, result.renderRefusals, result.renderRequests],
-      [313, 57, 265],
+      [331, 60, 278],
     );
     // Facet region selection over a live session.
     assert.deepEqual(
@@ -157,7 +157,7 @@ if (isMainThread) {
         result.volumeSplitsApplied,
         result.volumeSplitHistory,
       ],
-      [16, 6, 19, 5, 6],
+      [19, 6, 22, 7, 6],
     );
     // Mesh simplification over a live session, staged and executed.
     assert.deepEqual(
@@ -345,7 +345,7 @@ if (isMainThread) {
     );
     // What a split would split: every instance under both splits and several
     // limits (61 refused in the workspace's words), and malformed requests.
-    assert.deepEqual([result.splitSources, result.splitSourceRefusals], [100, 12]);
+    assert.deepEqual([result.splitSources, result.splitSourceRefusals], [118, 12]);
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],

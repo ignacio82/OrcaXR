@@ -2985,17 +2985,35 @@ the instance — plate, ID, name, strategy (its volumes promoted, or its one
 volume separated by connected body), volumes, their triangles and every
 instance the split replaces — or the workspace's refusal in its words and
 order: an instance the project no longer has (worded per split), an object
-with no volume, a non-model volume, a volume below three facets, height
-ranges or object extension data; for a single volume, more triangles than
-the synchronous limit (written as `toLocaleString('en-US')` writes them),
-paint or opaque triangle-indexed 3MF metadata; and, splitting to parts, an
-object that already has parts. The exchange is canonical JSON over a captured
-project (`SplitSourceExchange.ts`, `source_json`; WASM `split_source`, JNI
-`projectSplitSource`, Kotlin `ProjectSnapshot.splitSource`).
-`model-tool-vectors.mjs` asks it of every instance of a project covering
-each refusal, under both splits and several limits: 100 replies (61 refused)
-and 12 malformed requests agree in Rust, WASM in Node and over JNI, and 143
-Kotlin checks read them through the wrapper.
+with no volume, a non-model volume or a volume below three facets; splitting
+to objects, height ranges or object extension data no promotion distributes;
+for a single volume, more triangles than the synchronous limit (written as
+`toLocaleString('en-US')` writes them), paint or opaque triangle-indexed 3MF
+metadata; and, splitting to parts, an object that already has parts. The
+exchange is canonical JSON over a captured project (`SplitSourceExchange.ts`,
+`source_json`; WASM `split_source`, JNI `projectSplitSource`, Kotlin
+`ProjectSnapshot.splitSource`). `model-tool-vectors.mjs` asks it of every
+instance of a project covering each refusal and an import's provenance,
+under both splits and several limits: 118 replies (64 refused) and 12
+malformed requests agree in Rust, WASM in Node and over JNI, and 176 Kotlin
+checks read them through the wrapper.
+
+Split to Parts keeps the object, so the object's own data — height ranges,
+extension data — stays with it and never refuses the split. Split to Objects
+replaces the object, and its promotion (`separateObjectVolumes`,
+`splitToObjectsCommands.ts` and `commands::split_objects`, reached by both
+strategies) distributes what it knows how to distribute:
+`DISTRIBUTED_OBJECT_EXTENSION_KEYS` is `orcaxr:importSource`, the provenance
+every model import (`ModelImportParser`, the core's model staging) and
+geometry merge (`GeometryMergeParser`) gives an object. Each resulting object
+gets a copy, as a duplicated object keeps its own. Any other key still
+refuses the promotion. Until this change no imported model could be split,
+because every import carries that key; `split-imported-model.test.ts` holds
+the regression.
+Corpus cases cover a model import's and a geometry merge's provenance, alone
+and beside an unknown key: in the split sources, the model-tool journey (39
+steps, 191 JNI checks), the session's volume splits and the
+`split-to-objects-provenance` command trace.
 
 ### SVG and embossed-text parts
 
@@ -5518,11 +5536,13 @@ draws, so only the words are shared, through the strings contract.
 
 `model-tool-vectors.mjs` runs the production controller over a canonical
 3MF (a scaled, turned 20 mm block, a two-body pair with two instances, a
-two-body object, a guarded object with a modifier, a sphere) with seeded IDs.
-Its 31-step journey covers:
+two-body object, a guarded object with a modifier, a sphere, and three
+imported two-body models, one of them with an unknown extension key) with
+seeded IDs. Its 39-step journey covers:
 
 - splits: refusals before and after the confirmation, both strategies,
-  parts then promotion;
+  parts then promotion, and imported models whose provenance every
+  resulting object keeps;
 - simplifications: previews applied by count and by error, nothing to
   simplify, a cancelled preview, a one-shot simplification and a whole
   plate's preview;
@@ -5530,7 +5550,7 @@ Its 31-step journey covers:
   an angle between split parts.
 
 After every step it records the semantic hash and undo label, then undoes all
-six entries. `ProjectModelToolChecks.journey` (155 checks over JNI) takes the
+ten entries. `ProjectModelToolChecks.journey` (191 checks over JNI) takes the
 same steps through `ProjectWorkspace`. It has the browser's hash and label
 after each, its flow statuses, confirmations, simplified parts and counts,
 and its features and readout rows to rounding, and undoes back to the opened

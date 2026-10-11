@@ -139,5 +139,5 @@ fn capability_pages_match_the_browser_over_live_sessions() {
             );
         }
     }
-    assert_eq!((pages, edits), (366, 19));
+    assert_eq!((pages, edits), (384, 20));
 }

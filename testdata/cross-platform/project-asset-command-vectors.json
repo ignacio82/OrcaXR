@@ -31,7 +31,7 @@
     },
     {
       "path": "web/src/project/objects/splitToObjectsCommands.ts",
-      "sha256": "dc70ea9430e44cdac9d29d8272aa30b68c34f203c586114fd3cd88316210fdba"
+      "sha256": "7a9098dbff731347afeef1a22b1270fce763fde6ffd6eb013ab86a328233bdc6"
     },
     {
       "path": "web/src/project/objects/svgCommands.ts",

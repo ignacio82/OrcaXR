@@ -1,6 +1,14 @@
 import { canonicalStringify, cloneJson, cloneProjectState } from '../domain/canonical';
 import { isStableEntityId, type InstanceId, type ObjectId, type PlateId, type VolumeId } from '../domain/ids';
-import type { ProjectInstance, ProjectObject, ProjectState, ProjectVolume, Transform, Vec3 } from '../domain/model';
+import type {
+  JsonValue,
+  ProjectInstance,
+  ProjectObject,
+  ProjectState,
+  ProjectVolume,
+  Transform,
+  Vec3,
+} from '../domain/model';
 import { assertValidProjectState } from '../domain/validation';
 import { findObject, findVolume } from '../domain/selectors';
 import type { CommandContext, ProjectCommand } from '../history/command';
@@ -8,6 +16,29 @@ import type { CommandBus } from '../history/commandBus';
 import { selectionKey, type SelectionRef, type SelectionSnapshot } from '../selection';
 import type { ProjectRevisionGuard } from '../store';
 import { SplitVolumeToPartsCommand, type PreparedVolumeSplitPart, type VolumeSplitGuard } from './splitCommands';
+
+/**
+ * The object extension data a promotion knows how to distribute. An imported
+ * object's `orcaxr:importSource` (`ModelImportParser`, `GeometryMergeParser`:
+ * the file, its format and when it was imported) is the provenance of every
+ * object split from it, so each receives a copy, as a duplicated object keeps
+ * its own. Any other key is data no split here understands: a promotion
+ * refuses it rather than drop it or guess which object it belongs to.
+ */
+export const DISTRIBUTED_OBJECT_EXTENSION_KEYS: readonly string[] = Object.freeze(['orcaxr:importSource']);
+
+/** Whether [object] carries object extension data a promotion cannot distribute. */
+export function hasUndistributedObjectExtension(object: ProjectObject): boolean {
+  return Object.keys(object.extensionData ?? {}).some((key) => !DISTRIBUTED_OBJECT_EXTENSION_KEYS.includes(key));
+}
+
+/** What each object promoted from [source] carries of its extension data: a copy of every distributed key. */
+function distributedObjectExtension(source: ProjectObject): Record<string, JsonValue> | undefined {
+  const kept = Object.entries(source.extensionData ?? {}).filter(([key]) =>
+    DISTRIBUTED_OBJECT_EXTENSION_KEYS.includes(key),
+  );
+  return kept.length === 0 ? undefined : (cloneJson(Object.fromEntries(kept)) as Record<string, JsonValue>);
+}
 
 export interface ObjectVolumeSeparationGuard {
   readonly plateId: PlateId;
@@ -240,7 +271,7 @@ function validateSourceObject(object: ProjectObject): void {
   if (object.layerRanges.length > 0) {
     throw new Error('Split to objects requires an explicit layer-range distribution before promotion');
   }
-  if (object.extensionData && Object.keys(object.extensionData).length > 0) {
+  if (hasUndistributedObjectExtension(object)) {
     throw new Error('Split to objects requires an explicit object-extension distribution before promotion');
   }
 }
@@ -304,6 +335,8 @@ function promotedObject(
   };
   const filamentId = sourceVolume.filamentId ?? source.filamentId;
   if (filamentId) object.filamentId = filamentId;
+  const extensionData = distributedObjectExtension(source);
+  if (extensionData) object.extensionData = extensionData;
   return object;
 }
 

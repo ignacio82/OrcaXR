@@ -24,7 +24,7 @@
     },
     {
       "path": "testdata/cross-platform/project-asset-command-vectors.json",
-      "sha256": "c8e600ee7aeca1c85e05b519b7d8b06a523a2b57fac65673c0ae480fbe6de7fa"
+      "sha256": "7aea4db7c49de62686916745e87b0560e0ee0c220f2c5f17b3e6205735085533"
     },
     {
       "path": "testdata/cross-platform/project-clipboard-vectors.json",
