@@ -5228,11 +5228,15 @@ project's own slots (as the browser adopts an opened project's), applies the
 browser's edit and stages the live configuration as one undoable "Update
 slicing configuration"; a seventeenth slot is refused in the browser's words
 (shown under the pickers), a head's slot is never removed. Adopting first is
-deliberate: the browser's workspace keeps its palette beside the project and
-does not follow undo, so after undoing an added slot its next colour edit
-brings the slot back — a browser defect not fixed here (its palette, head
-presets and nozzles would have to follow history navigation without
-committing a new step); the app never resurrects a slot. The Prepare pickers
+deliberate: an edit starts from the project's current filaments, so an undone
+slot, colour or nozzle never comes back with the next edit. The browser's
+workspace keeps its palette beside the project and used to keep it through
+undo, so after undoing an added slot its next colour edit brought the slot
+back; its `undo` and `redo` now wait for a queued configuration and then
+follow the project's filaments (`followProjectFilaments`: the palette, head
+presets and nozzles from `projectFilamentSlots`, adopted without committing a
+step, so redo stays available), regression-tested by
+`web/src/workspace/__tests__/palette-follows-history.test.ts`. The Prepare pickers
 follow the project's slots too (`SlicingProfiles.follow` on each change, so
 undo and redo move them), choices start from the project's slots, an opened
 or restored project's filaments become the slots a later choice starts from

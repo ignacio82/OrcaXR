@@ -35,6 +35,7 @@ import { describeDiscovery, type DiscoveryOutcome } from '../printer/PrinterDire
 import type { ProjectSummaryInput } from '../diagnostics/DiagnosticsBundle';
 import type { FilamentId, InstanceId, LayerRangeId, ObjectId, PlateId, VolumeId } from '../project/domain/ids';
 import { UuidIdSource } from '../project/domain/ids';
+import { canonicalStringify } from '../project/domain/canonical';
 import type { ConfigMap, FacetRefinementEncoding, JsonValue, Transform, Vec3 } from '../project/domain/model';
 import type { FacetAnnotationGuard } from '../project/annotations';
 import { paintOverlayFacets } from '../project/painting/PaintOverlay';
@@ -3934,6 +3935,35 @@ export class OrcaWorkspace extends xb.Script {
       nozzles: this.headNozzles,
       palette: this.palette.list(),
     };
+  }
+
+  /**
+   * After undo or redo the palette, each slot's filament and its nozzle are the
+   * project's own filaments again, adopted as an opened project's are, so the
+   * next slot or profile edit starts from what the project holds: the palette
+   * kept beside the project used to stay as it was, and the next edit brought
+   * an undone slot (or colour, or nozzle) back. Nothing is committed — the
+   * project already holds these. A project that slices as authored commits no
+   * palette edit, so it keeps the palette it was opened with.
+   */
+  private followProjectFilaments(): void {
+    if (!this.profile) return;
+    const physical = this.canonicalProject.getSlicingConfiguration().filaments.physical;
+    if (physical.length === 0) return;
+    const slots = projectFilamentSlots(physical, this.palette.list());
+    const current = { heads: this.headFilaments, nozzles: this.headNozzles, palette: this.palette.list() };
+    if (canonicalStringify(slots) === canonicalStringify(current)) return;
+    this.headFilaments = [...slots.heads];
+    this.headNozzles = [...slots.nozzles];
+    // Adopting is not an edit: the palette's change must not commit a configuration.
+    this.applyingProfile = true;
+    try {
+      this.palette.replace(slots.palette);
+    } finally {
+      this.applyingProfile = false;
+    }
+    this.rebuildHeadsPanel();
+    this.onProfileChanged?.();
   }
 
   /** Adopts edited slots: their filaments and nozzles, then the palette, whose change commits them. */
@@ -8519,8 +8549,11 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public async undo(): Promise<boolean> {
+    // A queued slot or profile edit lands first, so the step undone is the one the operator sees as last.
+    await this.slicingConfigurationSettled();
     const changed = await this.canonicalProject.undoAsync();
     if (changed && !this.disposed) {
+      this.followProjectFilaments();
       this.syncTransformProxy();
       this.revalidatePublishedGcode();
       this.setStatus(t('workspace.orcaWorkspace.undidTheLastProjectEdit', 'Undid the last project edit.'));
@@ -8529,8 +8562,10 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public async redo(): Promise<boolean> {
+    await this.slicingConfigurationSettled();
     const changed = await this.canonicalProject.redoAsync();
     if (changed && !this.disposed) {
+      this.followProjectFilaments();
       this.syncTransformProxy();
       this.revalidatePublishedGcode();
       this.setStatus(t('workspace.orcaWorkspace.redidTheProjectEdit', 'Redid the project edit.'));
