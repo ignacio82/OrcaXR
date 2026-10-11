@@ -75,23 +75,20 @@ def until_enabled(text, timeout=30):
 
 
 def badge_under(label, badge, timeout=20):
-    """Whether the tree row showing [label] shows [badge] among its indicators, just under its name.
-    The filament bar names the selected object too, and its chips name the filaments: the tree's
-    row is the one beside its own check box ("Select <label>"), scrolled into view first. An
-    indicator that is not the row's last reads "<badge> ·"."""
+    """Whether the tree row of [label] shows [badge] among its indicators. The filament bar names the
+    selected object too, and its chips name the filaments: the row is told by its own check box
+    ("Select <label>"), scrolled into view first, and its words (name, description, indicators) lie to
+    the box's right, from its top to just below it — the name can have scrolled off above. An indicator
+    that is not the row's last reads "<badge> ·"."""
     box_name = f"Select {label}"
     # Finding the row may take scrolling; [timeout] bounds the wait for the badge once it shows.
     find(box_name, timeout=30)
     deadline = time.monotonic() + timeout
     while True:
         current = nodes()
-        boxes = [bounds(n) for n in current if (n.get("content-desc") or "") == box_name]
-        rows = [bounds(n) for n in current if (n.get("text") or "") == label
-                and any(box[1] < bounds(n)[3] and bounds(n)[1] < box[3] for box in boxes)]
-        if rows:
-            left, top, right, bottom = rows[0]
-            shown = [n for n in current if (n.get("text") or "") in (badge, f"{badge} ·")]
-            if any(0 <= bounds(n)[1] - bottom < 120 and bounds(n)[0] >= left - 10 for n in shown):
+        for box in (bounds(n) for n in current if (n.get("content-desc") or "") == box_name):
+            shown = [bounds(n) for n in current if (n.get("text") or "") in (badge, f"{badge} ·")]
+            if any(b[0] >= box[2] - 10 and box[1] <= b[1] <= box[3] + 60 for b in shown):
                 return True
         if time.monotonic() >= deadline:
             return False

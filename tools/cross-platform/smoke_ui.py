@@ -49,29 +49,60 @@ class Screen:
         left, top, right, bottom = map(int, re.findall(r"\d+", node.get("bounds")))
         return (left + right) // 2, (top + bottom) // 2
 
-    def find(self, text, timeout=20, exact=True):
-        """The node showing [text], scrolling the list on to its end (where what shows no longer
-        changes) and back to its start until it shows. The end is told by the words shown, not
-        by the bounds: Android's stretch overscroll keeps moving those at an end."""
+    def find(self, text, timeout=120, exact=True):
+        """The node showing [text]. Not on screen, the list is searched on down to its end a screen
+        at a time, then flung quickly back to its start and searched down again, until the time is
+        up. Where a list ends is told by the words shown, not the bounds, which Android's stretch
+        overscroll keeps moving. (Searching down first spares the system picker's pull to refresh.)
+        Lists such as Prepare's run to many screens, so a search takes a while."""
         deadline = time.monotonic() + timeout
-        onward, placed, seen = True, None, []
-        while time.monotonic() < deadline:
+        seen = []
+
+        def look():
             current = self.nodes()
             for node in current:
                 value = node.get("text") or node.get("content-desc") or ""
                 if value == text or (not exact and text in value):
-                    return node
+                    return node, current
                 if value and value not in seen:
                     seen.append(value)
-            layout = [node.get("text") or node.get("content-desc") or "" for node in current]
-            if layout == placed:
-                onward = not onward
-            placed = layout
-            x, top, bottom = self.scroll_band(current)
-            start, end = (bottom, top) if onward else (top, bottom)
-            self.adb("shell", "input", "swipe", str(x), str(start), str(x), str(end), "300")
-            # Let a fling or an overscroll stretch settle before the next look.
-            time.sleep(0.6)
+            return None, current
+
+        def words(nodes):
+            # Only what the list scrolls: a status line above it may change every second.
+            lists = [node for node in nodes if node.get("scrollable") == "true"]
+            if not lists:
+                return [node.get("text") or node.get("content-desc") or "" for node in nodes]
+            area = lambda node: (lambda b: (b[2] - b[0]) * (b[3] - b[1]))(list(map(int, re.findall(r"\d+", node.get("bounds")))))
+            largest = max(lists, key=area)
+            return [node.get("text") or node.get("content-desc") or "" for node in largest.iter("node")]
+
+        found, current = look()
+        if found is None:
+            # A menu or dialog may still be opening: a swipe now would land outside it and close it.
+            time.sleep(1.5)
+            found, current = look()
+        while found is None and time.monotonic() < deadline:
+            # On down to the end, a screen at a time.
+            while found is None and time.monotonic() < deadline:
+                x, top, bottom = self.scroll_band(current)
+                self.adb("shell", "input", "swipe", str(x), str(bottom), str(x), str(top), "300")
+                time.sleep(0.6)
+                before = words(current)
+                found, current = look()
+                if found is None and words(current) == before:
+                    break
+            # Back to the start: quick flings until what shows no longer changes.
+            while found is None and time.monotonic() < deadline:
+                x, top, bottom = self.scroll_band(current)
+                self.adb("shell", "input", "swipe", str(x), str(top), str(x), str(bottom), "100")
+                time.sleep(0.6)
+                before = words(current)
+                found, current = look()
+                if found is None and words(current) == before:
+                    break
+        if found is not None:
+            return found
         (self.output / f"{self.name}-smoke-failed.xml").write_text(self.adb("shell", "cat", self.dump))
         (self.output / f"{self.name}-smoke-seen.txt").write_text("\n".join(seen) + "\n")
         raise AssertionError(f"'{text}' never appeared")
@@ -117,10 +148,13 @@ class Screen:
         self.adb("shell", "input", "keyevent", str(code))
 
     def to_top(self):
-        """Flings the screen's list back to its first item."""
+        """Flings the screen's list back to its first item, inside the list (a bar above it, such as
+        Prepare's pinned Slice, takes no swipe), and lets it come to rest: a tap on a list still
+        flinging only stops it."""
+        x, top, bottom = self.scroll_band(self.nodes())
         for _ in range(6):
-            self.adb("shell", "input", "swipe", "360", "300", "360", "1100", "100")
-        time.sleep(0.5)
+            self.adb("shell", "input", "swipe", str(x), str(top), str(x), str(bottom), "100")
+        time.sleep(2)
 
     def hide_keyboard(self):
         """Closes the soft keyboard, which would cover the next field or button. Back closes it; a
@@ -142,13 +176,15 @@ class Screen:
         raise AssertionError("The soft keyboard would not close")
 
     def field(self, label):
-        """The text field labelled [label] (its label is a child node), else the node showing it."""
+        """The text field labelled [label] (its label is a child node), else the node showing it. A
+        field can lie far down a long list (Prepare's runs to many screens with a project's virtual
+        filaments), so the search may take a while on a loaded emulator."""
         for node in self.nodes():
             if node.get("class") == "android.widget.EditText" and any(
                 (child.get("text") or "") == label for child in node.iter("node")
             ):
                 return node
-        return self.find(label)
+        return self.find(label, timeout=90)
 
     def type_into(self, label, value):
         """Focuses the field labelled [label] and types [value], checking what landed. Typing

@@ -1845,8 +1845,12 @@ external slice routes, and verified output publication.
   `:engine`, `LocalEngineClient` (one job, 10 s cooperative-cancel deadline,
   then that process ended and its death awaited), owner-token cleanup, and
   `LocalSlicing` claim/verify/publish by revision. Host JNI and JVM checks
-  pass; the instrumented test, the emulator smoke and `emulator-slices.py
-  --adapter` have not run yet.
+  pass, as do the instrumented `LocalEngineServiceTest` (a cube sliced, a
+  long slice cancelled; API 34 emulator) and the local-slice smoke on both
+  emulators; `emulator-slices.py --adapter`
+  reruns the eleven fixture comparisons through the adapter's C entry point
+  (the one JNI calls) and all eleven match the browser engine's references
+  on the x86_64 emulator.
 - [ ] Reuse canonical preflight and exact captured configuration. Exercise U1
   toolchanges, CC profiles, FullSpectrum modes, support/seam/fuzzy/color painting,
   layer events, scoped overrides, and every engine feature currently claimed.
@@ -1880,8 +1884,8 @@ external slice routes, and verified output publication.
   engine when the build carries it for the device's ABI and the measured
   memory admits the plate (256 MiB plus 16 times its archive, provisional),
   otherwise none and why — never an unconfigured server in its place. It asks
-  once per endpoint before any plate is uploaded. The emulator smoke has not
-  run yet, and the memory rule awaits device measurements.
+  once per endpoint before any plate is uploaded. The local-slice smoke
+  passes on both emulators; the memory rule awaits device measurements.
 - [ ] Qualify foreground/background execution for each SDK/distribution target.
   Test task switching, screen lock, thermal pressure, notification denial where
   relevant, service timeout, process death, and reopening an interrupted job.
@@ -1934,7 +1938,7 @@ storage journeys on phone, tablet, and desktop-sized windows.
   slicer as the browser's `sliceNow` — or, with it off, on the device's own
   engine in its `:engine` service process as the browser slices in-browser,
   published only for the state it came from (`android-local-slice-smoke.py`,
-  not yet run) — attested route, the shared preflight's
+  on both emulators) — attested route, the shared preflight's
   issues as the browser's panel shows them, the one-plate archive, "Slice" /
   "Cancel Slice" with progress, the G-code streamed to the app's cache and
   opened in Preview; output whose project changed is discarded or withdrawn,
@@ -1943,7 +1947,7 @@ storage journeys on phone, tablet, and desktop-sized windows.
   to the next source it reads (it once outlived a fresh slice after a bed
   fill: `PreviewCurrency`, 4 JVM tests; `ProjectStaleSliceChecks`, 91 host
   JNI checks across fill, add instance, paste, arrange, primitive and undo;
-  the local-slice smoke's new assertion not yet run);
+  and the local-slice smoke's assertion, on both emulators);
   the line a finished slice gets is the browser's (`SliceStatus.ts`: the
   engine's own layer total first), shared through the core's `SliceTally`
   (40 browser cases, 563 JNI checks).
@@ -1976,8 +1980,8 @@ storage journeys on phone, tablet, and desktop-sized windows.
   14-step controller journey, V8's `pow`, `cbrt` and `sort`): Prepare lists
   its heads and recipes and adds, edits, duplicates, enables, disables and
   deletes recipes, each one undoable step with the browser's label (a
-  105-check JNI journey; the filament smoke drives it, not yet run on an
-  emulator).
+  105-check JNI journey; the filament smoke drives it on both
+  emulators).
 - [ ] Adapt inspector/object tree, toolbars, menus, command palette, dialogs,
   settings, and progress states to narrow, medium, and wide windows. Support
   keyboard traversal, shortcuts, hover, context menus, trackpad navigation,
@@ -2044,7 +2048,7 @@ storage journeys on phone, tablet, and desktop-sized windows.
   at 55%) each committed as one step with the browser's label, and Erase all
   (45 JNI checks of the workflow, 13 of the scene's paint, 9 of its base
   colours; an emulator paint smoke, which also assigns the cube a filament
-  and compares its colour with the paint's, is written, not yet run).
+  and compares its colour with the paint's, passes on both emulators).
   The browser's model tools run through the shared core
   ([§](engineering/native-core.md#android-model-tools)): Split to Objects
   (its confirmation, both strategies) and Split to Parts from the Edit and
@@ -2059,7 +2063,7 @@ storage journeys on phone, tablet, and desktop-sized windows.
   view's foot in turn with the paint panel and the Lay flat card. A
   191-check JNI journey matches the browser controller's hash, label,
   statuses, counts and readout after all 39 steps and undoes them;
-  `android-modeltools-smoke.py` has not run yet. Repair is not offered: it
+  `android-modeltools-smoke.py` passes on both emulators. Repair is not offered: it
   needs libslic3r's mesh kernels in the `:engine` job service. Lighting and
   preview controls remain.
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
@@ -2130,8 +2134,8 @@ storage journeys on phone, tablet, and desktop-sized windows.
   menu camera views as actions; enlarged text cuts no area name (the bar takes a
   second row, the rail widens) and dialogs scroll; Compose's animator-scale
   handling is the reduced motion; content stays clear of the system bars,
-  cutouts and the keyboard. `android-accessibility-smoke.py` has not run on an
-  emulator yet. The browser's in-app reduce-motion override waits for an Android
+  cutouts and the keyboard. `android-accessibility-smoke.py` passes on both
+  emulators. The browser's in-app reduce-motion override waits for an Android
   preferences surface.
 
 **Exit gate:** open a large painted project, edit it, undo/redo, save/reopen,

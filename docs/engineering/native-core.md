@@ -5355,7 +5355,7 @@ sides of the caret and shows exactly the new text (a loaded emulator can drop Ct
 Ctrl, or place the tap's caret after a following key), since Enter commits whatever the
 field holds, and then presses Tab to leave the field, which shows the applied value. It
 finds a field by the scrolling container's own bounds, since the area bar's height varies
-with the window and the text size.
+with the window and the text size. It passes on both emulators.
 
 ### Android creation
 
@@ -5558,7 +5558,7 @@ state. `ProjectEditingTest` and `ModelToolsTest` (app JVM) cover the menus,
 the fields, the statuses, the readout and the transform composition.
 `renderer-api` tests cover the projection's round trip and the payload
 decoding. `android-modeltools-smoke.py`, added to `emulator-smoke.py` before
-the accessibility smoke, has not run on an emulator yet. Its steps:
+the accessibility smoke, passes on both emulators. Its steps:
 
 1. Import a two-body STL, split it to parts and to objects, and undo each.
 2. Preview a sphere's simplification and apply it from the Workspace, by its
@@ -5642,8 +5642,8 @@ before the adaptive smoke) adds a cube, adds a fifth slot in Prepare (A-5
 and its picker), selects the cube with Select All, assigns it from the bar's
 "Head 5" chip ("Undo Assign filament", the filament under the cube's row),
 undoes it (the row shows none) and recolours the new slot from its swatch,
-then drives the virtual filament library (below); it has not run on an
-emulator yet. Not yet done: the inspector selector's height-range scopes in
+then drives the virtual filament library (below); it passes on both
+emulators. Not yet done: the inspector selector's height-range scopes in
 a panel of their own (the bar assigns ranges selected in the tree).
 
 The Prepare area shows the browser's virtual filament library under the
@@ -5701,7 +5701,7 @@ filament library", "Add virtual filament" (the browser's 50 % Ratio of the
 first two heads, its exact cadence previewed), a name typed and Add ("Undo
 Add <name>"), the row's Disable ("Undo Disable mixed filament"), its Delete
 reviewed and confirmed ("Undo Remove mixed filament", the library empty),
-and undo bringing it back, still disabled; it has not run on an emulator.
+and undo bringing it back, still disabled; it passes on both emulators.
 
 ### Android painting
 
@@ -5807,8 +5807,8 @@ selection filament bar (the project filaments unit's) and finds the
 Workspace's pixels over the cube recoloured, then undoes it and finds them
 as before; drags across the cube and finds the pixels it painted changed,
 to the colour the assigned cube was drawn in; finds "Undo Paint colour
-facets", undoes it and finds the cube drawn as before. It has not run on an
-emulator yet.
+facets", undoes it and finds the cube drawn as before. It passes on both
+emulators.
 
 ### Android Preview area
 
@@ -5840,6 +5840,15 @@ carries no bed). The bottom navigation's labels now stay on
 one line: with four areas a phone left "Workspace" wrapped.
 
 ### Android Prepare area
+
+Slice, Cancel Slice, the job's progress, the slice's status line and the
+send's progress (with Cancel send) stay above the area's list, as the browser
+keeps Slice in its toolbar and its status in a status line: the profiles,
+every filament slot and the virtual filament library run to several screens
+(a project with eleven recipes to many), and the slice's result card — its
+Preview and Send to Printer — heads the list, where the operator returns
+after a slice. While the keyboard is up the bar steps aside, so the field
+being typed in keeps the room above the keyboard (little, in landscape).
 
 Prepare slices the active plate on the external slicer as the browser's
 `sliceNow` does. Its connection is the browser's
@@ -6025,17 +6034,20 @@ route, admission and words; Gradle assemble, unit tests, lint and both
 androidTest compiles pass, and `verify-artifacts.py --apk` passes on the
 debug APK (109.2 MB with the engine, which adds 17.9 MB arm64 and 19.6 MB
 x86_64 of stored libraries) and the shrunk release APK (71.2 MB), whose R8
-output keeps the JNI class and method names the library registers. Not run here,
-for the integrator: the instrumented `LocalEngineServiceTest` (a cube sliced
-through the service, then a cancel), `android-local-slice-smoke.py` (added
-to `emulator-smoke.py` before the adaptive smoke: a cube from the Add menu,
-the local route and why, Slice in the `:engine` process, Preview's
-toolpaths, Prepare's size/lines/layers against the published file read back,
-a filled bed's progress with the service in the foreground and Cancel Slice,
-the engine process killed mid-slice with the editor surviving, and a fresh
-engine for the next slice), and `emulator-slices.py --adapter`, which reruns
-the eleven fixture comparisons through the adapter's C entry point (the one
-JNI calls) with its fixture driver. Still open: thumbnails (neither Android
+output keeps the JNI class and method names the library registers. The
+instrumented `LocalEngineServiceTest` (a cube sliced through the service,
+then a cube scaled to the build volume cancelled mid-slice; it takes the
+app's shared profile catalog, as the core admits four documents at a time)
+passes on the API 34 emulator. `android-local-slice-smoke.py` (in
+`emulator-smoke.py`: a cube from the Add menu, the local route and why, Slice
+in the `:engine` process, Preview's toolpaths, Prepare's size/lines/layers
+against the published file read back, a cube scaled to the build volume
+sliced with the service in the foreground and Cancel Slice, the engine
+process killed mid-slice with the editor surviving, and a fresh engine for
+the next slice) passes on both emulators. `emulator-slices.py --adapter`, which reruns the
+eleven fixture comparisons through the adapter's C entry point (the one JNI
+calls) with its fixture driver, matches the browser engine's references in
+all eleven on the x86_64 emulator. Still open: thumbnails (neither Android
 route renders one), slicing all plates, ARM64 execution and
 physical-device qualification. The summary line is the browser's, from the
 shared core ([above](#g-code-artifact-summary)), on both routes.
@@ -6143,7 +6155,7 @@ JVM tests: the emulator's sequence, refusal of a slice of a state the
 project left, each of the three values withdrawing, opened files, failed
 reads and dismissal). `android-local-slice-smoke.py` now checks that the
 slice taken after undoing the scaling shows neither in Preview nor in
-Prepare as withdrawn; it has not run on an emulator here.
+Prepare as withdrawn; it passes on both emulators.
 
 ### Android Device area
 
@@ -6516,7 +6528,7 @@ dark tokens'; the switch's explicit light outranks it), sets font scale 2.0
 (every area and its key controls, the Add printer dialog's fields and buttons,
 the bar's five whole names), checks fields above the keyboard in landscape and
 portrait and opens areas, a menu and a dialog with every animation scale at 0,
-restoring each setting as it ends. It has not run on an emulator yet.
+restoring each setting as it ends. It passes on both emulators.
 
 ### Action capabilities
 
@@ -7617,7 +7629,10 @@ on the busy shared host encountered a System UI ANR after JNI tests passed; the
 startup assertion correctly failed. This small CI display is for protocol/startup
 checks, not renderer performance measurements. `--from <smoke>` (for example
 `--from android-inspector-smoke`) runs the order from that smoke on, on the same
-freshly owned AVD: every smoke installs the app it drives. Its density is the
+freshly owned AVD: every smoke installs the app it drives; `--only <smoke>` runs
+that smoke alone. The runner waits until shared storage takes a file before
+the first smoke, since a smoke pushing to Downloads at once would be refused
+just after boot. Its density is the
 `pixel_2` profile's 420 dpi, so the 720-pixel display is 274 dp wide. To test an
 already-owned emulator explicitly, use `android-smoke.py --serial emulator-NNNN`.
 It refuses physical-device serials. Tests install the development app and test APK,

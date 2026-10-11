@@ -53,11 +53,12 @@ MENU = ("Select All", "Deselect All", "Clone Selected", "Delete Selected", "Dele
         "Reset Scale", "Centre on Plate", "Scale to build volume", "Drop to bed", "Auto-arrange Plate")
 
 
-def edit(action, timeout=20):
+def edit(action, timeout=60):
     """An action from the Project area's Edit menu. With the placement actions the menu outgrows a phone's
     height, so its own list (the smallest scrolling container holding its items) scrolls to the action."""
     tap("Edit")
     deadline = time.monotonic() + timeout
+    swipes = 0
     while True:
         nodes = screen.nodes()
         item = next((n for n in nodes if (n.get("text") or "") == action), None)
@@ -72,10 +73,12 @@ def edit(action, timeout=20):
                  and any((child.get("text") or "") in MENU for child in n.iter("node"))]
         assert lists, "The Edit menu did not open"
         left, top, right, bottom = bounds(min(lists, key=lambda n: (bounds(n)[2] - bounds(n)[0]) * (bounds(n)[3] - bounds(n)[1])))
-        # The menu opens at its first item: what is not shown yet lies further down.
+        # The menu may open where it was left: back to its first item, then on down to the action.
         inset = (bottom - top) // 5
         x = str((left + right) // 2)
-        adb("shell", "input", "swipe", x, str(bottom - inset), x, str(top + inset), "300")
+        start, end = (top + inset, bottom - inset) if swipes < 3 else (bottom - inset, top + inset)
+        swipes += 1
+        adb("shell", "input", "swipe", x, str(start), x, str(end), "300")
         time.sleep(0.5)
 
 

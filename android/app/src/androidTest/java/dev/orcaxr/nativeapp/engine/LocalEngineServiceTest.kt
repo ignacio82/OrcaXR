@@ -43,8 +43,10 @@ class LocalEngineServiceTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             val state = LocalEngineDevice.measure(context)
             assertTrue("the debug build packages the engine: ${state.reason}", state.available)
-            val catalogBytes = context.assets.open("profiles/catalog.json").use { it.readBytes() }
-            ProfileCatalogs.build(catalogBytes).use { catalog ->
+            // The app's own catalog, as its windows share it: the core admits four documents at a time, and
+            // the app's session, this test's and the plate's export capture take the other three.
+            val catalog = ProfileCatalogs.shared { context.assets.open("profiles/catalog.json").use { it.readBytes() } }
+            run {
                 ProjectWorkspace().use { workspace ->
                     workspace.ready().get(60, TimeUnit.SECONDS)
                     val live = checkNotNull(catalog.defaultSelection(LiveSlicingChoice.EMPTY)?.live)
@@ -76,6 +78,10 @@ class LocalEngineServiceTest {
                         LocalSlicing.discard(job)
 
                         // A second job, cancelled once it runs: the engine stops cooperatively (or its process is ended).
+                        // The cube scaled to the build volume, so the slice outlasts the cancel (a 20 mm cube slices
+                        // in well under a second).
+                        workspace.selectAll().get(60, TimeUnit.SECONDS)
+                        assertTrue("scaled to the build volume", workspace.scaleSelectedToFit().get(60, TimeUnit.SECONDS) != null)
                         val second = LocalSlicing.stage(jobs, id()) { workspace.projectPlate(plate, it).get(60, TimeUnit.SECONDS) }
                         val cancel = AtomicBoolean(false)
                         val stopped = client.run(second, { _, _ -> cancel.set(true) }) { cancel.get() }

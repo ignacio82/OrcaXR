@@ -23,6 +23,7 @@ as a 3MF package, with the token and nothing else.
 import argparse
 import base64
 import json
+import re
 import subprocess
 import tempfile
 import time
@@ -46,14 +47,42 @@ adb, find, tap, enabled = screen.adb, screen.find, screen.tap, screen.enabled
 hexagon = ROOT / "web/public/models/multicolor_hexagon.3mf"
 
 
+def choose(current, option):
+    """Opens the picker showing [current] and chooses [option] from its menu: the menu is a window of
+    its own, searched (and scrolled) once it is up. A tap that landed while the list was moving, or
+    while the project was busy, opens nothing, and the picker is tapped again."""
+    attempts = []
+    for _ in range(3):
+        # The pickers are disabled while the project is busy (a configuration being applied, say).
+        ready = time.monotonic() + 60
+        while (field := find(current)).get("enabled") != "true":
+            assert time.monotonic() < ready, f"The picker of '{current}' stayed disabled"
+            time.sleep(0.5)
+        x, y = screen.center(field)
+        adb("shell", "input", "tap", str(x), str(y))
+        opened = time.monotonic() + 6
+        while "Pop-Up Window" not in screen.focused() and time.monotonic() < opened:
+            time.sleep(0.5)
+        if "Pop-Up Window" in screen.focused():
+            tap(option, timeout=60)
+            return
+        attempts.append((field.get("bounds"), field.get("enabled"), field.get("focused"), screen.focused().strip()))
+        png = subprocess.check_output(["adb", "-s", args.serial, "exec-out", "screencap", "-p"], timeout=60)
+        (output / f"prepare-picker-{len(attempts)}.png").write_bytes(png)
+    raise AssertionError(f"The picker of '{current}' never opened its menu: {attempts}")
+
+
 def pick_download(name):
-    """Chooses [name] from Downloads in the system picker, through its roots when Recent lacks it."""
+    """Chooses [name] from Downloads in the system picker: Recent lists files lately added, a scroll
+    or two down; through its roots when Recent lacks it."""
     try:
-        tap(name, timeout=5)
+        tap(name, timeout=20)
     except AssertionError:
         tap("Show roots")
+        time.sleep(1.5)
         tap("Downloads")
-        tap(name, timeout=20)
+        time.sleep(2)
+        tap(name, timeout=60)
 
 
 def type_into(label, value):
@@ -85,6 +114,25 @@ server = subprocess.Popen(
      json.dumps({"token": TOKEN, "gcodeFile": "testdata/parity/fixtures/reference.gcode"})],
     cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
 )
+
+
+def delete_slicer():
+    """Taps the external slicer's own Delete: the first "Delete" below its section's heading,
+    scrolling the section up until it shows."""
+    top = lambda node: int(re.findall(r"\d+", node.get("bounds"))[1])
+    for _ in range(8):
+        current = screen.nodes()
+        heading = next((n for n in current if (n.get("text") or "") == "External slicer"), None)
+        if heading is not None:
+            below = sorted((n for n in current if (n.get("text") or "") == "Delete" and top(n) > top(heading)), key=top)
+            if below:
+                x, y = screen.center(below[0])
+                adb("shell", "input", "tap", str(x), str(y))
+                return
+        x, upper, lower = screen.scroll_band(current)
+        adb("shell", "input", "swipe", str(x), str(lower), str(x), str((upper + lower) // 2), "300")
+        time.sleep(0.6)
+    raise AssertionError("The external slicer offers no Delete")
 
 
 def ask(command):
@@ -139,8 +187,7 @@ try:
 
     # Another printer, chosen from the picker: one undoable step, and its preflight passes too.
     screen.to_top()
-    tap("Snapmaker U1 (0.4 nozzle)")
-    tap("Elegoo Centauri Carbon 0.4 nozzle")
+    choose("Snapmaker U1 (0.4 nozzle)", "Elegoo Centauri Carbon 0.4 nozzle")
     find("Elegoo Centauri Carbon 0.4 nozzle", timeout=30)
     screen.absent("Head 2 filament", timeout=30)
     tap("Project")
@@ -197,8 +244,10 @@ try:
     screen.absent("Slice preflight issues", timeout=30)
     assert enabled("Slice"), "Slice was not offered for a project with its own settings"
 
-    # Deleting the slicer turns slicing off and forgets the consent.
-    tap("Delete")
+    # Deleting the slicer turns slicing off and forgets the consent. The project's virtual filaments
+    # have Delete buttons too: the slicer's is the first one below the "External slicer" heading.
+    find("External slicer", timeout=120)
+    delete_slicer()
     find("External slicer removed — slicing locally.", timeout=30)
     find("Offline")
 

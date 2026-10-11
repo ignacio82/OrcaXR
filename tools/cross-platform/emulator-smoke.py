@@ -29,6 +29,7 @@ SMOKES = ["android-smoke", "android-local-network-smoke", "android-device-smoke"
           "android-adaptive-smoke"]
 parser.add_argument("--from", dest="start", choices=SMOKES, default=SMOKES[0],
                     help="run the smokes from this one on, in order")
+parser.add_argument("--only", choices=SMOKES, help="run this smoke alone on the freshly owned AVD")
 arguments = parser.parse_args()
 api = arguments.api
 images = {
@@ -66,9 +67,16 @@ with tempfile.TemporaryDirectory(prefix="orcaxr-avd-") as directory:
                 time.sleep(2)
             else:
                 raise RuntimeError("Owned emulator did not boot before the deadline")
+            # Shared storage comes up after the boot completes; a smoke pushing a file to Downloads at
+            # once (the first of a run resumed with --from) would be refused.
+            deadline = time.monotonic() + 120
+            while subprocess.run(["adb", "-s", serial, "shell", "touch /sdcard/Download/.orcaxr-ready && rm /sdcard/Download/.orcaxr-ready"],
+                                 capture_output=True).returncode != 0:
+                assert time.monotonic() < deadline, "Shared storage never became writable"
+                time.sleep(2)
             page = subprocess.check_output(["adb", "-s", serial, "shell", "getconf", "PAGESIZE"], text=True).strip()
             assert page == str(arguments.pages * 1024), f"Expected {arguments.pages} KB pages, the kernel uses {page} bytes"
-            for smoke in SMOKES[SMOKES.index(arguments.start):]:
+            for smoke in [arguments.only] if arguments.only else SMOKES[SMOKES.index(arguments.start):]:
                 # The local-network permission exists from Android 17.
                 if smoke == "android-local-network-smoke" and api < 37:
                     continue

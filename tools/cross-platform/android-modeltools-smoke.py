@@ -73,7 +73,7 @@ def edit(action, timeout=30):
     while True:
         tap("Edit")
         found = None
-        for _ in range(8):
+        for attempt in range(12):
             nodes = screen.nodes()
             item = next((n for n in nodes if (n.get("text") or "") == action), None)
             if item is not None:
@@ -87,7 +87,9 @@ def edit(action, timeout=30):
             left, top, right, bottom = bounds(min(lists, key=lambda n: (bounds(n)[2] - bounds(n)[0]) * (bounds(n)[3] - bounds(n)[1])))
             inset = (bottom - top) // 5
             x = str((left + right) // 2)
-            adb("shell", "input", "swipe", x, str(bottom - inset), x, str(top + inset), "300")
+            # The menu may open where it was left: back to its first item, then on down to the action.
+            start, end = (top + inset, bottom - inset) if attempt < 3 else (bottom - inset, top + inset)
+            adb("shell", "input", "swipe", x, str(start), x, str(end), "300")
             time.sleep(0.5)
         assert found is not None, f"'{action}' never showed in the Edit menu"
         if screen.enabled(action):

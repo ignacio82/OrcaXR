@@ -1,8 +1,8 @@
 {
   "cargo": "cargo 1.94.1 (29ea6fb6a 2026-03-24)",
-  "defaultFeatures": true,
+  "defaultFeatures": false,
   "features": [
-    "gcode"
+    "project"
   ],
   "inputs": {
     "contracts/android-strings.json": "9fe1c73c189262a533cf6518b5b5a0bfdd79cd9e8b7674947ac05e4b3b11b9a3",
@@ -468,33 +468,33 @@
     "tools/cross-platform/android-create-smoke.py": "7480d18967a28669b7b3f9d4a8a60f058f92cc91d31a6146546d2b81bd788ee7",
     "tools/cross-platform/android-device-smoke.py": "18e8964be26bcbf138cf50655b1d44585b888ccd14c0e77d43c7ef860e3c4f42",
     "tools/cross-platform/android-edit-smoke.py": "52f0d7b689200467fa2c1f468216bf2bfb3ac304d1fd2da48a90174f033d2e52",
-    "tools/cross-platform/android-filament-smoke.py": "9a1dae6a06d5203eb4080fb8ea9a099d58df1918bfc984a8e87751126a53e29c",
-    "tools/cross-platform/android-inspector-smoke.py": "bc22d1cb5adca0ab08f139280a7487d24616165fbd011f8755c734501dd40d20",
+    "tools/cross-platform/android-filament-smoke.py": "fd8168bee2fe79dc0972838b7e7b2f2d9696a1d7d3ec676bf2540f062b2f9558",
+    "tools/cross-platform/android-inspector-smoke.py": "d87b569dcb6c23b8e44c005bdd4ea8981b2270c17486ad974528706189bb162c",
     "tools/cross-platform/android-local-network-smoke.py": "28a69831ae655ffcc28e0197595b517848349c01f8b6471517760b3b5327871c",
     "tools/cross-platform/android-local-slice-smoke.py": "d58dfd302cee06ea6ea839bc974fdb7cc8d505b3096686f67f83df1b3f65acbc",
     "tools/cross-platform/android-locale-smoke.py": "d0f81b3017cae31ade09be71df8553f01e43baeb57cecf761f90bf1b76dc87ed",
-    "tools/cross-platform/android-modeltools-smoke.py": "300067f67f395ec27fbcaede3581fa46811de4730d23f7424c12e234b325ad0c",
+    "tools/cross-platform/android-modeltools-smoke.py": "698c0891263cb1816a9dc27f41e4c22f966467c307d86ac7ae56495bca4d62f2",
     "tools/cross-platform/android-paint-smoke.py": "9d41498a9a5706345827b52c40fb602ba1fdd6d1a52f8aeb335de4ad66d8eb34",
-    "tools/cross-platform/android-prepare-smoke.py": "cb4d0563d46e5a7a53b1590696e489a18db76754b3160e32784226db026f31cd",
-    "tools/cross-platform/android-preview-smoke.py": "bbfe024f5b0c1cc435166531193109b5fb051ec87b3eb7f7d6c8ec60ee2eb26b",
+    "tools/cross-platform/android-prepare-smoke.py": "aec3144773b5f34f7d3549f084ea8718eaea58d2a5d8ee4bdc5aadafdc1c77b6",
+    "tools/cross-platform/android-preview-smoke.py": "37e9fba629eb336e58c049a8adcafe04a88f3d23e6e6a4c8b58f996780b97ed2",
     "tools/cross-platform/android-project-smoke.py": "8bedadc2ede8fd857c5ea42bdca8d8f2d9560f03bd5c359b79bd9bd58798752e",
-    "tools/cross-platform/android-send-smoke.py": "ff89f39cc74d5e18df71abaafe11afa608e8e811eee105ad4ea7c39037de3b8a",
+    "tools/cross-platform/android-send-smoke.py": "df2d6a710ca5416514053b93dbd16b25c0f98ebaf4c2866be0d5313b91b2bb19",
     "tools/cross-platform/android-smoke.py": "e73b310a896e5720e1614be268c7aac39ddb014d46a9652c87307f31e3699db2",
     "tools/cross-platform/artifacts.py": "e6addc1df707757faf498ea6d1dca298f065038546958a0cee46d5e46205e8fd",
     "tools/cross-platform/build-android.py": "28f80643b01f0ef59c6e1cd645d80eb67742417d3ab218a0d6b5ad6cd0d1891e",
     "tools/cross-platform/build-project-jvm.py": "a2f74bb17f1ff830674689292b7bf489bc42fa4a7d065fa708fbdb4903e7f339",
     "tools/cross-platform/build-wasm.py": "6311757d4e2261a1121247fabf0b6eaa0b8840ef371e161d407c4a1c0d75b53c",
-    "tools/cross-platform/emulator-smoke.py": "8bc25530ce825600eab6bd32ef51a9274faedf570c03928ed1fca1c122daa56a",
-    "tools/cross-platform/smoke_ui.py": "d9f9ae1aa40b6eee37dee6c4e2590966d73d8e8520d8f3a96acb493ef7b6ee6b",
+    "tools/cross-platform/emulator-smoke.py": "65016fbd1a499f97430f0588cc32c0e1208f6cfe1a0004e4d545ab0703aace93",
+    "tools/cross-platform/smoke_ui.py": "7458028979485f2dd173ff5443c9dc8144da2e68227d70eea95f23f881e09e85",
     "tools/cross-platform/test-zip-write.py": "af58df31f97dc99c8c644c4e820878265d9ebf5a0d2a0d622b00b63b11b5a2a0",
     "tools/cross-platform/verify-artifacts.py": "b36cc1f552ffa7cda6b08df1b03d930ec6ced25307a3b7717b1001f7f1260cc2"
   },
-  "kind": "browser-wasm",
+  "kind": "browser-project-wasm",
   "outputs": {
-    "orcaxr_core.d.ts": "b4d97fa1b44a0304f40f981d72a0efed69b90dc11aa9961b9372f8d41a6fb851",
-    "orcaxr_core.js": "494c7ddef19f4cda6df3e457b0c9ce155a9c53eec2028ec6dc49b727e13458bf",
-    "orcaxr_core_bg.wasm": "7bad60d51c73b438ae867809e26a0e33ed304d707c43da6b4d69f7b24149ee7f",
-    "orcaxr_core_bg.wasm.d.ts": "ff66e2233b5af6e42e05feeef67b33a739c50f29a6c434131dd7bb341686f2c5"
+    "orcaxr_core.d.ts": "0c1375011de984b4ee12e965a73e87348e31b66e824143691457e3be4c5eadfe",
+    "orcaxr_core.js": "5a9b303cf51871281405b33418327b22c143dd549966c16e041f851ed32515c4",
+    "orcaxr_core_bg.wasm": "afc3ac2abfec5f36ac7bde98d9780188ffeee7073128d54e7a0aa9a40b287b31",
+    "orcaxr_core_bg.wasm.d.ts": "68813105564d7e8bf91f64e00d03b695bd708209694290e6c27e0080106ed93d"
   },
   "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",
   "schemaVersion": 1,

@@ -24,6 +24,7 @@ import json
 import re
 import subprocess
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from artifacts import ROOT, sha256
@@ -53,13 +54,16 @@ hexagon = ROOT / "web/public/models/multicolor_hexagon.3mf"
 
 
 def pick_download(name):
-    """Chooses [name] from Downloads in the system picker, through its roots when Recent lacks it."""
+    """Chooses [name] from Downloads in the system picker: Recent lists files lately added, a scroll
+    or two down; through its roots when Recent lacks it."""
     try:
-        tap(name, timeout=5)
+        tap(name, timeout=20)
     except AssertionError:
         tap("Show roots")
+        time.sleep(1.5)
         tap("Downloads")
-        tap(name, timeout=20)
+        time.sleep(2)
+        tap(name, timeout=60)
 
 
 def type_into(label, value):
