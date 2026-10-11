@@ -380,9 +380,11 @@ class MainActivity : ComponentActivity() {
                 else -> Box(modifier) {
                     WorkspaceScreen(project, Modifier.fillMaxSize())
                     if (resources.getBoolean(R.bool.viewport_experiment_enabled)) {
+                        // Debug builds only: under the Workspace's header strip, clear of the tools'
+                        // statuses (Lay flat's and its Done), which take the bottom as the browser's do.
                         TextButton(
                             onClick = { startActivity(Intent().setClassName(this@MainActivity, "$packageName.ViewportExperimentActivity")) },
-                            modifier = Modifier.align(Alignment.BottomEnd),
+                            modifier = Modifier.align(Alignment.TopEnd).padding(top = 56.dp),
                         ) { Text(stringResource(R.string.open_viewport_experiment)) }
                     }
                 }

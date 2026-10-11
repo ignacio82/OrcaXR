@@ -101,17 +101,29 @@ def described(title, axis, nodes):
 
 
 def field(title, axis, timeout=20):
-    """The inspector field [axis] of tool [title], scrolled clear of the bottom bar."""
+    """The inspector field [axis] of tool [title], scrolled wholly into the screen's scrolling
+    part. That part ends where the area bar begins, and the bar's height depends on the window
+    and the text size (it wraps the areas' names onto more rows), so the field is placed by the
+    container's own bounds, and the swipe stays inside it."""
     deadline = time.monotonic() + timeout
     while True:
         find(title)
-        node = described(title, axis, screen.nodes())
+        nodes = screen.nodes()
+        node = described(title, axis, nodes)
+        containers = [bounds(n) for n in nodes if n.get("scrollable") == "true"]
+        left, top, right, bottom = max(containers, key=lambda b: (b[2] - b[0]) * (b[3] - b[1])) if containers else (0, 0, width, height)
+        shift = (bottom - top) // 3
         if node is not None:
-            left, top, right, bottom = bounds(node)
-            if bottom - top > 40 and bottom < height - 260:
+            _, field_top, _, field_bottom = bounds(node)
+            if field_bottom - field_top > 40 and field_top >= top and field_bottom <= bottom:
                 return node
+            # Above the scrolling part: bring the content down instead.
+            if field_top < top:
+                shift = -shift
         assert time.monotonic() < deadline, f"The {title} {axis} field never showed"
-        adb("shell", "input", "swipe", "360", "900", "360", "600", "300")
+        x = str((left + right) // 2)
+        start_y = bottom - (bottom - top) // 6 if shift > 0 else top + (bottom - top) // 6
+        adb("shell", "input", "swipe", x, str(start_y), x, str(start_y - shift), "300")
         time.sleep(0.5)
 
 
@@ -127,8 +139,8 @@ def until_value(title, axis, expected, timeout=30):
 
 
 def type_field(title, axis, text, expected):
-    """Types [text] into a field and presses Enter — the browser's change — then waits for the
-    selection's value, [expected], with the browser's two decimals. Enter commits whatever the
+    """Types [text] into a field and presses Enter — the browser's change — then leaves the field
+    and waits for the selection's value, [expected], with the browser's two decimals. Enter commits whatever the
     field holds, so the field must show exactly [text] first. On a loaded emulator Ctrl+A can
     arrive without its Ctrl, and the tap's caret can land after a Move End sent to follow it,
     so the old digits survive around the caret: the field is emptied on both sides of the caret
@@ -161,6 +173,9 @@ def type_field(title, axis, text, expected):
         (output / f"inspector-{title.split()[0].lower()}-{axis}-typing.png").write_bytes(png)
         raise AssertionError(f"Could not type '{text}' into {title} {axis}; it showed {seen}")
     screen.key(66)
+    # Enter changes the field, which keeps the focus and its typing (the browser's input does); Tab
+    # leaves it, so it shows the selection's value.
+    screen.key(61)
     screen.hide_keyboard()
     until_value(title, axis, expected)
 

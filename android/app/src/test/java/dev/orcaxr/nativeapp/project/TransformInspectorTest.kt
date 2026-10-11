@@ -18,13 +18,22 @@ class TransformInspectorTest {
 
     @Test
     fun aChangedFieldSubmitsTheThreeTextsAsTyped() {
-        // The input's change event: the edited field differs from what it showed; all three texts go, as typed.
-        assertEquals(listOf("50", "95.00", "0.00"), TransformInspector.change(shown, listOf("50", "95.00", "0.00"), 0))
+        // The input's change event: the edited field differs from what it held when focused; all three texts go, as typed.
+        assertEquals(listOf("50", "95.00", "0.00"), TransformInspector.change("100.00", listOf("50", "95.00", "0.00"), 0))
         // Unreadable text is the core's to read (`parseFloat`, as 0), not the inspector's to refuse.
-        assertEquals(listOf("100.00", "abc", "0.00"), TransformInspector.change(shown, listOf("100.00", "abc", "0.00"), 1))
+        assertEquals(listOf("100.00", "abc", "0.00"), TransformInspector.change("95.00", listOf("100.00", "abc", "0.00"), 1))
         // Leaving a field unchanged is no change.
-        assertNull(TransformInspector.change(shown, shown, 2))
-        assertNull(TransformInspector.change(shown, listOf("100.00", "95.00", "0.00"), 0))
+        assertNull(TransformInspector.change("0.00", shown, 2))
+        assertNull(TransformInspector.change("100.00", listOf("100.00", "95.00", "0.00"), 0))
+    }
+
+    @Test
+    fun aChangeFiresOnceForEachNewText() {
+        // Enter changed the field to "50" and kept the focus; the selection now shows "50.00" elsewhere. Leaving
+        // the field fires no second change for the same "50", as the browser's input does not.
+        assertNull(TransformInspector.change("50", listOf("50", "95.00", "0.00"), 0))
+        // Typing on after Enter is a new change.
+        assertEquals(listOf("55", "95.00", "0.00"), TransformInspector.change("50", listOf("55", "95.00", "0.00"), 0))
     }
 
     @Test

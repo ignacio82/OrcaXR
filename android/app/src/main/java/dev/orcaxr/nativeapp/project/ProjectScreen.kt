@@ -358,8 +358,15 @@ private fun InspectorTool(tool: TransformTool, shown: List<String>, edits: Int, 
     val axes = listOf(stringResource(R.string.project_inspector_x), stringResource(R.string.project_inspector_y), stringResource(R.string.project_inspector_z))
     var focused by remember { mutableStateOf<Int?>(null) }
     var typed by remember { mutableStateOf(shown) }
+    // The focused field's text at its last change (or when it took the focus): the input's `change` fires for a new text only.
+    var since by remember { mutableStateOf("") }
     LaunchedEffect(shown, edits) { typed = TransformInspector.follow(shown, typed, focused) }
     val focus = LocalFocusManager.current
+    fun submit(axis: Int) {
+        val texts = TransformInspector.change(since, typed, axis) ?: return
+        since = typed[axis]
+        onEdit(texts)
+    }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(title, style = MaterialTheme.typography.titleSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -372,22 +379,28 @@ private fun InspectorTool(tool: TransformTool, shown: List<String>, edits: Int, 
                     singleLine = true,
                     enabled = enabled,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
+                    // The soft keyboard's Done changes the field and puts the keyboard away.
+                    keyboardActions = KeyboardActions(onDone = {
+                        submit(axis)
+                        focus.clearFocus()
+                    }),
                     modifier = Modifier.weight(1f)
-                        // Enter from a hardware keyboard is Done too, as Enter changes the browser's input;
-                        // Escape stays the field's, as the browser skips its shortcuts while one is edited.
+                        // Enter from a hardware keyboard changes the field as it changes the browser's input, which
+                        // keeps the focus and its typing; Escape stays the field's, as the browser skips its shortcuts
+                        // while one is edited.
                         .onPreviewKeyEvent { event ->
                             val enter = event.key == Key.Enter || event.key == Key.NumPadEnter
-                            if (enter && event.type == KeyEventType.KeyUp) focus.clearFocus()
+                            if (enter && event.type == KeyEventType.KeyUp) submit(axis)
                             enter || event.key == Key.Escape
                         }
                         .onFocusChanged { state ->
                             if (state.isFocused) {
                                 focused = axis
+                                since = typed[axis]
                             } else if (focused == axis) {
-                                // The input's change event: the focus left a field whose text changed.
+                                // The input's change event: the focus left a field whose text changed since its last change.
                                 focused = null
-                                val change = TransformInspector.change(shown, typed, axis)
+                                val change = TransformInspector.change(since, typed, axis)
                                 if (change != null) onEdit(change) else typed = TransformInspector.follow(shown, typed, null)
                             }
                         }

@@ -4960,9 +4960,16 @@ instance there is no inspector; the fields are enabled as the core enables
 browser's panel invokes them.
 
 A field keeps what is typed while it holds the focus (the browser updates
-every input but the active one); Done, Enter from a hardware keyboard or the
-focus leaving a field whose text changed — the input's `change` event —
-submits the tool's three texts as typed. `ProjectWorkspace.editTransform`
+every input but the active one). The input's `change` event submits the
+tool's three texts as typed when the field's text differs from what it held
+at its last change (or when it took the focus): Enter from a hardware
+keyboard, which keeps the focus and the typing as the browser's input does;
+the soft keyboard's Done, which also puts the keyboard away; or the focus
+leaving the field. So leaving after Enter submits nothing more unless the
+text changed again. (Enter used to clear the focus; outside touch mode
+Android hands it straight back, so the field went on showing its typing —
+the browser's look by accident — and leaving it would have submitted the
+same edit a second time.) `ProjectWorkspace.editTransform`
 plans on the actor's authority from the session's whole selection and the
 state it reads there: `TransformFields.edit` over the origins, then one
 `setInstanceTransform` (one change) or `setInstanceTransforms` under that
@@ -5020,7 +5027,9 @@ instances". An import selects nothing, as in the browser, so it selects the cube
 with Select All first. It types into a field only once the field is emptied on both
 sides of the caret and shows exactly the new text (a loaded emulator can drop Ctrl+A's
 Ctrl, or place the tap's caret after a following key), since Enter commits whatever the
-field holds; it passes on both emulators.
+field holds, and then presses Tab to leave the field, which shows the applied value. It
+finds a field by the scrolling container's own bounds, since the area bar's height varies
+with the window and the text size.
 
 ### Android creation
 

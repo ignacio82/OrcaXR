@@ -32,11 +32,12 @@ class Screen:
 
     def nodes(self):
         """The screen's nodes. While a window is being replaced (an activity recreated, say) the
-        dump finds no root and writes nothing; it is taken again once the new window is up."""
+        dump finds no root and writes nothing, and on a loaded emulator the dump itself can fail;
+        it is taken again once the new window is up."""
         for attempt in range(10):
-            self.adb("shell", "rm", "-f", self.dump)
-            self.adb("shell", "uiautomator", "dump", self.dump)
             try:
+                self.adb("shell", "rm", "-f", self.dump)
+                self.adb("shell", "uiautomator", "dump", self.dump)
                 return list(ET.fromstring(self.adb("shell", "cat", self.dump)).iter("node"))
             except subprocess.CalledProcessError:
                 if attempt == 9:
@@ -49,8 +50,9 @@ class Screen:
         return (left + right) // 2, (top + bottom) // 2
 
     def find(self, text, timeout=20, exact=True):
-        """The node showing [text], scrolling the list on to its end (where nothing moves any
-        more) and back to its start until it shows."""
+        """The node showing [text], scrolling the list on to its end (where what shows no longer
+        changes) and back to its start until it shows. The end is told by the words shown, not
+        by the bounds: Android's stretch overscroll keeps moving those at an end."""
         deadline = time.monotonic() + timeout
         onward, placed, seen = True, None, []
         while time.monotonic() < deadline:
@@ -61,14 +63,15 @@ class Screen:
                     return node
                 if value and value not in seen:
                     seen.append(value)
-            layout = [node.get("bounds") for node in current]
+            layout = [node.get("text") or node.get("content-desc") or "" for node in current]
             if layout == placed:
                 onward = not onward
             placed = layout
             x, top, bottom = self.scroll_band(current)
             start, end = (bottom, top) if onward else (top, bottom)
             self.adb("shell", "input", "swipe", str(x), str(start), str(x), str(end), "300")
-            time.sleep(0.3)
+            # Let a fling or an overscroll stretch settle before the next look.
+            time.sleep(0.6)
         (self.output / f"{self.name}-smoke-failed.xml").write_text(self.adb("shell", "cat", self.dump))
         (self.output / f"{self.name}-smoke-seen.txt").write_text("\n".join(seen) + "\n")
         raise AssertionError(f"'{text}' never appeared")

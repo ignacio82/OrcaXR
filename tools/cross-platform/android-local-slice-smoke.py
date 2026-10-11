@@ -9,11 +9,13 @@ slicing is off — and Slice slices the plate in the engine's own process
 with the toolpaths drawn, and the G-code summary in Prepare (size, lines,
 layers — the engine's stated total, as the browser prefers it) matches the
 file the app published, read back from the device. The
-bed is then filled with instances: a slice of it shows the engine's
-progress with the service in the foreground, and Cancel Slice stops it.
-Sliced again, the engine's process is killed mid-slice: the editor stays up
-with its project and says the engine stopped unexpectedly; undone back to
-one cube, the next slice runs on a fresh engine process.
+cube is then scaled to the build volume — a slice long enough to watch (a
+bed of small cubes slices in about two seconds on the emulator): it shows
+the engine's progress with the service in the foreground, and Cancel Slice
+stops it. Sliced again, the engine's process is killed mid-slice: the
+editor stays up with its project and says the engine stopped unexpectedly;
+undone back to the small cube, the next slice runs on a fresh engine
+process.
 
 Lessons kept from the earlier smokes: an action on the selection waits for
 the core to enable it, and rows are found by text, never by position.
@@ -137,18 +139,25 @@ assert int(summary.group(2)) == math.floor(len(gcode) / 1024 + 0.5), (summary.gr
 assert int(summary.group(3)) == lines, (summary.group(3), lines)
 assert int(summary.group(4)) == layers and layers >= 50, (summary.group(4), layers, markers)
 
-# A full bed: the engine's progress shows, the service is in the foreground, and Cancel Slice stops it.
+# A long slice: the engine's progress shows, the service is in the foreground, and Cancel Slice stops it.
 tap("Project")
-menu("Edit", "Fill Bed with Instances")
-find("Undo Fill ", exact=False, timeout=60)
-instances = find("Undo Fill ", exact=False).get("text")
+menu("Edit", "Scale to build volume")
+deadline = time.monotonic() + 60
+while (scaled := find("Undo ", exact=False, timeout=30).get("text")) == "Undo Add cube.stl":
+    assert time.monotonic() < deadline, "Scale to build volume made no step"
+    time.sleep(0.5)
 tap("Prepare")
 find("The project changed after this plate was sliced; its G-code was withdrawn. Slice again.", timeout=30)
 slice_ready()
 tap("Slice")
 progress = running_progress()
-services = adb("shell", "dumpsys", "activity", "services", f"{PACKAGE}/.engine.LocalEngineService")
-assert "isForeground=true" in services, "The engine's service was not in the foreground while slicing"
+# The service promotes itself as the job starts, a moment after the engine's first step may show.
+deadline = time.monotonic() + 10
+while "isForeground=true" not in (services := adb("shell", "dumpsys", "activity", "services", f"{PACKAGE}/.engine.LocalEngineService")):
+    if time.monotonic() > deadline:
+        (output / "local-slice-services.txt").write_text(services)
+        raise AssertionError("The engine's service was not in the foreground while slicing")
+    time.sleep(0.5)
 tap("Cancel Slice")
 cancelled = find(CANCELLED, exact=False, timeout=60).get("text")
 
@@ -162,10 +171,10 @@ adb("shell", "run-as", PACKAGE, "kill", "-9", str(victim))
 find(INTERRUPTED, timeout=60)
 assert pid(PACKAGE) == editor, "The editor's process did not survive the engine's"
 tap("Project")
-find(instances, timeout=30)
+find(scaled, timeout=30)
 
-# Back to one cube: the next slice runs on a fresh engine process.
-tap(instances)
+# Back to the small cube: the next slice runs on a fresh engine process.
+tap(scaled)
 find("Undo Add cube.stl", timeout=30)
 tap("Prepare")
 slice_ready()
@@ -185,7 +194,7 @@ report = {
     "gcodeLayers": layers,
     "gcodeLayerMarkers": markers,
     "toolpathPixels": toolpaths,
-    "fill": instances,
+    "scaled": scaled,
     "progress": progress,
     "cancelled": cancelled,
 }

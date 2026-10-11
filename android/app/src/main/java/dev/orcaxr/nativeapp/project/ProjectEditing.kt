@@ -145,19 +145,25 @@ object ProjectEditing {
  * them (main.ts `updateToolSettings`), kept free of Android so they are
  * checked on the JVM: each tool's three fields, X, Y and Z; a field shows the
  * selection's text except while it holds the focus (the browser leaves the
- * active input alone); a change — Done, or the focus leaving a field whose
- * text is not what it shows, the input's `change` event — submits the three
- * fields' texts as typed, which the core reads with `parseFloat`.
+ * active input alone); a change — the input's `change` event: Enter, or the
+ * focus leaving the field, when its text differs from what it held at the
+ * last change (or when focused) — submits the three fields' texts as typed,
+ * which the core reads with `parseFloat`. Enter keeps the focus and the
+ * typing, as the browser's input does, so leaving afterwards submits nothing
+ * more unless the text changed again.
  */
 object TransformInspector {
     /** The tools whose fields the inspector shows, in the browser's tool-rail order. */
     val TOOLS = listOf(TransformTool.MOVE, TransformTool.ROTATE, TransformTool.SCALE)
     const val AXES = 3
 
-    /** The texts a change of field [axis] submits: all three as [typed], or null when [axis] still shows its [shown] text. */
-    fun change(shown: List<String>, typed: List<String>, axis: Int): List<String>? {
-        require(shown.size == AXES && typed.size == AXES && axis in 0 until AXES)
-        return if (typed[axis] == shown[axis]) null else typed
+    /**
+     * The texts a change of field [axis] submits: all three as [typed], or null when [axis] still holds
+     * [since], its text at the last change (or when it took the focus).
+     */
+    fun change(since: String, typed: List<String>, axis: Int): List<String>? {
+        require(typed.size == AXES && axis in 0 until AXES)
+        return if (typed[axis] == since) null else typed
     }
 
     /** What the fields hold once [shown] changes: the selection's texts, except the [focused] field's own typing. */
