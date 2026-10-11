@@ -5394,9 +5394,11 @@ place of the parts' own: `WorkspaceRenderer` uploads them under their own
 keys and points those parts' draws at them, so `FilamentScene` uploads those
 volumes from them. When the preview ends, the volumes are uploaded from their
 own meshes again and take back the paint the scene shows
-(`ProjectModel.sceneSnapshot`). A tool never takes a previewed part's facet:
-Lay flat, Measure and the painter work on the project's mesh, not the
-preview's. A card beneath the view's top strip shows the panel's status, Apply
+(`ProjectModel.sceneSnapshot`). A tool's pick on a previewed part is refused
+as the browser refuses it: Lay flat, Measure and the painter work on the
+project's mesh, not the preview's (`ToolPick`), and the tool's own panel says
+"That part shows a simplify preview; apply or cancel it first." in the
+browser's words. A card beneath the view's top strip shows the panel's status, Apply
 and Cancel, whichever tool is on. The tool's panel takes the view's foot in
 turn — the paint panel, the Measure panel (status, hint, picked features,
 readout, Clear, Done; at most a third of the view, scrolling) or the Lay flat
@@ -5417,6 +5419,20 @@ on a model selects. So with a model clicked, Simplify, Repair and Erase all
 acted on every model on the plate. A selected instance now stands for its
 object's model parts; `paint-target-pick.test.ts` holds a simplify regression
 beside the painting's.
+
+Building the Android preview found a second browser defect. A simplify preview
+swaps each previewed part's display geometry. The workspace's paint, measure,
+lay-flat and brim-ear picks still raycast that display, then read what they
+met as the project's mesh. A stroke sent the preview's facet numbers to the
+real mesh, a measure fed them to the canonical mesh's feature extractor, lay
+flat took a decimated facet's normal, and an ear sat on the decimated surface.
+`OrcaWorkspace.previewsVolume` now refuses the pick on the nearest part when
+that part is previewed (`refusePreviewedPick`); a previewed part hides what
+lies behind it. Parts the preview leaves alone, and every part once Apply or
+Cancel ends the preview, take every tool as before. Each of the four
+refusals in `simplify-preview-pick.test.ts` fails on the old code. The rule
+is the host's alone: the core holds no preview geometry, which only a host
+draws, so only the words are shared, through the strings contract.
 
 `model-tool-vectors.mjs` runs the production controller over a canonical
 3MF (a scaled, turned 20 mm block, a two-body pair with two instances, a

@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
+import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -859,8 +860,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     /** The Lay flat tool (`tool_lay_on_face`): while on, a tap in the Workspace lays the tapped facet on the bed instead of selecting. */
     var layingFlat by mutableStateOf(false)
         private set
-    /** The last lay-flat tap met no model facet: the Workspace says so, as the browser's status does. */
-    var layFlatMissed by mutableStateOf(false)
+    /** What the Lay flat card says, as the browser's status does: the tool's hint, or why the last tap laid nothing flat. */
+    @get:StringRes
+    var layFlatNote by mutableIntStateOf(R.string.workspace_lay_flat_hint)
         private set
 
     fun layFlat(on: Boolean) {
@@ -868,7 +870,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         if (on && measuring) measure(false)
         if (on && paint.state.active) paint.stop()
         layingFlat = on
-        layFlatMissed = false
+        layFlatNote = R.string.workspace_lay_flat_hint
     }
 
     /**
@@ -880,10 +882,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
      */
     fun layFlatAt(instanceId: String?, volumeId: String?, facet: Int) {
         if (instanceId == null || volumeId.isNullOrEmpty()) {
-            layFlatMissed = true
+            layFlatNote = R.string.workspace_lay_flat_missed
             return
         }
-        layFlatMissed = false
+        layFlatNote = R.string.workspace_lay_flat_hint
         if (!ProjectEditing.enabled(view, "tool_lay_on_face")) return
         work {
             try {
@@ -1043,6 +1045,20 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     var measureStatus by mutableStateOf<String?>(null)
         private set
     private var measurePicks: List<MeasurePick> = emptyList()
+
+    /**
+     * A Workspace tool's tap or stroke met a part a simplify preview draws in
+     * its place, whose facets are not the project's: refused in the browser's
+     * words (`refusePreviewedPick`) as the active tool's own status, nothing
+     * painted, measured or laid flat.
+     */
+    fun refusePreviewedPick() {
+        when {
+            paint.state.active -> paint.refusePreviewed()
+            measuring -> measureStatus = words(R.string.simplify_preview_pick)
+            layingFlat -> layFlatNote = R.string.simplify_preview_pick
+        }
+    }
 
     /** Turns the Measure tool on — with a fresh pair of picks, as the browser's `measureTool` — or off; Lay flat and painting go off. */
     fun measure(on: Boolean) {

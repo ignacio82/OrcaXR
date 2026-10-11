@@ -190,7 +190,7 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
             Card(Modifier.align(Alignment.BottomCenter).padding(16.dp)) {
                 Row(Modifier.padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        stringResource(if (model.layFlatMissed) R.string.workspace_lay_flat_missed else R.string.workspace_lay_flat_hint),
+                        stringResource(model.layFlatNote),
                         Modifier.weight(1f, fill = false).semantics { liveRegion = LiveRegionMode.Polite },
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -217,6 +217,7 @@ private fun statusText(status: PaintStatus): String = when (status) {
     is PaintStatus.EraseAllNeedsModel -> stringResource(R.string.paint_status_erase_needs_model, status.channel.label)
     is PaintStatus.ErasedAll -> stringResource(R.string.paint_status_erased_all, status.channel.label, status.parts.toString())
     PaintStatus.NothingPainted -> stringResource(R.string.paint_status_nothing)
+    PaintStatus.Previewed -> stringResource(R.string.simplify_preview_pick)
 }
 
 /** A tool panel's most height (paint, Measure): the model on the bed stays in sight above it, and the panel scrolls. */
@@ -495,16 +496,12 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         update.paint.forEach(renderer::setPaint)
     }
 
-    /**
-     * What a pick met, on the model as the project holds it: null without a
-     * hit, or on a part a simplify preview draws in its place, whose facets
-     * are not the project's.
-     */
-    private fun exact(pick: FilamentScene.Pick?): FilamentScene.Pick? = pick?.takeIf { it.volumeId !in previewed }
+    /** What a tool's pick met: nothing, a previewed part (refused) or a part of the project. */
+    private fun met(pick: FilamentScene.Pick?): ToolPick = ToolPick.of(pick, previewed.keys)
 
-    /** What a pick met, as the painter takes it; null without a hit in the part's own frame. */
+    /** What a pick met, as the painter takes it; null without a hit on the project's mesh in the part's own frame. */
     private fun touch(pick: FilamentScene.Pick?): PaintModel.Touch? {
-        val hit = exact(pick) ?: return null
+        val hit = (met(pick) as? ToolPick.Part)?.pick ?: return null
         val local = hit.localPoint ?: return null
         val eye = hit.localOrigin ?: return null
         val draw = draws[hit.key]
@@ -542,8 +539,13 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = event.x; downY = event.y; lastX = downX; lastY = downY
                     dragged = false; scaling = false; stroking = false
-                    // The paint tool owns a touch that starts on a model; one that starts on nothing orbits.
-                    if (paint.state.active) touch(renderer.pick(event.x.toDouble(), event.y.toDouble()))?.let { stroking = paint.begin(it) }
+                    // The paint tool owns a touch that starts on a model; one that starts on nothing, or on
+                    // a part a simplify preview draws (refused, as the browser's painter refuses it), orbits.
+                    if (paint.state.active) {
+                        val pick = renderer.pick(event.x.toDouble(), event.y.toDouble())
+                        if (met(pick) == ToolPick.Previewed) model.refusePreviewedPick()
+                        else touch(pick)?.let { stroking = paint.begin(it) }
+                    }
                 }
                 MotionEvent.ACTION_MOVE -> if (stroking) {
                     // The stroke samples its own part alone, as the browser's painter intersects its display.
@@ -564,9 +566,12 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
                         paint.end()
                     } else if (!dragged && !scaling && !paint.state.active) {
                         val hit = renderer.pick(event.x.toDouble(), event.y.toDouble())
-                        // A tool's facet is the project's: never a simplify preview's.
-                        val exact = exact(hit)
-                        if (model.layingFlat) {
+                        // A tool's facet is the project's: a tap on a simplify preview's is refused.
+                        val met = met(hit)
+                        val exact = (met as? ToolPick.Part)?.pick
+                        if ((model.layingFlat || model.measuring) && met == ToolPick.Previewed) {
+                            model.refusePreviewedPick()
+                        } else if (model.layingFlat) {
                             // The Lay flat tool owns the tap, as the browser's does: it never selects.
                             model.layFlatAt(exact?.instanceId, exact?.volumeId, exact?.facet ?: 0)
                         } else if (model.measuring) {

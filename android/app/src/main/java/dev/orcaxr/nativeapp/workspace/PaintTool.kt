@@ -90,6 +90,8 @@ sealed interface PaintStatus {
     data class ErasedAll(val channel: PaintChannel, val parts: Int) : PaintStatus
     /** `Nothing was painted.` */
     data object NothingPainted : PaintStatus
+    /** `That part shows a simplify preview; apply or cancel it first.`: a stroke never starts on a previewed part. */
+    data object Previewed : PaintStatus
 }
 
 /**

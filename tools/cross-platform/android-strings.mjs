@@ -980,7 +980,13 @@ function readResources(directory) {
           translatable: element.attributes.translatable !== "false",
           formatted: true,
         });
-      } else if (["string-array", "item"].includes(element.name)) {
+      } else if (
+        element.name === "string-array" ||
+        (element.name === "item" &&
+          ["string", "plurals", "array"].includes(element.attributes.type))
+      ) {
+        // Text the contract would have to carry; an `<item type="id">` (a
+        // view tag's key) or another valueless item carries none.
         problem(
           `${file}: ${element.name} ${name} is not supported by ${GENERATOR}`,
         );

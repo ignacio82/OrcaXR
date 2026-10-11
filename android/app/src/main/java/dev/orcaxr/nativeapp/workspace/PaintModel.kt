@@ -115,6 +115,11 @@ class PaintModel(private val host: Host) : AutoCloseable {
         status = said
     }
 
+    /** A stroke met a part a simplify preview draws in its place: none starts, and the panel says why. */
+    fun refusePreviewed() {
+        status = PaintStatus.Previewed
+    }
+
     fun eraseChannel() {
         state = state.chooseMode(PaintMode.ERASE)
     }

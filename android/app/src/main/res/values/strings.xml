@@ -372,6 +372,7 @@
     <string name="simplify_preview_hint">Preview shows the result on the model; nothing is changed until you apply.</string>
     <string name="simplify_nothing_at_ratio">Nothing to simplify at that ratio.</string>
     <string name="simplify_no_preview">There is no simplify preview to apply.</string>
+    <string name="simplify_preview_pick">That part shows a simplify preview; apply or cancel it first.</string>
     <string name="measure_start">Measure: click two features (a face, edge, corner, or hole).</string>
     <string name="measure_cleared">Measurement cleared.</string>
     <string name="measure_missed">Click a model surface to measure it.</string>

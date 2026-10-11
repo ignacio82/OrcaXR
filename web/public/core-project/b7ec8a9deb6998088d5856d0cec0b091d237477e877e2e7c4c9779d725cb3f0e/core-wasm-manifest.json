@@ -1,11 +1,11 @@
 {
   "cargo": "cargo 1.94.1 (29ea6fb6a 2026-03-24)",
-  "defaultFeatures": true,
+  "defaultFeatures": false,
   "features": [
-    "gcode"
+    "project"
   ],
   "inputs": {
-    "contracts/android-strings.json": "469f349a191118b6e368ec2c68c254f5a86d9650af3fb0a7d2b5d915dd70cee4",
+    "contracts/android-strings.json": "4ec966bb26e73597ee97288bce930ff162f41f659efc1e29f22604a7f170a5bf",
     "contracts/core-protocol.json": "63e7ed821d0da12f863004109a41f5dbfd00b73a2c29584ae2b3a3a6b1320f7a",
     "contracts/gcode-buffer.json": "237797f7310f4eb9cd1fe14bedc5c1bce31e2b2fb7b6995056c98da975c7f716",
     "contracts/gcode-metadata.json": "9839972a577bf7fb31f3fbbbffca1ec3003c4dbbd86ec165b9fbf8263b7d23df",
@@ -489,12 +489,12 @@
     "tools/cross-platform/test-zip-write.py": "af58df31f97dc99c8c644c4e820878265d9ebf5a0d2a0d622b00b63b11b5a2a0",
     "tools/cross-platform/verify-artifacts.py": "b36cc1f552ffa7cda6b08df1b03d930ec6ced25307a3b7717b1001f7f1260cc2"
   },
-  "kind": "browser-wasm",
+  "kind": "browser-project-wasm",
   "outputs": {
-    "orcaxr_core.d.ts": "b4d97fa1b44a0304f40f981d72a0efed69b90dc11aa9961b9372f8d41a6fb851",
-    "orcaxr_core.js": "494c7ddef19f4cda6df3e457b0c9ce155a9c53eec2028ec6dc49b727e13458bf",
-    "orcaxr_core_bg.wasm": "7bad60d51c73b438ae867809e26a0e33ed304d707c43da6b4d69f7b24149ee7f",
-    "orcaxr_core_bg.wasm.d.ts": "ff66e2233b5af6e42e05feeef67b33a739c50f29a6c434131dd7bb341686f2c5"
+    "orcaxr_core.d.ts": "a99d2c698e1f9a95f09ddc4b351e0a34eb33dd2229c46c1294c361d2b20e9271",
+    "orcaxr_core.js": "7fc09ae71569121167847ae0d8b073260ac24bcb4ac99d77f632b27404158b32",
+    "orcaxr_core_bg.wasm": "e86cf7f6e23503bbcfe9e9e91c3a7b4e93a33afc40e3ac82fac7edf616acca1e",
+    "orcaxr_core_bg.wasm.d.ts": "68813105564d7e8bf91f64e00d03b695bd708209694290e6c27e0080106ed93d"
   },
   "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",
   "schemaVersion": 1,

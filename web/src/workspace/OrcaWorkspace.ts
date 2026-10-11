@@ -3398,6 +3398,7 @@ export class OrcaWorkspace extends xb.Script {
       if (hit && (!nearest || hit.distance < nearest.hit.distance)) nearest = { target, hit };
     }
     if (nearest) {
+      if (this.previewsVolume(nearest.target.volumeId)) return this.refusePreviewedPick();
       const instance = nearest.target.display.parent!;
       instance.updateWorldMatrix(true, false);
       const local = instance.worldToLocal(nearest.hit.point.clone());
@@ -3439,6 +3440,7 @@ export class OrcaWorkspace extends xb.Script {
     }
     if (nearest) {
       const { target, hit } = nearest;
+      if (this.previewsVolume(target.volumeId)) return this.refusePreviewedPick();
       const faceIndex = hit.faceIndex as number;
       try {
         const extractor = this.measureExtractorFor(target.volumeId);
@@ -3569,6 +3571,32 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /**
+   * Whether a simplify preview draws this part: its displays show the
+   * decimated mesh, whose facets, normals and surface are not the project's.
+   */
+  private previewsVolume(volumeId: VolumeId): boolean {
+    return this.simplifyPreview?.prepared.some((entry) => entry.volumeId === volumeId) ?? false;
+  }
+
+  /**
+   * Refuse a tool's pick on a previewed part. Painting, measuring, laying flat
+   * or placing a brim ear there would read the preview's geometry as the
+   * project's — a facet number of another mesh, a decimated normal, a point
+   * off the model — so until Apply installs the preview or Cancel restores the
+   * model, the part is only looked at. The nearest part is the one refused: a
+   * previewed part hides what lies behind it.
+   */
+  private refusePreviewedPick(): false {
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.thatPartShowsASimplify',
+        'That part shows a simplify preview; apply or cancel it first.',
+      ),
+    );
+    return false;
+  }
+
+  /**
    * Begin a paint gesture at this canvas ray on the nearest paintable part it
    * meets — the visible one, not the first in scene order.
    */
@@ -3580,6 +3608,7 @@ export class OrcaWorkspace extends xb.Script {
       if (!nearest || hit.distance < nearest.hit.distance) nearest = { target, hit };
     }
     if (!nearest) return false;
+    if (this.previewsVolume(nearest.target.volumeId)) return this.refusePreviewedPick();
     const value = this.activePaintValue();
     const instance = this.canonicalProject.getInstanceTransform(nearest.target.instanceId);
     const volume = this.canonicalProject.getVolumeTransform(nearest.target.volumeId);
@@ -8208,6 +8237,7 @@ export class OrcaWorkspace extends xb.Script {
       .slice(0, 1);
     for (const { target, hit } of hits) {
       if (!hit.face) continue;
+      if (this.previewsVolume(target.volumeId)) return this.refusePreviewedPick();
       const instance = this.projectedModels(this.activePlateId).find(
         (entry) => entry.volumeId === target.volumeId,
       )?.instanceId;

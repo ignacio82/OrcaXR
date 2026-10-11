@@ -245,6 +245,9 @@
     "simplify_no_preview": {
       "key": "workspace.orcaWorkspace.thereIsNoSimplifyPreview"
     },
+    "simplify_preview_pick": {
+      "key": "workspace.orcaWorkspace.thatPartShowsASimplify"
+    },
     "measure_start": {
       "key": "workspace.orcaWorkspace.measureClickTwoFeaturesA"
     },

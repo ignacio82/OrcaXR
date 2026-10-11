@@ -1416,6 +1416,7 @@
   "workspace.orcaWorkspace.thatHoleIsScaledUnevenly": "That hole is scaled unevenly, so it has no single radius to measure.",
   "workspace.orcaWorkspace.thatPartHasNoBrim": "That part has no brim ears.",
   "workspace.orcaWorkspace.thatPartHasNoGeometry": "That part has no geometry to read corners from.",
+  "workspace.orcaWorkspace.thatPartShowsASimplify": "That part shows a simplify preview; apply or cancel it first.",
   "workspace.orcaWorkspace.the16SlotFilamentLimit": "The 16-slot filament limit has been reached.",
   "workspace.orcaWorkspace.theModelToAlignIs": "The model to align is no longer on this plate.",
   "workspace.orcaWorkspace.thePrinterConsoleIsUnavailable": "The printer console is unavailable in this shell.",
