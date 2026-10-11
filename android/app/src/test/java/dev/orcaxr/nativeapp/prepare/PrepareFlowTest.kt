@@ -1,7 +1,8 @@
 package dev.orcaxr.nativeapp.prepare
 
 import dev.orcaxr.core.ProjectIntents
-import java.io.ByteArrayOutputStream
+import dev.orcaxr.core.SliceFigures
+import dev.orcaxr.core.SliceStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
@@ -154,30 +155,10 @@ class PrepareFlowTest {
 
     @Test
     fun aSliceSummaryInTheBrowsersWords() {
-        assertEquals("SLICED in 1234 ms\n2 KB, 10 lines, 2 layers", PrepareWords.sliced(1234, 2048, 10, 2, 0))
-        assertEquals("SLICED in 5 ms\n0 KB, 1 lines, 0 layers, 2 warning(s)", PrepareWords.sliced(5, 100, 1, 0, 2))
-    }
-
-    @Test
-    fun theTallyCountsLinesAndLayerMarkersAcrossChunks() {
-        val gcode = ";LAYER_CHANGE\nG1 X1\n; CHANGE_LAYER\nG1 X2\n;LAYER_CHANGE\n;; CHANGE_LAYER\nM84"
-        val bytes = gcode.toByteArray()
-        for (chunk in listOf(1, 2, 3, 7, bytes.size)) {
-            val sink = ByteArrayOutputStream()
-            val tally = GcodeTally(sink)
-            var at = 0
-            while (at < bytes.size) {
-                val count = minOf(chunk, bytes.size - at)
-                if (count == 1) tally.write(bytes[at].toInt()) else tally.write(bytes, at, count)
-                at += count
-            }
-            tally.flush()
-            assertEquals("passed through in chunks of $chunk", gcode, sink.toString())
-            assertEquals(bytes.size.toLong(), tally.bytes)
-            // split('\n').length
-            assertEquals(gcode.split('\n').size.toLong(), tally.lines)
-            // /; CHANGE_LAYER|;LAYER_CHANGE/g
-            assertEquals("layers in chunks of $chunk", Regex("; CHANGE_LAYER|;LAYER_CHANGE").findAll(gcode).count().toLong(), tally.layers)
-        }
+        // The figures are the core's (SliceStatusTally, replayed over JNI against the browser's corpus).
+        val figures = SliceFigures(2048, "2", 10, "2", null, 2)
+        assertEquals("SLICED in 1234 ms\n2 KB, 10 lines, 2 layers", SliceStatus.describe(1234, figures, 0))
+        val stated = SliceFigures(100, "0", 1, "18446744073709552000", "18446744073709552000", 0)
+        assertEquals("SLICED in 5 ms\n0 KB, 1 lines, 18446744073709552000 layers, 2 warning(s)", SliceStatus.describe(5, stated, 2))
     }
 }

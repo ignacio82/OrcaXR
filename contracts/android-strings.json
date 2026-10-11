@@ -174,6 +174,9 @@
     "prepare_path",
     "prepare_upload",
     "prepare_sliced_on",
+    "prepare_sliced_locally",
+    "engine_channel",
+    "engine_notification",
     "send_cancel",
     "preview_sliced",
     "preview_showing",
@@ -297,6 +300,16 @@
     {
       "file": "android/app/src/main/java/dev/orcaxr/nativeapp/prepare/PrepareFlow.kt",
       "key": "app.main.externalSlicerConnectedExternalSlicing",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/prepare/PrepareFlow.kt",
+      "key": "app.main.externalSlicerConnectionFailedSlicing",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/prepare/PrepareFlow.kt",
+      "key": "app.main.externalSlicerRemovedSlicingLocally",
       "kept": "model"
     },
     {

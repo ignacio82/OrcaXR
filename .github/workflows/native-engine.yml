@@ -59,6 +59,11 @@ jobs:
           python3 tools/native-engine/build-engine.py --abi '${{ matrix.abi }}' --verify-only
           python3 tools/native-engine/test-geometry-inputs.py
           python3 tools/native-engine/test-engine-package.py --abi '${{ matrix.abi }}'
+      - name: Build and guard the application adapter over the verified engine build
+        run: |
+          python3 tools/native-engine/build-engine-adapter.py --abi '${{ matrix.abi }}'
+          python3 tools/native-engine/build-engine-adapter.py --abi '${{ matrix.abi }}' --verify-only
+          python3 tools/native-engine/test-engine-adapter.py --abi '${{ matrix.abi }}'
       - uses: actions/setup-node@v6
         if: matrix.abi == 'x86_64'
         with:
@@ -81,6 +86,7 @@ jobs:
           test "${#references[@]}" -eq 1
           python3 tools/native-engine/test-slice-runner.py "${fixtures[0]}" "${references[0]}"
           python3 tools/native-engine/emulator-slices.py "${fixtures[0]}" "${references[0]}"
+          python3 tools/native-engine/emulator-slices.py --adapter "${fixtures[0]}" "${references[0]}"
       - uses: actions/upload-artifact@v6
         if: always()
         with:
@@ -88,6 +94,7 @@ jobs:
           path: |
             tools/native-engine/build/geometry/*/*/manifest.json
             tools/native-engine/build/engine/*/*/package/manifest.json
+            tools/native-engine/build/adapter/*/*/package/manifest.json
             tools/native-engine/build/fixtures/
             tools/native-engine/build/references/
             tools/native-engine/results/

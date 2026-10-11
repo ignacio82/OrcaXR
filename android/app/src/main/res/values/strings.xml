@@ -47,6 +47,10 @@
     <string name="prepare_cancel">Cancel Slice</string>
     <string name="prepare_upload">Upload and slice</string>
     <string name="prepare_sliced_on">Sliced on %1$s</string>
+    <!-- The local route: a plate sliced by this device's own engine, and that engine's foreground notification. -->
+    <string name="prepare_sliced_locally">Sliced on this device</string>
+    <string name="engine_channel">Slicing</string>
+    <string name="engine_notification">Slicing on this device</string>
     <!-- The send action's name (web/src/actions/groups/output.ts), and the browser's button while a send runs (web/src/main.ts). -->
     <string name="send_action">Send to Printer</string>
     <string name="send_cancel">Cancel send</string>

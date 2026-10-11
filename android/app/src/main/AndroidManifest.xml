@@ -6,6 +6,13 @@
          clients check before every exchange (LocalNetworkAccess). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <!-- A slice on this device's own engine keeps running when the operator switches tasks or locks
+         the screen: its service is in the foreground (dataSync: local file processing the operator
+         started, with progress and Cancel in its notification) only while a job runs. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- That notification, from Android 13: asked once, before the first slice on this device. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- The languages offered (system settings' per-app language): those the browser offers that
          carry any of the app's words, generated with their resources by android-strings.mjs. -->
     <application android:allowBackup="false" android:icon="@mipmap/ic_launcher"
@@ -35,6 +42,10 @@
                 <data android:mimeType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml" />
             </intent-filter>
         </activity>
+        <!-- The slicing engine, alone in its own process so an engine crash leaves the editor running
+             (process separation, not an isolated sandbox); only this app binds it. -->
+        <service android:name=".engine.LocalEngineService" android:process=":engine" android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <!-- Copies of projects the operator shares, read-only, granted once to the receiving app. -->
         <provider android:name=".project.SharedProjects" android:authorities="${applicationId}.shared"
             android:exported="false" android:grantUriPermissions="true" />

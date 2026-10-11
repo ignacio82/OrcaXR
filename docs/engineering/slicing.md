@@ -303,6 +303,11 @@ python3 tools/native-engine/test-engine-package.py --abi x86_64
 python3 tools/native-engine/test-engine-package.py --abi arm64-v8a
 python3 tools/native-engine/test-slice-runner.py "$fixture_manifest" "$reference_manifest"
 python3 tools/native-engine/emulator-slices.py "$fixture_manifest" "$reference_manifest"
+# The application adapter over that verified engine build, and the same fixtures through its entry point:
+python3 tools/native-engine/build-engine-adapter.py
+python3 tools/native-engine/test-engine-adapter.py --abi x86_64
+python3 tools/native-engine/test-engine-adapter.py --abi arm64-v8a
+python3 tools/native-engine/emulator-slices.py --adapter "$fixture_manifest" "$reference_manifest"
 ```
 
 Set both manifest variables to the generated files for the same captured corpus.
@@ -316,10 +321,16 @@ and SHA-256-pinned. It runs on relevant engine/recipe changes or explicit dispat
 the existing faster native/core gates remain. A workflow declaration is not a
 completed hosted CI run.
 
-The application JNI/process adapter, complete capture/preflight workflow, broader
-engine capability and large-model corpus, ARM64 execution, 16 KB runtime loading,
-dependency security/support review and physical-device qualification remain
-required. The fixture comparison does not close the engine or release exit gates.
+The application's JNI adapter and engine process now exist
+([Android local slicing](native-core.md#android-local-slicing)):
+`build-engine-adapter.py` compiles only the adapter against this recipe's
+verified build (never rebuilding libslic3r), and `emulator-slices.py --adapter`
+reruns these fixtures through the adapter's C entry point — the one its JNI
+layer calls — with a fixture driver; that run, the app's emulator smoke,
+broader engine capability and a large-model corpus, ARM64 execution, 16 KB
+runtime loading, dependency security/support review and physical-device
+qualification remain required. The fixture comparison does not close the
+engine or release exit gates.
 
 
 8. **3MF loader dispatch is BBS-leaning and breaks on Prusa / MakerWorld files.** Use `Model::read_from_archive` which sniffs Prusa-vs-BBS. In browser imports, official BBS multi-plate membership lives in `Metadata/model_settings.config` as `(object_id, instance_id)` pairs; core `<build>` transforms use the global 1.2×-bed plate grid, so resolve exact membership and `printable_area` or fail closed, then subtract the source origin. Canonical transforms stay plate-local; only standard BBS export re-adds that virtual origin. Never guess from thumbnails or spatial clusters. Production-extension `p:path` IDs are model-part-local: key references by normalized package path plus ID, permit external paths only from the root model, recursively compose same-part child components including repeats, and reject missing/conflicting paths or IDs, traversal, cycles, depth over 64, and expansion over 16,384 nodes. Do not preserve original split `.model` members: the generated flattened core absorbs them, so keeping them stores the geometry twice and leaves a stale copy behind (see the large-model section). Remove `p:path` from that generated core, and let the relationship projection drop the now-dangling targets. A read-only `MarbleRunTube_V7.3mf` smoke resolved 26 external parts into 5 plates/28 objects/29 volumes/28 instances and passed in-memory canonical save/reopen; this is headless evidence, not official GUI qualification. Do not add a blanket affine-shear rejection: that real Orca archive contains such build matrices, while arbitrary shear remains an explicit residual of the canonical TRS projection.

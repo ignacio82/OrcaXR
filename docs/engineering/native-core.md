@@ -4485,6 +4485,27 @@ than 256 tools (the corpus's 300-tool case), though its toolpaths were
 fine. The bound is now 65536 entries, all a 64 Ki-unit trailer can hold, and
 a preview with no summary opens too (a worker test covers both).
 
+The status line a finished slice gets is shared too. The browser's rule
+lived inline in `sliceNow`; it is now `SliceStatus.ts`
+(`sliceStatusFigures`: `split('\n').length` lines, and layers the engine's
+own stated total — the summary's `layerCount` — else its
+`; CHANGE_LAYER`/`;LAYER_CHANGE` markers; `describeSliceStatus`: size in
+whole KB as `toFixed(0)` rounds it, then lines, layers, warnings), and
+`artifact::SliceTally` ports it for a file streamed in chunks of any size —
+line breaks and markers counted as they pass, only the bytes that can hold
+the trailer kept — with numbers spelled as JavaScript spells them.
+`slice-status-vectors.mjs` records 40 browser artifacts (the repository
+fixtures, stated totals that agree, differ, are zero or malformed or lie
+past the trailer behind a long settings block, marker near-misses and
+adjacency, CRLF, lone CR, BOM, three-byte text, KB rounding ties); Rust
+matches all of them in five chunkings, and Android through JNI
+(`NativeGcode.tally*`, at most eight live tallies, handles never reused)
+and the Kotlin `SliceStatusTally`/`SliceStatus.describe`
+(`ProjectSliceStatusChecks`, 563 host JNI checks). Prepare now words both
+routes' slices with it; Android had counted only markers, so where the
+engine states a total and counts differently its line disagreed with the
+browser's. Preview already showed the shared artifact summary.
+
 ### Plate projection for slicing
 
 `orcaxr_project::slicing::plate` is the browser's per-plate slice
@@ -5190,7 +5211,8 @@ the one-plate archive (`projectPlate`, refused when its `ProjectRevision` is
 not the preflight's), and — only to an endpoint the operator agreed to once —
 uploads it, with "Cancel Slice" stopping before the upload or ending in the
 client's confirmed outcome. The G-code streams into the app's cache through
-`GcodeTally` (lines and the browser's fallback layer count) and is discarded
+`SliceStatusTally` (the shared core's count of what the browser's status
+line says: lines, and layers by the engine's own total first) and is discarded
 when the project changed meanwhile; otherwise Preview opens it
 (`PreviewModel.openSlice`, keeping its revision) and withdraws it once the
 project changes. The platform-free flow has 11 JVM tests;
@@ -5205,11 +5227,11 @@ the multicolour hexagon, which carries its own printer and filaments, slicing
 with them while the pickers say so. Its first run
 found the client's stale keep-alive connection (above) and a server defect:
 results in a temporary directory under a dot directory were never delivered
-([runtime and deployment](runtime-and-deployment.md)). Not yet matched: local slicing,
+([runtime and deployment](runtime-and-deployment.md)). Slicing on the device's own engine
+is [below](#android-local-slicing). Not yet matched:
 the wave-overhang engine check,
 preflight actions (reveal, drop to bed), troubleshooting text, slicing all
-plates, and the shared artifact summary (layers are the browser's fallback
-count).
+plates.
 
 ### Android profile selection
 
@@ -5247,6 +5269,127 @@ last check found that the workspace appended a project document in one
 chunk, so any document over the host's 64 KiB chunk — a fresh project
 carrying a catalog configuration, or New Project after opening a project
 with its own — failed as `input_limit`; documents are now appended in chunks.
+
+### Android local slicing
+
+Prepare slices on the device's own engine as the browser slices in-browser.
+The route is the browser's rule (`sliceRoute`): the external slicer when the
+operator turned it on and its engine attested — their preference — and
+otherwise this device's engine, when the build carries it for one of the
+device's ABIs and the device's measured memory admits a plate
+(`LocalEngineState`: `ActivityManager` total/available/low memory, re-read
+each time Prepare refreshes and again when a plate is staged). An external
+slicer the operator did not turn on is never chosen in the device's place,
+and none is ever chosen when the device cannot slice: the route line says so
+("Slicing route: none." and why). The route line names the engine and the
+largest plate the memory admits now; the switch's hint and the connection
+statuses use the browser's "slicing locally" words when the device slices.
+
+Engine and adapter. `tools/native-engine/build-engine-adapter.py` layers
+over the verified `build-engine.py` recipe instead of extending it: it runs
+that recipe's verification, then compiles only `tools/native-engine/adapter/`
+(and the constructor regression `defaults_probe.cpp`) with the exact compile
+and link lines the engine build gives its probe target (read from that build
+tree's `build.ninja`, never written), `-fPIC`, a version script exporting
+only `JNI_OnLoad` and the adapter's C entry points, and 16 KB pages, into
+`build/adapter/<recipe>/<abi>/`. So an adapter edit never rebuilds libslic3r
+(about 50 s per ABI against ~30 min), and an engine change gives the adapter
+a new recipe. Its package (stripped `liborcaxr_engine.so`, the engine
+package's TBB and libc++ stripped, the fixture driver, resources) is
+verified for identity, every ELF's ABI, alignment, runtime closure and
+exports; `test-engine-adapter.py` mutates real packages (8 cases per ABI).
+The adapter (`engine_adapter.cpp`) reads the one-plate archive and overrides
+exactly as the browser engine's project route does (`load_bbs_3mf` with
+LoadModel | LoadConfig | AddDefaultInstances, the full configuration with its
+enum maps, the project configuration, the overrides — a refused value
+skipped and counted as the browser engine skips it — `normalize_fdm`, then
+apply, validate with a warning object, process, export), so FullSpectrum and
+every annotation channel reach the same engine. Before reading, it checks
+each staged input's length and SHA-256; it binds the loader's staging to the
+job, reports progress (percent and the engine's step name, printable ASCII,
+128 bytes) to a polled state, stops cooperatively (`Print::cancel`, and the
+3MF loader's own cancel flag before the print exists), reads the closed
+G-code back for its length and SHA-256, and answers one ASCII result document
+(completed, failed with a stable stage/code and the engine's words bounded to
+the browser's 240 characters, cancelled, busy). Engine logging is off: its
+messages can name projects and paths. Sizes: the stripped adapter is
+17.8 MB (x86_64) and 16.2 MB (arm64), each ABI's four libraries 19.6/17.9 MB.
+
+Process and job. `LocalEngineService` runs alone in `:engine` (not
+exported; process separation, not an isolated sandbox), loads the library
+once and refuses it unless its compiled identity (engine commit, engine
+recipe, adapter recipe) matches the APK's `assets/engine/manifest.json`,
+whose resources it copies out with checked digests. One job at a time:
+`LocalSlicing.stage` (core-bridge) writes the plate's archive and overrides
+— byte for byte what the external route uploads — into a private
+no-backup job directory, syncs, seals and hashes them from the disk; Binder
+(`ILocalEngine`) carries only the job's name, those identities, an owner
+token, progress polls and the result document. `LocalEngineClient` puts the
+service in the foreground first, polls every 250 ms, and on cancel asks for
+a cooperative stop; after 10 s without one it ends that generation's
+process (`Process.killProcess` of the PID the service reported) and admits
+no further job until that process's death is observed. Outcomes stay
+distinct (`LocalSlicing.outcome`): output to verify; failed (the browser
+engine's "validate failed:" prefix for a refused print); cancelled, or
+cancelled with the process ended; interrupted (the engine's process died
+unasked — the editor keeps running with its project); unknown (neither a
+result nor the death observed). An editor that dies cancels its job through
+its owner token, and the service removes that job; jobs an earlier run left
+are swept when Prepare starts. Output is published only after
+`LocalSlicing.claim` (moved out of the job directory, a regular file of
+exactly the reported length and SHA-256, strict UTF-8 as the browser's fatal
+decoder, no NUL) and `publish` (the project still the `ProjectRevision` the
+plate was staged from, else discarded); it lands where the external route's
+does, so Preview, Send to Printer and the out-of-date withdrawal treat both
+routes alike. A plate is admitted when the measured available memory covers
+256 MiB plus 16 times its archive (provisional until devices are measured).
+
+Foreground execution. While a job runs the service is a `dataSync`
+foreground service — local file processing the operator started, with a
+low-importance notification showing progress and a Cancel Slice action — so
+a slice continues on task switch and screen lock; the editor may be cached
+or frozen meanwhile (it polls; the engine never calls into it) and publishes
+when it resumes, if the project is unchanged. Starting is only possible while
+the app is in the foreground (a background start is refused in words);
+Android 15's dataSync time limit (`onTimeout`) cancels the job. The
+notification needs `POST_NOTIFICATIONS` from Android 13: Prepare asks once,
+before the first local slice; denied, the slice still runs and the service
+appears in the task manager without it.
+Remaining to qualify: device thermal pressure, notification denial, the
+dataSync daily limit, Doze, and reopening a job interrupted by process death
+(the slice is lost; the project is not).
+
+Packaging. Every app build packages the verified export (`bundleEngine`
+runs `build-engine-adapter.py --export`), unless `-Porcaxr.localEngine=none`:
+the hosted CI job has no engine build and uses it, and that APK says it
+carries no engine. The build does not strip those libraries again (they
+are stripped and hashed already; its own strip rewrote their bytes), so
+`verify-artifacts.py --apk` can check the packaged engine libraries and
+resources against the APK's engine manifest and the export, byte for byte.
+
+Verified: `ProjectLocalSliceChecks` (77 host JNI checks on a real session)
+stages a plate byte for byte as the external upload, reads well- and
+ill-formed result and status documents, maps every end, and claims, refuses
+(length, digest, invalid or truncated UTF-8, NUL, a link) and publishes or
+discards output by revision; `LocalEngineRouteTest` (5 JVM tests) covers the
+route, admission and words; Gradle assemble, unit tests, lint and both
+androidTest compiles pass, and `verify-artifacts.py --apk` passes on the
+debug APK (109.2 MB with the engine, which adds 17.9 MB arm64 and 19.6 MB
+x86_64 of stored libraries) and the shrunk release APK (71.2 MB), whose R8
+output keeps the JNI class and method names the library registers. Not run here,
+for the integrator: the instrumented `LocalEngineServiceTest` (a cube sliced
+through the service, then a cancel), `android-local-slice-smoke.py` (added
+to `emulator-smoke.py` before the adaptive smoke: a cube from the Add menu,
+the local route and why, Slice in the `:engine` process, Preview's
+toolpaths, Prepare's size/lines/layers against the published file read back,
+a filled bed's progress with the service in the foreground and Cancel Slice,
+the engine process killed mid-slice with the editor surviving, and a fresh
+engine for the next slice), and `emulator-slices.py --adapter`, which reruns
+the eleven fixture comparisons through the adapter's C entry point (the one
+JNI calls) with its fixture driver. Still open: thumbnails (neither Android
+route renders one), slicing all plates, ARM64 execution and
+physical-device qualification. The summary line is the browser's, from the
+shared core ([above](#g-code-artifact-summary)), on both routes.
 
 ### Android send to printer
 

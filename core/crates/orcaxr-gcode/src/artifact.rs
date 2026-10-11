@@ -245,21 +245,33 @@ fn js_round(value: f64) -> f64 {
     }
 }
 
-/// The last [`TRAILER_SCAN_UNITS`] UTF-16 units of the decoded text. A UTF-16
-/// unit comes from at most three bytes, so the trailer lies within the last
-/// `3 × TRAILER_SCAN_UNITS` bytes; decoding starts at a byte no sequence can
-/// continue, where the whole file's decoder starts afresh too.
+/// The bytes that can hold the trailer: a UTF-16 unit comes from at most three
+/// bytes, so the last [`TRAILER_SCAN_UNITS`] units lie within these.
+const TRAILER_WINDOW_BYTES: usize = TRAILER_SCAN_UNITS * 3 + 4;
+
+/// The last [`TRAILER_SCAN_UNITS`] UTF-16 units of the decoded text.
 fn trailer(bytes: &[u8]) -> Vec<u16> {
-    let window = TRAILER_SCAN_UNITS * 3 + 4;
-    let units = if bytes.len() <= window {
-        decode_utf8(bytes)
+    if bytes.len() <= TRAILER_WINDOW_BYTES {
+        trailer_of(bytes, true)
     } else {
-        let mut start = bytes.len() - window;
-        while start < bytes.len() && (0x80..=0xBF).contains(&bytes[start]) {
+        trailer_of(&bytes[bytes.len() - TRAILER_WINDOW_BYTES..], false)
+    }
+}
+
+/// The trailer from the file's last [`TRAILER_WINDOW_BYTES`] bytes, or the
+/// [`whole`](trailer_of) file when it is no longer. A cut window's decoding
+/// starts at a byte no sequence can continue, where the whole file's decoder
+/// starts afresh too.
+fn trailer_of(window: &[u8], whole: bool) -> Vec<u16> {
+    let units = if whole {
+        decode_utf8(window)
+    } else {
+        let mut start = 0;
+        while start < window.len() && (0x80..=0xBF).contains(&window[start]) {
             start += 1;
         }
-        let mut units = Vec::with_capacity(bytes.len() - start);
-        Utf8Decoder::fragment().decode(&bytes[start..], true, &mut units);
+        let mut units = Vec::with_capacity(window.len() - start);
+        Utf8Decoder::fragment().decode(&window[start..], true, &mut units);
         units
     };
     if units.len() > TRAILER_SCAN_UNITS {
@@ -267,6 +279,107 @@ fn trailer(bytes: &[u8]) -> Vec<u16> {
     } else {
         units
     }
+}
+
+/// The layer-change markers the browser counts when an artifact states no
+/// total (`/; CHANGE_LAYER|;LAYER_CHANGE/g`). Each starts with the only `;`
+/// it holds, so matches never overlap and a mismatch restarts at most at the
+/// byte that broke it.
+const LAYER_MARKERS: [&[u8]; 2] = [b"; CHANGE_LAYER", b";LAYER_CHANGE"];
+
+/// What the browser's status line says of a finished slice
+/// (`sliceStatusFigures` and `describeSliceStatus` in `SliceStatus.ts`), with
+/// numbers spelled as JavaScript spells them.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SliceFigures {
+    /// The artifact's length.
+    pub bytes: u64,
+    /// `(bytes / 1024).toFixed(0)`.
+    pub kilobytes: String,
+    /// `split('\n').length` of the decoded text.
+    pub lines: u64,
+    /// The engine's stated total, else [`layer_markers`](Self::layer_markers).
+    pub layers: String,
+    /// The total the trailer states (`summarizeGcodeArtifact(...).layerCount`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stated_layers: Option<String>,
+    pub layer_markers: u64,
+}
+
+/// [`SliceFigures`] of an artifact streamed through in chunks of any size, as
+/// a host writes or reads it: line breaks and markers are counted as they
+/// pass, and only the bytes that can hold the trailer are kept.
+#[derive(Debug, Default)]
+pub struct SliceTally {
+    bytes: u64,
+    breaks: u64,
+    markers: u64,
+    matched: [usize; 2],
+    tail: Vec<u8>,
+}
+
+impl SliceTally {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn push(&mut self, chunk: &[u8]) {
+        for &byte in chunk {
+            if byte == b'\n' {
+                self.breaks += 1;
+            }
+            for (marker, matched) in LAYER_MARKERS.iter().zip(self.matched.iter_mut()) {
+                *matched = if marker[*matched] == byte {
+                    *matched + 1
+                } else {
+                    usize::from(marker[0] == byte)
+                };
+                if *matched == marker.len() {
+                    self.markers += 1;
+                    *matched = 0;
+                }
+            }
+        }
+        self.bytes += chunk.len() as u64;
+        self.tail.extend_from_slice(chunk);
+        if self.tail.len() > 2 * TRAILER_WINDOW_BYTES {
+            self.tail.drain(..self.tail.len() - TRAILER_WINDOW_BYTES);
+        }
+    }
+
+    pub fn finish(&self) -> SliceFigures {
+        let whole = self.bytes <= TRAILER_WINDOW_BYTES as u64;
+        let window = &self.tail[self.tail.len().saturating_sub(TRAILER_WINDOW_BYTES)..];
+        let stated = integer(unit_line(
+            &trailer_of(window, whole),
+            b"; total layers count = ",
+        ));
+        SliceFigures {
+            bytes: self.bytes,
+            kilobytes: ryu_js::Buffer::new()
+                .format_to_fixed(self.bytes as f64 / 1024.0, 0)
+                .into(),
+            lines: self.breaks + 1,
+            layers: stated.map_or_else(|| self.markers.to_string(), number),
+            stated_layers: stated.map(number),
+            layer_markers: self.markers,
+        }
+    }
+}
+
+impl SliceFigures {
+    /// The figures as one ASCII JSON object, for hosts.
+    pub fn json(&self) -> String {
+        serde_json::to_string(self).expect("slice figures serialize")
+    }
+}
+
+/// [`SliceFigures`] of a whole artifact.
+pub fn slice_figures(bytes: &[u8]) -> SliceFigures {
+    let mut tally = SliceTally::new();
+    tally.push(bytes);
+    tally.finish()
 }
 
 fn unit_terminator(unit: u16) -> bool {

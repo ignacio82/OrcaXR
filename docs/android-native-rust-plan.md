@@ -845,7 +845,10 @@ Snapmaker NDK build proof, and an explicit renderer decision.
   The shared core's libraries align (`verify-artifacts.py`) and load: the 48
   instrumented tests, cold starts and the app's smokes pass on the 16 KB
   page-size Android 17 emulator (`emulator-smoke.py --api 37 --pages 16`).
-  The slicing engine is not packaged yet (Phase 6), so its part remains.
+  The slicing engine is now packaged in every app build (its adapter, TBB and
+  libc++ for both ABIs, checked by `verify-artifacts.py` against the verified
+  export); its loading on the 16 KB image is in `android-local-slice-smoke.py`,
+  not yet run, so its part remains.
 - [ ] Record the flat/spatial renderer selection and any required alternative
   prototype. Resolve blockers before building the full XR interface.
   The Workspace now uses the Filament candidate in release builds too; the
@@ -1812,9 +1815,24 @@ external slice routes, and verified output publication.
   entry point. Pin source, common/platform patches, NDK, dependency inputs,
   compiler flags, ABI, and every packaged library hash. Keep build concurrency
   conservative on the shared host.
+  `build-engine-adapter.py` layers the application adapter over the verified
+  `build-engine.py` recipe (its own recipe binds the engine recipe, package
+  manifest, sources, compile/link lines and every packaged library's hash;
+  `test-engine-adapter.py` mutates real packages), and the app build packages
+  only its verified export. The engine recipe's own clean-source rebuild and a
+  hosted run of both remain.
 - [ ] Implement the service/JNI contract described above, including bounded input
   staging, one-job admission, progress, thread-safe callbacks, cooperative cancel,
   hard-stop escalation, process-death observation, and cleanup after editor death.
+  Implemented ([native-core](engineering/native-core.md#android-local-slicing)):
+  the JNI adapter over the browser engine's project-route reading (identities
+  of the staged archive and overrides checked first, polled progress,
+  `Print::cancel`, bounded result documents), `LocalEngineService` alone in
+  `:engine`, `LocalEngineClient` (one job, 10 s cooperative-cancel deadline,
+  then that process ended and its death awaited), owner-token cleanup, and
+  `LocalSlicing` claim/verify/publish by revision. Host JNI and JVM checks
+  pass; the instrumented test, the emulator smoke and `emulator-slices.py
+  --adapter` have not run yet.
 - [ ] Reuse canonical preflight and exact captured configuration. Exercise U1
   toolchanges, CC profiles, FullSpectrum modes, support/seam/fuzzy/color painting,
   layer events, scoped overrides, and every engine feature currently claimed.
@@ -1843,12 +1861,21 @@ external slice routes, and verified output publication.
 - [ ] Define local/external route selection using measured resource limits and
   user preferences. Show the selected route and reason; do not upload models or
   silently reroute work to a server the user has not configured and authorized.
-  Prepare shows the route and why (an attested external slicer, or none: there
-  is no local engine yet) and asks once per endpoint before any plate is
-  uploaded; local slicing and the selection between routes remain.
+  Prepare shows the route and why, by the browser's rule: the external slicer
+  the operator turned on and whose engine attested, otherwise this device's
+  engine when the build carries it for the device's ABI and the measured
+  memory admits the plate (256 MiB plus 16 times its archive, provisional),
+  otherwise none and why — never an unconfigured server in its place. It asks
+  once per endpoint before any plate is uploaded. The emulator smoke has not
+  run yet, and the memory rule awaits device measurements.
 - [ ] Qualify foreground/background execution for each SDK/distribution target.
   Test task switching, screen lock, thermal pressure, notification denial where
   relevant, service timeout, process death, and reopening an interrupted job.
+  Chosen: a `dataSync` foreground service (local file processing the operator
+  started; notification with progress and Cancel) only while a job runs,
+  started while the app is in the foreground; Android 15's time limit cancels
+  the job; the editor polls, so a cached or frozen editor delays nothing.
+  None of the listed conditions has been tested on a device or emulator yet.
 
 **Exit gate:** qualified fixtures produce materially equivalent G-code across
 Android, browser, and server; service crashes leave the editor/recovery usable;
@@ -1890,10 +1917,16 @@ storage journeys on phone, tablet, and desktop-sized windows.
   preview (picker, colour modes, layer window and filters, emulator-verified),
   with the file's own totals from the shared artifact summary.
   The Prepare area (`PrepareModel`) slices the active plate on the external
-  slicer as the browser's `sliceNow`: attested route, the shared preflight's
+  slicer as the browser's `sliceNow` — or, with it off, on the device's own
+  engine in its `:engine` service process as the browser slices in-browser,
+  published only for the state it came from (`android-local-slice-smoke.py`,
+  not yet run) — attested route, the shared preflight's
   issues as the browser's panel shows them, the one-plate archive, "Slice" /
   "Cancel Slice" with progress, the G-code streamed to the app's cache and
-  opened in Preview; output whose project changed is discarded or withdrawn.
+  opened in Preview; output whose project changed is discarded or withdrawn;
+  the line a finished slice gets is the browser's (`SliceStatus.ts`: the
+  engine's own layer total first), shared through the core's `SliceTally`
+  (40 browser cases, 563 JNI checks).
   Its result offers "Send to Printer" for a current slice and a connected
   printer, through the Device area's shared send workflow.
   The bar's order is Workspace (the home), Prepare, Preview, Device, Project.

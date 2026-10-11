@@ -40,6 +40,35 @@ def elf_alignment(data, abi):
     return loads
 
 
+ENGINE_LIBRARIES = {"liborcaxr_engine.so", "libtbb.so", "libtbbmalloc.so", "libc++_shared.so"}
+
+
+def verify_engine(archive, libraries):
+    """The local slicing engine, when the APK carries it: exactly the verified adapter export's
+    libraries for both ABIs and its resources, as the identity manifest the app checks names them."""
+    packaged = {name for name in libraries if name.split("/")[2] in ENGINE_LIBRARIES}
+    if "assets/engine/manifest.json" not in archive.namelist():
+        assert not packaged, "Engine libraries are packaged without the engine identity manifest"
+        return None
+    manifest = json.loads(archive.read("assets/engine/manifest.json"))
+    assert set(manifest["abis"]) == {"arm64-v8a", "x86_64"} and manifest["slicingQualified"] is False
+    expected = {f"lib/{abi}/{name}" for abi, entry in manifest["abis"].items() for name in entry["files"]}
+    assert packaged == expected and all(len(entry["files"]) == len(ENGINE_LIBRARIES) for entry in manifest["abis"].values()), \
+        "Packaged engine libraries differ from the engine manifest"
+    for abi, entry in manifest["abis"].items():
+        for name, digest in entry["files"].items():
+            assert libraries[f"lib/{abi}/{name}"]["sha256"] == digest, f"Engine library differs from the verified adapter: {abi}/{name}"
+    for name, digest in manifest["resources"].items():
+        assert hashlib.sha256(archive.read(f"assets/engine/resources/{name}")).hexdigest() == digest, f"Engine resource drift: {name}"
+    exported = ROOT / "android/app/build/generated/engine/assets/engine/manifest.json"
+    if exported.exists():
+        assert json.loads(exported.read_text()) == manifest, "The APK's engine manifest is not the verified export"
+    return {"adapterRecipe": manifest["adapterRecipe"], "engineRecipe": manifest["engineRecipe"],
+            "engineCommit": manifest["engineCommit"],
+            "bytesPerAbi": {abi: sum(len(archive.read(f"lib/{abi}/{name}")) for name in entry["files"])
+                            for abi, entry in manifest["abis"].items()}}
+
+
 def verify_apk(path, ndk):
     native = ROOT / "android/core-bridge/build/generated"
     value = verify_manifest(native / "core-native-manifest.json", native / "jniLibs", "android-jni")
@@ -69,6 +98,8 @@ def verify_apk(path, ndk):
             report["libraries"][name] = {"sha256": hashlib.sha256(data).hexdigest(), "zipOffset": offset, "loadAlignments": alignments}
         for name in value["outputs"]:
             assert f"lib/{name}" in report["libraries"], f"Missing required JNI library: {name}"
+        report["localEngine"] = verify_engine(archive, report["libraries"])
+    report["apkBytes"] = path.stat().st_size
     return report
 
 
@@ -100,7 +131,9 @@ def main():
         output = ROOT / "tools/cross-platform/results"
         output.mkdir(parents=True, exist_ok=True)
         (output / f"{args.apk.stem}-artifacts.json").write_text(json.dumps(report, indent=2) + "\n")
-        print(f"Verified {len(report['libraries'])} packaged native libraries, both ABIs, source identity and 16 KB alignment")
+        engine = "with the verified local engine" if report["localEngine"] else "without a local engine"
+        print(f"Verified {len(report['libraries'])} packaged native libraries, both ABIs, source identity and 16 KB alignment, "
+              f"{engine}; APK {report['apkBytes']} bytes")
 
 
 if __name__ == "__main__":

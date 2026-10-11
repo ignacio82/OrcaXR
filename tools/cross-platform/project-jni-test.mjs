@@ -366,6 +366,50 @@ try {
     await readFile(new URL("web/public/profiles/catalog.json", root)),
   );
   assert.equal(slicingChoiceChecks, 11);
+  // The local slicing route on a real session: a plate staged as the external
+  // route's own upload, the engine's documents and every way a job ends, and
+  // output claimed, verified and published only for the state it came from.
+  const localSliceChecks = jvm.call(
+    "localSliceChecks",
+    decodeBytes("stl-binary/cube"),
+    await readFile(new URL("testdata/parity/fixtures/reference.gcode", root)),
+  );
+  assert.equal(localSliceChecks, 77);
+  // What the status line says of a finished slice (the browser's
+  // `SliceStatus.ts`), streamed through the core's tally over JNI in several
+  // chunkings and worded by the Kotlin owner, for every artifact of the corpus.
+  const statusFixture = await json("testdata/cross-platform/slice-status-vectors.json");
+  const statusBytes = (parts) =>
+    Buffer.concat(
+      parts.map((part) =>
+        part.text !== undefined
+          ? Buffer.from(part.text, "utf8")
+          : part.repeat !== undefined
+            ? Buffer.from(part.repeat.repeat(part.times), "utf8")
+            : Buffer.from(part.bytes),
+      ),
+    );
+  const sliceStatusChecks = jvm.call(
+    "sliceStatusChecks",
+    statusFixture.cases
+      .map((c) =>
+        [
+          c.name,
+          statusBytes(c.parts).toString("base64"),
+          c.bytes,
+          c.kilobytes,
+          c.lines,
+          c.layers,
+          c.statedLayers ?? "-",
+          c.layerMarkers,
+          c.status.elapsedMs,
+          c.status.warnings,
+          Buffer.from(c.status.text, "utf8").toString("base64"),
+        ].join("\t"),
+      )
+      .join("\n"),
+  );
+  assert.equal(sliceStatusChecks, 563);
   // The workspace bed through the JNI exports, then the Kotlin wrapper.
   const bedFixture = await json("testdata/cross-platform/workspace-bed-vectors.json");
   const workspaceBeds = replayWorkspaceBeds(projectJniCore(jvm.call), bedFixture, layout);
@@ -1551,6 +1595,8 @@ try {
     projectRecoveryChecks,
     documentOwnersChecks,
     slicingChoiceChecks,
+    localSliceChecks,
+    sliceStatusChecks,
     workspaceBeds,
     workspaceBedChecks,
     transformFields,

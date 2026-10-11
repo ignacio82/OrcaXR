@@ -3,6 +3,9 @@
 
 Requires a verified build-engine.py package and a complete published-WASM
 reference set. This internal CLI run does not qualify an APK or an app route.
+With --adapter the same fixtures run through the application adapter's own
+slicing entry point (liborcaxr_engine.so, the C function its JNI layer calls,
+driven by its fixture driver) from a verified build-engine-adapter.py package.
 """
 import argparse
 import fcntl
@@ -25,6 +28,9 @@ ROOT = HERE.parents[1]
 spec = importlib.util.spec_from_file_location("native_engine", HERE / "build-engine.py")
 engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
+adapter_spec = importlib.util.spec_from_file_location("engine_adapter", HERE / "build-engine-adapter.py")
+adapter = importlib.util.module_from_spec(adapter_spec)
+adapter_spec.loader.exec_module(adapter)
 base = engine.base
 sha = engine.geometry.sha
 SERIAL = "emulator-5588"
@@ -146,7 +152,24 @@ def stop_owned_emulator(process, graceful_timeout=30, kill_timeout=15):
     raise RuntimeError("Owned emulator descendants did not stop")
 
 
-def run_slices(package, package_manifest, fixtures_path, fixtures, reference_path, output):
+def checked_result(result, through_adapter):
+    """The completion document: the probe's, or the adapter's own result with its digest."""
+    if through_adapter:
+        if (set(result) != {"schemaVersion", "outcome", "stage", "objects", "gcodeBytes", "gcodeSha256", "rejectedOverrides"}
+            or result["schemaVersion"] != 1 or result["outcome"] != "completed" or result["stage"] != "output"
+            or type(result["objects"]) is not int or result["objects"] != 1 or result["rejectedOverrides"] != 0
+            or type(result["gcodeBytes"]) is not int or not 0 < result["gcodeBytes"] <= 128 * 1024 * 1024
+            or not re.fullmatch(r"[0-9a-f]{64}", result["gcodeSha256"])):
+            raise RuntimeError("Native adapter completion protocol mismatch")
+        return
+    if (set(result) != {"schemaVersion", "completed", "objects", "gcodeBytes"}
+        or type(result["schemaVersion"]) is not int or result["schemaVersion"] != 1
+        or result["completed"] is not True or type(result["objects"]) is not int or result["objects"] != 1
+        or type(result["gcodeBytes"]) is not int or not 0 < result["gcodeBytes"] <= 128 * 1024 * 1024):
+        raise RuntimeError("Native fixture completion protocol mismatch")
+
+
+def run_slices(package, package_manifest, fixtures_path, fixtures, reference_path, output, executable):
     remote = "/data/local/tmp/orcaxr-slices-" + uuid.uuid4().hex
     adb("shell", "mkdir", "-p", remote + "/resources/info", remote + "/jobs")
     for name, identity in package_manifest["files"].items():
@@ -157,10 +180,10 @@ def run_slices(package, package_manifest, fixtures_path, fixtures, reference_pat
         adb("push", package / "resources" / name, remote + "/resources/" + name)
         if adb("shell", "sha256sum", remote + "/resources/" + name).split()[0] != digest:
             raise RuntimeError("Device resource copy identity mismatch")
-    adb("shell", "chmod", "700", remote + "/orcaxr_slice_probe")
+    adb("shell", "chmod", "700", remote + "/" + executable)
     default_result = remote + "/defaults.json"
     default_command = " ".join(shlex.quote(value) for value in ["env", "LD_LIBRARY_PATH=" + remote,
-        remote + "/orcaxr_slice_probe", "--check-defaults", default_result])
+        remote + "/" + executable, "--check-defaults", default_result])
     defaults = engine_protocol(default_command, remote + "/defaults.log", default_result, output, "defaults")
     if (set(defaults) != {"schemaVersion", "defaultsChecked", "patterns"}
         or type(defaults["schemaVersion"]) is not int or defaults["schemaVersion"] != 1
@@ -179,17 +202,13 @@ def run_slices(package, package_manifest, fixtures_path, fixtures, reference_pat
             if adb("shell", "sha256sum", job + "/" + destination).split()[0] != entry["sha256"]:
                 raise RuntimeError("Device fixture copy identity mismatch")
         command = " ".join(shlex.quote(value) for value in ["env", "LD_LIBRARY_PATH=" + remote,
-            remote + "/orcaxr_slice_probe", job + "/input.3mf", job + "/overrides.json",
+            remote + "/" + executable, job + "/input.3mf", job + "/overrides.json",
             remote + "/resources", job + "/output.gcode", job + "/result.json"])
         started = time.monotonic()
         # Any timeout/failure tears down this entire owned VM before returning.
         # Remote engine output never becomes a public result merely on creation.
         result = engine_protocol(command, job + "/progress.jsonl", job + "/result.json", output, identifier, timeout=240)
-        if (set(result) != {"schemaVersion", "completed", "objects", "gcodeBytes"}
-            or type(result["schemaVersion"]) is not int or result["schemaVersion"] != 1
-            or result["completed"] is not True or type(result["objects"]) is not int or result["objects"] != 1
-            or type(result["gcodeBytes"]) is not int or not 0 < result["gcodeBytes"] <= 128 * 1024 * 1024):
-            raise RuntimeError("Native fixture completion protocol mismatch")
+        checked_result(result, executable == adapter.DRIVER)
         elapsed = (time.monotonic() - started) * 1000
         remote_path = job + "/output.gcode"
         mode = adb("shell", "stat", "-c", "%F", remote_path)
@@ -197,6 +216,8 @@ def run_slices(package, package_manifest, fixtures_path, fixtures, reference_pat
         if mode != "regular file" or size != result["gcodeBytes"]:
             raise RuntimeError("Native output type or length mismatch")
         digest = adb("shell", "sha256sum", remote_path).split()[0]
+        if executable == adapter.DRIVER and digest != result["gcodeSha256"]:
+            raise RuntimeError("Native adapter reported a different G-code digest")
         local = output / (identifier + ".gcode")
         adb("pull", remote_path, local)
         if local.is_symlink() or not local.is_file() or local.stat().st_size != size or sha(local) != digest:
@@ -219,6 +240,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("fixtures", type=Path)
     parser.add_argument("reference", type=Path)
+    parser.add_argument("--adapter", action="store_true", help="slice through the application adapter's entry point")
     args = parser.parse_args()
     fixtures_path, reference_path = args.fixtures.resolve(), args.reference.resolve()
     if SERIAL in subprocess.check_output([SDK / "platform-tools/adb", "devices"], text=True):
@@ -232,6 +254,11 @@ def main():
         subprocess.run([sys.executable, HERE / "build-engine.py", "--abi", "x86_64", "--verify-only"], check=True)
         recipe = engine.geometry.recipe_id(engine.inputs())
         package = base.BUILD / "engine" / recipe / "x86_64/package"
+        executable = "orcaxr_slice_probe"
+        if args.adapter:
+            subprocess.run([sys.executable, HERE / "build-engine-adapter.py", "--abi", "x86_64", "--verify-only"], check=True)
+            package = base.BUILD / "adapter" / adapter.recipe_id(adapter.inputs(), recipe) / "x86_64/package"
+            executable = adapter.DRIVER
         package_manifest = metadata(package / "manifest.json")
         run_id = uuid.uuid4().hex
         output = HERE / "results" / ("slices-" + run_id)
@@ -261,7 +288,8 @@ def main():
                         raise RuntimeError("Owned emulator did not boot within the diagnostic limit")
                     if adb("shell", "getprop", "ro.product.cpu.abi") != "x86_64":
                         raise RuntimeError("Wrong emulator ABI")
-                    defaults, observations = run_slices(package, package_manifest, fixtures_path, fixtures, reference_path, output)
+                    defaults, observations = run_slices(package, package_manifest, fixtures_path, fixtures, reference_path,
+                                                        output, executable)
                     report = {"schemaVersion": 1, "evidenceKind": "x86_64-emulator-native-fixture-parity-only",
                         "engineCommit": base.PIN, "packageManifestSha256": sha(package / "manifest.json"),
                         "fixtureManifestSha256": sha(fixtures_path), "referenceManifestSha256": sha(reference_path),
@@ -272,14 +300,15 @@ def main():
                         "pageSize": int(adb("shell", "getconf", "PAGESIZE")),
                         "initializationCheck": defaults, "observations": observations,
                         "emulatorFixtureParity": True, "nativeSlicingQualified": False,
-                        "applicationRoute": False, "arm64RuntimeQualified": False}
+                        "applicationRoute": False, "adapterEntryPoint": args.adapter,
+                        "arm64RuntimeQualified": False}
                 finally:
                     stop_owned_emulator(process)
         # Publish evidence only after the owned VM and all its jobs are stopped.
         if any(sha(path) != digest for path, digest in recorded_hashes.items()):
             raise RuntimeError("Fixture comparison inputs changed during execution")
         checked_references(fixtures_path, reference_path)
-        if engine.inputs() != package_manifest["inputs"]:
+        if (adapter.inputs() if args.adapter else engine.inputs()) != package_manifest["inputs"]:
             raise RuntimeError("Native engine recipe changed during fixture comparison")
         (output / "manifest.json").write_text(json.dumps(report, indent=2) + "\n")
         print(f"Verified native fixture comparison: {output}", flush=True)

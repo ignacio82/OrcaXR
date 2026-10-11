@@ -1,0 +1,12 @@
+{
+  global:
+    JNI_OnLoad;
+    orcaxr_engine_slice;
+    orcaxr_engine_cancel;
+    orcaxr_engine_progress;
+    orcaxr_engine_identity;
+    orcaxr_engine_file_sha256;
+    orcaxr_engine_check_defaults;
+  local:
+    *;
+};

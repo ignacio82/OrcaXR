@@ -1,9 +1,9 @@
 package dev.orcaxr.nativeapp.prepare
 
 import dev.orcaxr.core.ProjectIntents
-import java.io.FilterOutputStream
-import java.io.OutputStream
-import java.util.Locale
+import dev.orcaxr.nativeapp.engine.LocalEngineState
+import dev.orcaxr.nativeapp.engine.LocalEngineWords
+import dev.orcaxr.nativeapp.engine.LocalSliceBudget
 
 /** Where the external slicer connection stands (the browser controller's phases). */
 enum class SlicerPhase { Idle, Probing, Connected, Failed }
@@ -63,6 +63,21 @@ data class SliceConsent(val endpoints: Set<String> = emptySet()) {
     fun revoke(endpoint: String) = SliceConsent(endpoints - endpoint)
 }
 
+/** Where a slice goes: this device's engine, the external slicer, or nowhere. */
+enum class SliceRouteKind { Local, External, None }
+
+/**
+ * The route a slice takes now, by the browser's rule: the external slicer
+ * when the operator turned it on and its engine attested (their preference),
+ * otherwise the engine on this device ([local], with the memory it measured).
+ * A slicer the operator did not turn on is never chosen in its place.
+ */
+fun sliceRoute(connection: SlicerConnection, local: LocalEngineState): SliceRouteKind = when {
+    connection.enabled -> SliceRouteKind.External
+    local.available -> SliceRouteKind.Local
+    else -> SliceRouteKind.None
+}
+
 /** One preflight issue as the browser's `SlicePreflightPanel` card shows it. */
 data class PreflightCard(
     val id: String,
@@ -86,11 +101,16 @@ object PrepareWords {
     const val CONNECTED = "External slicer connected — external slicing is on."
     const val CONNECTION_FAILED = "External slicer connection failed — slicing is unavailable."
     const val REMOVED = "External slicer removed — slicing is unavailable."
+    /** The browser's words for the same, when this device slices instead (as the browser does in-browser). */
+    const val CONNECTION_FAILED_LOCAL = "External slicer connection failed — slicing locally."
+    const val REMOVED_LOCAL = "External slicer removed — slicing locally."
     const val CHECKING = "Checking engine…"
     const val OFFLINE = "Offline"
     const val ON = "On — models will be sliced on the external server."
-    /** The browser slices locally when off; this device has no engine of its own yet. */
-    const val OFF = "Off — this device has no slicing engine of its own; connect an external slicer to slice."
+    /** Off on a device that cannot slice itself (no engine in this build, or too little memory). */
+    const val OFF = "Off — this device cannot slice on its own now; connect an external slicer to slice."
+    /** The browser's "Off — slicing locally in-browser.", for this device's engine. */
+    const val OFF_LOCAL = "Off — slicing on this device."
     /** A sliced plate whose project changed afterwards: Preview withdraws it, as the browser does. */
     const val OUT_OF_DATE = "The project changed after this plate was sliced; its G-code was withdrawn. Slice again."
 
@@ -108,14 +128,35 @@ object PrepareWords {
         else -> OFFLINE
     }
 
-    fun hint(connection: SlicerConnection): String = if (connection.enabled) ON else OFF
+    fun hint(connection: SlicerConnection, local: LocalEngineState = LocalEngineState.NONE): String = when {
+        connection.enabled -> ON
+        local.available -> OFF_LOCAL
+        else -> OFF
+    }
 
-    /** The route a slice would take and why — the plan's rule: shown before anything is uploaded. */
-    fun route(connection: SlicerConnection): String = when {
-        connection.enabled && connection.engine != null ->
+    /** The status after a failed connection check: the browser's words when the device slices instead. */
+    fun connectionFailed(local: LocalEngineState) = if (local.available) CONNECTION_FAILED_LOCAL else CONNECTION_FAILED
+
+    /** The status after the slicer was removed. */
+    fun removed(local: LocalEngineState) = if (local.available) REMOVED_LOCAL else REMOVED
+
+    /**
+     * The route a slice would take and why — the plan's rule, shown before
+     * anything is sliced or uploaded: the attested external slicer the
+     * operator turned on, or this device's engine with the plate size its
+     * memory admits now, or none and why.
+     */
+    fun route(connection: SlicerConnection, local: LocalEngineState = LocalEngineState.NONE): String = when (sliceRoute(connection, local)) {
+        SliceRouteKind.External -> if (connection.engine != null) {
             "Slicing route: the external slicer at ${connection.endpoint}, whose engine attested as ${engine(connection.engine)}."
-        connection.enabled -> "Slicing route: the external slicer at ${connection.endpoint}."
-        else -> "Slicing route: none. This device has no slicing engine of its own; connect an external slicer whose engine attests."
+        } else {
+            "Slicing route: the external slicer at ${connection.endpoint}."
+        }
+        SliceRouteKind.Local ->
+            "Slicing route: this device's own engine (${LocalEngineWords.engine(local.commit.orEmpty())}), as external slicing is off. " +
+                "Plates of up to ${LocalEngineWords.megabytes(LocalSliceBudget.largestArchive(local.availableMemory))} fit the memory this device has now."
+        SliceRouteKind.None ->
+            "Slicing route: none. ${local.reason ?: LocalEngineWords.NOT_PACKAGED} Connect an external slicer whose engine attests."
     }
 
     fun consentTitle(endpoint: String) = "Upload this plate to $endpoint?"
@@ -130,12 +171,6 @@ object PrepareWords {
 
     /** A slice's progress (`renderCanonicalSliceStatus`). */
     fun progress(message: String) = "Slicing: $message"
-
-    /** The browser's summary of a finished slice; layers are its fallback count of layer-change markers. */
-    fun sliced(elapsedMs: Long, bytes: Long, lines: Long, layers: Long, warnings: Int): String {
-        val suffix = if (warnings > 0) ", $warnings warning(s)" else ""
-        return "SLICED in $elapsedMs ms\n${String.format(Locale.ROOT, "%.0f", bytes / 1024.0)} KB, $lines lines, $layers layers$suffix"
-    }
 
     /** A preflight with blocking issues (`SlicePreflightError`). */
     fun preflightBlocked(summary: ProjectIntents.PreflightSummary, issues: List<ProjectIntents.PreflightIssue>): String {
@@ -191,50 +226,4 @@ object PrepareWords {
 
     /** A sliced plate's file name, as the browser names one it sends: `<project>_<plate>.gcode`. */
     fun slicedFilename(project: String, plate: String) = gcodeFilename("${project}_$plate.gcode")
-}
-
-/**
- * Counts what a G-code stream holds as it passes through to [out]: its bytes,
- * its lines (`split('\n').length`) and its layer-change markers (the browser's
- * fallback layer count, `/; CHANGE_LAYER|;LAYER_CHANGE/g`), matched across
- * chunk boundaries.
- */
-class GcodeTally(out: OutputStream) : FilterOutputStream(out) {
-    var bytes = 0L
-        private set
-    private var newlines = 0L
-    var layers = 0L
-        private set
-    val lines: Long get() = newlines + 1
-    private val progress = IntArray(MARKERS.size)
-
-    override fun write(b: Int) {
-        out.write(b)
-        count(b.toByte())
-    }
-
-    override fun write(b: ByteArray, off: Int, len: Int) {
-        out.write(b, off, len)
-        for (i in off until off + len) count(b[i])
-    }
-
-    private fun count(byte: Byte) {
-        bytes++
-        if (byte == '\n'.code.toByte()) newlines++
-        for ((index, marker) in MARKERS.withIndex()) {
-            var matched = progress[index]
-            // The markers repeat no prefix of themselves, so a mismatch restarts at the first byte.
-            if (marker[matched] != byte) matched = if (marker[0] == byte) 0 else -1
-            matched++
-            if (matched == marker.size) {
-                layers++
-                matched = 0
-            }
-            progress[index] = matched
-        }
-    }
-
-    private companion object {
-        val MARKERS = listOf("; CHANGE_LAYER", ";LAYER_CHANGE").map { it.toByteArray(Charsets.US_ASCII) }
-    }
 }

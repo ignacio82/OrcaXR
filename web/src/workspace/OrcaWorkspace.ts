@@ -92,6 +92,7 @@ import type { SliceThumbnailPort } from '../slicer/CanonicalSlicerClientRoute';
 import { PlateThumbnailRenderer } from './PlateThumbnailRenderer';
 import { rotateVector } from '../project/objects/transformOperations';
 import { summarizeGcodeArtifact, type GcodeArtifactSummary } from '../slicer/GcodeArtifactSummary';
+import { describeSliceStatus, sliceStatusFigures } from '../slicer/SliceStatus';
 import { GCODE_PREVIEW_MODES } from '../slicer/GcodePreviewModel';
 import {
   GCODE_PREVIEW_MOVE_FILTERS,
@@ -9623,15 +9624,13 @@ export class OrcaWorkspace extends xb.Script {
         throw new Error('The project changed while slicing; the stale result was discarded. Slice again.');
       }
       const elapsedMs = Math.round(performance.now() - startedAt);
-      const lines = gcode.split('\n').length;
-      // Prefer the engine's own total: counting layer-change markers misses
-      // the layers it counts differently, and two disagreeing layer counts in
-      // one UI is worse than either.
-      const layers =
-        summarizeGcodeArtifact(gcode).layerCount ?? (gcode.match(/; CHANGE_LAYER|;LAYER_CHANGE/g) ?? []).length;
-      const warningSuffix = result.warnings.length > 0 ? `, ${result.warnings.length} warning(s)` : '';
       this.setStatus(
-        `SLICED in ${elapsedMs} ms\n${(plate.gcode.byteLength / 1024).toFixed(0)} KB, ${lines} lines, ${layers} layers${warningSuffix}`,
+        describeSliceStatus({
+          elapsedMs,
+          byteLength: plate.gcode.byteLength,
+          ...sliceStatusFigures(gcode),
+          warnings: result.warnings.length,
+        }),
       );
       // The engine job is complete. Preview owns its own worker and must not
       // retain the slicing slot while indexing the artifact.

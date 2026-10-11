@@ -20,6 +20,38 @@ val bundleCatalog by tasks.registering(BundleCatalog::class) {
 androidComponents.onVariants { variant ->
     variant.sources.assets?.addGeneratedSourceDirectory(bundleCatalog) { it.assets }
 }
+
+/**
+ * The slicing engine this device runs locally: the adapter library, its TBB and libc++ runtimes for
+ * both ABIs and its resources, exported only from packages build-engine-adapter.py verifies against
+ * the pinned engine recipe, with the identity manifest the engine's process checks the loaded
+ * library against. Every build packages it unless `-Porcaxr.localEngine=none` (a host without the
+ * engine build, such as the hosted CI job): that build says it carries no engine of its own and
+ * slices only on an external slicer the operator turns on.
+ */
+abstract class BundleEngine : Exec() {
+    @get:OutputDirectory abstract val jniDirectory: DirectoryProperty
+    @get:OutputDirectory abstract val assetsDirectory: DirectoryProperty
+}
+val localEngine = providers.gradleProperty("orcaxr.localEngine").getOrElse("packaged")
+require(localEngine == "packaged" || localEngine == "none") { "orcaxr.localEngine is packaged or none" }
+if (localEngine == "packaged") {
+    val bundleEngine by tasks.registering(BundleEngine::class) {
+        val export = layout.buildDirectory.dir("generated/engine")
+        val tools = rootProject.file("../tools/native-engine")
+        workingDir(rootProject.projectDir.parentFile)
+        environment("ANDROID_HOME", androidComponents.sdkComponents.sdkDirectory.get().asFile.path)
+        commandLine("python3", "tools/native-engine/build-engine-adapter.py", "--export", export.get().asFile.path)
+        inputs.files(fileTree(tools) { include("*.py", "adapter/**", "engine/**", "patches/**") })
+        inputs.files(fileTree(tools.resolve("build/adapter")) { include("*/*/package/**") })
+        jniDirectory.set(export.map { it.dir("jniLibs") })
+        assetsDirectory.set(export.map { it.dir("assets") })
+    }
+    androidComponents.onVariants { variant ->
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(bundleEngine) { it.jniDirectory }
+        variant.sources.assets?.addGeneratedSourceDirectory(bundleEngine) { it.assetsDirectory }
+    }
+}
 android {
     namespace = "dev.orcaxr.nativeapp"
     compileSdk = 37
@@ -51,7 +83,18 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
+    // The engine's libraries are packaged exactly as the verified export hashed them (already
+    // stripped): the build's own strip would rewrite their bytes, and the manifest would not hold.
+    packaging {
+        jniLibs {
+            keepDebugSymbols += setOf("**/liborcaxr_engine.so", "**/libtbb.so", "**/libtbbmalloc.so", "**/libc++_shared.so")
+        }
+    }
+    // AIDL: the engine service's binder, between the editor's process and the engine's.
+    buildFeatures {
+        compose = true
+        aidl = true
+    }
 }
 dependencies {
     implementation(project(":core-bridge"))

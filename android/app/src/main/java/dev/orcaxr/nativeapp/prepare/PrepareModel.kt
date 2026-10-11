@@ -16,6 +16,9 @@ import dev.orcaxr.core.ExternalSlicerArchive
 import dev.orcaxr.core.ExternalSlicerClient
 import dev.orcaxr.core.ExternalSlicerException
 import dev.orcaxr.core.ExternalSlicerPolicy
+import dev.orcaxr.core.LocalSliceOutcome
+import dev.orcaxr.core.LocalSliceRefusal
+import dev.orcaxr.core.LocalSlicing
 import dev.orcaxr.core.ProjectDocumentOutput
 import dev.orcaxr.core.ProjectIntents
 import dev.orcaxr.core.ProjectPlateArchive
@@ -23,10 +26,18 @@ import dev.orcaxr.core.ProjectPlatePreflight
 import dev.orcaxr.core.ProjectRevision
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.SharedCredentials
+import dev.orcaxr.core.SliceStatus
+import dev.orcaxr.core.SliceStatusTally
+import dev.orcaxr.nativeapp.engine.LocalEngineClient
+import dev.orcaxr.nativeapp.engine.LocalEngineDevice
+import dev.orcaxr.nativeapp.engine.LocalEngineState
+import dev.orcaxr.nativeapp.engine.LocalEngineWords
+import dev.orcaxr.nativeapp.engine.LocalSliceBudget
 import dev.orcaxr.nativeapp.send.SendGuard
 import dev.orcaxr.nativeapp.send.SliceToSend
 import java.io.File
 import java.io.FileOutputStream
+import java.util.UUID
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
@@ -58,8 +69,11 @@ data class SliceJob(val message: String, val percent: Double? = null, val cancel
 
 /**
  * A finished slice: its G-code in the app's cache under the name it is sent
- * by, the plate and the state of the project it came from, and the browser's
- * summary. Identity matters: a send checks it is still the published one.
+ * by, the plate and the state of the project it came from, the route it took
+ * (the external slicer's [endpoint], or this device's engine when [local]),
+ * and the browser's summary. Identity matters: a send checks it is still the
+ * published one. Both routes publish the same way, so Preview and Device
+ * treat them alike.
  */
 class SlicedPlate(
     val file: File,
@@ -69,11 +83,14 @@ class SlicedPlate(
     val revision: ProjectRevision,
     val endpoint: String,
     val summary: String,
+    val local: Boolean = false,
 )
 
 /** What the Prepare area shows. */
 data class PrepareState(
     val connection: SlicerConnection = SlicerConnection(),
+    /** This build's engine and this device's memory, as last measured. */
+    val local: LocalEngineState = LocalEngineState.NONE,
     val token: String = "",
     /** Whether the record keeps the token on this device (the Device area's switch). */
     val remember: Boolean = true,
@@ -99,6 +116,12 @@ data class PrepareState(
  * cache; output whose project changed in the meantime is discarded, and
  * Preview opens the rest. Connection work runs on one worker thread and a
  * slice on another, so the route can change (and be noticed) mid-slice.
+ *
+ * With the external slicer off, the plate is sliced by this device's own
+ * engine, as the browser slices in-browser: the same preflight and one-plate
+ * archive, staged privately for the engine's own process
+ * ([LocalEngineClient]), its G-code claimed, verified and published only
+ * for the project state it came from ([LocalSlicing]).
  */
 class PrepareModel(application: Application) : AndroidViewModel(application) {
     private val main = Handler(Looper.getMainLooper())
@@ -108,6 +131,8 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
     private val preferences = application.getSharedPreferences("orcaxr.slicer", Context.MODE_PRIVATE)
     private val folder = File(application.cacheDir, "prepare")
     private val client = ExternalSlicerClient(localNetwork = AndroidLocalNetwork.permission(application))
+    private val engine = LocalEngineClient(application)
+    private val jobs = LocalEngineDevice.jobs(application)
     private lateinit var credentials: SharedCredentials
     private var listening: AutoCloseable? = null
     /** Worker-thread state: the token this area last wrote to the record. */
@@ -134,6 +159,9 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
     private val preflights = AtomicInteger()
 
     init {
+        // Jobs left by an earlier run of the app: none of them runs now, and none is ever claimed.
+        slicer.execute { LocalSlicing.sweep(jobs) }
+        refreshLocal()
         work {
             credentials = AppCredentialVault.shared(application)
             listening = credentials.subscribe { work(::credentialsChanged) }
@@ -222,7 +250,7 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             is ProjectIntents.ExternalSlicerEndpoint.Refused -> {
                 val refused = synchronized(lock) { connection.refused(text(endpoint.value)).also { connection = it } }
                 persist(refused)
-                publish { it.copy(status = PrepareWords.CONNECTION_FAILED) }
+                publish { it.copy(status = PrepareWords.connectionFailed(it.local)) }
             }
             is ProjectIntents.ExternalSlicerEndpoint.Endpoint -> probe(text(endpoint.value))
         }
@@ -251,7 +279,7 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
                 }
                 if (after == before) return@work
                 persist(after)
-                publish { it.copy(status = if (after.enabled) PrepareWords.CONNECTED else PrepareWords.CONNECTION_FAILED) }
+                publish { it.copy(status = if (after.enabled) PrepareWords.CONNECTED else PrepareWords.connectionFailed(it.local)) }
             }
         }
     }
@@ -279,7 +307,7 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         }
         persist(removed)
         preferences.edit().putStringSet(CONSENTED, synchronized(lock) { consent.endpoints }).apply()
-        publish { it.copy(status = PrepareWords.REMOVED) }
+        publish { it.copy(status = PrepareWords.removed(it.local)) }
     }
 
     /**
@@ -306,8 +334,17 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         state = state.copy(status = null)
     }
 
+    /** This build's engine and the device's memory, measured again for the route Prepare shows. */
+    fun refreshLocal() {
+        checks.execute {
+            val measured = LocalEngineDevice.measure(getApplication())
+            main.post { state = state.copy(local = measured) }
+        }
+    }
+
     /** The active plate's preflight, again; a request made meanwhile replaces this one. */
     fun refreshPreflight() {
+        refreshLocal()
         val project = source ?: return
         val plate = project.view.activePlate ?: run {
             state = state.copy(preflight = null)
@@ -331,16 +368,28 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         text(result.summary.plateId), result.revision, result.summary.canSlice, result.issues.map(PrepareWords::card), result.summary.issueCount,
     )
 
-    /** "Slice": the first slice to an endpoint asks before anything is uploaded. */
+    /**
+     * "Slice", on the route [sliceRoute] chooses: the external slicer the
+     * operator turned on (whose first slice asks before anything is uploaded),
+     * or this device's engine.
+     */
     fun slice() {
         val now = state
-        if (now.job != null || !now.connection.enabled) return
-        val endpoint = now.connection.endpoint
-        if (!now.consent.allows(endpoint)) {
-            state = now.copy(consentFor = endpoint)
-            return
+        if (now.job != null) return
+        when (sliceRoute(now.connection, now.local)) {
+            SliceRouteKind.External -> {
+                val endpoint = now.connection.endpoint
+                if (!now.consent.allows(endpoint)) {
+                    state = now.copy(consentFor = endpoint)
+                    return
+                }
+                start(endpoint)
+            }
+            SliceRouteKind.Local -> launch({ true }) { project, plateId, projectName, plateName ->
+                runLocal(project, plateId, projectName, plateName)
+            }
+            SliceRouteKind.None -> Unit
         }
-        start(endpoint)
     }
 
     /** The operator's answer to "Upload this plate to …?". */
@@ -366,6 +415,26 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun start(endpoint: String) {
+        var generation = 0L
+        var held = ""
+        launch({
+            // The route is captured once; a different one is refused, never re-decided mid-job.
+            if (!connection.enabled || connection.endpoint != endpoint) {
+                false
+            } else {
+                generation = connection.generation
+                held = token
+                true
+            }
+        }) { project, plateId, projectName, plateName -> run(project, endpoint, generation, held, plateId, projectName, plateName) }
+    }
+
+    /**
+     * Starts one slice of the active plate: [admit] (under the lock) captures
+     * its route, then [body] runs on the slicing thread and the outcome is
+     * shown — the published slice, or the status line.
+     */
+    private fun launch(admit: () -> Boolean, body: (PlateSource, String, String, String) -> SlicedPlate) {
         val project = source ?: return
         val view = project.view
         val plate = view.activePlate
@@ -373,20 +442,17 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             state = state.copy(status = PrepareWords.NO_MODELS)
             return
         }
-        val (generation, held) = synchronized(lock) {
-            if (running) return
-            // The route is captured once; a different one is refused, never re-decided mid-job.
-            if (!connection.enabled || connection.endpoint != endpoint) return
+        synchronized(lock) {
+            if (running || !admit()) return
             running = true
             cancelRequested = false
-            connection.generation to token
         }
         // A new slice withdraws the previous output, as the browser's does.
         published = null
         state = state.copy(job = SliceJob("preflighting"), result = null, status = null)
         slicer.execute {
             val outcome = try {
-                Outcome.Done(run(project, endpoint, generation, held, plate.id, view.name.ifBlank { "Untitled project" }, plate.name))
+                Outcome.Done(body(project, plate.id, view.name.ifBlank { "Untitled project" }, plate.name))
             } catch (refusal: Refusal) {
                 Outcome.Failed(refusal.message)
             } catch (failure: Throwable) {
@@ -408,6 +474,13 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    /** Whether to ask for the notification permission before a local slice: once, ever. */
+    fun askNotifications(): Boolean {
+        if (preferences.getBoolean(NOTIFICATIONS_ASKED, false)) return false
+        preferences.edit().putBoolean(NOTIFICATIONS_ASKED, true).apply()
+        return true
     }
 
     fun slicedShown() {
@@ -504,7 +577,8 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             checkpoint(generation, endpoint)
 
             progress("Slicing project externally...")
-            val (result, tally) = GcodeTally(FileOutputStream(part).buffered()).use { tally ->
+            // What the status line says of it is counted as it streams in, by the shared core.
+            val figures = SliceStatusTally(FileOutputStream(part).buffered()).use { tally ->
                 val inFlight = client.slice(
                     endpoint, bearer, ExternalSlicerArchive(archiveFile.length()) { archiveFile.inputStream() }, archive.overrides, tally,
                 ) { update -> progress(text(update.message).ifEmpty { "slicing" }, update.percent) }
@@ -514,9 +588,9 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
                     cancelRequested
                 }
                 if (cancelled) inFlight.cancel()
-                val done = inFlight.result.get()
+                inFlight.result.get()
                 tally.flush()
-                done to tally
+                tally.figures()
             }
             // Output for a project that has since changed is discarded, never shown.
             if (project.view.revision != archive.revision) throw Refusal(PrepareWords.failed(PrepareWords.STALE))
@@ -526,11 +600,81 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             val file = File(outputs, name)
             check(part.renameTo(file)) { "OrcaXR could not keep the sliced G-code." }
             val elapsed = SystemClock.elapsedRealtime() - started
-            val summary = PrepareWords.sliced(elapsed, result.length, tally.lines, tally.layers, archive.warnings.size)
+            val summary = SliceStatus.describe(elapsed, figures, archive.warnings.size)
             return SlicedPlate(file, name, plateId, plateName, archive.revision!!, endpoint, summary)
         } finally {
             archiveFile.delete()
             part.delete()
+        }
+    }
+
+    /** Stops here when the operator cancelled a local slice. */
+    private fun cancelledHere() {
+        if (synchronized(lock) { cancelRequested }) throw Refusal(PrepareWords.failed(PrepareWords.CANCELLED_BY_USER))
+    }
+
+    /**
+     * One slice on this device's engine, on the slicing thread: preflight, the
+     * one-plate archive and its overrides staged privately (exactly what the
+     * external route uploads), the plate admitted against the memory the
+     * device has now, the engine's own process run with progress and
+     * cooperative cancel, then its G-code claimed, verified and published only
+     * while the project is still the state it was sliced from.
+     */
+    private fun runLocal(project: PlateSource, plateId: String, projectName: String, plateName: String): SlicedPlate {
+        val started = SystemClock.elapsedRealtime()
+        val preflight = project.preflight(plateId).get()
+        main.post { state = state.copy(preflight = preflightView(preflight)) }
+        if (!preflight.summary.canSlice) throw Refusal(PrepareWords.failed(PrepareWords.preflightBlocked(preflight.summary, preflight.issues)))
+        cancelledHere()
+
+        progress("serializing")
+        val job = LocalSlicing.stage(jobs, UUID.randomUUID().toString().replace("-", "")) { output ->
+            project.projectPlate(plateId, output).get()
+        }
+        try {
+            // The archive must be the state the preflight judged.
+            if (job.revision != preflight.revision) throw Refusal(PrepareWords.failed(PrepareWords.STALE))
+            val measured = LocalEngineDevice.measure(getApplication())
+            main.post { state = state.copy(local = measured) }
+            if (!LocalSliceBudget.fits(job.archive.bytes, measured)) {
+                throw Refusal(PrepareWords.failed(measured.reason ?: LocalEngineWords.tooLarge(job.archive.bytes, measured)))
+            }
+            cancelledHere()
+
+            progress(LocalEngineWords.STARTING)
+            val end = try {
+                engine.run(job, { message, percent -> progress(message.ifEmpty { "slicing" }, percent) }) {
+                    synchronized(lock) { cancelRequested }
+                }
+            } catch (refusal: LocalSliceRefusal) {
+                throw Refusal(refusal.message ?: PrepareWords.failed(LocalEngineWords.NOT_STARTED))
+            }
+            val result = when (val outcome = LocalSlicing.outcome(end)) {
+                is LocalSliceOutcome.Output -> outcome.result
+                else -> throw Refusal(outcome.status ?: PrepareWords.failed(LocalSlicing.UNKNOWN_OUTCOME))
+            }
+            folder.mkdirs()
+            // The verified bytes pass through the shared core's count of what the status line says.
+            val (verified, figures) = SliceStatusTally().use { tally ->
+                val verified = try {
+                    LocalSlicing.claim(job, result, File(folder, "slice.gcode.part"), tally)
+                } catch (refusal: LocalSliceRefusal) {
+                    throw Refusal(PrepareWords.failed(refusal.message ?: LocalSlicing.MISMATCH))
+                }
+                verified to tally.figures()
+            }
+            val name = PrepareWords.slicedFilename(projectName, plateName)
+            val outputs = File(folder, "gcode").apply { mkdirs() }
+            outputs.listFiles()?.forEach { it.delete() }
+            // Output for a project that has since changed is discarded, never shown.
+            val file = LocalSlicing.publish(verified, job, project.view.revision, File(outputs, name))
+                ?: throw Refusal(PrepareWords.failed(PrepareWords.STALE))
+            val elapsed = SystemClock.elapsedRealtime() - started
+            val summary = SliceStatus.describe(elapsed, figures, job.warnings)
+            return SlicedPlate(file, name, plateId, plateName, job.revision!!, "", summary, local = true)
+        } finally {
+            LocalSlicing.discard(job)
         }
     }
 
@@ -547,12 +691,15 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             pending.result.whenComplete { _, _ -> client.close() }
         }
         worker.execute { listening?.close() }
+        // A local slice still running sees the cancel at its next poll; the engine is let go after it.
+        slicer.execute { engine.close() }
         worker.shutdown()
         checks.shutdown()
         slicer.shutdown()
     }
 
     private companion object {
+        const val NOTIFICATIONS_ASKED = "notificationsAsked"
         const val ENDPOINT = "endpoint"
         const val ENABLED = "enabled"
         const val ENGINE = "engine"

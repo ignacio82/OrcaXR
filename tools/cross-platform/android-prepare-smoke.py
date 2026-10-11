@@ -6,7 +6,8 @@ stand-in that writes the two-layer reference G-code; the emulator reaches the
 host at 10.0.2.2) with a bearer token. A cube is imported through the system's
 document picker into a fresh project, which starts — as the browser's new
 document does — from the catalog's default profile (Snapmaker U1, 0.4 mm,
-four heads). Prepare shows the slicer offline and Slice unavailable; a
+four heads). Prepare shows the slicer offline and the device's own engine as
+the route (android-local-slice-smoke.py slices on it); a
 connection without the token shows the policy's refusal, with the token the
 attested engine. The cube passes the shared preflight; another printer chosen
 from the picker becomes the project's configuration as one undoable step and
@@ -111,18 +112,19 @@ try:
     find("Untitled project", timeout=30)
     import_cube()
 
-    # Prepare: the active plate, no slicer yet, and no way to slice.
+    # Prepare: the active plate, no slicer yet: the route is this device's own engine.
     tap("Prepare")
     find("· 1 object(s)", exact=False, timeout=30)
     find("Offline")
-    find("Slicing route: none.", exact=False)
-    assert not enabled("Slice"), "Slice was offered without an attested slicer"
+    find("Slicing route: this device's own engine", exact=False)
+    find("Off — slicing on this device.")
 
     # The policy's refusal: the server wants its token before it reports its engine.
     type_into("External slicer URL", endpoint)
     tap("Connect")
     find("The external slicer requires a token before it will report its engine.", timeout=30)
-    assert not enabled("Slice"), "Slice was offered for an unattested slicer"
+    # An unattested slicer is never the route: the device's engine still is.
+    find("Slicing route: this device's own engine", exact=False)
     type_into("Access token (only if the server requires one)", TOKEN)
     tap("Connect")
     find("Online — attested (the native Snapmaker Orca CLI at", exact=False, timeout=30)
@@ -197,7 +199,7 @@ try:
 
     # Deleting the slicer turns slicing off and forgets the consent.
     tap("Delete")
-    find("External slicer removed — slicing is unavailable.", timeout=30)
+    find("External slicer removed — slicing locally.", timeout=30)
     find("Offline")
 
     received = json.loads(ask("summary"))

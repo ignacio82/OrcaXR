@@ -17,4 +17,9 @@ final class NativeGcode {
     static native void copy(long handle, ByteBuffer target);
     static native void close(long handle);
     static native char[] decodeUtf8(byte[] bytes);
+    // What the status line says of a finished slice, streamed through (SliceStatusTally).
+    static native long tallyOpen();
+    static native void tallyPush(long handle, byte[] bytes, int length);
+    static native String tallyFigures(long handle);
+    static native void tallyClose(long handle);
 }

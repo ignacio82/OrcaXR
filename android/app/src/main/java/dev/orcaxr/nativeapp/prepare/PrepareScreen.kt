@@ -54,9 +54,10 @@ import dev.orcaxr.nativeapp.send.SendGuard
 import dev.orcaxr.nativeapp.send.SendWords
 
 /**
- * The Prepare area: the active plate, the external slicer it is sliced on
+ * The Prepare area: the active plate, the external slicer it can be sliced on
  * (the browser's External Slicer settings — URL, token, connect, on/off,
- * remove, the attested engine or why not), the route a slice takes and why,
+ * remove, the attested engine or why not), the route a slice takes and why
+ * (that slicer when it is on, else this device's own engine),
  * the shared preflight's issues as the browser's panel shows them, and
  * "Slice" / "Cancel Slice" with the job's progress. The first slice on an
  * endpoint asks before uploading; a finished slice opens in Preview, and one
@@ -93,11 +94,21 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
             permission.launch(LOCAL_NETWORK)
         }
     }
+    // Slicing on this device shows its progress and Cancel in a notification, which Android 13 lets
+    // the app post only once the operator allows it: asked once, before the first local slice.
+    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { model.slice() }
+    val slice = {
+        val ask = Build.VERSION.SDK_INT >= ANDROID_13 && sliceRoute(connection, state.local) == SliceRouteKind.Local &&
+            context.checkSelfPermission(NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED && model.askNotifications()
+        if (ask) notifications.launch(NOTIFICATIONS) else model.slice()
+    }
     var hidden by remember { mutableStateOf(emptySet<String>()) }
     val job = state.job
     val preflight = state.preflight?.takeIf { it.plateId == plate?.id }
     val blocked = preflight?.canSlice == false
-    val canSlice = connection.enabled && plate != null && plate.objects > 0 && job == null && !blocked
+    // The route the rule chooses (the external slicer turned on, or this device's engine); none offers no Slice.
+    val route = sliceRoute(connection, state.local)
+    val canSlice = route != SliceRouteKind.None && plate != null && plate.objects > 0 && job == null && !blocked
 
     LazyColumn(
         modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -179,10 +190,10 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                     style = MaterialTheme.typography.labelLarge,
                     color = if (connection.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(PrepareWords.hint(connection), style = MaterialTheme.typography.bodySmall)
+                Text(PrepareWords.hint(connection, state.local), style = MaterialTheme.typography.bodySmall)
             }
         }
-        item { Text(PrepareWords.route(connection), style = MaterialTheme.typography.bodyMedium) }
+        item { Text(PrepareWords.route(connection, state.local), style = MaterialTheme.typography.bodyMedium) }
         if (preflight != null && preflight.cards.isNotEmpty()) {
             // Hidden issues stay hidden through recomputes while the fault stands, as the browser's panel keeps them.
             val present = preflight.cards.map { it.id }.toSet()
@@ -204,7 +215,7 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = model::slice, enabled = canSlice) { Text(stringResource(R.string.prepare_slice)) }
+                Button(onClick = slice, enabled = canSlice) { Text(stringResource(R.string.prepare_slice)) }
                 OutlinedButton(onClick = model::cancel, enabled = job != null && !job.cancelling) {
                     Text(stringResource(R.string.prepare_cancel))
                 }
@@ -238,7 +249,10 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(result.name, style = MaterialTheme.typography.titleSmall)
-                        Text(stringResource(R.string.prepare_sliced_on, result.endpoint), style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            if (result.local) stringResource(R.string.prepare_sliced_locally) else stringResource(R.string.prepare_sliced_on, result.endpoint),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                         if (result.revision != view.revision) {
                             // Output for a state the project has left is never previewed or sent.
                             Text(PrepareWords.OUT_OF_DATE, color = MaterialTheme.colorScheme.error)
@@ -319,4 +333,6 @@ private fun IssueCard(card: PreflightCard, onHide: () -> Unit) {
 }
 
 private const val ANDROID_17 = 37
+private const val ANDROID_13 = 33
+private const val NOTIFICATIONS = Manifest.permission.POST_NOTIFICATIONS
 private const val LOCAL_NETWORK = Manifest.permission.ACCESS_LOCAL_NETWORK

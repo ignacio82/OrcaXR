@@ -3,7 +3,7 @@ use jni::{
     objects::{JByteArray, JByteBuffer, JCharArray, JClass, JString},
     sys::{jcharArray, jdouble, jint, jlong, jstring},
 };
-use orcaxr_gcode::{Cancellation, Session, SessionError, layout};
+use orcaxr_gcode::{Cancellation, Session, SessionError, artifact::SliceTally, layout};
 use std::{
     collections::HashMap,
     panic::{AssertUnwindSafe, catch_unwind},
@@ -400,9 +400,125 @@ fn close(handle: i64) -> Result<(), &'static str> {
     Ok(())
 }
 
+// --- Slice status tallies -------------------------------------------------------------------
+// What the status line says of a finished slice (`SliceTally`), streamed by
+// the host as it writes or reads the artifact. Each tally keeps at most two
+// trailer windows (~400 KiB); a few may live at once, handles never reused.
+
+const MAX_TALLIES: usize = 8;
+const MAX_TALLY_CHUNK: usize = 1 << 20;
+static TALLIES: OnceLock<Mutex<HashMap<i64, SliceTally>>> = OnceLock::new();
+static NEXT_TALLY: AtomicI64 = AtomicI64::new(1);
+fn tallies() -> &'static Mutex<HashMap<i64, SliceTally>> {
+    TALLIES.get_or_init(Default::default)
+}
+fn tally_open() -> Result<i64, &'static str> {
+    let mut tallies = tallies().lock().map_err(|_| "invalid_state")?;
+    if tallies.len() >= MAX_TALLIES {
+        return Err("resource_limit");
+    }
+    let handle = NEXT_TALLY
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+        .map_err(|_| "resource_limit")?;
+    tallies.insert(handle, SliceTally::new());
+    Ok(handle)
+}
+fn tally_push(handle: i64, chunk: &[u8]) -> Result<(), &'static str> {
+    tallies()
+        .lock()
+        .map_err(|_| "invalid_state")?
+        .get_mut(&handle)
+        .ok_or("closed")?
+        .push(chunk);
+    Ok(())
+}
+fn tally_figures(handle: i64) -> Result<String, &'static str> {
+    Ok(tallies()
+        .lock()
+        .map_err(|_| "invalid_state")?
+        .get(&handle)
+        .ok_or("closed")?
+        .finish()
+        .json())
+}
+fn tally_close(handle: i64) -> Result<(), &'static str> {
+    tallies()
+        .lock()
+        .map_err(|_| "invalid_state")?
+        .remove(&handle);
+    Ok(())
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_tallyOpen(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+) -> jlong {
+    boundary(&mut env, |_| tally_open())
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_tallyPush(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+    handle: jlong,
+    bytes: JByteArray<'_>,
+    length: jint,
+) {
+    boundary(&mut env, |env| {
+        let capacity = env.get_array_length(&bytes).map_err(|_| "invalid_source")?;
+        let length = integer(length)?;
+        if length > MAX_TALLY_CHUNK || length > integer(capacity)? {
+            return Err("source_length");
+        }
+        let mut chunk = vec![0i8; length];
+        env.get_byte_array_region(&bytes, 0, &mut chunk)
+            .map_err(|_| "invalid_source")?;
+        let chunk: Vec<u8> = chunk.into_iter().map(|byte| byte as u8).collect();
+        tally_push(handle, &chunk)
+    });
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_tallyFigures(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+    handle: jlong,
+) -> jstring {
+    boundary(&mut env, |env| {
+        let value = tally_figures(handle)?;
+        string(env, value)
+    })
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_tallyClose(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+    handle: jlong,
+) {
+    boundary(&mut env, |_| tally_close(handle));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn slice_tallies_are_bounded_and_never_reused() {
+        let handles: Vec<_> = (0..MAX_TALLIES).map(|_| tally_open().unwrap()).collect();
+        assert_eq!(tally_open(), Err("resource_limit"));
+        tally_push(handles[0], b";LAYER_CHANGE\nG1 Z0.2\n").unwrap();
+        let figures = tally_figures(handles[0]).unwrap();
+        assert!(
+            figures.contains("\"layers\":\"1\"") && figures.contains("\"lines\":3"),
+            "{figures}"
+        );
+        for handle in &handles {
+            tally_close(*handle).unwrap();
+        }
+        assert_eq!(tally_push(handles[0], b"x"), Err("closed"));
+        assert_eq!(tally_figures(handles[0]), Err("closed"));
+        let next = tally_open().unwrap();
+        assert!(next > *handles.last().unwrap());
+        tally_close(next).unwrap();
+    }
     #[test]
     fn cancelled_work_keeps_its_admission_slot_until_the_last_owner_drops() {
         let first = register(0, "{}").unwrap();
