@@ -78,6 +78,8 @@ data class PreviewState(
     val generation: Long = 0,
     /** For a plate Prepare sliced, the state of the project it came from; none for a file the operator opened. */
     val slice: ProjectRevision? = null,
+    /** The slice shown was withdrawn: the project changed after it was sliced ([PreviewCurrency]). The next source read replaces it. */
+    val withdrawn: Boolean = false,
 )
 
 /**
@@ -87,8 +89,9 @@ data class PreviewState(
  * `GcodeSession`, and publishes [PreviewState] projections of the shared
  * preview — every parse, projection and colour is the core's. A sliced plate
  * keeps the state of the project it came from and is withdrawn once the
- * project changes, as the browser withdraws stale output. All native work
- * runs on one worker thread; a new file closes the previous session.
+ * project changes, as the browser withdraws stale output ([PreviewCurrency]);
+ * each source read replaces what the viewer said of the last one. All native
+ * work runs on one worker thread; a new file closes the previous session.
  */
 class PreviewModel(application: Application) : AndroidViewModel(application) {
     private val main = Handler(Looper.getMainLooper())
@@ -111,9 +114,8 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
     private var summary: GcodeArtifactText? = null
     private var name: String? = null
     private var generation = 0L
-    /** The shown slice's project state, and the latest one the project reported. */
-    private var origin: ProjectRevision? = null
-    private var latest: ProjectRevision? = null
+    /** The shown slice's project state, the latest one the project reported, and whether a slice was withdrawn. */
+    private val currency = PreviewCurrency()
 
     private fun work(task: () -> Unit) {
         worker.execute {
@@ -144,6 +146,12 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissMessage() {
         message = null
+    }
+
+    /** Dismisses the notice that the slice shown was withdrawn. */
+    fun dismissWithdrawn() {
+        state = state.copy(withdrawn = false)
+        worker.execute { currency.dismissed() }
     }
 
     /** The document's display name and the size its provider declares, if any. */
@@ -218,20 +226,21 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
      * has changed since: stale output is never shown.
      */
     fun openSlice(file: File, name: String, revision: ProjectRevision) = load(revision) {
-        if (latest != null && latest != revision) throw Refusal(PrepareWords.OUT_OF_DATE)
+        if (!currency.admits(revision)) throw Refusal(PrepareWords.OUT_OF_DATE)
         Source(name, file.length()) { file.inputStream() }
     }
 
-    /** The project is now at [revision]: a slice of any other state is withdrawn. */
+    /**
+     * The project is now at [revision]: a slice of any other state is
+     * withdrawn, and the viewer says so ([PreviewState.withdrawn]) until it
+     * reads another source — in order with everything else it publishes, so
+     * a fresh slice is never shown under the notice of the one it replaced.
+     */
     fun projectChanged(revision: ProjectRevision?) = worker.execute {
-        latest = revision
-        if (origin == null || origin == revision) return@execute
+        if (!currency.projectChanged(revision)) return@execute
         session?.close()
-        session = null; model = null; loaded = null; plan = null; origin = null
-        main.post {
-            state = PreviewState(loading = pending.get() > 0)
-            message = PrepareWords.OUT_OF_DATE
-        }
+        session = null; model = null; loaded = null; plan = null
+        main.post { state = PreviewState(loading = pending.get() > 0, withdrawn = true) }
     }
 
     /** A document to read: its display name, the size it declares, and how to open it. */
@@ -245,7 +254,8 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
             try {
                 // One source at a time: the previous one is released before the next is read.
                 session?.close()
-                session = null; model = null; loaded = null; plan = null; origin = null
+                session = null; model = null; loaded = null; plan = null
+                currency.released()
                 val document = source()
                 val shown = document.name
                 val opened = feed(document.open, shown, document.declared)
@@ -257,7 +267,7 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
                 }
                 session = opened
                 name = shown
-                origin = slice
+                currency.shown(slice)
                 generation++
             } catch (failure: Throwable) {
                 pending.decrementAndGet()
@@ -267,7 +277,7 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
             }
             pending.decrementAndGet()
             try {
-                project()
+                project(fresh = true)
             } catch (failure: Throwable) {
                 main.post { state = PreviewState() }
                 throw failure
@@ -324,8 +334,13 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
     private fun windowOf(window: GcodeWindow?): GcodeRequests.Window =
         window?.let { GcodeRequests.Window.Entries(it.first.toLong(), it.last.toLong()) } ?: GcodeRequests.Window.Whole
 
-    /** Asks the shared preview and inspection for the plan's view and publishes them with the toolpath. */
-    private fun project() {
+    /**
+     * Asks the shared preview and inspection for the plan's view and
+     * publishes them with the toolpath. A [fresh] source replaces what the
+     * viewer said of the last one, as the browser's status line is replaced
+     * by each new preview's: its notices and failures belong to that source.
+     */
+    private fun project(fresh: Boolean = false) {
         val current = session ?: return
         val shown = plan ?: return
         if (model == null || shown.window != loaded) {
@@ -372,11 +387,12 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
             bottomZMm = selection?.getDouble("firstZMm"), topZMm = selection?.getDouble("lastZMm"), moves = view.moves,
             legend = legend, range = numeric, unsupportedReason = unsupportedReason, layerCount = layerCount, summary = summary,
             limitations = limitations, windowed = shown.window != null, hasPrevious = shown.hasPrevious,
-            hasNext = shown.hasNext, toolpath = toolpath, generation = generation, slice = origin,
+            hasNext = shown.hasNext, toolpath = toolpath, generation = generation, slice = currency.origin,
+            withdrawn = currency.withdrawn,
         )
         main.post {
             state = next.copy(loading = pending.get() > 0)
-            undrawn?.let { message = it }
+            if (fresh) message = undrawn else undrawn?.let { message = it }
         }
     }
 

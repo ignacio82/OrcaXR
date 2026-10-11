@@ -72,6 +72,7 @@ export function startProjectJni(profile = "debug") {
   signatures.documentOwnersChecks = ["byte[]"];
   signatures.slicingChoiceChecks = ["byte[]", "byte[]"];
   signatures.localSliceChecks = ["byte[]", "byte[]"];
+  signatures.staleSliceChecks = ["byte[]", "byte[]"];
   signatures.sliceStatusChecks = ["String"];
   signatures.workspaceBedChecks = ["String"];
   signatures.transformFieldChecks = ["String"];

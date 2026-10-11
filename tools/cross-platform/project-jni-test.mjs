@@ -378,6 +378,15 @@ try {
     await readFile(new URL("testdata/parity/fixtures/reference.gcode", root)),
   );
   assert.equal(localSliceChecks, 77);
+  // A fresh slice after an edit stays current: after a cube, a bed fill, an
+  // added instance, a paste, an arrangement, a primitive and an undo, the view
+  // reports the state both routes stage, through the recovery capture.
+  const staleSliceChecks = jvm.call(
+    "staleSliceChecks",
+    await readFile(new URL("web/public/profiles/catalog.json", root)),
+    await readFile(new URL("testdata/parity/fixtures/reference.gcode", root)),
+  );
+  assert.equal(staleSliceChecks, 91);
   // What the status line says of a finished slice (the browser's
   // `SliceStatus.ts`), streamed through the core's tally over JNI in several
   // chunkings and worded by the Kotlin owner, for every artifact of the corpus.
@@ -1670,6 +1679,7 @@ try {
     documentOwnersChecks,
     slicingChoiceChecks,
     localSliceChecks,
+    staleSliceChecks,
     sliceStatusChecks,
     workspaceBeds,
     workspaceBedChecks,

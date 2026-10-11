@@ -1933,7 +1933,13 @@ storage journeys on phone, tablet, and desktop-sized windows.
   not yet run) — attested route, the shared preflight's
   issues as the browser's panel shows them, the one-plate archive, "Slice" /
   "Cancel Slice" with progress, the G-code streamed to the app's cache and
-  opened in Preview; output whose project changed is discarded or withdrawn;
+  opened in Preview; output whose project changed is discarded or withdrawn,
+  by the browser's guard (revision, semantic hash, asset fingerprint) in
+  Prepare, Preview and Send alike, and Preview's withdrawal notice gives way
+  to the next source it reads (it once outlived a fresh slice after a bed
+  fill: `PreviewCurrency`, 4 JVM tests; `ProjectStaleSliceChecks`, 91 host
+  JNI checks across fill, add instance, paste, arrange, primitive and undo;
+  the local-slice smoke's new assertion not yet run);
   the line a finished slice gets is the browser's (`SliceStatus.ts`: the
   engine's own layer total first), shared through the core's `SliceTally`
   (40 browser cases, 563 JNI checks).

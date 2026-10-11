@@ -1,8 +1,8 @@
 {
   "cargo": "cargo 1.94.1 (29ea6fb6a 2026-03-24)",
-  "defaultFeatures": false,
+  "defaultFeatures": true,
   "features": [
-    "printer"
+    "gcode"
   ],
   "inputs": {
     "contracts/android-strings.json": "4ec966bb26e73597ee97288bce930ff162f41f659efc1e29f22604a7f170a5bf",
@@ -471,7 +471,7 @@
     "tools/cross-platform/android-filament-smoke.py": "9a1dae6a06d5203eb4080fb8ea9a099d58df1918bfc984a8e87751126a53e29c",
     "tools/cross-platform/android-inspector-smoke.py": "bc22d1cb5adca0ab08f139280a7487d24616165fbd011f8755c734501dd40d20",
     "tools/cross-platform/android-local-network-smoke.py": "28a69831ae655ffcc28e0197595b517848349c01f8b6471517760b3b5327871c",
-    "tools/cross-platform/android-local-slice-smoke.py": "3806f6893eca8c9833eb994e2267f73d447cdcd25eff1c114318558dc4b3149b",
+    "tools/cross-platform/android-local-slice-smoke.py": "d58dfd302cee06ea6ea839bc974fdb7cc8d505b3096686f67f83df1b3f65acbc",
     "tools/cross-platform/android-locale-smoke.py": "d0f81b3017cae31ade09be71df8553f01e43baeb57cecf761f90bf1b76dc87ed",
     "tools/cross-platform/android-modeltools-smoke.py": "300067f67f395ec27fbcaede3581fa46811de4730d23f7424c12e234b325ad0c",
     "tools/cross-platform/android-paint-smoke.py": "9d41498a9a5706345827b52c40fb602ba1fdd6d1a52f8aeb335de4ad66d8eb34",
@@ -489,12 +489,12 @@
     "tools/cross-platform/test-zip-write.py": "af58df31f97dc99c8c644c4e820878265d9ebf5a0d2a0d622b00b63b11b5a2a0",
     "tools/cross-platform/verify-artifacts.py": "b36cc1f552ffa7cda6b08df1b03d930ec6ced25307a3b7717b1001f7f1260cc2"
   },
-  "kind": "browser-printer-wasm",
+  "kind": "browser-wasm",
   "outputs": {
-    "orcaxr_core.d.ts": "38ee6a3ac63da0303e53dc53f27c1d543faa7b3164a2c0ba052fcd04bd51d8d9",
-    "orcaxr_core.js": "ea01a8a3f825e73ae7c992ecd74026ae7edbbfb272be56a97030b0425ead12f4",
-    "orcaxr_core_bg.wasm": "1659a5286232f84af7efa317d6c5d6ff73cad690f58fc14c03f529c4a93af081",
-    "orcaxr_core_bg.wasm.d.ts": "8eeb8b17786ab2b9f12e874b0e40f9fcb5cea94f6c75ee6c14e1d38116b96187"
+    "orcaxr_core.d.ts": "b4d97fa1b44a0304f40f981d72a0efed69b90dc11aa9961b9372f8d41a6fb851",
+    "orcaxr_core.js": "494c7ddef19f4cda6df3e457b0c9ce155a9c53eec2028ec6dc49b727e13458bf",
+    "orcaxr_core_bg.wasm": "7bad60d51c73b438ae867809e26a0e33ed304d707c43da6b4d69f7b24149ee7f",
+    "orcaxr_core_bg.wasm.d.ts": "ff66e2233b5af6e42e05feeef67b33a739c50f29a6c434131dd7bb341686f2c5"
   },
   "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",
   "schemaVersion": 1,

@@ -15,7 +15,8 @@ the engine's progress with the service in the foreground, and Cancel Slice
 stops it. Sliced again, the engine's process is killed mid-slice: the
 editor stays up with its project and says the engine stopped unexpectedly;
 undone back to the small cube, the next slice runs on a fresh engine
-process.
+process, and is current: neither Preview nor Prepare still says the slice
+the scaling withdrew was withdrawn.
 
 Lessons kept from the earlier smokes: an action on the selection waits for
 the core to enable it, and rows are found by text, never by position.
@@ -40,6 +41,7 @@ app_apk = ROOT / "android/app/build/outputs/apk/debug/app-debug.apk"
 SLICED_FILE = "Untitled_project_Plate_1.gcode"
 CANCELLED = "slice failed: Cancelled by user"
 INTERRUPTED = "slice failed: the slicing engine stopped unexpectedly; the project is unchanged. Slice again."
+OUT_OF_DATE = "The project changed after this plate was sliced; its G-code was withdrawn. Slice again."
 
 screen = Screen(args.serial, output, "local-slice")
 adb, find, tap, enabled = screen.adb, screen.find, screen.tap, screen.enabled
@@ -147,7 +149,7 @@ while (scaled := find("Undo ", exact=False, timeout=30).get("text")) == "Undo Ad
     assert time.monotonic() < deadline, "Scale to build volume made no step"
     time.sleep(0.5)
 tap("Prepare")
-find("The project changed after this plate was sliced; its G-code was withdrawn. Slice again.", timeout=30)
+find(OUT_OF_DATE, timeout=30)
 slice_ready()
 tap("Slice")
 progress = running_progress()
@@ -182,6 +184,12 @@ tap("Slice")
 find("Sliced in Prepare from the project as it stands.", timeout=240)
 restarted = pid(ENGINE)
 assert restarted and restarted != victim, "The engine's process was not replaced"
+# This slice is current: Preview no longer says the slice the scaling withdrew was withdrawn
+# (that notice once outlived the fresh slice), and Prepare offers it.
+screen.absent(OUT_OF_DATE, timeout=10)
+tap("Prepare")
+find("Sliced on this device", timeout=30)
+screen.absent(OUT_OF_DATE, timeout=10)
 
 report = {
     "evidenceKind": "emulator-only",

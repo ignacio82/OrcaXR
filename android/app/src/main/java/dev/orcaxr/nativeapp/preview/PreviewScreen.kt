@@ -67,6 +67,7 @@ import dev.orcaxr.renderer.CameraViews
 import dev.orcaxr.core.GcodePreviewModes
 import dev.orcaxr.core.WorkspaceBed
 import dev.orcaxr.nativeapp.R
+import dev.orcaxr.nativeapp.prepare.PrepareWords
 import dev.orcaxr.nativeapp.shell.focusRing
 import dev.orcaxr.renderer.GcodeMoveFilter
 import dev.orcaxr.renderer.GcodePreviewPlan
@@ -141,6 +142,15 @@ fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier, panelWidth
             if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             Text(status(state), style = MaterialTheme.typography.bodySmall)
             if (state.slice != null) Text(stringResource(R.string.preview_sliced), style = MaterialTheme.typography.bodySmall)
+            // The slice shown was withdrawn; the next one read replaces this notice, so a fresh slice never shows under it.
+            if (state.withdrawn) {
+                Card(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(PrepareWords.OUT_OF_DATE, Modifier.weight(1f))
+                        TextButton(onClick = model::dismissWithdrawn) { Text(stringResource(R.string.device_dismiss)) }
+                    }
+                }
+            }
             model.message?.let { message ->
                 Card(Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {

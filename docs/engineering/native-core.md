@@ -5761,7 +5761,8 @@ client's confirmed outcome. The G-code streams into the app's cache through
 line says: lines, and layers by the engine's own total first) and is discarded
 when the project changed meanwhile; otherwise Preview opens it
 (`PreviewModel.openSlice`, keeping its revision) and withdraws it once the
-project changes. The platform-free flow has 11 JVM tests;
+project changes, by the browser's rule ([stale slices](#android-stale-slices)).
+The platform-free flow has 11 JVM tests;
 `android-prepare-smoke.py` drives it on the emulator suites (API 34, and the
 16 KB API 37 image) against the real server on the host
 (`external-slicer-serve.mjs`, reached at 10.0.2.2): the refusal without a
@@ -5887,7 +5888,7 @@ exactly the reported length and SHA-256, strict UTF-8 as the browser's fatal
 decoder, no NUL) and `publish` (the project still the `ProjectRevision` the
 plate was staged from, else discarded); it lands where the external route's
 does, so Preview, Send to Printer and the out-of-date withdrawal treat both
-routes alike. A plate is admitted when the measured available memory covers
+routes alike ([stale slices](#android-stale-slices)). A plate is admitted when the measured available memory covers
 256 MiB plus 16 times its archive (provisional until devices are measured).
 
 Foreground execution. While a job runs the service is a `dataSync`
@@ -6002,6 +6003,45 @@ browser storage panel's `startStored`): the dialog in its stored-file mode
 <file>." or "Print cancelled." in the browser's words; the device smoke
 reprints the simulator's file and cancels it, and the host checks decline
 one (28 checks). Not yet matched: sending every plate.
+
+### Android stale slices
+
+A slice is current by the browser's rule (`StoreProjectSliceSource.isCurrent`,
+which `OrcaWorkspace.revalidatePublishedGcode` and the send's `isCurrent` apply
+to the published G-code): the project store at the slice's revision and
+semantic hash, and the asset bundle at its fingerprint. Android compares the
+same three values (`ProjectRevision`) everywhere a slice is judged: the
+preflight's state, both routes' captures (the external route's one-plate
+archive and the local route's staged job, each from the guard
+`ProjectWorkspace.projectPlate` exports under), the publication check of both
+routes, Prepare's result card, Preview (`PreviewCurrency`) and Send
+(`SendGuard`), each against the state the session last acknowledged
+(`ProjectView.revision`), which every edit's completion refreshes.
+
+An emulator probe once read "The project changed after this plate was
+sliced; its G-code was withdrawn. Slice again." straight after a fresh slice
+of a filled bed, with no step between staging and completion. The project's
+state had not moved: on a real session the fill (64 instances, revision 4 to
+68), an added instance, a paste, an arrangement, a primitive and an undo each
+leave the view reporting exactly what the preflight judges and both captures
+stage, through the recovery capture the edit scheduled (run between staging
+and completion, five seconds after the fill on the emulator) and concurrent
+preflights; the local route publishes, the result compares current, and an
+edit after staging still withdraws it (`ProjectStaleSliceChecks`, 91 host JNI
+checks). The words were Preview's: `PreviewModel` put its withdrawal notice
+in its sticky message, and opening the next slice never cleared it, so after
+any edit that withdrew a shown slice, the fresh one opened under the old
+notice (the probe read the text while Preview showed the new slice). The
+notice is now part of what the viewer shows (`PreviewState.withdrawn`),
+published in order with everything else from the viewer's worker, and each
+source the viewer reads replaces it — and replaces what it said of the last
+source, as the browser clears its preview and status before showing each
+new one — so a current slice never shows under it (`PreviewCurrencyTest`, 4
+JVM tests: the emulator's sequence, refusal of a slice of a state the
+project left, each of the three values withdrawing, opened files, failed
+reads and dismissal). `android-local-slice-smoke.py` now checks that the
+slice taken after undoing the scaling shows neither in Preview nor in
+Prepare as withdrawn; it has not run on an emulator here.
 
 ### Android Device area
 

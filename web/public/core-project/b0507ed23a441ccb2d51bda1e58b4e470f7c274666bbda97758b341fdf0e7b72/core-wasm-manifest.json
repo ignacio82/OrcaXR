@@ -471,7 +471,7 @@
     "tools/cross-platform/android-filament-smoke.py": "9a1dae6a06d5203eb4080fb8ea9a099d58df1918bfc984a8e87751126a53e29c",
     "tools/cross-platform/android-inspector-smoke.py": "bc22d1cb5adca0ab08f139280a7487d24616165fbd011f8755c734501dd40d20",
     "tools/cross-platform/android-local-network-smoke.py": "28a69831ae655ffcc28e0197595b517848349c01f8b6471517760b3b5327871c",
-    "tools/cross-platform/android-local-slice-smoke.py": "3806f6893eca8c9833eb994e2267f73d447cdcd25eff1c114318558dc4b3149b",
+    "tools/cross-platform/android-local-slice-smoke.py": "d58dfd302cee06ea6ea839bc974fdb7cc8d505b3096686f67f83df1b3f65acbc",
     "tools/cross-platform/android-locale-smoke.py": "d0f81b3017cae31ade09be71df8553f01e43baeb57cecf761f90bf1b76dc87ed",
     "tools/cross-platform/android-modeltools-smoke.py": "300067f67f395ec27fbcaede3581fa46811de4730d23f7424c12e234b325ad0c",
     "tools/cross-platform/android-paint-smoke.py": "9d41498a9a5706345827b52c40fb602ba1fdd6d1a52f8aeb335de4ad66d8eb34",
