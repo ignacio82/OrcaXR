@@ -5345,7 +5345,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                   await workspace.setSelectedModelScale(x, y, z);
                 }
               } catch (error) {
-                if (inX.isConnected) workspace.setStatus(`Transform failed: ${(error as Error).message}`);
+                if (inX.isConnected)
+                  workspace.setStatus(
+                    t('app.main.transformFailed', 'Transform failed: {reason}', { reason: (error as Error).message }),
+                  );
               } finally {
                 if (inX.isConnected) updateToolSettings();
               }

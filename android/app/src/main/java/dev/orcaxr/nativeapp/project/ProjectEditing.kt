@@ -147,7 +147,6 @@ object ProjectEditing {
         }
     }
 
-    fun transformFailed(reason: String?): String = "Transform failed: ${reason.orEmpty()}"
     fun layFlatFailed(reason: String?): String = "Lay flat failed: ${reason.orEmpty()}"
 }
 

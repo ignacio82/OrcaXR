@@ -151,8 +151,7 @@ class ProjectEditingTest {
         assertEquals("Arranged 2 model(s); 1 did not fit on this plate.", ProjectEditing.arrangedStatus(ProjectIntents.Arrangement(listOf(placement("a"), placement("b")), idList("c"), emptyList())))
         assertEquals("The plate is already arranged.", ProjectEditing.arrangedStatus(ProjectIntents.Arrangement(emptyList(), emptyList(), emptyList())))
         assertNull(ProjectEditing.arrangedStatus(ProjectIntents.Arrangement(listOf(placement("a")), emptyList(), emptyList())))
-        // main.ts onTransformChange and layPickedFacetOnBed.
-        assertEquals("Transform failed: Instance transform scale cannot contain zero", ProjectEditing.transformFailed("Instance transform scale cannot contain zero"))
+        // layPickedFacetOnBed (main.ts's "Transform failed" is a mapped resource, project_transform_failed).
         assertEquals("Lay flat failed: Unknown instance i", ProjectEditing.layFlatFailed("Unknown instance i"))
     }
 

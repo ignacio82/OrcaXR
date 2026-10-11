@@ -1543,7 +1543,11 @@ export class OrcaWorkspace extends xb.Script {
         );
       } catch (error) {
         this.cancelTransformGestures();
-        this.setStatus(`Transform stopped: ${(error as Error).message}`);
+        this.setStatus(
+          t('workspace.orcaWorkspace.transformStopped', 'Transform stopped: {reason}', {
+            reason: (error as Error).message,
+          }),
+        );
         this.syncTransformProxy();
       }
     };
@@ -1619,7 +1623,11 @@ export class OrcaWorkspace extends xb.Script {
       await owner.finish();
     } catch (error) {
       if (!this.disposed && sequence === this.transformGestureSequence)
-        this.setStatus(`Transform stopped: ${(error as Error).message}`);
+        this.setStatus(
+          t('workspace.orcaWorkspace.transformStopped', 'Transform stopped: {reason}', {
+            reason: (error as Error).message,
+          }),
+        );
     } finally {
       this.transformGestureOwners.delete(owner);
       if (!this.disposed && sequence === this.transformGestureSequence) {
@@ -2397,7 +2405,9 @@ export class OrcaWorkspace extends xb.Script {
       outcome = await session.apply();
     } catch (error) {
       this.smartPaintError = error instanceof Error ? error.message : String(error);
-      this.setStatus(`Smart Paint failed: ${this.smartPaintError}`);
+      this.setStatus(
+        t('workspace.orcaWorkspace.smartPaintFailed', 'Smart Paint failed: {reason}', { reason: this.smartPaintError }),
+      );
       this.onSmartPaintStateChanged?.();
       return;
     }
@@ -3317,7 +3327,9 @@ export class OrcaWorkspace extends xb.Script {
         detected.ears.map((ear) => ear.point),
       );
     } catch (error) {
-      this.setStatus(`Brim ears: ${(error as Error).message}`);
+      this.setStatus(
+        t('workspace.orcaWorkspace.brimEarsFailed', 'Brim ears: {reason}', { reason: (error as Error).message }),
+      );
       return false;
     }
     this.setStatus(
@@ -3347,7 +3359,9 @@ export class OrcaWorkspace extends xb.Script {
     try {
       await this.canonicalProject.clearBrimEars(objectId);
     } catch (error) {
-      this.setStatus(`Brim ears: ${(error as Error).message}`);
+      this.setStatus(
+        t('workspace.orcaWorkspace.brimEarsFailed', 'Brim ears: {reason}', { reason: (error as Error).message }),
+      );
       return false;
     }
     this.setStatus(t('workspace.orcaWorkspace.clearedTheBrimEarsUndo', 'Cleared the brim ears; undo restores them.'));
@@ -4163,7 +4177,11 @@ export class OrcaWorkspace extends xb.Script {
         d.owner.update([{ instanceId: entry.instanceId, transform: next }]);
       } catch (error) {
         this.cancelTransformGestures();
-        this.setStatus(`Transform stopped: ${(error as Error).message}`);
+        this.setStatus(
+          t('workspace.orcaWorkspace.transformStopped', 'Transform stopped: {reason}', {
+            reason: (error as Error).message,
+          }),
+        );
       }
     }
   }
@@ -4308,7 +4326,11 @@ export class OrcaWorkspace extends xb.Script {
       this.profile = this.catalog.profiles.find((candidate) => candidate.id === current.id) ?? null;
     }
     this.applyCatalogDefaultProfile().catch((error: unknown) =>
-      this.setStatus(`Profile defaults failed: ${error instanceof Error ? error.message : String(error)}`),
+      this.setStatus(
+        t('workspace.orcaWorkspace.profileDefaultsFailed', 'Profile defaults failed: {reason}', {
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+      ),
     );
     this.onProfileChanged?.();
   }
@@ -4513,7 +4535,11 @@ export class OrcaWorkspace extends xb.Script {
         } catch (error) {
           const stale = error instanceof AsyncSessionError && error.code === 'stale';
           if (stale && attempt < 4) continue;
-          this.setStatus(`Profile change failed: ${error instanceof Error ? error.message : String(error)}`);
+          this.setStatus(
+            t('workspace.orcaWorkspace.profileChangeFailed', 'Profile change failed: {reason}', {
+              reason: error instanceof Error ? error.message : String(error),
+            }),
+          );
           return;
         }
       }
@@ -9547,7 +9573,11 @@ export class OrcaWorkspace extends xb.Script {
     } finally {
       this.projectImportInProgress = false;
       this.applyCatalogDefaultProfile().catch((error: unknown) =>
-        this.setStatus(`Profile defaults failed: ${error instanceof Error ? error.message : String(error)}`),
+        this.setStatus(
+          t('workspace.orcaWorkspace.profileDefaultsFailed', 'Profile defaults failed: {reason}', {
+            reason: error instanceof Error ? error.message : String(error),
+          }),
+        ),
       );
     }
   }

@@ -21,6 +21,10 @@
       "key": "app.main.headFilament",
       "arguments": ["index"]
     },
+    "project_transform_failed": {
+      "key": "app.main.transformFailed",
+      "arguments": ["reason"]
+    },
     "prepare_no_presets": { "key": "app.main.noCompatiblePresets" },
     "prepare_own_settings": { "key": "app.main.usingTheProjectSOwn" },
     "prepare_remove": { "key": "action.delete_models.label" },

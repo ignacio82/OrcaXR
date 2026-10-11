@@ -851,7 +851,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         try {
             workspace.editTransform(tool, texts).await()
         } catch (failure: Throwable) {
-            throw IllegalStateException(ProjectEditing.transformFailed(cause(failure).message))
+            throw IllegalStateException(words(R.string.project_transform_failed, cause(failure).message.orEmpty()))
         } finally {
             main.post { inspectorEdits++ }
         }
@@ -899,6 +899,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     // ---- Model tools: split, simplify and measure, as the browser's workspace runs them ----
 
     private fun words(id: Int): String = getApplication<Application>().getString(id)
+    private fun words(id: Int, first: Any, vararg rest: Any): String = getApplication<Application>().getString(id, first, *rest)
 
     /** A Split to Objects waiting for the operator's answer: what it will replace (the browser's confirmation). */
     var pendingSplit by mutableStateOf<SplitConfirmation?>(null)

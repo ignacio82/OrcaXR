@@ -150,6 +150,7 @@
     <string name="project_inspector_x">X</string>
     <string name="project_inspector_y">Y</string>
     <string name="project_inspector_z">Z</string>
+    <string name="project_transform_failed">Transform failed: %1$s</string>
     <string name="workspace_lay_flat_hint">Lay flat: click the facet that should rest on the bed.</string>
     <string name="workspace_lay_flat_missed">Click a model facet to lay it flat.</string>
     <string name="workspace_lay_flat_done">Done</string>
