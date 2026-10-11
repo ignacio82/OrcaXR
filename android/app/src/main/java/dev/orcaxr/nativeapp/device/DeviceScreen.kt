@@ -15,8 +15,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -43,6 +46,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -98,7 +103,7 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
         modifier.fillMaxWidth().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { Text(stringResource(R.string.device_printers), style = MaterialTheme.typography.titleLarge) }
+        item { Text(stringResource(R.string.device_printers), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge) }
         if (state.printers.isEmpty()) {
             item { Text(stringResource(R.string.device_no_printers)) }
         }
@@ -196,7 +201,7 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
         AlertDialog(
             onDismissRequest = { removing = false },
             title = { Text(stringResource(R.string.device_remove_title, name)) },
-            text = { Text(stringResource(R.string.device_remove_detail)) },
+            text = { Text(stringResource(R.string.device_remove_detail), Modifier.verticalScroll(rememberScrollState())) },
             confirmButton = { TextButton(onClick = { removing = false; model.removeActive() }) { Text(stringResource(R.string.device_remove)) } },
             dismissButton = { TextButton(onClick = { removing = false }) { Text(stringResource(R.string.device_keep)) } },
         )
@@ -205,7 +210,7 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
         AlertDialog(
             onDismissRequest = { model.answerAsk(false) },
             title = { Text(pending.title) },
-            text = { Text(pending.detail) },
+            text = { Text(pending.detail, Modifier.verticalScroll(rememberScrollState())) },
             confirmButton = { TextButton(onClick = { model.answerAsk(true) }) { Text(pending.confirm) } },
             dismissButton = { TextButton(onClick = { model.answerAsk(false) }) { Text(stringResource(R.string.device_cancel)) } },
         )
@@ -215,7 +220,9 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
         AlertDialog(
             onDismissRequest = { model.answer(false) },
             title = { Text(stringResource(R.string.device_confirm_title, text(intent.printerLabel))) },
-            text = { Text(state.commands.firstOrNull { it.command == intent.command }?.let { text(it.label) }.orEmpty()) },
+            text = {
+                Text(state.commands.firstOrNull { it.command == intent.command }?.let { text(it.label) }.orEmpty(), Modifier.verticalScroll(rememberScrollState()))
+            },
             confirmButton = { TextButton(onClick = { model.answer(true) }) { Text(stringResource(R.string.device_confirm)) } },
             dismissButton = { TextButton(onClick = { model.answer(false) }) { Text(stringResource(R.string.device_do_not)) } },
         )
@@ -255,12 +262,17 @@ private fun CredentialFields(state: DeviceState, model: DeviceModel) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth(),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { model.setApiKey(key) }, enabled = key.trim() != state.apiKey) {
-                Text(stringResource(R.string.device_save_key))
-            }
-            Switch(checked = state.remember, onCheckedChange = model::setRemember)
-            Text(stringResource(R.string.device_remember))
+        OutlinedButton(onClick = { model.setApiKey(key) }, enabled = key.trim() != state.apiKey) {
+            Text(stringResource(R.string.device_save_key))
+        }
+        // The whole row is the switch, so it is named by its words.
+        Row(
+            Modifier.toggleable(value = state.remember, role = Role.Switch, onValueChange = model::setRemember),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Switch(checked = state.remember, onCheckedChange = null)
+            Text(stringResource(R.string.device_remember), Modifier.weight(1f))
         }
         TextButton(onClick = model::forgetCredentials) { Text(stringResource(R.string.device_forget)) }
     }
@@ -304,7 +316,8 @@ private fun AddPrinterDialog(onDismiss: () -> Unit, onAdd: (String, String, Int?
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.device_add_printer)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Scrolls when enlarged text or the keyboard leaves it too little room: every field stays reachable.
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.device_printer_name)) }, singleLine = true)
                 OutlinedTextField(address, { address = it }, label = { Text(stringResource(R.string.device_printer_address)) }, singleLine = true)
                 OutlinedTextField(

@@ -88,6 +88,8 @@ data class ProjectView(
     val plateList: List<ProjectPlateState> = emptyList(),
     /** The session's selection; tree [rows] report theirs as `selected`. */
     val selection: ProjectSelectionView = ProjectSelectionView(),
+    /** The selection's names, in its order, for what the 3D view says ([ProjectSceneSummary]). */
+    val selectionNames: List<String> = emptyList(),
     /** The actions the Project area offers, by catalogue ID, as the core enables them for the selection. */
     val actions: Map<String, ProjectActionState> = emptyMap(),
     /** The catalogue's context menus of an object and of a plate, in catalogue order. */
@@ -343,10 +345,11 @@ class ProjectWorkspace(
         val bed = snapshot.workspaceBed(active?.id)
         val inspector = snapshot.query().use { root -> ProjectInspection.inspector(root, selection) }
         val (filaments, filamentSlots) = filamentsOf(snapshot, selection)
+        val names = if (selection.refs.isEmpty()) emptyList() else snapshot.query().use { root -> ProjectSceneSummary.names(root, selection.refs) }
         return { view: ProjectView ->
             view.copy(
                 name = name, plates = count, rows = page?.rows.orEmpty(), totalRows = page?.totalRows ?: 0,
-                activePlate = active, plateList = plates, selection = selection, bed = bed, inspector = inspector,
+                activePlate = active, plateList = plates, selection = selection, selectionNames = names, bed = bed, inspector = inspector,
                 filaments = filaments, filamentSlots = filamentSlots,
             )
         }

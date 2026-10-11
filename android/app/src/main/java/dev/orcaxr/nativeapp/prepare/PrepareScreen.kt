@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -36,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -128,7 +132,7 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.prepare_external_slicer), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.prepare_external_slicer), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
@@ -159,12 +163,14 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                     }
                 }
                 if (connection.endpoint.isNotEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Switch(
-                            checked = connection.enabled,
-                            onCheckedChange = model::setEnabled,
-                            enabled = connection.phase != SlicerPhase.Probing,
-                        )
+                    // The whole row is the switch, so it is named by its words.
+                    val usable = connection.phase != SlicerPhase.Probing
+                    Row(
+                        Modifier.toggleable(value = connection.enabled, enabled = usable, role = Role.Switch, onValueChange = model::setEnabled),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Switch(checked = connection.enabled, onCheckedChange = null, enabled = usable)
                         Text(stringResource(R.string.prepare_enabled))
                     }
                 }
@@ -181,7 +187,7 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
             // Hidden issues stay hidden through recomputes while the fault stands, as the browser's panel keeps them.
             val present = preflight.cards.map { it.id }.toSet()
             val shown = preflight.cards.filter { it.id !in hidden }
-            item { Text(stringResource(R.string.prepare_preflight), style = MaterialTheme.typography.titleMedium) }
+            item { Text(stringResource(R.string.prepare_preflight), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium) }
             items(shown, key = { "issue:${it.id}" }) { card -> IssueCard(card) { hidden = (hidden intersect present) + card.id } }
             val hiddenCount = preflight.cards.size - shown.size
             if (hiddenCount > 0) {
@@ -280,7 +286,8 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
         AlertDialog(
             onDismissRequest = { model.answerConsent(false) },
             title = { Text(PrepareWords.consentTitle(endpoint)) },
-            text = { Text(PrepareWords.CONSENT_DETAIL) },
+            // Enlarged text scrolls inside the dialog rather than pushing its buttons away.
+            text = { Text(PrepareWords.CONSENT_DETAIL, Modifier.verticalScroll(rememberScrollState())) },
             confirmButton = { TextButton(onClick = { model.answerConsent(true) }) { Text(stringResource(R.string.prepare_upload)) } },
             dismissButton = { TextButton(onClick = { model.answerConsent(false) }) { Text(stringResource(R.string.device_cancel)) } },
         )

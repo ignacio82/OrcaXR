@@ -5512,8 +5512,8 @@ language that translates a mapped message, plus `xml/locales_config.xml` (the
 manifest's `localeConfig`: the system's per-app language setting offers English
 and those languages). Qualifiers follow BCP-47: `pt-BR` is `pt-rBR`, `zh-Hans` and
 `zh-Hant` are `b+zh+Hans`/`b+zh+Hant` (Android adds the likely script, so `zh-CN`
-reads Hans and `zh-TW`/`zh-HK` Hant). Today 33 of 128 resources are mapped (one
-plural), 95 stay English, 19 languages carry 265 translations and none is
+reads Hans and `zh-TW`/`zh-HK` Hant). Today 86 of 201 resources are mapped (one
+plural), 115 stay English, 19 languages carry 748 translations and none is
 refused — the browser's catalogues hold about a hundred upstream-seeded
 messages each, mostly action names, so most Android text is English in every
 language, as most browser text is.
@@ -5561,9 +5561,127 @@ It passes on both emulators. Holding the converter to the browser's
 renderer found three `icu.ts` defects, fixed with regression tests: `#` was replaced in a plural's rendered text, so an
 argument such as a file "Part #2" printed "Part 32"; `'#'` did not quote a
 literal `#` in a plural; and `selectordinal` used cardinal rules ("2th").
-Design tokens, TalkBack, enlarged text, contrast, reduced motion, keyboard
-focus, edge-to-edge and IME insets remain, as do the Android-only words still
-literal in Kotlin (the Device tabs' contents, model messages).
+The theme and accessibility follow ([below](#android-design-tokens-and-accessibility));
+the Android-only words still literal in Kotlin (the Device tabs' contents, model
+messages) remain.
+
+### Android design tokens and accessibility
+
+The app wears the browser's design system. `tools/cross-platform/android-tokens.mjs`
+(check by default, `--write`; in the contracts CI job after `android-strings.mjs`)
+imports `web/src/ui/tokens.ts` — never parses it — and writes
+`theme/OrcaTokens.kt`: both flat-shell themes' colour roles (`domThemes`, 27 roles
+as ARGB), the viewport's wash (`gradient.viewport`, top and bottom) and the plate
+skin (now `DomTheme.plate`, read by `OrcaWorkspace`'s flat skins too), the radii
+(3/4/6 dp), spacing, motion (120/150/200 ms on `cubic-bezier(0.2, 0, 0, 1)`), the
+family each CSS stack resolves to on Android (the first one the system ships:
+Roboto, monospace) and the contrast pairs (`domContrastPairs`). The browser's type
+ramp is its stylesheet's, so the generator reads it from `web/index.html`: one
+named rule per role (page title 17/700, card heading 12.5/700, section heading
+12/600, body 13, note 11 on 1.45, button 12.5/500, field label 12, unit 11, code
+11 mono, and the narrow window's `@media (max-width: 768px) .view-tab` 12.5/600 for
+the bar and rail), in sp, since Chrome on Android draws a CSS px as a dp; a rule
+that moves or stops setting a size fails the check. It also writes the window's
+background per system theme (`values{,-night}/orca_colors.xml`) and the theme
+switch's icon from the browser's `dark_mode` Material symbol.
+
+`OrcaTheme` builds Material's theme from them: the window is `bg` (the browser's
+areas are pages on its grey), cards `bgCard`, menus and dialogs `bgElevated`, the
+accent primary, the selected-row tint the containers, danger error and warn
+tertiary, `strokeStrong` the outline (field and switch boundaries), `stroke` the
+hairline; Material's type roles take the browser role of the same purpose (titles
+its page title, nothing it draws being larger); shapes its radii. (Material 1.4
+keeps its motion scheme internal, so components keep Material's motion; the
+browser's motion tokens wait for the app's own animations.) `LocalOrcaTheme` gives the browser's
+roles Material has none for (the chrome, the wash, the plate). The theme follows
+the system's dark setting unless the browser's switch — at the Workspace's top
+end, its `dark_mode` icon named "Switch to dark mode"/"Switch to light mode" and
+pressed while dark, as `btn-theme` is — chose one, remembered under the browser's
+key (`ThemeChoice`). The browser instead opens light whatever
+`prefers-color-scheme` says (a desktop's scheme is not a preference about the
+slicer Orca users know); Android's dark theme is the person's own setting, and an
+accessibility one, so the app honours it. The system bars' icons follow the theme
+shown.
+
+Contrast is held to WCAG 2.2 AA (4.5:1 text, 3:1 a control's boundary or state).
+`domContrastPairs` lists the 45 role pairs the browser's flat shell draws and
+`web/src/ui/__tests__/tokens.test.ts` holds both themes to them; `OrcaThemeTest`
+holds the generated values to the same pairs and the 32 pairs the app's
+components draw (text on pages, cards, menus, dialogs, the selected row, the
+status containers, the wash, the chrome and a snackbar; field boundaries,
+checked controls, the shown area's indicator, issue edges) in both themes.
+Checking them found browser defects, fixed with that regression test: the dark
+theme's teal read 3.0:1 as link and menu text (a teal both dark enough under
+white and light enough to read on graphite does not exist, so the dark theme's
+fills are now light tones with dark ink, `#00b4a0`/`#191c1e`), dark danger 4.3:1
+and white on it 3.5:1, light warnings 3.5:1, light accent, danger and "Ready" on
+the grey window 4.2–4.45:1, `accentSoft` used as text at 3.7:1, and every field's
+and switch's boundary about 1.4:1 (`strokeStrong` is now the 3:1 control
+boundary; text fields and the switch's off track use it). The same test found
+three panels reading custom properties no token defines (`--oxr-color-selection`,
+`--oxr-surface-disabled`, `--oxr-color-bg-raised`): a selected filament option
+fell back to dark text on the warning orange and a selected object row to a blue
+neither theme chose. `selection` is now a role (an opaque teal tint that body and
+muted text read on), and the test fails any `var(--…)` that resolves to nothing.
+
+The 3D views wear the theme: `FilamentScene.setBackdrop` draws the viewport's
+wash on a quad at the far end of the view, carried with the camera and exactly
+the vertical field of view high, so the wash sits on the screen as the
+browser's CSS gradient does (unlit, untoned, drawn last behind everything);
+`setBedColors` draws the bed's outline and grid in the plate skin's major and
+minor colours; the Workspace's words take the theme's ink. To an accessibility
+service each 3D view is the browser's "Build plate" (`#viewport`); the Workspace
+says the active plate, its objects and the selection by name
+(`ProjectSceneSummary`, from `ProjectView.selectionNames`, which
+`ProjectWorkspace` reads from the captured project with the inspector: an
+instance by its object's name, since a collapsed object hides its instance
+rows) in the browser's words where it has them ("Selection", "Nothing
+selected", "Nothing on this plate yet."), Preview its status line. Both offer
+the browser's View menu camera views (Default, Top, Front, Left, Right, Rear,
+Bottom View) as accessibility actions — what the drag and pinch gestures leave
+TalkBack, Switch Access and Voice Access: `CameraViews` frames the bed as
+`OrcaWorkspace.frameCameraView` does (offsets in multiples of the bed's larger
+side, its 0.03-unit focus lift and 0.0015-unit pole at the workspace's 1.75
+scale; `OrbitCamera` now takes any pitch short of straight up or down). Headings
+are marked (the Project's name, Plates, Plates and objects, Recent documents,
+Prepare's plate, External slicer and preflight issues, G-code preview,
+Printers); a switch and its words are one control (Use external slicer, Remember
+printer keys); a tree row's long press (its menu) is labelled "Actions for
+<name>"; file and folder rows are buttons; every control already carried the
+browser's words.
+
+Enlarged text cuts nothing that matters. The bar (`ShellBar`) keeps every
+area's whole name: `NavigationRows` puts the five items on as few rows as fit,
+their counts as even as rows allow — one row of equal items at the usual size,
+as Material's bar, a second row at 1.3× or 2× or in a language with long words
+— and the rail (`ShellRail`) grows from 80 dp to its widest name (at most a
+third of the window, where a name wraps) and scrolls. Dialogs scroll their
+content, so their buttons stay reachable. Reduced motion is the platform's:
+Compose multiplies every animation's duration by the system's animator
+duration scale, which "Remove animations" sets to 0, so each ends at once and
+infinite ones show their end, as the browser's `prefers-reduced-motion` rule
+does; the app adds no motion of its own beyond Material's components. The
+browser's in-app "always reduce motion"
+preference waits for an Android preferences surface. The window is edge to
+edge: the Scaffold keeps content clear of the system bars, a display cutout
+and (with no bottom bar) the keyboard (`safeDrawing`); the work area consumes
+that padding and adds the keyboard's height beyond it (`imePadding`), so a
+focused field stays above the keyboard while the bar stays under it; the bar
+pads for the navigation bar and a side cutout.
+
+`OrcaThemeTest`, `ThemeChoiceTest`, `NavigationRowsTest` and
+`ViewDescriptionTest` (JVM) and `CameraViewsTest` (renderer-api) cover the
+platform-free parts; `ProjectAccessibilityChecks` (18 host JNI checks) follows
+`ProjectSceneSummary` on a real session through a cube, a cylinder, Select
+All, Deselect All and a new plate and its undo. `android-accessibility-smoke.py`
+(in `emulator-smoke.py` before the adaptive smoke) audits every area's
+actionable nodes for names, checks no control lies under a system bar, turns
+night mode on (the Project page's background and the Workspace's wash are the
+dark tokens'; the switch's explicit light outranks it), sets font scale 2.0
+(every area and its key controls, the Add printer dialog's fields and buttons,
+the bar's five whole names), checks fields above the keyboard in landscape and
+portrait and opens areas, a menu and a dialog with every animation scale at 0,
+restoring each setting as it ends. It has not run on an emulator yet.
 
 ### Action capabilities
 

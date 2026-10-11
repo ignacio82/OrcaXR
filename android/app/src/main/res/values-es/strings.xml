@@ -21,6 +21,14 @@
     <string name="project_duplicate_plate">Duplicar Placa Actual</string>
     <string name="project_reset_rotation">Reiniciar rotación</string>
     <string name="project_scale_to_fit_volume">Escalar al volumen de impresión</string>
+    <string name="workspace_selection">Selección</string>
+    <string name="view_camera_default">Vista por Defecto</string>
+    <string name="view_camera_top">Vista superior</string>
+    <string name="view_camera_front">Vista frontal</string>
+    <string name="view_camera_left">Vista izquierda</string>
+    <string name="view_camera_right">Vista derecha</string>
+    <string name="view_camera_rear">Vista trasera</string>
+    <string name="view_camera_bottom">Vista inferior</string>
     <string name="project_edit_cut">Cortar</string>
     <string name="project_edit_copy">Copiar</string>
     <string name="project_edit_paste">Pegar</string>

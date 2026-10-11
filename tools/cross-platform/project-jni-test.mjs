@@ -476,6 +476,9 @@ try {
   // The renderer's view of a real session: render deltas and mesh packets into the scene.
   const projectSceneChecks = jvm.call("projectSceneChecks", decodeBytes("stl-binary/cube"));
   assert.equal(projectSceneChecks, 13);
+  // What the Workspace's 3D view says to TalkBack, from a real session as it changes.
+  const accessibilityChecks = jvm.call("accessibilityChecks");
+  assert.equal(accessibilityChecks, 18);
   const archiveCase = JSON.parse(
     await readFile(new URL("testdata/cross-platform/foreign-import-vectors.json", root)),
   ).cases.find((c) => c.name === ACTOR_ARCHIVE_CASE);
@@ -1562,6 +1565,7 @@ try {
     kotlinStagedWorks,
     stagedRecordChecks,
     projectSceneChecks,
+    accessibilityChecks,
     actorArchiveChecks,
     providerDocumentChecks,
     ...preflights,

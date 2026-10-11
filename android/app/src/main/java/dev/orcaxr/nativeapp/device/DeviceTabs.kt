@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
@@ -68,13 +69,13 @@ fun FilesTab(model: DeviceModel) {
             val join = { name: String -> if (folder.isEmpty()) name else "$folder/$name" }
             for (directory in listing.directories) {
                 val name = text(directory.name)
-                Text("📁 $name", Modifier.fillMaxWidth().clickable { model.openFolder(join(name)) }.padding(vertical = 6.dp))
+                Text("📁 $name", Modifier.fillMaxWidth().clickable(role = Role.Button) { model.openFolder(join(name)) }.padding(vertical = 6.dp))
             }
             for (file in listing.files) {
                 val name = text(file.name)
                 val size = (file.sizeBytes as? ProjectIntents.OptionalFinite.Value)
                     ?.let { (PrinterStorage.size(it.value) as? ProjectIntents.OptionalText.Value)?.let { s -> text(s.value) } }
-                Column(Modifier.fillMaxWidth().clickable { model.selectFile(join(name)) }.padding(vertical = 6.dp)) {
+                Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { model.selectFile(join(name)) }.padding(vertical = 6.dp)) {
                     Text(name, style = MaterialTheme.typography.bodyLarge)
                     size?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }

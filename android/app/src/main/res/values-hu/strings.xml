@@ -20,6 +20,13 @@
     <string name="project_instance_to_object">Beállítás különálló objektumként</string>
     <string name="project_reset_rotation">Forgatás visszaállítása</string>
     <string name="project_scale_to_fit_volume">Átméretezés a nyomtatótérhez</string>
+    <string name="view_camera_default">Alapértelmezett nézet</string>
+    <string name="view_camera_top">Felülnézet</string>
+    <string name="view_camera_front">Előlnézet</string>
+    <string name="view_camera_left">Bal nézet</string>
+    <string name="view_camera_right">Jobb nézet</string>
+    <string name="view_camera_rear">Hátulnézet</string>
+    <string name="view_camera_bottom">Alsó nézet</string>
     <string name="project_edit_cut">Vágás</string>
     <string name="project_edit_copy">Másolás</string>
     <string name="project_edit_paste">Beillesztés</string>

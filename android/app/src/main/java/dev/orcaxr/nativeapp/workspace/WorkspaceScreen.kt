@@ -8,6 +8,7 @@ import android.view.ScaleGestureDetector
 import android.view.SurfaceView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
@@ -21,9 +22,12 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -31,8 +35,14 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.orcaxr.core.ProjectSceneSummary
 import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.project.ProjectModel
+import dev.orcaxr.nativeapp.theme.LocalOrcaTheme
+import dev.orcaxr.nativeapp.theme.OrcaThemeTokens
+import dev.orcaxr.nativeapp.theme.ThemeSwitch
+import dev.orcaxr.renderer.CameraView
+import dev.orcaxr.renderer.CameraViews
 import dev.orcaxr.renderer.PreviewFraming
 import dev.orcaxr.renderer.SceneSync
 import dev.orcaxr.renderer.filament.FilamentScene
@@ -48,10 +58,17 @@ import kotlin.math.abs
  * in the browser, and the scene highlights the project's selection. While
  * the Lay flat tool is on (the Edit menu's), a tap lays the tapped facet on
  * the bed instead, as a click does with the browser's tool.
+ *
+ * It wears the theme's viewport wash and plate colours, and offers the
+ * browser's theme switch at its top end. To an accessibility service the
+ * view is the browser's "Build plate", says what stands on it and what is
+ * selected ([ViewDescription]), and offers the browser's View menu camera
+ * views as actions — the gestures' only other way to move the camera.
  */
 @Composable
 fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     val renderer = remember { WorkspaceRenderer(model) }
+    val resources = LocalResources.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
         // The renderer holds a GPU surface: it exists only while the screen is resumed.
@@ -74,16 +91,38 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     val selected = view.selection.instances
     SideEffect { renderer.highlight(selected) }
     LaunchedEffect(view.bed.widthMm, view.bed.depthMm) { renderer.bed(view.bed.widthMm, view.bed.depthMm) }
+    val theme = LocalOrcaTheme.current.tokens
+    SideEffect { renderer.theme(theme) }
+    val words = ViewDescription.Words(
+        plate = { name, count -> resources.getString(R.string.prepare_plate, name, count) },
+        empty = stringResource(R.string.workspace_plate_empty),
+        selection = stringResource(R.string.workspace_selection),
+        nothingSelected = stringResource(R.string.workspace_nothing_selected),
+    )
+    val described = ViewDescription.workspace(ProjectSceneSummary.of(view), words)
+    val label = stringResource(R.string.workspace_view)
+    val cameras = ViewDescription.cameraActions(renderer::show)
     Box(modifier) {
-        AndroidView(factory = { context -> WorkspaceSurface(context).also(renderer::attach) }, Modifier.fillMaxSize())
+        AndroidView(
+            factory = { context -> WorkspaceSurface(context).also(renderer::attach) },
+            Modifier.fillMaxSize().semantics {
+                contentDescription = label
+                stateDescription = described
+                customActions = cameras
+            },
+        )
         // Objects on every plate (the tree may show them collapsed).
         val objects = view.plateList.sumOf { it.objects }
-        Text(
-            if (objects == 0) stringResource(R.string.workspace_empty) else view.name,
-            Modifier.align(Alignment.TopStart).padding(16.dp),
-            color = Color.White,
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (objects == 0) stringResource(R.string.workspace_empty) else view.name,
+                Modifier.weight(1f).padding(vertical = 16.dp),
+                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            // The browser's theme switch, which it keeps in the strip above its viewport.
+            ThemeSwitch()
+        }
         if (model.layingFlat) {
             // The Lay flat tool's status (the browser's), and the way out of it.
             Card(Modifier.align(Alignment.BottomCenter).padding(16.dp)) {
@@ -123,6 +162,25 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
     }
     /** The project's bed (mm), drawable sides: the browser's 200 mm plate until the project is read. */
     private var bed = 200.0 to 200.0
+    /** The theme's wash and plate, applied to every scene made. */
+    private var theme: OrcaThemeTokens? = null
+
+    /** Dresses the view in [tokens]: the viewport's wash behind it, the plate skin's lines for the bed. */
+    fun theme(tokens: OrcaThemeTokens) {
+        if (tokens == theme) return
+        theme = tokens
+        scene?.let { dress(it, tokens) }
+    }
+
+    private fun dress(renderer: FilamentScene, tokens: OrcaThemeTokens) {
+        renderer.setBackdrop(tokens.viewportTop.toInt(), tokens.viewportBottom.toInt())
+        renderer.setBedColors(tokens.plate.gridMajor.toInt(), tokens.plate.gridMinor.toInt())
+    }
+
+    /** Puts the camera on the browser's [view] of the project's bed. */
+    fun show(view: CameraView) {
+        scene?.setCamera(CameraViews.of(view, bed.first, bed.second))
+    }
 
     fun attach(view: WorkspaceSurface) {
         surface = view
@@ -159,6 +217,7 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         val view = surface ?: return
         val renderer = FilamentScene(view)
         scene = renderer
+        theme?.let { dress(renderer, it) }
         renderer.setBed(bed.first, bed.second)
         renderer.frame(bed.first, bed.second)
         renderer.setActive(true)

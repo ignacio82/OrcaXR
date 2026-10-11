@@ -371,7 +371,7 @@ export class ObjectsPanel {
     item.style.cssText =
       `box-sizing:border-box;height:${this.rowHeightPx}px;display:flex;align-items:center;gap:5px;` +
       `padding:3px 5px 3px ${6 + (row.accessibility.level - 1) * 17}px;overflow:hidden;` +
-      `background:${row.accessibility.selected ? 'var(--oxr-color-selection,#2463a955)' : 'transparent'};` +
+      `background:${row.accessibility.selected ? 'var(--oxr-color-selection)' : 'transparent'};` +
       `opacity:${row.accessibility.disabled ? '0.68' : '1'};outline-offset:-2px;`;
 
     item.addEventListener('focus', (event) => {

@@ -2018,9 +2018,24 @@ storage journeys on phone, tablet, and desktop-sized windows.
   what Android cannot say. Resources are display only; canonical text stays
   `Locale.ROOT`. Debug builds carry the en-XA/ar-XB pseudo-locales; a JVM test
   holds format arguments, and `android-locale-smoke.py` (German, ar-XB right to
-  left, en-XA) passes on both emulators. Design tokens,
-  TalkBack, enlarged text, contrast, reduced motion, keyboard focus,
-  edge-to-edge and IME insets remain.
+  left, en-XA) passes on both emulators. Design tokens are generated too:
+  `android-tokens.mjs` writes the browser's two flat-shell themes (colours, the
+  viewport wash and plate), radii, spacing, motion, families and contrast pairs
+  from `web/src/ui/tokens.ts`, and its type ramp from the stylesheet, into
+  `OrcaTokens.kt`; `OrcaTheme` builds Material's theme from them, following the
+  system's dark setting unless the browser's theme switch (in the Workspace)
+  chose. Every pair the browser and the app draw meets WCAG AA in both themes
+  (web and JVM tests); checking found and fixed browser defects (the dark teal,
+  danger and warnings as text, field and switch boundaries, three undefined
+  custom properties). TalkBack hears the browser's words, marked headings,
+  one-control switches, the 3D views as "Build plate" with the plate, objects and
+  selection (`ProjectSceneSummary`, 18 host JNI checks) and the browser's View
+  menu camera views as actions; enlarged text cuts no area name (the bar takes a
+  second row, the rail widens) and dialogs scroll; Compose's animator-scale
+  handling is the reduced motion; content stays clear of the system bars,
+  cutouts and the keyboard. `android-accessibility-smoke.py` has not run on an
+  emulator yet. The browser's in-app reduce-motion override waits for an Android
+  preferences surface.
 
 **Exit gate:** open a large painted project, edit it, undo/redo, save/reopen,
 slice locally or externally, inspect toolpaths, and recover after process death

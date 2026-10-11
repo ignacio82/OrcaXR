@@ -110,6 +110,9 @@ public final class ProjectJniHarness {
     public static long projectSceneChecks(byte[] cube) {
         return dev.orcaxr.renderer.ProjectSceneChecks.run(cube);
     }
+    public static long accessibilityChecks() {
+        return ProjectAccessibilityChecks.run();
+    }
     public static long slicingChoiceChecks(byte[] cube, byte[] catalog) {
         return ProjectSlicingChoiceChecks.run(cube, catalog);
     }
@@ -394,6 +397,7 @@ public final class ProjectJniHarness {
             if (name.equals("printerExchangesChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("newProjectCase")) method = ProjectJniHarness.class.getMethod(name, String.class, double[].class, String.class, String.class);
             if (name.equals("projectSceneChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);
+            if (name.equals("accessibilityChecks")) method = ProjectJniHarness.class.getMethod(name);
             if (name.equals("documentOwnersChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);
             if (name.equals("slicingChoiceChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, byte[].class);
             if (name.equals("workspaceBedChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);

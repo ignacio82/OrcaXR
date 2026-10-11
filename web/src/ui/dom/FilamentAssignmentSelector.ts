@@ -444,7 +444,7 @@ function optionCardStyle(selected: boolean, disabled: boolean): string {
   return (
     'display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:7px;border:1px solid ' +
     `${selected ? 'var(--oxr-color-accent,var(--oxr-warn))' : 'var(--oxr-color-stroke,var(--oxr-stroke))'};` +
-    `background:${selected ? 'var(--oxr-color-selection,var(--oxr-warn))' : 'var(--oxr-color-surface,var(--oxr-surface))'};` +
+    `background:${selected ? 'var(--oxr-color-selection)' : 'var(--oxr-color-surface,var(--oxr-surface))'};` +
     `opacity:${disabled ? '0.62' : '1'};cursor:${disabled ? 'not-allowed' : 'pointer'};`
   );
 }

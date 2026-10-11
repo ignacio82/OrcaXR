@@ -257,7 +257,7 @@ import {
 import { exportConfigJson, parseConfigJson } from '../features/ConfigIO';
 import { virtualFilamentsFromConfig, type VirtualFilament } from '../features/MixedFilamentPreview';
 import { xrIcon } from '../ui/icons';
-import { tokens } from '../ui/tokens';
+import { domThemes, tokens, type DomThemeName } from '../ui/tokens';
 import {
   XR_PINNABLE,
   XR_PIXEL_SIZE,
@@ -428,6 +428,23 @@ interface PlateSkin {
   grabAffordances: boolean;
 }
 
+/** A window theme's plate: its colours are the theme's tokens (`domThemes[theme].plate`). */
+function flatPlateSkin(theme: DomThemeName, gridOpacity: number): PlateSkin {
+  const colour = (hex: string) => parseInt(hex.slice(1), 16);
+  const plate = domThemes[theme].plate;
+  return {
+    plate: colour(plate.fill),
+    opacity: 1,
+    roughness: 0.85,
+    metalness: 0.05,
+    gridMajor: colour(plate.gridMajor),
+    gridMinor: colour(plate.gridMinor),
+    gridOpacity,
+    origin: colour(plate.origin),
+    grabAffordances: false,
+  };
+}
+
 const PLATE_SKINS: Readonly<Record<PlateAppearance, PlateSkin>> = {
   xr: {
     plate: 0x0d141c,
@@ -440,28 +457,8 @@ const PLATE_SKINS: Readonly<Record<PlateAppearance, PlateSkin>> = {
     origin: 0xff6d00,
     grabAffordances: true,
   },
-  'flat-light': {
-    plate: 0xdfe3e6,
-    opacity: 1,
-    roughness: 0.85,
-    metalness: 0.05,
-    gridMajor: 0x8d979d,
-    gridMinor: 0xa9b2b7,
-    gridOpacity: 0.85,
-    origin: 0x009688,
-    grabAffordances: false,
-  },
-  'flat-dark': {
-    plate: 0x353b3e,
-    opacity: 1,
-    roughness: 0.85,
-    metalness: 0.05,
-    gridMajor: 0x788085,
-    gridMinor: 0x5c6367,
-    gridOpacity: 0.7,
-    origin: 0x00a892,
-    grabAffordances: false,
-  },
+  'flat-light': flatPlateSkin('light', 0.85),
+  'flat-dark': flatPlateSkin('dark', 0.7),
 };
 
 /**

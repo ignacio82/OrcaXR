@@ -2,7 +2,6 @@ package dev.orcaxr.nativeapp.shell
 
 import androidx.compose.material.ripple.RippleAlpha
 import androidx.compose.material3.LocalRippleConfiguration
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RippleConfiguration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -36,7 +35,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 
 /**
- * The app's theme with keyboard focus that shows. Material draws a focused
+ * Keyboard focus that shows, inside the app's theme ([dev.orcaxr.nativeapp.theme.OrcaTheme]). Material draws a focused
  * control's state layer at 10% of its content colour, which a keyboard user
  * barely sees; the browser outlines its focused control (`:focus-visible`,
  * web/index.html). Every button, navigation item, tab, menu item, switch
@@ -47,9 +46,7 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 fun FocusVisibleTheme(content: @Composable () -> Unit) {
-    MaterialTheme {
-        CompositionLocalProvider(LocalRippleConfiguration provides RippleConfiguration(rippleAlpha = FOCUS_VISIBLE_ALPHA), content = content)
-    }
+    CompositionLocalProvider(LocalRippleConfiguration provides RippleConfiguration(rippleAlpha = FOCUS_VISIBLE_ALPHA), content = content)
 }
 
 private val FOCUS_VISIBLE_ALPHA = RippleAlpha(draggedAlpha = 0.16f, focusedAlpha = 0.24f, hoveredAlpha = 0.08f, pressedAlpha = 0.1f)

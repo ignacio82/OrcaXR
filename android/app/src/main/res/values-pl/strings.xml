@@ -21,6 +21,14 @@
     <string name="project_duplicate_plate">Powiel bieżącą płytę</string>
     <string name="project_reset_rotation">Zresetuj obrót</string>
     <string name="project_scale_to_fit_volume">Skaluj do obszaru roboczego</string>
+    <string name="workspace_selection">Wybór</string>
+    <string name="view_camera_default">Domyślny widok</string>
+    <string name="view_camera_top">Widok z góry</string>
+    <string name="view_camera_front">Widok z przodu</string>
+    <string name="view_camera_left">Widok z lewej</string>
+    <string name="view_camera_right">Widok z prawej</string>
+    <string name="view_camera_rear">Widok z tyłu</string>
+    <string name="view_camera_bottom">Widok z dołu</string>
     <string name="project_edit_cut">Wytnij</string>
     <string name="project_edit_copy">Kopiuj</string>
     <string name="project_edit_paste">Wklej</string>

@@ -21,6 +21,14 @@
     <string name="project_duplicate_plate">Dupliquer le plateau actuel</string>
     <string name="project_reset_rotation">Réinitialiser la Rotation</string>
     <string name="project_scale_to_fit_volume">Adapter la taille au volume d’impression</string>
+    <string name="workspace_selection">Sélection</string>
+    <string name="view_camera_default">Vue par défaut</string>
+    <string name="view_camera_top">Vue du Dessus</string>
+    <string name="view_camera_front">Vue Avant</string>
+    <string name="view_camera_left">Vue Gauche</string>
+    <string name="view_camera_right">Vue Droite</string>
+    <string name="view_camera_rear">Vue Arrière</string>
+    <string name="view_camera_bottom">Vue du Dessous</string>
     <string name="project_edit_cut">Couper</string>
     <string name="project_edit_copy">Copier</string>
     <string name="project_edit_paste">Coller</string>

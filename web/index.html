@@ -821,7 +821,8 @@
         flex: 0 0 auto;
         border: none;
         border-radius: var(--radius-pill);
-        background: var(--oxr-surface-active);
+        /* Off, the track is the control boundary, so the switch and its knob both show (3:1). */
+        background: var(--oxr-stroke-strong);
         padding: 0;
         transition: background var(--dur-base) var(--ease-ui);
       }
@@ -1040,7 +1041,8 @@
         box-sizing: border-box;
         background: var(--oxr-bg-card);
         color: var(--oxr-text);
-        border: 1px solid var(--oxr-stroke);
+        /* A field is found by its edge: the control boundary, 3:1 (WCAG 1.4.11). */
+        border: 1px solid var(--oxr-stroke-strong);
         border-radius: var(--radius-sm);
         padding: 5px 8px;
         min-height: 26px;
@@ -2666,7 +2668,7 @@
                       >?</span
                     >
                     <div class="tooltip-content">
-                      <b style="color: var(--oxr-accent-soft)">Local HTTP:</b><br />Chrome 142+ can connect directly
+                      <b style="color: var(--oxr-accent)">Local HTTP:</b><br />Chrome 142+ can connect directly
                       after you approve Local Network Access. Enter <code>http://printer-ip</code> explicitly and add
                       this page's exact origin to Moonraker <code>cors_domains</code> (hosted app:
                       <code>https://orcaxr.martinez.fyi</code>).<br /><br /><b>Fallback:</b> Join the headset and
@@ -2841,7 +2843,7 @@
                         >?</span
                       >
                       <div class="tooltip-content" style="width: 300px; margin-inline-start: -150px">
-                        <b style="color: var(--oxr-accent-soft)">Why use an external slicer?</b><br />
+                        <b style="color: var(--oxr-accent)">Why use an external slicer?</b><br />
                         The in-browser WebAssembly (WASM) slicer has a hard memory limit of 4GB, which can crash on very
                         large models.<br /><br />
                         By running the

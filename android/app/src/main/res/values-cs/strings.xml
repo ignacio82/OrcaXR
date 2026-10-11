@@ -19,6 +19,14 @@
     <string name="project_instance_to_object">Nastavit jako samostatný objekt</string>
     <string name="project_reset_rotation">Výchozí Natočení</string>
     <string name="project_scale_to_fit_volume">Škálovat na sestavení objemu</string>
+    <string name="workspace_selection">Výběr</string>
+    <string name="view_camera_default">Výchozí zobrazení</string>
+    <string name="view_camera_top">Pohled svrchu</string>
+    <string name="view_camera_front">Pohled zepředu</string>
+    <string name="view_camera_left">Pohled zleva</string>
+    <string name="view_camera_right">Pohled zprava</string>
+    <string name="view_camera_rear">Pohled zezadu</string>
+    <string name="view_camera_bottom">Pohled zespod</string>
     <string name="project_edit_cut">Řezat</string>
     <string name="project_edit_copy">Kopírovat</string>
     <string name="project_edit_paste">Vložit</string>

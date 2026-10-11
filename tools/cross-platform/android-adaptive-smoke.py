@@ -14,7 +14,7 @@ with a rail and still one area at a time; at 1280 x 800 px it is an
 expanded one (1280 dp) where Prepare and Project show their panel at the
 start beside the Workspace, Preview its controls beside the toolpath view,
 and Device fills the work area; Tab crosses from the rail into the panel and
-round again without stopping in the Workspace.
+round again, stopping in the Workspace only at its theme switch.
 
 File drag and drop cannot be driven through adb: the JVM tests cover how a
 drop is classified, planned and refused.
@@ -251,7 +251,7 @@ try:
         assert viewport >= panel_end - 2, f"The Workspace does not leave {area}'s panel its 356 dp: it starts at {viewport}"
         assert heading[2] <= viewport, f"{area}'s panel is not at the start beside the Workspace: {heading}, {viewport}"
         report[f"expanded{area}ViewportStart"] = viewport
-    # Tab crosses from the rail into the panel and round again, never stopping in the Workspace.
+    # Tab crosses from the rail into the panel and round again; in the Workspace only its theme switch takes the focus.
     tab_to("Project")
     seen = traverse(26)
     cycle(seen, ("New Project", "Open Project…", "Import Model…", *AREAS))

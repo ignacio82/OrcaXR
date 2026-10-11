@@ -259,7 +259,7 @@ export class PlateManager {
       ordinal.setAttribute('aria-hidden', 'true');
       ordinal.style.cssText =
         'display:grid;width:30px;height:30px;flex:0 0 30px;place-items:center;border-radius:50%;' +
-        'background:var(--oxr-color-bg-raised,#ffffff12);font-weight:750;';
+        'background:var(--oxr-color-surface-active);font-weight:750;';
       const label = document.createElement('span');
       label.style.cssText = 'min-width:0;overflow-wrap:anywhere;';
       const name = document.createElement('strong');

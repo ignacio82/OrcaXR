@@ -149,6 +149,22 @@
     <string name="workspace_lay_flat_hint">Lay flat: click the facet that should rest on the bed.</string>
     <string name="workspace_lay_flat_missed">Click a model facet to lay it flat.</string>
     <string name="workspace_lay_flat_done">Done</string>
+    <!-- What the 3D views say to accessibility services: the browser's viewport label (web/index.html #viewport),
+         its XR objects panel's selection words, and its View menu camera views (web/src/actions/groups/view.ts). -->
+    <string name="workspace_view">Build plate</string>
+    <string name="workspace_selection">Selection</string>
+    <string name="workspace_nothing_selected">Nothing selected</string>
+    <string name="workspace_plate_empty">Nothing on this plate yet.</string>
+    <string name="view_camera_default">Default View</string>
+    <string name="view_camera_top">Top View</string>
+    <string name="view_camera_front">Front View</string>
+    <string name="view_camera_left">Left View</string>
+    <string name="view_camera_right">Right View</string>
+    <string name="view_camera_rear">Rear View</string>
+    <string name="view_camera_bottom">Bottom View</string>
+    <!-- The browser's theme switch (btn-theme, web/src/main.ts): named by what pressing it does. -->
+    <string name="theme_switch_dark">Switch to dark mode</string>
+    <string name="theme_switch_light">Switch to light mode</string>
     <!-- Creation: the browser's clipboard and bed fill (edit.ts, scene.ts), its Add menu primitives (scene.ts) and helper volumes (gizmos.ts). -->
     <string name="project_add_menu">Add</string>
     <string name="project_edit_cut">Cut</string>

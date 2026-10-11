@@ -21,6 +21,14 @@
     <string name="project_duplicate_plate">Duplicat de la Placa Actual</string>
     <string name="project_reset_rotation">Restableix la Rotació</string>
     <string name="project_scale_to_fit_volume">Escalar per a la impressió del volum</string>
+    <string name="workspace_selection">Selecció</string>
+    <string name="view_camera_default">Vista per omissió</string>
+    <string name="view_camera_top">Vista superior</string>
+    <string name="view_camera_front">Vista frontal</string>
+    <string name="view_camera_left">Vista esquerra</string>
+    <string name="view_camera_right">Vista dreta</string>
+    <string name="view_camera_rear">Vista del darrere</string>
+    <string name="view_camera_bottom">Vista inferior</string>
     <string name="project_edit_cut">Retalla</string>
     <string name="project_edit_copy">Copiar</string>
     <string name="project_edit_paste">Enganxar</string>

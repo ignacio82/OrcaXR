@@ -118,9 +118,11 @@ class MeshPicking(private val mesh: TriangleMesh, cancelled: () -> Boolean = {fa
     }
 }
 
+/** A camera orbiting [target]: [yaw] round the vertical, [pitch] above (or, for the browser's
+ * Bottom View, below) the horizontal — never straight up or down — [distance] metres away. */
 data class OrbitCamera(val yaw: Double=.65, val pitch: Double=.8, val distance: Double=.42,
     val target: Point3=Point3(0.0,.03,0.0)) {
-    init {require(yaw.isFinite() && pitch in .05..1.5 && distance in .03..5.0 && target.finite())}
+    init {require(yaw.isFinite() && pitch > -PI/2 && pitch < PI/2 && distance in .03..5.0 && target.finite())}
     val eye get()=target+Point3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch))*distance
     fun ray(x: Double,y: Double,width: Int,height: Int): PickRay {
         require(width>0 && height>0 && x.isFinite() && y.isFinite())

@@ -275,7 +275,7 @@ export class PaintPanel {
     button.style.cssText =
       'display:flex;align-items:center;gap:6px;min-height:44px;padding:6px 10px;border-radius:8px;cursor:pointer;' +
       `border:2px solid ${selected ? 'var(--oxr-color-accent)' : 'var(--oxr-stroke)'};` +
-      `background:${entry.selectable ? 'var(--oxr-surface)' : 'var(--oxr-surface-disabled)'};color:inherit;` +
+      `background:${entry.selectable ? 'var(--oxr-surface)' : 'var(--oxr-color-surface-disabled)'};color:inherit;` +
       `opacity:${entry.selectable ? 1 : 0.55};`;
 
     const swatch = document.createElement('span');

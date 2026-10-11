@@ -18,8 +18,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -59,6 +61,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -103,7 +106,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(view.name, style = MaterialTheme.typography.titleLarge)
+                Text(view.name, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
                 val state = stringResource(if (view.dirty) R.string.project_unsaved else R.string.project_saved)
                 Text(view.document?.let { "$it · $state" } ?: state, style = MaterialTheme.typography.bodySmall)
                 if (model.busy || !view.ready) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -133,7 +136,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                 AddMenu(view, model)
             }
         }
-        item { Text(stringResource(R.string.project_plates), style = MaterialTheme.typography.titleMedium) }
+        item { Text(stringResource(R.string.project_plates), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium) }
         itemsIndexed(view.plateList, key = { _, plate -> "plate:" + plate.id }) { index, plate ->
             PlateRow(plate, index, view, model) { renaming = Renaming.Plate(plate.id, plate.name) }
         }
@@ -142,7 +145,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                 Text(stringResource(R.string.project_add_plate))
             }
         }
-        item { Text(stringResource(R.string.project_objects), style = MaterialTheme.typography.titleMedium) }
+        item { Text(stringResource(R.string.project_objects), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium) }
         items(view.rows, key = { "row:" + text(it.key) }) { row -> TreeRow(row, view, model) { renaming = Renaming.Entity(it.entity, it.name) } }
         if (view.totalRows > view.rows.size) {
             item { Text(stringResource(R.string.project_more_rows, view.totalRows - view.rows.size), style = MaterialTheme.typography.bodySmall) }
@@ -160,7 +163,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
             }
         }
         if (model.recent.isNotEmpty()) {
-            item { Text(stringResource(R.string.project_recent), style = MaterialTheme.typography.titleMedium) }
+            item { Text(stringResource(R.string.project_recent), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium) }
             items(model.recent, key = { "recent:" + it.uri }) { entry ->
                 Text(
                     entry.name,
@@ -186,7 +189,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
         AlertDialog(
             onDismissRequest = { model.answerDiscard(DiscardAnswer.Cancel) },
             title = { Text(stringResource(R.string.project_discard_title, pending.name)) },
-            text = { Text(stringResource(R.string.project_discard_detail)) },
+            text = { Text(stringResource(R.string.project_discard_detail), Modifier.verticalScroll(rememberScrollState())) },
             confirmButton = {
                 Row {
                     TextButton(onClick = { model.answerDiscard(DiscardAnswer.Discard) }) { Text(stringResource(R.string.project_discard)) }
@@ -200,7 +203,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
         AlertDialog(
             onDismissRequest = { model.answerConflict(ConflictAnswer.Cancel) },
             title = { Text(stringResource(R.string.project_conflict_title, pending.name)) },
-            text = { Text(stringResource(R.string.project_conflict_detail)) },
+            text = { Text(stringResource(R.string.project_conflict_detail), Modifier.verticalScroll(rememberScrollState())) },
             confirmButton = {
                 Row {
                     TextButton(onClick = { model.answerConflict(ConflictAnswer.Overwrite) }) { Text(stringResource(R.string.project_overwrite)) }
@@ -215,7 +218,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
             onDismissRequest = { model.answerImport(false) },
             title = { Text(stringResource(R.string.project_import_title, pending.filename)) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(stringResource(R.string.project_import_objects, pending.objects))
                     for (notice in pending.notices) Text("• $notice", style = MaterialTheme.typography.bodySmall)
                     if (pending.blocked) Text(stringResource(R.string.project_import_blocked))
@@ -493,6 +496,7 @@ private fun TreeRow(row: ProjectIntents.ObjectTreeRow, view: ProjectView, model:
     var modifiers by remember { mutableStateOf(PointerKeyboardModifiers(0)) }
     val selectable = ProjectEditing.selectable(row)
     val choices = if (menu) ProjectEditing.rowMenu(row, view) else emptyList()
+    val actions = stringResource(R.string.project_plate_actions, label)
     Box {
         Row(
             Modifier.fillMaxWidth()
@@ -507,6 +511,8 @@ private fun TreeRow(row: ProjectIntents.ObjectTreeRow, view: ProjectView, model:
                     enabled = selectable,
                     onClick = { model.selectRow(key, ProjectEditing.rowMode(modifiers.isShiftPressed, modifiers.isCtrlPressed || modifiers.isMetaPressed)) },
                     // As the browser's Objects panel: the menu opens without changing the selection.
+                    // TalkBack offers it as the row's long-press action, named for the row.
+                    onLongClickLabel = actions,
                     onLongClick = { menu = true },
                 )
                 .semantics { selected = row.selected }

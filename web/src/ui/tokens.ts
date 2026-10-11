@@ -41,7 +41,18 @@ export interface ColorTable {
   surfaceHover: string;
   surfaceActive: string;
   surfaceDisabled: string;
+  /**
+   * A selected row or option: a tint of the accent, opaque, that body and
+   * muted text still read on at 4.5:1. Selection is never told by this fill
+   * alone — the row also says so to assistive technology.
+   */
+  selection: string;
   stroke: string;
+  /**
+   * The boundary of a control — a text field, a select, a switch's track —
+   * which WCAG 1.4.11 needs at 3:1 against what it sits on. `stroke` stays the
+   * hairline for separators, where nothing has to be found by its edge.
+   */
   strokeStrong: string;
   accent: string;
   accentSoft: string;
@@ -89,6 +100,7 @@ const XR_COLORS: ColorTable = {
   surfaceHover: '#ffffff26',
   surfaceActive: '#ffffff4d',
   surfaceDisabled: '#ffffff08',
+  selection: '#ff6d0033',
   stroke: '#ffffff1a',
   strokeStrong: '#ffffff33',
   accent: '#FF6D00',
@@ -119,19 +131,23 @@ const DOM_LIGHT: ColorTable = {
   surfaceHover: '#e9ebed',
   surfaceActive: '#dfe2e4',
   surfaceDisabled: '#f7f8f9',
+  selection: '#cfe7e4',
   stroke: '#dcdee1',
-  strokeStrong: '#c2c6ca',
+  strokeStrong: '#79828a',
   // The teal is a shade deeper than the marketing swatch on purpose: white
   // sits on it in the tab strip and on both header buttons, and at 13px that
-  // needs 4.5:1. `accentSoft` keeps the brighter tone for hovers and hairlines,
+  // needs 4.5:1 — as does the teal itself, as link and menu text, on the grey
+  // window. `accentSoft` keeps the brighter tone for hovers and hairlines,
   // where nothing is read against it.
-  accent: '#00796b',
+  accent: '#007669',
   accentSoft: '#009688',
   accent2: '#00584e',
-  danger: '#d0342c',
+  // Status colours are also text (validation, warnings, "Ready"), so each is
+  // the shade that reads at 4.5:1 on every light surface it is written on.
+  danger: '#c33129',
   dangerSurface: '#fdecea',
-  ok: '#2e7d32',
-  warn: '#c77700',
+  ok: '#2c7730',
+  warn: '#975a00',
   warnSurface: '#fff4e5',
   text: '#262e30',
   // Muted, not faint: this is field notes and status lines at 11–12px, which
@@ -141,7 +157,13 @@ const DOM_LIGHT: ColorTable = {
   ...ROLE_COLORS,
 };
 
-/** The same shell in Orca's dark mode: graphite panels, the same teal accent. */
+/**
+ * The same shell in Orca's dark mode: graphite panels and the teal accent,
+ * lifted to the tone that reads on graphite. The accent is link text and the
+ * focus ring as well as a fill, and no teal is both dark enough under white
+ * text and light enough to read on graphite — so, as in any dark theme that
+ * meets WCAG AA, the fills are light tones and what sits on them is dark.
+ */
 const DOM_DARK: ColorTable = {
   bg: '#191c1e',
   bgCard: '#24282b',
@@ -152,19 +174,20 @@ const DOM_DARK: ColorTable = {
   surfaceHover: '#3a4145',
   surfaceActive: '#454d51',
   surfaceDisabled: '#282d30',
+  selection: '#173c38',
   stroke: '#3b4247',
-  strokeStrong: '#525a5f',
-  accent: '#007f71',
+  strokeStrong: '#77838a',
+  accent: '#00b4a0',
   accentSoft: '#4ddbc4',
-  accent2: '#00615a',
-  danger: '#ef5350',
+  accent2: '#00958a',
+  danger: '#f37d7b',
   dangerSurface: '#4a1f1d',
   ok: '#66bb6a',
   warn: '#ffa726',
   warnSurface: '#3d3220',
   text: '#e6eaeb',
   textMuted: '#98a2a6',
-  onAccent: '#ffffff',
+  onAccent: '#191c1e',
   ...ROLE_COLORS,
 };
 
@@ -227,6 +250,12 @@ export interface DomTheme {
   radius: { sm: number; md: number; lg: number; pill: number };
   gradient: { accent: string; progress: string; viewport: string };
   shadow: { panel: string; menu: string; modal: string; accent: string; accentHover: string };
+  /**
+   * The build plate as the window dresses it (`OrcaWorkspace`'s flat plate
+   * skins): an unlit tray in the theme's greys, a quiet major/minor grid and
+   * the origin mark, seen against `gradient.viewport`.
+   */
+  plate: { fill: string; gridMajor: string; gridMinor: string; origin: string };
 }
 
 /**
@@ -248,6 +277,7 @@ export const domThemes: Readonly<Record<DomThemeName, DomTheme>> = {
       // transparent, so this is what the 3D view is actually seen against.
       viewport: 'linear-gradient(180deg, #f4f6f7 0%, #c8ced2 100%)',
     },
+    plate: { fill: '#dfe3e6', gridMajor: '#8d979d', gridMinor: '#a9b2b7', origin: '#009688' },
     shadow: {
       panel: '0 1px 3px rgba(20, 26, 28, 0.10)',
       menu: '0 6px 20px rgba(20, 26, 28, 0.18)',
@@ -264,6 +294,7 @@ export const domThemes: Readonly<Record<DomThemeName, DomTheme>> = {
       progress: `linear-gradient(90deg, ${DOM_DARK.accentSoft}, ${DOM_DARK.accent})`,
       viewport: 'linear-gradient(180deg, #2f3437 0%, #15181a 100%)',
     },
+    plate: { fill: '#353b3e', gridMajor: '#788085', gridMinor: '#5c6367', origin: '#00a892' },
     shadow: {
       panel: '0 1px 3px rgba(0, 0, 0, 0.45)',
       menu: '0 8px 24px rgba(0, 0, 0, 0.55)',
@@ -273,6 +304,67 @@ export const domThemes: Readonly<Record<DomThemeName, DomTheme>> = {
     },
   },
 };
+
+/**
+ * How strongly a pair must contrast, by WCAG 2.2 AA: `text` is 4.5:1 (1.4.3; the
+ * shell's 11–17 px text is never "large"), `ui` 3:1 for what identifies a
+ * control or its state — a field's boundary, a switch's track and knob, the
+ * focus ring (1.4.11).
+ */
+export type ContrastUse = 'text' | 'ui';
+
+/** A foreground role drawn on a background role somewhere in the flat shell. */
+export interface ContrastPair {
+  readonly fg: keyof ColorTable;
+  readonly bg: keyof ColorTable;
+  readonly use: ContrastUse;
+}
+
+/** The minimum contrast ratio each use needs. */
+export const CONTRAST_MINIMUM: Readonly<Record<ContrastUse, number>> = { text: 4.5, ui: 3 };
+
+const on = (fg: keyof ColorTable, use: ContrastUse, ...bgs: (keyof ColorTable)[]): ContrastPair[] =>
+  bgs.map((bg) => ({ fg, bg, use }));
+
+/**
+ * Every foreground/background role pair the DOM shell draws, in both themes.
+ * A theme change that breaks one fails `tokens.test.ts`; the native app's
+ * theme is generated from these tables and holds its own pairs to the same
+ * minimums. The list is what the stylesheet and panels actually combine:
+ * body and muted text on every surface they sit on, the accent and the status
+ * colours as text (links, the open menu, validation, warnings), text on the
+ * accent's and danger's fills, and the controls' boundaries and knobs.
+ */
+export const domContrastPairs: readonly ContrastPair[] = Object.freeze([
+  ...on('text', 'text', 'bg', 'bgCard', 'bgElevated', 'bgSunken', 'surface', 'surfaceHover', 'surfaceActive'),
+  ...on('text', 'text', 'selection', 'warnSurface', 'dangerSurface'),
+  ...on('textMuted', 'text', 'bg', 'bgCard', 'bgElevated', 'bgSunken', 'surface', 'selection'),
+  ...on('accent', 'text', 'bg', 'bgCard', 'bgElevated', 'bgSunken', 'surface'),
+  ...on('danger', 'text', 'bg', 'bgCard', 'bgElevated', 'bgSunken', 'surface', 'dangerSurface'),
+  ...on('warn', 'text', 'bg', 'bgCard', 'bgElevated', 'bgSunken', 'warnSurface'),
+  ...on('ok', 'text', 'bg', 'bgCard', 'bgElevated'),
+  ...on('onAccent', 'text', 'accent', 'accent2', 'danger'),
+  ...on('strokeStrong', 'ui', 'bg', 'bgCard', 'bgElevated', 'bgSunken', 'surface'),
+  // The switch's knob on its track, off and on.
+  ...on('bgCard', 'ui', 'strokeStrong', 'accent'),
+]);
+
+/** WCAG 2.x relative luminance of an opaque `#rrggbb` colour. */
+export function relativeLuminance(hex: string): number {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!match) throw new Error(`tokens: contrast needs an opaque #rrggbb colour, not ${hex}`);
+  const channel = (offset: number) => {
+    const value = parseInt(match[1].slice(offset, offset + 2), 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+}
+
+/** The WCAG 2.x contrast ratio of two opaque colours, from 1 to 21. */
+export function contrastRatio(a: string, b: string): number {
+  const [light, dark] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
+}
 
 /** Groups whose numeric values are pixel lengths (emitted with a `px` suffix). */
 const PX_GROUPS = new Set(['radius', 'space', 'type', 'icon']);

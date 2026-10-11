@@ -9,28 +9,28 @@ import android.provider.OpenableColumns
 import android.view.DragEvent
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -38,6 +38,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -54,13 +55,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.orcaxr.core.CoreCompatibility
 import dev.orcaxr.core.DocumentOwners
@@ -77,8 +76,16 @@ import dev.orcaxr.nativeapp.send.SendDialog
 import dev.orcaxr.nativeapp.shell.FocusVisibleTheme
 import dev.orcaxr.nativeapp.shell.Navigation
 import dev.orcaxr.nativeapp.shell.ShellArea
+import dev.orcaxr.nativeapp.shell.ShellBar
+import dev.orcaxr.nativeapp.shell.ShellDestination
 import dev.orcaxr.nativeapp.shell.ShellLayout
+import dev.orcaxr.nativeapp.shell.ShellRail
 import dev.orcaxr.nativeapp.shell.Viewport
+import dev.orcaxr.nativeapp.theme.LocalThemeSwitch
+import dev.orcaxr.nativeapp.theme.OrcaTheme
+import dev.orcaxr.nativeapp.theme.ThemeChoice
+import dev.orcaxr.nativeapp.theme.ThemePreference
+import dev.orcaxr.nativeapp.theme.ThemeSwitchState
 import dev.orcaxr.nativeapp.workspace.WorkspaceScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -102,6 +109,11 @@ import kotlinx.coroutines.withContext
  * Enter or Space, with its focus shown ([FocusVisibleTheme]); a dialog is a
  * window of its own, so the focus stays in it and wraps. Files dropped on the
  * window load as the browser's drop does ([DropIntake]).
+ *
+ * It wears the browser's design tokens ([OrcaTheme]): light or dark as the
+ * system is, unless the browser's theme switch (in the Workspace) chose one
+ * on this device. It draws edge to edge: content stays clear of the system
+ * bars and a display cutout, and above the keyboard while one is up.
  */
 class MainActivity : ComponentActivity() {
     private val device: DeviceModel by viewModels()
@@ -110,6 +122,9 @@ class MainActivity : ComponentActivity() {
     private val prepare: PrepareModel by viewModels()
     /** The area shown; an opened or shared document switches to the Project area, a finished slice to Preview. */
     private var area by mutableIntStateOf(R.string.nav_workspace)
+    private val themePreference by lazy { ThemePreference(this) }
+    /** The theme chosen with the switch on this device, if any (otherwise the system's decides). */
+    private var themeChoice by mutableStateOf<String?>(null)
 
     /** A document another app opened or shared with OrcaXR, if [intent] carries one. */
     private fun incoming(intent: Intent?): Uri? = when (intent?.action) {
@@ -226,6 +241,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        themeChoice = themePreference.stored
         enableEdgeToEdge()
         project.taskId = taskId
         prepare.bind(project)
@@ -260,7 +276,20 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            FocusVisibleTheme {
+            val dark = ThemeChoice.dark(themeChoice, isSystemInDarkTheme())
+            // The system bars' icons follow the theme shown, not only the system's.
+            LaunchedEffect(dark) {
+                val bars = if (dark) SystemBarStyle.dark(TRANSPARENT) else SystemBarStyle.light(TRANSPARENT, TRANSPARENT)
+                enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+            }
+            val switch = remember(dark) {
+                ThemeSwitchState(dark) {
+                    val chosen = ThemeChoice.toggled(dark)
+                    themePreference.stored = chosen
+                    themeChoice = chosen
+                }
+            }
+            OrcaTheme(dark) { CompositionLocalProvider(LocalThemeSwitch provides switch) { FocusVisibleTheme {
                 val ready = state == R.string.workspace_development
                 val layout = ShellLayout.of(LocalWindowInfo.current.containerDpSize.width.value.toInt(), shellArea(area))
                 val snackbar = remember { SnackbarHostState() }
@@ -294,53 +323,38 @@ class MainActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize().dragAndDropTarget(shouldStartDragAndDrop = { ready }, target = target)) {
                     Scaffold(
                         bottomBar = {
-                            if (ready && layout.navigation == Navigation.Bar) {
-                                NavigationBar {
-                                    for ((label, icon) in AREAS) {
-                                        NavigationBarItem(
-                                            selected = area == label,
-                                            onClick = { area = label },
-                                            icon = { Icon(painterResource(icon), contentDescription = null) },
-                                            // One line: five areas leave a narrow phone little room per label.
-                                            label = { Text(stringResource(label), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
-                                        )
-                                    }
-                                }
-                            }
+                            // Every area's whole name: a second row when they do not fit one (enlarged text, a long language).
+                            if (ready && layout.navigation == Navigation.Bar) ShellBar(AREAS, area) { area = it }
                         },
                         snackbarHost = { SnackbarHost(snackbar) },
-                    ) { padding ->
+                        // Clear of the system bars, a display cutout and (without a bottom bar) the keyboard.
+                        contentWindowInsets = WindowInsets.safeDrawing,
+                    ) { scaffolded ->
+                        // What the Scaffold kept clear is consumed; the keyboard's height beyond it lifts the work area,
+                        // so a focused field stays above the keyboard (the bar, if any, stays under it).
+                        val padding = Modifier.padding(scaffolded).consumeWindowInsets(scaffolded).imePadding()
                         if (!ready) {
-                            Column(Modifier.fillMaxSize().padding(padding),
+                            Column(Modifier.fillMaxSize().then(padding),
                                 verticalArrangement = Arrangement.Center,
                                 horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
                                 Text(stringResource(state), style = MaterialTheme.typography.bodyLarge)
                             }
                         } else if (layout.navigation == Navigation.Rail) {
-                            Row(Modifier.fillMaxSize().padding(padding)) {
+                            Row(Modifier.fillMaxSize().then(padding)) {
                                 // The Scaffold's padding already keeps it clear of the system bars.
-                                NavigationRail(windowInsets = WindowInsets(0, 0, 0, 0)) {
-                                    for ((label, icon) in AREAS) {
-                                        NavigationRailItem(
-                                            selected = area == label,
-                                            onClick = { area = label },
-                                            icon = { Icon(painterResource(icon), contentDescription = null) },
-                                            label = { Text(stringResource(label), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
-                                        )
-                                    }
-                                }
+                                ShellRail(AREAS, area, { area = it })
                                 Work(layout, Modifier.weight(1f).fillMaxHeight())
                             }
                         } else {
-                            Work(layout, Modifier.fillMaxSize().padding(padding))
+                            Work(layout, Modifier.fillMaxSize().then(padding))
                         }
                     }
                     if (over) DropPrompt()
                 }
                 // A send's confirmation waits above whichever area is shown: the operator may have moved on.
                 device.sendConfirmation?.let { pending -> SendDialog(pending.view, device::answerSend) }
-            }
+            } } }
         }
     }
 
@@ -418,12 +432,15 @@ private fun shellArea(label: Int): ShellArea = when (label) {
 
 /** The areas in the bar's and rail's order, with their icons. */
 private val AREAS = listOf(
-    R.string.nav_workspace to android.R.drawable.ic_menu_gallery,
-    R.string.nav_prepare to android.R.drawable.ic_menu_upload,
-    R.string.nav_preview to android.R.drawable.ic_menu_view,
-    R.string.nav_device to android.R.drawable.ic_menu_share,
-    R.string.nav_project to android.R.drawable.ic_menu_save,
+    ShellDestination(R.string.nav_workspace, android.R.drawable.ic_menu_gallery),
+    ShellDestination(R.string.nav_prepare, android.R.drawable.ic_menu_upload),
+    ShellDestination(R.string.nav_preview, android.R.drawable.ic_menu_view),
+    ShellDestination(R.string.nav_device, android.R.drawable.ic_menu_share),
+    ShellDestination(R.string.nav_project, android.R.drawable.ic_menu_save),
 )
+
+/** System bars drawn over the app's own background: no scrim. */
+private const val TRANSPARENT = android.graphics.Color.TRANSPARENT
 
 private const val AREA = "area"
 private const val ANDROID_13 = 33

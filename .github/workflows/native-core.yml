@@ -122,6 +122,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/generate-engine-options.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/generate-action-catalog.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/android-strings.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/android-tokens.mjs
           node tools/cross-platform/test-project-intent-generator.mjs
           node tools/cross-platform/project-intent-vectors.mjs
           node tools/cross-platform/package-browser-core.mjs

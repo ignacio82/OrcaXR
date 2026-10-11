@@ -138,7 +138,19 @@
     "filament_bar_assigned": { "key": "ui.selectionFilamentBar.assigned" },
     "filament_bar_cleared": {
       "key": "ui.selectionFilamentBar.assignmentCleared"
-    }
+    },
+    "workspace_selection": { "key": "ui.xrObjectsPanel.selection" },
+    "workspace_nothing_selected": { "key": "ui.xrObjectsPanel.noSelection" },
+    "workspace_plate_empty": { "key": "ui.xrObjectsPanel.empty" },
+    "view_camera_default": { "key": "action.view_camera_default.label" },
+    "view_camera_top": { "key": "action.view_camera_top.label" },
+    "view_camera_front": { "key": "action.view_camera_front.label" },
+    "view_camera_left": { "key": "action.view_camera_left.label" },
+    "view_camera_right": { "key": "action.view_camera_right.label" },
+    "view_camera_rear": { "key": "action.view_camera_rear.label" },
+    "view_camera_bottom": { "key": "action.view_camera_bottom.label" },
+    "theme_switch_dark": { "key": "app.main.switchToDarkMode" },
+    "theme_switch_light": { "key": "app.main.switchToLightMode" }
   },
   "english": [
     "app_name",
@@ -263,7 +275,8 @@
     "tree_filament_inherited",
     "tree_color_facets",
     "tree_support_facets",
-    "tree_settings"
+    "tree_settings",
+    "workspace_view"
   ],
   "kotlin": [
     {

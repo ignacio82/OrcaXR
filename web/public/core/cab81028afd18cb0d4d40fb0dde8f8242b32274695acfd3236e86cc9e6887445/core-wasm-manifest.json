@@ -5,7 +5,7 @@
     "gcode"
   ],
   "inputs": {
-    "contracts/android-strings.json": "26c4e66aa3de797b810fb3d73b3c7a80c522762636b2b6c5e25799cfd69e8822",
+    "contracts/android-strings.json": "f481dfe9bf7d762e5cbb13afb063001e8be9672af28925c7478ab1c9c74c4cdf",
     "contracts/core-protocol.json": "63e7ed821d0da12f863004109a41f5dbfd00b73a2c29584ae2b3a3a6b1320f7a",
     "contracts/gcode-buffer.json": "237797f7310f4eb9cd1fe14bedc5c1bce31e2b2fb7b6995056c98da975c7f716",
     "contracts/gcode-metadata.json": "9839972a577bf7fb31f3fbbbffca1ec3003c4dbbd86ec165b9fbf8263b7d23df",
@@ -444,7 +444,8 @@
     "core/crates/orcaxr-wasm/src/printer.rs": "58694c34965e3bcdbbe06477a3f6692a13aa62beac737c7bc82c837e46d830fd",
     "core/crates/orcaxr-wasm/src/project.rs": "d10b4bbf182dd9e19dab6afb728c58a879b4bd8591fef2890e15582fb99c2900",
     "core/rust-toolchain.toml": "f0c85cfd5110f10de478e970a3c3caa2f96d55266b20724ddbb7f949f64ff05f",
-    "tools/cross-platform/android-adaptive-smoke.py": "697bc3cae9a13b379715e64510b251255b995f0a36a6911fc6b476c5647f662b",
+    "tools/cross-platform/android-accessibility-smoke.py": "e837084f14cce4eaafdf955d0d3d929a1b96881061695c2a1a0271ce66daf97b",
+    "tools/cross-platform/android-adaptive-smoke.py": "fdf56be77422635086c16ded70e44f2ab2a482aafb5f232f7e07389b67e50f76",
     "tools/cross-platform/android-create-smoke.py": "7480d18967a28669b7b3f9d4a8a60f058f92cc91d31a6146546d2b81bd788ee7",
     "tools/cross-platform/android-device-smoke.py": "18e8964be26bcbf138cf50655b1d44585b888ccd14c0e77d43c7ef860e3c4f42",
     "tools/cross-platform/android-edit-smoke.py": "52f0d7b689200467fa2c1f468216bf2bfb3ac304d1fd2da48a90174f033d2e52",
@@ -461,7 +462,7 @@
     "tools/cross-platform/build-android.py": "28f80643b01f0ef59c6e1cd645d80eb67742417d3ab218a0d6b5ad6cd0d1891e",
     "tools/cross-platform/build-project-jvm.py": "a2f74bb17f1ff830674689292b7bf489bc42fa4a7d065fa708fbdb4903e7f339",
     "tools/cross-platform/build-wasm.py": "6311757d4e2261a1121247fabf0b6eaa0b8840ef371e161d407c4a1c0d75b53c",
-    "tools/cross-platform/emulator-smoke.py": "38eda0ad64bc8ec1e298ef95b33473b4620614c4d7908b1c0b11f668f3df7b81",
+    "tools/cross-platform/emulator-smoke.py": "cca69de1750ee83dd43ce4c710a10cebc5161dd6764be30efe0e1e308062533c",
     "tools/cross-platform/smoke_ui.py": "0dbaf98f62c015f512d9a40b53cc99cf848e1d09ba0f4f9fedd4d122417a533f",
     "tools/cross-platform/test-zip-write.py": "af58df31f97dc99c8c644c4e820878265d9ebf5a0d2a0d622b00b63b11b5a2a0",
     "tools/cross-platform/verify-artifacts.py": "608f9bc1505fcc91843fe0aaf9c707bf28ecf10507481adfb2df2a69ac2f9ff3"

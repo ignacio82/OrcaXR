@@ -95,7 +95,7 @@ the same commit when behavior changes; do not append a second source of truth.
 | Browser startup, persistence, printers, external slicing, server and deployment | [Runtime and deployment](docs/engineering/runtime-and-deployment.md) |
 | Mesh storage/import/export, preview, memory, responsiveness | [Large-model contracts](docs/engineering/large-models.md) |
 | WASM/native engine changes and build gotchas | [Current slicing constraints](docs/engineering/slicing.md), [Snapmaker build notes](wasm/patches/README-snapmaker.md) |
-| Native Android and shared Rust implementation (app strings: `contracts/android-strings.json`; `values-*` are generated) | [Native Android and Rust plan](docs/android-native-rust-plan.md), [native-core build and evidence](docs/engineering/native-core.md) |
+| Native Android and shared Rust implementation (app strings: `contracts/android-strings.json`; `values-*` and the theme's `OrcaTokens.kt`, from `web/src/ui/tokens.ts`, are generated) | [Native Android and Rust plan](docs/android-native-rust-plan.md), [native-core build and evidence](docs/engineering/native-core.md) |
 | Retired Android/JNI implementation only | [Historical Android notes](docs/historical/android-slicer-notes.md) |
 
 The Android notes preserve old patches and investigations. They are not the

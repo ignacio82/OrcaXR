@@ -47,7 +47,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
@@ -57,6 +60,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.orcaxr.core.GcodeArtifactText
+import dev.orcaxr.nativeapp.theme.LocalOrcaTheme
+import dev.orcaxr.nativeapp.theme.OrcaThemeTokens
+import dev.orcaxr.nativeapp.workspace.ViewDescription
+import dev.orcaxr.renderer.CameraView
+import dev.orcaxr.renderer.CameraViews
 import dev.orcaxr.core.GcodePreviewModes
 import dev.orcaxr.core.WorkspaceBed
 import dev.orcaxr.nativeapp.R
@@ -79,6 +87,10 @@ import kotlin.math.abs
  * controls, or — given a [panelWidth], in a wide window — beside them at the
  * end, as the browser's sidebar sits at the start of its viewport. The
  * toolpaths sit on the project's [bed], grown to reach them.
+ *
+ * The view wears the theme's viewport wash and plate lines; to an
+ * accessibility service it is the browser's "Build plate", says what the
+ * status line says, and offers the browser's View menu camera views.
  */
 @Composable
 fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier, panelWidth: Dp? = null, bed: WorkspaceBed = WorkspaceBed.DEFAULT) {
@@ -105,16 +117,28 @@ fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier, panelWidth
     }
     LaunchedEffect(state.toolpath, state.generation) { renderer.show(state.toolpath?.geometry, state.generation) }
     LaunchedEffect(bed.widthMm, bed.depthMm) { renderer.bed(bed.widthMm, bed.depthMm) }
+    val theme = LocalOrcaTheme.current.tokens
+    SideEffect { renderer.theme(theme) }
+    val label = stringResource(R.string.workspace_view)
+    val described = status(state)
+    val cameras = ViewDescription.cameraActions(renderer::show)
 
     val view = @Composable { place: Modifier ->
-        AndroidView(factory = { context -> PreviewSurface(context).also(renderer::attach) }, place)
+        AndroidView(
+            factory = { context -> PreviewSurface(context).also(renderer::attach) },
+            place.semantics {
+                contentDescription = label
+                stateDescription = described
+                customActions = cameras
+            },
+        )
     }
     val controls = @Composable { place: Modifier ->
         Column(
             place.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(stringResource(R.string.preview_heading), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.preview_heading), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
             OutlinedButton(onClick = { open.launch(arrayOf("*/*")) }, enabled = !state.loading) {
                 Text(stringResource(R.string.preview_open))
             }
@@ -326,6 +350,26 @@ private class PreviewRenderer {
     private var bed: Pair<Double, Double>? = null
     /** The project's bed (mm), drawable sides. */
     private var projectBed = 200.0 to 200.0
+    /** The theme's wash and plate, applied to every scene made. */
+    private var theme: OrcaThemeTokens? = null
+
+    /** Dresses the view in [tokens]: the viewport's wash behind it, the plate skin's lines for the bed. */
+    fun theme(tokens: OrcaThemeTokens) {
+        if (tokens == theme) return
+        theme = tokens
+        scene?.let { dress(it, tokens) }
+    }
+
+    private fun dress(renderer: FilamentScene, tokens: OrcaThemeTokens) {
+        renderer.setBackdrop(tokens.viewportTop.toInt(), tokens.viewportBottom.toInt())
+        renderer.setBedColors(tokens.plate.gridMajor.toInt(), tokens.plate.gridMinor.toInt())
+    }
+
+    /** Puts the camera on the browser's [view] of the bed drawn under the toolpaths. */
+    fun show(view: CameraView) {
+        val (width, depth) = bed ?: projectBed
+        scene?.setCamera(CameraViews.of(view, width, depth))
+    }
 
     fun attach(view: PreviewSurface) {
         surface = view
@@ -364,6 +408,7 @@ private class PreviewRenderer {
         val view = surface ?: return
         val renderer = FilamentScene(view)
         scene = renderer
+        theme?.let { dress(renderer, it) }
         renderer.setActive(true)
         present(renderer)
         // The same file as before the pause: the viewer's orbit, not a fresh frame.

@@ -50,6 +50,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         val entities = IdentityHashMap<Chunk, Int>()
     }
     private class Lines(val vertices: VertexBuffer, val indices: IndexBuffer, val entity: Int, val bytes: Long)
+    /** The viewport's vertical wash: a quad at the far end of the view, carried with the camera. */
+    private class Backdrop(val vertices: VertexBuffer, val indices: IndexBuffer, val entity: Int, val material: MaterialInstance)
 
     private val handler = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { task -> Thread(task, "OrcaXR scene geometry") }
@@ -69,6 +71,16 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private val meshes = LinkedHashMap<String, Mesh>()
     private val placed = LinkedHashMap<String, Placed>()
     private var bed: Lines? = null
+    private var bedSize: Pair<Double, Double>? = null
+    /** The bed's outline and grid colours (RGB, 0..1): the plate skin's major and minor lines once themed. */
+    private var bedOutline = BED_TINT.copyOf()
+    private var bedGrid = FloatArray(3) { BED_TINT[it] * BED_GRID_SHADE }
+    /** The viewport's wash, top and bottom (RGB, 0..1). */
+    private var washTop = CLEAR.copyOf()
+    private var washBottom = CLEAR.copyOf()
+    private var backdrop: Backdrop? = null
+    /** Buffers Filament still copies for the backdrop: kept alive until each copy completes. */
+    private val backdropBuffers = Collections.newSetFromMap(IdentityHashMap<ByteBuffer, Boolean>())
     private var toolpath: Lines? = null
     private var toolpathSegments = 0
     private var selected: Set<String> = emptySet()
@@ -102,7 +114,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             bedMaterial = opaque.createInstance()
             bedMaterial.setParameter("clipHeight", clipHeight)
             bedMaterial.setParameter("opacity", 1f)
-            bedMaterial.setParameter("tint", BED_TINT[0], BED_TINT[1], BED_TINT[2], 1f)
+            // The bed's lines carry their own colours.
+            bedMaterial.setParameter("tint", 1f, 1f, 1f, 1f)
             toolpathMaterial = opaque.createInstance()
             toolpathMaterial.setParameter("clipHeight", clipHeight)
             toolpathMaterial.setParameter("opacity", 1f)
@@ -112,8 +125,9 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             view.isPostProcessingEnabled = false
             renderer.clearOptions = Renderer.ClearOptions().apply {
                 clear = true
-                clearColor = doubleArrayOf(.035, .045, .06, 1.0)
+                clearColor = doubleArrayOf(CLEAR[0].toDouble(), CLEAR[1].toDouble(), CLEAR[2].toDouble(), 1.0)
             }
+            backdrop = createBackdrop()
             helper.renderCallback = object : UiHelper.RendererCallback {
                 override fun onNativeWindowChanged(window: Surface) {
                     swapChain?.let { engine.destroySwapChain(it) }
@@ -133,7 +147,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
                 override fun onResized(width: Int, height: Int) {
                     if (width <= 0 || height <= 0) return
                     view.viewport = Viewport(0, 0, width, height)
-                    camera.setProjection(45.0, width.toDouble() / height, .001, 10.0, Camera.Fov.VERTICAL)
+                    camera.setProjection(FIELD_OF_VIEW, width.toDouble() / height, .001, 10.0, Camera.Fov.VERTICAL)
                     FilamentHelper.synchronizePendingFrames(engine)
                     updateCamera()
                 }
@@ -389,10 +403,97 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             chunk.positions.remaining().toLong() + chunk.colors.remaining() + chunk.indices.remaining())
     }
 
+    /**
+     * The view's background, as the browser's window shows its viewport: a
+     * vertical wash from [topArgb] at the top edge to [bottomArgb] at the
+     * bottom, whatever the camera does. Colours are drawn as given (sRGB, no
+     * tone mapping), as the browser's CSS gradient is.
+     */
+    fun setBackdrop(topArgb: Int, bottomArgb: Int) {
+        checkOpen()
+        val top = rgb(topArgb); val bottom = rgb(bottomArgb)
+        if (top.contentEquals(washTop) && bottom.contentEquals(washBottom)) return
+        washTop = top; washBottom = bottom
+        renderer.clearOptions = Renderer.ClearOptions().apply {
+            clear = true
+            clearColor = doubleArrayOf(bottom[0].toDouble(), bottom[1].toDouble(), bottom[2].toDouble(), 1.0)
+        }
+        backdrop?.let { upload(it.vertices, 1, washColours()) }
+        invalidate()
+    }
+
+    /** The bed's colours: its outline in [outlineArgb], its grid in [gridArgb] (the plate skin's major and minor lines). */
+    fun setBedColors(outlineArgb: Int, gridArgb: Int) {
+        checkOpen()
+        val outline = rgb(outlineArgb); val grid = rgb(gridArgb)
+        if (outline.contentEquals(bedOutline) && grid.contentEquals(bedGrid)) return
+        bedOutline = outline; bedGrid = grid
+        bedSize?.let { (width, depth) -> setBed(width, depth) }
+    }
+
+    private fun rgb(argb: Int) = floatArrayOf(((argb ushr 16) and 255) / 255f, ((argb ushr 8) and 255) / 255f, (argb and 255) / 255f)
+
+    /** The backdrop's vertex colours: top-left, top-right, bottom-left, bottom-right. */
+    private fun washColours(): ByteBuffer {
+        val colours = MeshPacking.direct(4 * 16)
+        for (colour in arrayOf(washTop, washTop, washBottom, washBottom)) colours.putFloat(colour[0]).putFloat(colour[1]).putFloat(colour[2]).putFloat(1f)
+        colours.flip()
+        return colours
+    }
+
+    /** Copies [buffer] into [vertices]' buffer [index], keeping it alive until Filament has it. Not counted as mesh upload. */
+    private fun upload(vertices: VertexBuffer, index: Int, buffer: ByteBuffer) {
+        backdropBuffers.add(buffer)
+        vertices.setBufferAt(engine, index, buffer, 0, buffer.remaining(), handler) { backdropBuffers.remove(buffer) }
+    }
+
+    /**
+     * A quad filling the view at [BACKDROP_DEPTH] metres, in the camera's own
+     * space (so it moves with it): exactly the vertical field of view high, far
+     * wider than any window. Drawn after everything else, at the far end of the
+     * depth range, it shows only where nothing else is drawn.
+     */
+    private fun createBackdrop(): Backdrop {
+        val half = (BACKDROP_DEPTH * tan(Math.toRadians(FIELD_OF_VIEW / 2))).toFloat()
+        val wide = half * BACKDROP_ASPECT
+        val positions = MeshPacking.direct(4 * 12)
+        for ((x, y) in listOf(-wide to half, wide to half, -wide to -half, wide to -half)) {
+            positions.putFloat(x).putFloat(y).putFloat(-BACKDROP_DEPTH.toFloat())
+        }
+        positions.flip()
+        val indices = MeshPacking.direct(6 * 4)
+        for (index in intArrayOf(0, 2, 1, 1, 2, 3)) indices.putInt(index)
+        indices.flip()
+        val material = opaque.createInstance()
+        material.setParameter("clipHeight", Float.MAX_VALUE)
+        material.setParameter("opacity", 1f)
+        material.setParameter("tint", 1f, 1f, 1f, 1f)
+        val vertices = VertexBuffer.Builder().bufferCount(2).vertexCount(4)
+            .attribute(VertexBuffer.VertexAttribute.POSITION, 0, VertexBuffer.AttributeType.FLOAT3, 0, 12)
+            .attribute(VertexBuffer.VertexAttribute.COLOR, 1, VertexBuffer.AttributeType.FLOAT4, 0, 16)
+            .build(engine)
+        val index = IndexBuffer.Builder().indexCount(6).bufferType(IndexBuffer.Builder.IndexType.UINT).build(engine)
+        val entity = engine.entityManager.create()
+        RenderableManager.Builder(1)
+            .boundingBox(Box(0f, 0f, -BACKDROP_DEPTH.toFloat(), wide, half, 1f))
+            .geometry(0, RenderableManager.PrimitiveType.TRIANGLES, vertices, index, 0, 6)
+            .material(0, material)
+            .priority(7)
+            .culling(false).castShadows(false).receiveShadows(false)
+            .build(engine, entity)
+        scene.addEntity(entity)
+        upload(vertices, 0, positions)
+        upload(vertices, 1, washColours())
+        backdropBuffers.add(indices)
+        index.setBuffer(engine, indices, 0, indices.remaining(), handler) { backdropBuffers.remove(indices) }
+        return Backdrop(vertices, index, entity, material)
+    }
+
     /** The print bed: its outline and a grid every 10 mm (coarser on a large bed), on z = 0 from the origin. */
     fun setBed(widthMm: Double, depthMm: Double) {
         checkOpen(); require(widthMm.isFinite() && depthMm.isFinite() && widthMm in 1.0..5000.0 && depthMm in 1.0..5000.0)
         bed?.let(::destroyLines); bed = null
+        bedSize = widthMm to depthMm
         var spacing = 10.0
         while ((widthMm + depthMm) / spacing > MAX_BED_LINES) spacing *= 5
         val segments = ArrayList<Pair<Point3, Point3>>()
@@ -409,14 +510,14 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         val indices = MeshPacking.direct(segments.size * 8)
         val low = FloatArray(3) { Float.POSITIVE_INFINITY }; val high = FloatArray(3) { Float.NEGATIVE_INFINITY }
         segments.forEachIndexed { n, (a, b) ->
-            val shade = if (outline[n]) 1f else BED_GRID_SHADE
+            val colour = if (outline[n]) bedOutline else bedGrid
             for (point in arrayOf(RenderSpace.point(a), RenderSpace.point(b))) {
                 val coordinates = floatArrayOf(point.x.toFloat(), point.y.toFloat(), point.z.toFloat())
                 for (axis in 0..2) {
                     positions.putFloat(coordinates[axis])
                     low[axis] = min(low[axis], coordinates[axis]); high[axis] = max(high[axis], coordinates[axis])
                 }
-                colors.putFloat(shade).putFloat(shade).putFloat(shade).putFloat(1f)
+                colors.putFloat(colour[0]).putFloat(colour[1]).putFloat(colour[2]).putFloat(1f)
                 indices.putInt(indices.position() / 4)
             }
         }
@@ -529,6 +630,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private fun updateCamera() {
         val eye = orbit.eye; val target = orbit.target
         camera.lookAt(eye.x, eye.y, eye.z, target.x, target.y, target.z, 0.0, 1.0, 0.0)
+        // The backdrop rides with the camera, so the wash stays put on the screen.
+        backdrop?.let { place(it.entity, FloatArray(16).also(camera::getModelMatrix)) }
         invalidate()
     }
 
@@ -580,6 +683,12 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         meshes.values.forEach(::discard); meshes.clear()
         bed?.let(::destroyLines); bed = null
         toolpath?.let(::destroyLines); toolpath = null; toolpathSegments = 0
+        backdrop?.let {
+            destroyEntity(it.entity)
+            engine.destroyVertexBuffer(it.vertices); engine.destroyIndexBuffer(it.indices)
+            engine.destroyMaterialInstance(it.material)
+        }
+        backdrop = null
         engine.destroyMaterialInstance(bedMaterial)
         engine.destroyMaterialInstance(toolpathMaterial)
         engine.destroyMaterial(opaque); engine.destroyMaterial(transparent)
@@ -587,10 +696,17 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         val cameraEntity = camera.entity
         engine.destroyCameraComponent(cameraEntity); engine.entityManager.destroy(cameraEntity)
         engine.flushAndWait(); engine.destroy()
-        pendingBuffers.clear(); pending = 0; state = "Closed"
+        pendingBuffers.clear(); backdropBuffers.clear(); pending = 0; state = "Closed"
     }
 
     private companion object {
+        /** The background until a theme gives one: the experiment's near-black. */
+        val CLEAR = floatArrayOf(.035f, .045f, .06f)
+        /** The camera's vertical field of view in degrees, the browser's flat 45° (`FLAT_FOV`). */
+        const val FIELD_OF_VIEW = 45.0
+        /** How far the backdrop sits (the view reaches 10 m) and how much wider than high it is. */
+        const val BACKDROP_DEPTH = 9.5
+        const val BACKDROP_ASPECT = 16f
         /** A non-printable instance is drawn see-through, so it reads as left out of the print. */
         const val NOT_PRINTABLE_OPACITY = .4f
         /** A selected instance's colour is moved this far toward [SELECTED_ACCENT]. */
