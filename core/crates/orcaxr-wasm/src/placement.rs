@@ -43,3 +43,18 @@ pub fn primitive_payload(request: &str) -> Result<Vec<u8>, JsValue> {
 pub fn transform_rotation(request: &str) -> Result<String, JsValue> {
     fields::rotation_json(request).map_err(error)
 }
+
+/// The paint stroke sample a pointer hit makes with the painter's settings
+/// (`paintToolSampleExchange`): `{"channel","hit","settings","stateOrder"}`
+/// in, `{"sample"}` or `{"error","message"}` out.
+#[wasm_bindgen]
+pub fn paint_tool_sample(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::facets::paint_tool::sample_json(request).map_err(error)
+}
+
+/// The colours a filament library paints states in (`paintFacetColorsExchange`):
+/// `{"channel","filaments","states"}` in, `{"colors"}` out.
+#[wasm_bindgen]
+pub fn paint_facet_colors(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::facets::paint_facets::colors_json(request).map_err(error)
+}

@@ -4,12 +4,16 @@
 // `PaintStrokeExchange` in the shared contract's encoding. Strokes open on a
 // volume, channel and target (with every open refusal), stream samples —
 // brushes dragged with and without triangle splitting, Fill, Triangle,
-// Height Range, Gap Fill, invalid tool input — page their overlays, and
+// Height Range, Gap Fill, invalid tool input, and brushes and bands the
+// painter's settings place on scaled, stretched and turned parts — page their
+// overlays, and
 // commit through the browser's own facet commands: ranges, refined trees
 // over a persisted refinement, a stroke that touched nothing, one that
 // changes nothing, and one that went stale. Every sample's live preview and
 // every commit's canonical overlay are recorded as paint overlay packets
-// (`PaintOverlay.ts`), compared by SHA-256. Replayed by Rust.
+// (`PaintOverlay.ts`) and as paint facets (`PaintFacets.ts`: runs of whole
+// facets, leaves of subdivided ones and each state's colour), compared by
+// SHA-256. Replayed by Rust, by WASM in Node and Chrome, and over JNI.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -32,6 +36,11 @@ import {
   PaintOverlayRefusal,
   capturePaintOverlay,
 } from "../../web/src/project/painting/PaintOverlay.ts";
+import {
+  PaintFacetsRefusal,
+  capturePaintFacets,
+} from "../../web/src/project/painting/PaintFacets.ts";
+import { paintToolSampleExchange } from "../../web/src/project/painting/PaintToolExchange.ts";
 import {
   decodeProjectPaintOverlayRequest,
   encodeProjectPaintOverlayRequest,
@@ -285,9 +294,24 @@ function packets(capture, step) {
     ...(facets > 2 ? { window: sha256(capture.packet(1, 2)) } : {}),
   });
 }
-// The stroke's live preview, as the workspace draws it after a sample.
+// One paint facets capture: its summary, its runs and leaves, and a window
+// of each past two.
+function facets(capture, step) {
+  const summary = JSON.parse(capture.summary());
+  steps.push({
+    ...step,
+    summary: capture.summary(),
+    runs: sha256(capture.runs(0, 16384)),
+    leaves: sha256(capture.leaves(0, 16384)),
+    ...(summary.runs > 2 ? { runWindow: sha256(capture.runs(1, 2)) } : {}),
+    ...(summary.leaves > 2 ? { leafWindow: sha256(capture.leaves(1, 2)) } : {}),
+  });
+}
+// The stroke's live preview, as the workspace draws it after a sample, and as
+// a renderer colouring the volume's own facets draws it.
 function preview(name) {
   packets(strokes.get(name).preview(), { stroke: name, preview: true });
+  facets(strokes.get(name).previewFacets(), { stroke: name, previewFacets: true });
 }
 // The canonical overlay of one volume's channel, as the workspace draws it.
 function canonical(volumeId, channel) {
@@ -307,6 +331,19 @@ function canonical(volumeId, channel) {
   } catch (error) {
     if (!(error instanceof PaintOverlayRefusal)) throw error;
     steps.push({ canonical: text, refusal: code(error) });
+  }
+  try {
+    facets(
+      capturePaintFacets(
+        session.project.getSnapshot(),
+        session.assets,
+        decodeProjectPaintOverlayRequest(text),
+      ),
+      { canonicalFacets: text },
+    );
+  } catch (error) {
+    if (!(error instanceof PaintFacetsRefusal)) throw error;
+    steps.push({ canonicalFacets: text, refusal: code(error) });
   }
 }
 function sample(name, request) {
@@ -536,6 +573,103 @@ sample("fuzzy", {
 });
 commit("fuzzy", "Fuzz the low band");
 
+// Samples the painter's settings make on placed parts
+// (`paintToolSampleExchange`): the placement's transform measures the brush
+// and the band on the bed. A 200% instance takes with a 1.6 mm sphere what
+// the part's own 0.8 mm would; an instance stretched (2, 1, 0.5) takes a
+// ball of 1.6 mm on the bed, an ellipsoid in the part's own millimetres; and
+// a band on a part laid on its side runs across it in bed Z.
+const turned = (axis, angle) => [
+  ...axis.map((v) => v * Math.sin(angle / 2)),
+  Math.cos(angle / 2),
+];
+const placed = (instance) => ({
+  instance: {
+    translationMm: [0, 0, 0],
+    rotation: [0, 0, 0, 1],
+    scale: [1, 1, 1],
+    ...instance,
+  },
+  volume: { translationMm: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+});
+function placedSample(name, seed, settings, placement) {
+  const localPoint = centroid(sphereMesh, seed);
+  const reply = JSON.parse(
+    paintToolSampleExchange(
+      JSON.stringify({
+        channel: opened.get(name).channel,
+        hit: {
+          triangleIndex: seed,
+          localPoint,
+          localCameraPosition: localPoint.map((v) => v * 4 + 1),
+          placement,
+        },
+        settings,
+        stateOrder: [],
+      }),
+    ),
+  );
+  assert.ok(reply.sample, reply.message);
+  sample(name, decodeProjectPaintStrokeSample(reply.sample));
+}
+open("scaled", sphereId, "color", assigned(physical0));
+placedSample(
+  "scaled",
+  150,
+  { tool: "sphere", radiusMm: 1.6 },
+  placed({ translationMm: [90, 60, 16], rotation: turned([0, 0, 1], 0.7), scale: [2, 2, 2] }),
+);
+{
+  // What the part's own 0.8 mm sphere takes, unplaced, off the record.
+  const plain = PaintStrokeExchange.open(
+    session.project.getSnapshot(),
+    session.assets,
+    decodeProjectPaintStrokeOpen(
+      encodeProjectPaintStrokeOpen({ volumeId: units(sphereId), channel: "color", target: assigned(physical0) }),
+    ),
+  );
+  const localPoint = centroid(sphereMesh, 150);
+  const reply = JSON.parse(
+    paintToolSampleExchange(
+      JSON.stringify({
+        channel: "color",
+        hit: { triangleIndex: 150, localPoint, localCameraPosition: localPoint.map((v) => v * 4 + 1) },
+        settings: { tool: "sphere", radiusMm: 0.8 },
+        stateOrder: [],
+      }),
+    ),
+  );
+  plain.sample(decodeProjectPaintStrokeSample(reply.sample));
+  assert.equal(
+    sha256(plain.preview().packet(0, 16384)),
+    sha256(strokes.get("scaled").preview().packet(0, 16384)),
+    "a 200% part's 1.6 mm sphere takes what its own 0.8 mm takes",
+  );
+}
+commit("scaled", "Paint the scaled part");
+open("stretched", sphereId, "color", assigned(mixed));
+placedSample(
+  "stretched",
+  220,
+  { tool: "sphere", radiusMm: 1.6 },
+  placed({ translationMm: [40, 40, 4], scale: [2, 1, 0.5] }),
+);
+placedSample(
+  "stretched",
+  221,
+  { tool: "circle", radiusMm: 1.6, triangleSplitting: true },
+  placed({ translationMm: [40, 40, 4], scale: [2, 1, 0.5] }),
+);
+commit("stretched");
+open("turned band", sphereId, "seam", assigned("prefer"));
+placedSample(
+  "turned band",
+  30,
+  { tool: "heightRange", heightRangeMm: 1, triangleSplitting: true },
+  placed({ translationMm: [20, 20, 8], rotation: turned([1, 0, 0], Math.PI / 2) }),
+);
+commit("turned band");
+
 // A stroke that touches nothing commits nothing; two strokes opened on the
 // same state race, and the later commit is stale.
 open("empty", terrainId, "support", assigned("block"));
@@ -565,6 +699,14 @@ canonical("import:volume:missing", "color");
   );
   assert.throws(() => capture.packet(0, 16385), PaintOverlayRefusal);
   steps.push({ canonical: text, count: 16385, refusal: "invalid_request" });
+  const facets = capturePaintFacets(
+    session.project.getSnapshot(),
+    session.assets,
+    decodeProjectPaintOverlayRequest(text),
+  );
+  assert.throws(() => facets.runs(0, 16385), PaintFacetsRefusal);
+  assert.throws(() => facets.leaves(0, 16385), PaintFacetsRefusal);
+  steps.push({ canonicalFacets: text, count: 16385, refusal: "invalid_request" });
 }
 session.dispose();
 
@@ -572,7 +714,11 @@ const sources = [
   "tools/cross-platform/paint-stroke-vectors.mjs",
   "web/src/project/painting/PaintStrokeExchange.ts",
   "web/src/project/painting/PaintStrokeService.ts",
+  "web/src/project/painting/PaintToolExchange.ts",
+  "web/src/project/painting/PaintPlacement.ts",
   "web/src/project/painting/PaintOverlay.ts",
+  "web/src/project/painting/PaintFacets.ts",
+  "web/src/project/painting/paintOverlayColors.ts",
   "web/src/project/annotations/FacetRegionExchange.ts",
   "web/src/project/annotations/FacetRegionSelection.ts",
   "web/src/project/annotations/FacetAnnotationStrokeCommand.ts",

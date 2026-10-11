@@ -184,6 +184,14 @@ class ProjectWorkspace(
             "add_primitive_cube", "add_primitive_cylinder", "add_primitive_sphere", "add_primitive_cone", "add_primitive_disc", "add_primitive_torus",
             "add_modifier", "add_support_enforcer", "add_support_blocker",
         )
+        /**
+         * The painting actions, read where the browser offers each: the paint
+         * tools on its toolbar (`dom-toolbar`, as the paint panel's Start
+         * painting invokes them) and the panel's Erase all and its `1`–`9`
+         * palette rows (`dom-inspector`).
+         */
+        val PAINT_TOOLBAR_ACTIONS = PaintChannel.entries.map { it.toolAction }
+        val PAINT_INSPECTOR_ACTIONS = listOf("paint_erase_all") + (1..9).map { "paint_select_filament_$it" }
         /** The capability host facts of the Android shell: the flat (non-XR) workspace, preparing, without a printer job; [clipboard] while a copy is held. */
         private fun host(clipboard: Boolean) = ProjectIntents.CapabilityHostState(
             ProjectIntents.OptionalStartupSnapshot.Absent(ProjectIntents.Empty), ProjectIntents.WorkspaceMode.Prepare,
@@ -428,7 +436,9 @@ class ProjectWorkspace(
             val placement = actions(ProjectIntents.ActionSurface.DomMenu, PLACEMENT_MENU_ACTIONS) +
                 actions(ProjectIntents.ActionSurface.DomToolbar, PLACEMENT_TOOLBAR_ACTIONS) +
                 actions(ProjectIntents.ActionSurface.DomInspector, TRANSFORM_ACTIONS)
-            Triple((all + placement).associateBy { it.id }, context(ProjectIntents.ActionContextTarget.Object), context(ProjectIntents.ActionContextTarget.Plate))
+            val painting = actions(ProjectIntents.ActionSurface.DomToolbar, PAINT_TOOLBAR_ACTIONS) +
+                actions(ProjectIntents.ActionSurface.DomInspector, PAINT_INSPECTOR_ACTIONS)
+            Triple((all + placement + painting).associateBy { it.id }, context(ProjectIntents.ActionContextTarget.Object), context(ProjectIntents.ActionContextTarget.Plate))
         }
         request.completion.whenComplete { outcome, _ ->
             @Suppress("UNCHECKED_CAST")
@@ -454,7 +464,7 @@ class ProjectWorkspace(
         session
     }, ::effects, staging = STAGING)
 
-    private fun outcome(request: ProjectRequest): CompletableFuture<ProjectOutcome> = request.completion.toCompletableFuture()
+    internal fun outcome(request: ProjectRequest): CompletableFuture<ProjectOutcome> = request.completion.toCompletableFuture()
 
     /** The session's guards and history now, refreshing the view's history. */
     private fun query(): CompletableFuture<Pair<ProjectIntents.SessionAcknowledgement, ProjectActorGuard>> =
@@ -563,7 +573,7 @@ class ProjectWorkspace(
 
     /** Reads the session on the actor's authority, between operations; the read's failure is its answer. */
     @Suppress("UNCHECKED_CAST")
-    private fun <T> inspect(read: (ProjectSession) -> T): CompletableFuture<T> =
+    internal fun <T> inspect(read: (ProjectSession) -> T): CompletableFuture<T> =
         outcome(actor.inspect(read)).thenApply { result ->
             (result as? ProjectOutcome.Inspected)?.result?.getOrThrow() as T? ?: throw failure(result, null)
         }
@@ -586,7 +596,7 @@ class ProjectWorkspace(
         query()
     }.thenApply { view }
 
-    private fun failure(outcome: ProjectOutcome, cause: Throwable?): ProjectFailure = ProjectFailure(
+    internal fun failure(outcome: ProjectOutcome, cause: Throwable?): ProjectFailure = ProjectFailure(
         when (outcome) {
             is ProjectOutcome.NotStarted -> when (outcome.reason) {
                 ProjectRefusal.BUSY -> "The project is busy; try again when the current operation finishes."
@@ -1183,7 +1193,7 @@ class ProjectWorkspace(
     }
 
     /** The session's whole selection now (on the authority). */
-    private fun whole(session: ProjectSession): ProjectSelectionView = session.selection().use { selectionView(it, Long.MAX_VALUE) }
+    internal fun whole(session: ProjectSession): ProjectSelectionView = session.selection().use { selectionView(it, Long.MAX_VALUE) }
 
     private fun selected(request: ProjectRequest): CompletableFuture<Boolean> = outcome(request).thenApply { result ->
         when (result) {
@@ -1294,7 +1304,7 @@ class ProjectWorkspace(
     private class Edit<T>(val commands: List<ProjectIntents.Command>, val result: T, val label: String? = null, val separate: Boolean = false)
 
     /** The guard of [snapshot] in [session]: what a query would answer for that state. */
-    private fun guardOf(session: ProjectSession, snapshot: ProjectSnapshot): ProjectIntents.SessionGuard {
+    internal fun guardOf(session: ProjectSession, snapshot: ProjectSnapshot): ProjectIntents.SessionGuard {
         val id = ArrayList<Int>(snapshot.idLength().toInt())
         while (id.size < snapshot.idLength()) {
             val chunk = snapshot.id(id.size.toLong(), minOf(ProjectHost.MAX_TEXT_CHUNK_UNITS.toLong(), snapshot.idLength() - id.size))
@@ -1316,7 +1326,7 @@ class ProjectWorkspace(
     )
 
     /** One operation's acknowledgement, or why it changed nothing; a committed step without a receipt answers null. */
-    private fun submitted(operation: ProjectIntents.SessionOperation): CompletableFuture<ProjectIntents.SessionAcknowledgement?> =
+    internal fun submitted(operation: ProjectIntents.SessionOperation): CompletableFuture<ProjectIntents.SessionAcknowledgement?> =
         outcome(actor.submit(operation)).thenApply { result ->
             val completed = result as? ProjectOutcome.Completed ?: throw failure(result, null)
             when (val reply = completed.reply.result) {
@@ -1328,7 +1338,7 @@ class ProjectWorkspace(
         }
 
     /** [future], once the view's history caught up with it either way. */
-    private fun <T> refreshed(future: CompletableFuture<T>): CompletableFuture<T> =
+    internal fun <T> refreshed(future: CompletableFuture<T>): CompletableFuture<T> =
         future.handle { value, error -> value to error }.thenCompose { (value, error) ->
             query().handle { _, _ -> if (error != null) throw (error as? java.util.concurrent.CompletionException)?.cause ?: error else value }
         }

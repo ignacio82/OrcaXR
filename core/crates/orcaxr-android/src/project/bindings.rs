@@ -1509,6 +1509,52 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sessionPaintFacets, session_paint_facets, jlong,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_paintStrokePreviewFacets, paint_stroke_preview_facets, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_paintFacetsSummary, paint_facets_summary, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_paintFacetsRuns, paint_facets_runs, jbyteArray,
+    handle: jlong,
+    start: jlong,
+    count: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_paintFacetsLeaves, paint_facets_leaves, jbyteArray,
+    handle: jlong,
+    start: jlong,
+    count: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_paintToolSample, paint_tool_sample, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_paintStrokeSampleWith, paint_stroke_sample_with, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_paintFacetColors, paint_facet_colors, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionPickScene, session_pick_scene, jlong,
     handle: jlong,
     request: JString<'local>,

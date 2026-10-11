@@ -296,6 +296,11 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun paintOverlay(request: ProjectIntents.PaintOverlayRequest): ProjectPaintOverlay = read {
         own(NativeProject.sessionPaintOverlay(it, ProjectIntents.encodePaintOverlayRequest(request)), ::ProjectPaintOverlay)
     }
+    /** The paint facets of one volume's channel, with each state's colour;
+     * the capture owns its runs and leaves, read off this session's call gate. */
+    fun paintFacets(request: ProjectIntents.PaintOverlayRequest): ProjectPaintFacets = read {
+        own(NativeProject.sessionPaintFacets(it, ProjectIntents.encodePaintOverlayRequest(request)), ::ProjectPaintFacets)
+    }
     /** The stroke's whole gesture as one staged edit for `executeStaged`, or
      * null when it touched no facet. A stroke whose state changed refuses
      * `stale`; do not sample the stroke while it stages. */
@@ -475,6 +480,29 @@ class ProjectPaintStroke internal constructor(handle: Long) : ProjectHandle(hand
     }
     /** The live preview as the canonical overlay would draw it. */
     fun preview(): ProjectPaintOverlay = read { own(NativeProject.paintStrokePreview(it), ::ProjectPaintOverlay) }
+    /** The live preview as paint facets, each state in the colour the workspace previews it in. */
+    fun previewFacets(): ProjectPaintFacets = read { own(NativeProject.paintStrokePreviewFacets(it), ::ProjectPaintFacets) }
+    /** One sample made with the painter's [settings] where the pointer [hit]
+     * (the browser's `paintSelectionInputs` for this stroke's channel, Gap
+     * Fill ordered by the opened palette): the sample and its reply, or the
+     * painter's refusal with the stroke left as it was. */
+    fun sampleWith(hit: PaintHit, settings: PaintToolSettings): PaintStrokeStep = read {
+        PaintTools.step(NativeProject.paintStrokeSampleWith(it, PaintTools.strokeRequest(hit, settings)))
+    }
+}
+
+/** One volume's paint facets ([ProjectSession.paintFacets] or a stroke's
+ * preview): a summary with each state's colour, then packets of whole-facet
+ * runs ([PaintFacetPackets.RUN_BYTES] each) and leaves of subdivided facets
+ * ([PaintFacetPackets.LEAF_BYTES] each), at most [MAX_PAGE] per packet. */
+class ProjectPaintFacets internal constructor(handle: Long) : ProjectHandle(handle) {
+    fun summary(): PaintFacetsSummary = PaintFacetsSummary.read(summaryJson())
+    fun summaryJson(): String = read { NativeProject.paintFacetsSummary(it) }
+    fun runs(start: Long, count: Long): ByteArray = read { NativeProject.paintFacetsRuns(it, start, count) }
+    fun leaves(start: Long, count: Long): ByteArray = read { NativeProject.paintFacetsLeaves(it, start, count) }
+    companion object {
+        const val MAX_PAGE = 16384L
+    }
 }
 
 /** One plate captured for picking: the nearest front-facing facet a

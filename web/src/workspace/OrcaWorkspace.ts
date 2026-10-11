@@ -133,6 +133,8 @@ import {
 } from '../project/objects/assembly';
 import { GEMINI_PAINT_PROVIDER_ID, LazyGeminiAiPaintPort } from '../features/aiPaintProvider';
 import { paintPaletteColors, type PaintPalette } from '../project/painting/paintPalette';
+import { channelOverlayColors, paintStateColor } from '../project/painting/paintOverlayColors';
+import type { PaintPlacement } from '../project/painting/PaintPlacement';
 import {
   CanonicalWorkspaceController,
   type CanonicalFilamentAssignableEntityRef,
@@ -462,17 +464,6 @@ const PLATE_SKINS: Readonly<Record<PlateAppearance, PlateSkin>> = {
   'flat-dark': flatPlateSkin('dark', 0.7),
 };
 
-/**
- * Non-colour channels have no filament colour, so each assigned state gets a
- * fixed, distinguishable overlay hue. The panel always labels the state too, so
- * hue is never the only cue.
- */
-const CHANNEL_STATE_COLORS: Readonly<Record<string, Readonly<Record<string, string>>>> = Object.freeze({
-  support: Object.freeze({ enforce: '#39d353', block: '#f85149' }),
-  seam: Object.freeze({ prefer: '#58a6ff', avoid: '#ff9f43' }),
-  fuzzySkin: Object.freeze({ true: '#bc8cff' }),
-});
-
 function rgbaToHex(color: readonly [number, number, number, number]): string {
   const channel = (value: number) =>
     Math.max(0, Math.min(255, Math.round(value * 255)))
@@ -496,14 +487,6 @@ function previewRenderFailureMessage(error: unknown): string {
     return 'Preview unavailable: this G-code path failed safety validation. Re-slice the plate or open a different G-code file.';
   }
   return `Preview unavailable: the toolpath could not be rendered safely${detail ? ` (${detail})` : ''}. Re-slice the plate or open a different G-code file.`;
-}
-
-function channelOverlayColors(
-  channel: PaintChannel,
-  filamentColors: ReadonlyMap<string, string>,
-): ReadonlyMap<string, string> {
-  if (channel === 'color') return filamentColors;
-  return new Map(Object.entries(CHANNEL_STATE_COLORS[channel] ?? {}));
 }
 
 /** Derived colour overlays never occlude or intercept the canonical mesh. */
@@ -2095,6 +2078,8 @@ export class OrcaWorkspace extends xb.Script {
   private paintStroke: {
     volumeId: VolumeId;
     display: THREE.Mesh;
+    /** Where the part sits on the bed, so the brush measures bed millimetres. */
+    placement?: PaintPlacement;
     triangles: Set<number>;
     channel: PaintChannel;
     mode: 'paint' | 'erase';
@@ -2462,7 +2447,13 @@ export class OrcaWorkspace extends xb.Script {
       const key = `smart:${region.id}`;
       // An unassigned region still previews, in neutral white, so the operator
       // can see what the assistant found before choosing a destination.
-      colorByKey.set(key, region.value === undefined ? '#ffffff' : (colors.get(String(region.value)) ?? '#ffffff'));
+      colorByKey.set(
+        key,
+        paintStateColor(
+          colors,
+          region.value === undefined ? { kind: 'unpainted' } : { kind: 'assigned', value: region.value as JsonValue },
+        ),
+      );
       assignments.push({ triangles: [...region.triangleIndices], value: key });
     }
     if (assignments.length === 0) {
@@ -3524,22 +3515,24 @@ export class OrcaWorkspace extends xb.Script {
     return extractor;
   }
 
-  /** Volumes the current selection paints, defaulting to the whole plate. */
+  /**
+   * Model parts the current selection paints: the selected parts, the parts of
+   * selected objects and of selected instances' objects, or every model part
+   * on the plate when no part, object or instance is selected. Helper volumes
+   * are never painted, so they are never erased either.
+   */
   private paintableSelectedVolumes(): VolumeId[] {
-    const selected = new Set(
-      this.canonicalProject
-        .getObjectsTree()
-        .selection.refs.filter((ref) => ref.kind === 'volume')
-        .map((ref) => ref.id as VolumeId),
-    );
-    const objectIds = new Set(
-      this.canonicalProject
-        .getObjectsTree()
-        .selection.refs.filter((ref) => ref.kind === 'object')
-        .map((ref) => ref.id),
-    );
+    const refs = this.canonicalProject.getObjectsTree().selection.refs;
+    const selected = new Set(refs.filter((ref) => ref.kind === 'volume').map((ref) => ref.id as VolumeId));
+    const instanceIds = new Set(refs.filter((ref) => ref.kind === 'instance').map((ref) => ref.id as string));
+    const targets = this.paintTargets().filter((record) => getThreeProjectEntity(record.display)?.role === 'model');
+    const objectIds = new Set<string>([
+      ...refs.filter((ref) => ref.kind === 'object').map((ref) => ref.id as string),
+      // An instance shares its object's parts and paint.
+      ...targets.filter((record) => instanceIds.has(record.instanceId)).map((record) => record.objectId as string),
+    ]);
     const volumes: VolumeId[] = [];
-    for (const record of this.paintTargets()) {
+    for (const record of targets) {
       if (
         selected.has(record.volumeId) ||
         objectIds.has(record.objectId) ||
@@ -3584,9 +3577,12 @@ export class OrcaWorkspace extends xb.Script {
     }
     if (!nearest) return false;
     const value = this.activePaintValue();
+    const instance = this.canonicalProject.getInstanceTransform(nearest.target.instanceId);
+    const volume = this.canonicalProject.getVolumeTransform(nearest.target.volumeId);
     this.paintStroke = {
       volumeId: nearest.target.volumeId,
       display: nearest.target.display,
+      ...(instance && volume ? { placement: { instance, volume } } : {}),
       triangles: new Set<number>(),
       channel: this.paintChannel,
       mode: this.paintMode,
@@ -3613,7 +3609,7 @@ export class OrcaWorkspace extends xb.Script {
           ...(stroke.previousLocal
             ? { previousLocalPoint: [stroke.previousLocal.x, stroke.previousLocal.y, stroke.previousLocal.z] as const }
             : {}),
-          plateZMm: local.z,
+          ...(stroke.placement ? { placement: stroke.placement } : {}),
         },
         settings: this.paintSettings,
         channel: stroke.channel,
@@ -3770,10 +3766,7 @@ export class OrcaWorkspace extends xb.Script {
       refinement ? { refinement, topologyRevision, triangleCount: triangleCount ?? mesh.triangles.length } : {},
     );
     if (facets.stateIndices.length === 0) return null;
-    const stateColors = facets.states.map(
-      (state) =>
-        new THREE.Color(state.kind === 'assigned' ? (colors.get(String(state.value)) ?? '#ffffff') : '#ffffff'),
-    );
+    const stateColors = facets.states.map((state) => new THREE.Color(paintStateColor(colors, state)));
     const positions = facets.positions;
     const vertexColors = new Float32Array(positions.length);
     facets.stateIndices.forEach((state, slot) => {
@@ -3824,11 +3817,10 @@ export class OrcaWorkspace extends xb.Script {
         channel,
       );
     } else {
-      const previewColor =
-        value === undefined
-          ? '#ffffff'
-          : (channelOverlayColors(channel, paintPaletteColors(this.getPaintPalette(true))).get(String(value)) ??
-            '#ffffff');
+      const previewColor = paintStateColor(
+        channelOverlayColors(channel, paintPaletteColors(this.getPaintPalette(true))),
+        value === undefined ? { kind: 'unpainted' } : { kind: 'assigned', value },
+      );
       geometry = this.buildPaintOverlayGeometry(
         display,
         [{ triangles: [...triangles], value: 'preview' }],

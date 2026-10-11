@@ -45,4 +45,6 @@
     <string name="filament_colour_apply">Uygula</string>
     <string name="filament_bar_selected">Seçili</string>
     <string name="filament_bar_default">Varsayılan</string>
+    <string name="workspace_paint">Boyama</string>
+    <string name="paint_tool_sphere">Küre</string>
 </resources>

@@ -602,6 +602,17 @@ impl<P: TimestampPolicy> ProjectSession<P> {
         }
         crate::facets::overlay::capture(&self.bus.snapshot(), self.bus.assets(), request)
     }
+    /// The paint facets of one volume's channel, read from the acknowledged
+    /// state; the capture owns its runs, leaves and colours.
+    pub fn paint_facets(
+        &self,
+        request: &wire::PaintOverlayRequest,
+    ) -> Result<crate::facets::paint_facets::PaintFacets, crate::facets::overlay::Refusal> {
+        if self.disposed {
+            return Err(crate::facets::overlay::Refusal::Disposed);
+        }
+        crate::facets::paint_facets::capture(&self.bus.snapshot(), self.bus.assets(), request)
+    }
     /// Stage a session-opened stroke's whole gesture as one edit; `None` when
     /// it touched no facet. Staging refuses as stale once anything changed
     /// since the stroke opened, and the work's facet guard refuses it again

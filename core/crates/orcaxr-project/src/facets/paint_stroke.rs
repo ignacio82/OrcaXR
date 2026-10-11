@@ -10,6 +10,8 @@
 //! staged commit, which carries the opened snapshot's guards, so a project
 //! that changed meanwhile refuses it as stale.
 use super::overlay::{self, Overlay, Region};
+use super::paint_facets::{ColorMap, PaintFacets};
+use super::paint_tool;
 use super::palette::project_palette;
 use super::region::{
     self, Assignment, EncodedNode, Mesh, RegionError, RegionState, Request, Roots,
@@ -79,6 +81,10 @@ pub struct PaintStroke {
     /// Touched facets in the order a sample first touched them.
     touched_order: Vec<u32>,
     refinement: Option<Vec<EncodedNode>>,
+    /// The opened snapshot's colours for this channel, as the preview draws them.
+    colors: ColorMap,
+    /// The opened snapshot's palette order (`paintStateOrder`), for Gap Fill's colour precedence.
+    state_order: Vec<Vec<u16>>,
     /// The session guard a session-opened stroke stages its commit under.
     pub(crate) session_guard: Option<crate::session::LocalGuard>,
 }
@@ -151,8 +157,57 @@ impl PaintStroke {
             touched: vec![false; triangle_count as usize],
             touched_order: Vec::new(),
             refinement: None,
+            colors: ColorMap::for_channel(&state.filaments, channel),
+            state_order: project_palette(&state.filaments, false)
+                .entries
+                .into_iter()
+                .filter_map(|entry| entry.filament_id)
+                .collect(),
             session_guard: None,
         })
+    }
+
+    /// One pointer sample made with the painter's settings
+    /// (`paintSelectionInputs` for this stroke's channel, over the opened
+    /// snapshot's palette order): the sample it makes and [`Self::sample`]'s
+    /// reply, or the painter's refusal, leaving the stroke as it was.
+    pub fn sample_with(
+        &mut self,
+        hit: &paint_tool::Hit,
+        settings: &paint_tool::Settings,
+    ) -> Result<(wire::PaintStrokeSample, wire::PaintStrokeSampleReply), paint_tool::Refusal> {
+        let channel = paint_tool::PaintChannel::of_channel(self.channel)
+            .ok_or(paint_tool::Refusal::InvalidSettings("Brim is not painted"))?;
+        let sample = paint_tool::sample(settings, hit, channel, || self.state_order.clone())?;
+        let reply = self.sample(&sample);
+        Ok((sample, reply))
+    }
+
+    /// [`Self::sample_with`] as canonical JSON: `{"hit","settings"}` →
+    /// `{"reply","sample"}` (the `PaintStrokeSampleReply` and the
+    /// `PaintStrokeSample` it answered, as wire texts) or the painter's
+    /// `{"error","message"}`; a malformed request is refused as
+    /// `invalid_request`.
+    pub fn sample_json(&mut self, request: &str) -> Result<String, &'static str> {
+        let (hit, settings) = paint_tool::read_stroke_request(request)?;
+        let units = |text: &str| text.encode_utf16().collect::<Vec<u16>>();
+        let value = match self.sample_with(&hit, &settings) {
+            Ok((sample, reply)) => {
+                let sample = wire::encode_paint_stroke_sample(&sample)
+                    .map_err(|_| paint_tool::OUTPUT_LIMIT)?;
+                let reply = wire::encode_paint_stroke_sample_reply(&reply)
+                    .map_err(|_| paint_tool::OUTPUT_LIMIT)?;
+                Value::Object(
+                    [
+                        (units("reply"), Value::String(units(&reply))),
+                        (units("sample"), Value::String(units(&sample))),
+                    ]
+                    .into(),
+                )
+            }
+            Err(refusal) => paint_tool::reply_value(&Err(refusal))?,
+        };
+        paint_tool::canonical_text(&value)
     }
 
     /// One pointer sample: select over the opened snapshot and the tree the
@@ -355,6 +410,48 @@ impl PaintStroke {
             self.channel,
             &overlay::assigned_regions(collapsed.assignments()),
             encoding.as_ref(),
+        )
+    }
+
+    /// The live preview as paint facets ([`Self::preview`]'s facets arranged
+    /// for a renderer colouring the volume's own facets), each state with the
+    /// colour the workspace previews it in.
+    pub fn preview_facets(&self) -> Result<PaintFacets, overlay::Refusal> {
+        let mesh = Mesh {
+            vertices: &self.vertices,
+            triangles: &self.triangles,
+        };
+        let Some(roots) = &self.refinement else {
+            let regions = if self.touched_order.is_empty() {
+                Vec::new()
+            } else {
+                vec![Region {
+                    triangles: self.touched_order.iter().map(|&t| f64::from(t)).collect(),
+                    state: self.target.clone(),
+                }]
+            };
+            return PaintFacets::draw(
+                self.guard.clone(),
+                self.channel,
+                &regions,
+                None,
+                &self.colors,
+            );
+        };
+        let invalid = |_| overlay::Refusal::InvalidAnnotations;
+        let nodes = roots
+            .iter()
+            .map(node_of)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(invalid)?;
+        let collapsed = FacetChannel::from_roots(self.channel, nodes, None).map_err(invalid)?;
+        let encoding = collapsed.encoding().map(|encoding| encoding.to_value());
+        PaintFacets::draw(
+            self.guard.clone(),
+            self.channel,
+            &overlay::assigned_regions(collapsed.assignments()),
+            encoding.as_ref().map(|encoding| (encoding, mesh)),
+            &self.colors,
         )
     }
 

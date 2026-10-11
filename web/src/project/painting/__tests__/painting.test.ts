@@ -530,7 +530,15 @@ test('rejects unpaintable targets, filaments, and incomplete tool input', () => 
   assert.throws(
     () =>
       harness.service.commitStroke({
-        hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
+        hit: {
+          volumeId: harness.volumeId,
+          ...TRIANGLE_HIT,
+          // A flat part: no brush or band can be placed on it.
+          placement: {
+            instance: { ...identityTransform(), scale: [1, 1, 0] },
+            volume: identityTransform(),
+          },
+        },
         settings: { tool: 'heightRange', heightRangeMm: 2 },
         value: TOOL_ONE,
         mode: 'paint',

@@ -43,4 +43,6 @@
     <string name="filament_colour_apply">Alkalmaz</string>
     <string name="filament_bar_selected">kiválasztva</string>
     <string name="filament_bar_default">Alapértelmezett</string>
+    <string name="workspace_paint">Festés</string>
+    <string name="paint_tool_sphere">Gömb</string>
 </resources>

@@ -131,6 +131,18 @@ public final class ProjectJniHarness {
     public static long primitiveChecks(String script) {
         return ProjectPrimitiveChecks.run(script);
     }
+    public static long paintToolChecks(String script) {
+        return ProjectPaintToolChecks.run(script);
+    }
+    public static long paintChecks() {
+        return ProjectPaintChecks.run();
+    }
+    public static long scenePaintChecks() {
+        return dev.orcaxr.renderer.ProjectScenePaintChecks.run();
+    }
+    public static long sceneColourChecks() {
+        return dev.orcaxr.renderer.ProjectSceneColourChecks.run();
+    }
     public static long stagedRecordChecks(String script) {
         return ProjectStagedRecordChecks.run(script);
     }
@@ -413,6 +425,10 @@ public final class ProjectJniHarness {
             if (name.equals("placementEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("transformEditChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, String.class);
             if (name.equals("primitiveChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("paintToolChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("paintChecks")) method = ProjectJniHarness.class.getMethod(name);
+            if (name.equals("scenePaintChecks")) method = ProjectJniHarness.class.getMethod(name);
+            if (name.equals("sceneColourChecks")) method = ProjectJniHarness.class.getMethod(name);
             if (name.equals("stagedRecordChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("stagedRecords")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("createEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);

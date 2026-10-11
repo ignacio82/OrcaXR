@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Own a temporary AVD/process for the JNI, app-startup, Device, Project, edit, inspector, creation, filament, local-slicing, Preview, Prepare, Send, language, accessibility and adaptive-shell smoke tests.
+"""Own a temporary AVD/process for the JNI, app-startup, Device, Project, edit, inspector, creation, filament, local-slicing, paint, Preview, Prepare, Send, language, accessibility and adaptive-shell smoke tests.
 
 API 34 by default; `--api 37` runs them on Android 17, where every printer
 exchange needs the local-network permission, and adds that permission's own
@@ -22,7 +22,7 @@ parser.add_argument("--pages", type=int, choices=(4, 16), default=4)
 SMOKES = ["android-smoke", "android-local-network-smoke", "android-device-smoke", "android-project-smoke",
           "android-preview-smoke", "android-prepare-smoke", "android-send-smoke", "android-locale-smoke",
           "android-edit-smoke", "android-inspector-smoke", "android-create-smoke", "android-filament-smoke",
-          "android-local-slice-smoke",
+          "android-local-slice-smoke", "android-paint-smoke",
           # Night mode, font scale 2.0, rotation and animation scales, each restored as it ends.
           "android-accessibility-smoke",
           # Last: it resizes the display (restoring it as it ends) for the window-size layouts.

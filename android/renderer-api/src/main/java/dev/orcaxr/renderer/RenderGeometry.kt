@@ -111,6 +111,8 @@ class TriangleMesh private constructor(val topologyId: String, internal val xyz:
     val cpuBytes get() = (xyz.size.toLong()+indices.size+colors.size)*4
     fun point(vertex: Int) = Point3(xyz[vertex*3].toDouble(),xyz[vertex*3+1].toDouble(),xyz[vertex*3+2].toDouble())
     fun vertex(facet: Int, corner: Int) = point(indices[facet*3+corner])
+    /** Facet [facet]'s own colour (`0xAARRGGBB`). */
+    fun facetColor(facet: Int) = colors[facet]
     companion object {
         const val MAX_FACETS = 2_100_000
         fun copyOf(id: String, xyz: FloatArray, indices: IntArray, colors: IntArray): TriangleMesh {

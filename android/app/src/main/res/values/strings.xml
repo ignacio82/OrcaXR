@@ -258,4 +258,47 @@
     <string name="tree_settings">%1$s custom settings</string>
     <!-- The browser's drop overlay (app.main.dropA3MFSTLOBJ in web/src/main.ts), shown while a file is dragged over the window. -->
     <string name="drop_prompt">Drop a 3MF, STL, OBJ, AMF, ZIP, or G-code file to load it</string>
+    <!-- The Workspace's paint tool: the browser's Paint action (scene.ts), its paint panel (web/src/ui/dom/PaintPanel.ts) and its painter's statuses (OrcaWorkspace). -->
+    <string name="workspace_paint">Paint</string>
+    <string name="paint_title">Colour painting</string>
+    <string name="paint_hint">Drag across a model to paint. Escape cancels the stroke; undo removes it.</string>
+    <string name="paint_channels">Paint channel</string>
+    <string name="paint_filaments">Paint filament</string>
+    <string name="paint_states">Paint state</string>
+    <string name="paint_tools">Paint tool</string>
+    <string name="paint_channel_color">Colour</string>
+    <string name="paint_channel_support">Support</string>
+    <string name="paint_channel_seam">Seam</string>
+    <string name="paint_channel_fuzzy_skin">Fuzzy skin</string>
+    <string name="paint_tool_circle">Circle</string>
+    <string name="paint_tool_sphere">Sphere</string>
+    <string name="paint_tool_triangle">Triangle</string>
+    <string name="paint_tool_fill">Fill</string>
+    <string name="paint_tool_height_range">Height range</string>
+    <string name="paint_tool_gap_fill">Gap fill</string>
+    <string name="paint_state_enforce">Enforce support</string>
+    <string name="paint_state_block">Block support</string>
+    <string name="paint_state_prefer">Prefer seam</string>
+    <string name="paint_state_avoid">Avoid seam</string>
+    <string name="paint_state_fuzzy">Fuzzy surface</string>
+    <string name="paint_state_erase">Erase</string>
+    <string name="paint_radius">Brush radius (mm)</string>
+    <string name="paint_smart_fill_angle">Smart fill angle (°)</string>
+    <string name="paint_height_range">Band height (mm)</string>
+    <string name="paint_gap_area">Max gap area (mm²)</string>
+    <string name="paint_badge_key">%1$s · key %2$s</string>
+    <string name="paint_erase_all">Erase all painting on selection</string>
+    <string name="paint_status_tool">Paint %1$s: drag across a model, Escape cancels.</string>
+    <string name="paint_status_filament">Paint colour: %1$s</string>
+    <string name="paint_status_erase_default">Paint colour: erase to default</string>
+    <string name="paint_status_not_in_project">That filament is not in this project.</string>
+    <string name="paint_status_unavailable">That filament cannot be painted.</string>
+    <string name="paint_status_tool_kind">Paint tool: %1$s</string>
+    <string name="paint_status_channel_state">Paint %1$s: %2$s</string>
+    <string name="paint_status_painted">Painted %1$s facets.</string>
+    <string name="paint_status_erased">Erased %1$s facets.</string>
+    <string name="paint_status_failed">Paint failed: %1$s</string>
+    <string name="paint_status_erase_needs_model">Select a model to erase its %1$s painting.</string>
+    <string name="paint_status_erased_all">Erased %1$s painting on %2$s part(s).</string>
+    <string name="paint_status_nothing">Nothing was painted.</string>
 </resources>

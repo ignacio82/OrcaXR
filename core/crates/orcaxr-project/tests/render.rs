@@ -105,7 +105,7 @@ fn render_pages_match_the_browser_over_live_sessions() {
             }
         }
     }
-    assert_eq!((pages, refusals, requests), (259, 57, 209));
+    assert_eq!((pages, refusals, requests), (313, 57, 265));
 }
 
 /// A disposed session releases what it retained and answers nothing.

@@ -98,6 +98,7 @@ class FilamentViewport(private val surface: SurfaceView) : AutoCloseable {
                 instance.setParameter("clipHeight", clipHeight)
                 instance.setParameter("opacity", if (instance === duplicate) .5f else 1f)
                 instance.setParameter("tint", 1f, 1f, 1f, 1f)
+                instance.setParameter("highlight", 0f, 0f, 0f, 0f)
             }
             translucent.setParameter("opacity", .45f)
             view.scene = scene

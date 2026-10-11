@@ -2,9 +2,10 @@
 // session and run the host's script of strokes — opens and their refusals,
 // samples, overlay pages and staged commits — comparing every reply with the
 // TypeScript authority's own encoding and each commit's outcome, revision,
-// hash and undo label; every live preview and canonical overlay packet is
-// compared by SHA-256 (`sha256` resolves a hex digest). Runs unchanged over
-// WASM in Node and a browser worker, and over the JNI bridge.
+// hash and undo label; every live preview and canonical overlay packet, and
+// every preview and canonical paint facets capture (summary, runs and
+// leaves), is compared by SHA-256 (`sha256` resolves a hex digest). Runs
+// unchanged over WASM in Node and a browser worker, and over the JNI bridge.
 export async function replayPaintStrokes(
   core,
   fixture,
@@ -86,6 +87,7 @@ export async function replayPaintStrokes(
     overlays: 0,
     commits: 0,
     packets: 0,
+    facets: 0,
   };
   // One overlay capture against its recorded summary, packet and window.
   const packets = async (overlay, step, label) => {
@@ -102,6 +104,29 @@ export async function replayPaintStrokes(
       overlay.free();
     }
     counts.packets++;
+  };
+  // One paint facets capture against its recorded summary, runs, leaves and windows.
+  const facets = async (capture, step, label) => {
+    try {
+      const summary = capture.summary();
+      eq(summary, step.summary, `${label} facets summary`);
+      eq(await sha256(capture.runs(0, 16384)), step.runs, `${label} runs`);
+      eq(await sha256(capture.leaves(0, 16384)), step.leaves, `${label} leaves`);
+      const sizes = JSON.parse(summary);
+      eq(
+        sizes.runs > 2 ? await sha256(capture.runs(1, 2)) : undefined,
+        step.runWindow,
+        `${label} run window`,
+      );
+      eq(
+        sizes.leaves > 2 ? await sha256(capture.leaves(1, 2)) : undefined,
+        step.leafWindow,
+        `${label} leaf window`,
+      );
+    } finally {
+      capture.free();
+    }
+    counts.facets++;
   };
   try {
     if (
@@ -129,7 +154,29 @@ export async function replayPaintStrokes(
     };
     for (const [i, step] of fixture.steps.entries()) {
       const label = `step ${i}`;
-      if ("preview" in step) {
+      if ("previewFacets" in step) {
+        await facets(strokes.get(step.stroke).preview_facets(), step, label);
+      } else if ("canonicalFacets" in step) {
+        if (!("refusal" in step))
+          await facets(session.paint_facets(step.canonicalFacets), step, label);
+        else if ("count" in step) {
+          const capture = session.paint_facets(step.canonicalFacets);
+          try {
+            refuses(() => capture.runs(0, step.count), step.refusal, label);
+            refuses(() => capture.leaves(0, step.count), step.refusal, label);
+          } finally {
+            capture.free();
+          }
+          counts.refusals++;
+        } else {
+          refuses(
+            () => session.paint_facets(step.canonicalFacets),
+            step.refusal,
+            label,
+          );
+          counts.refusals++;
+        }
+      } else if ("preview" in step) {
         await packets(strokes.get(step.stroke).preview(), step, label);
       } else if ("canonical" in step) {
         if (!("refusal" in step))
@@ -228,5 +275,6 @@ export async function replayPaintStrokes(
     paintStrokeCommits: counts.commits,
     paintStrokeRefusals: counts.refusals,
     paintOverlayPackets: counts.packets,
+    paintFacetCaptures: counts.facets,
   };
 }

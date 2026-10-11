@@ -219,7 +219,10 @@ class MainActivity : ComponentActivity() {
             command && keyCode == KeyEvent.KEYCODE_Z && event.isShiftPressed -> project.redoShortcut()
             event.isCtrlPressed && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_Y -> project.redoShortcut()
             plain && keyCode == KeyEvent.KEYCODE_FORWARD_DEL -> project.deleteShortcut()
-            plain && keyCode == KeyEvent.KEYCODE_ESCAPE -> project.escapeShortcut()
+            // Escape ends a paint stroke in flight before it deselects, as the browser's painter takes it first.
+            plain && keyCode == KeyEvent.KEYCODE_ESCAPE -> project.paint.escape() || project.escapeShortcut()
+            // The browser's `1`–`9`: the paint palette's numbered rows.
+            plain && keyCode in KeyEvent.KEYCODE_1..KeyEvent.KEYCODE_9 -> project.paint.chooseNumber(keyCode - KeyEvent.KEYCODE_0)
             // The platform's clipboard keys for the browser's Copy, Cut and Paste of a model.
             command && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_C -> project.clipboardShortcut("edit_copy")
             command && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_X -> project.clipboardShortcut("edit_cut")

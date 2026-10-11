@@ -45,4 +45,6 @@
     <string name="filament_colour_apply">Taikyti</string>
     <string name="filament_bar_selected">pasirinkta</string>
     <string name="filament_bar_default">Numatytas</string>
+    <string name="workspace_paint">Piešti</string>
+    <string name="paint_tool_sphere">Sfera</string>
 </resources>

@@ -21,6 +21,7 @@ mod fresh;
 mod json_sink;
 mod library;
 mod model;
+mod painting;
 mod placement;
 mod plate;
 mod preflight;
@@ -61,6 +62,7 @@ use orcaxr_project::{
     staging_layout as staging,
     store::ProjectSnapshot,
 };
+use painting::*;
 use placement::*;
 use plate::*;
 use preflight::*;
@@ -126,6 +128,7 @@ enum Record {
     Emboss(Box<orcaxr_project::emboss::PreparedEmboss>),
     SvgPart(Box<orcaxr_project::svg::PreparedSvgPart>),
     PaintOverlay(Box<orcaxr_project::facets::overlay::Overlay>),
+    PaintFacets(Box<orcaxr_project::facets::paint_facets::PaintFacets>),
     PickScene(Box<orcaxr_project::picking::PickScene>),
     PrintJobStatus(Box<orcaxr_printer::status::JobStatus>),
     HoldToConfirm(Box<orcaxr_printer::control::HoldToConfirm>),
@@ -208,6 +211,11 @@ access!(
     with_paint_overlay,
     PaintOverlay,
     Box<orcaxr_project::facets::overlay::Overlay>
+);
+access!(
+    with_paint_facets,
+    PaintFacets,
+    Box<orcaxr_project::facets::paint_facets::PaintFacets>
 );
 access!(
     with_paint_stroke,

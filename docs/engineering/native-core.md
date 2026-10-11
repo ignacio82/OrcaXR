@@ -89,7 +89,10 @@ newer compiler with this runtime. The dependency adds annotation 1.10.0 and Kotl
 stdlib 2.4.0; Gradle verifies their exact metadata/artifacts too.
 
 Two offline unlit materials provide facet colors, world-height clipping and
-transparency. The build checks runtime version, compiler/archive/script identity,
+transparency: a vertex colour times the draw's tint where its alpha is 1, the
+vertex colour alone where it is 0 (a painted facet), moved toward a
+`highlight` colour by its alpha, the transparent material premultiplying by
+its opacity. The build checks runtime version, compiler/archive/script identity,
 compiler arguments, sources and generated output hashes. Regenerate with
 `python3 tools/renderer/build-materials.py`, optionally passing `--matc` for an
 already downloaded compiler with the required hash. Normal builds verify tracked
@@ -3393,11 +3396,14 @@ a support-painted terrain and a modifier, runs every open refusal, then
 strokes — dragged Circles, splitting Spheres, Fill and Triangle over the
 persisted refinement under clipping and a transform, a splitting erase and
 its repeat, dense Gap Fill, Height Ranges on the seam and fuzzy-skin channels,
-an empty stroke and two strokes racing — and commits each through the
-browser's own facet commands. Rust, WASM in Node and Chrome and JNI reproduce
-every sample reply and overlay page byte for byte and every refusal, and each
-commit's outcome (8 applied, 1 unchanged, 1 nothing to stage, 1 stale),
-revision, hash and undo label; 105 Kotlin checks cover the wrapper.
+brushes and a band the painter's settings place on a scaled, a stretched and
+a turned part, an empty stroke and two strokes racing — and commits each
+through the browser's own facet commands. Rust, WASM in Node and Chrome and
+JNI reproduce every sample reply and overlay page byte for byte and every
+refusal, and each commit's outcome (11 applied, 1 unchanged, 1 nothing to
+stage, 1 stale), revision, hash and undo label; the Kotlin wrapper replays
+the whole corpus too (231 checks with its overlay packets and paint
+facets).
 
 ### Paint overlay packets
 
@@ -3424,9 +3430,112 @@ Bindings: WASM `ProjectSession.paint_overlay`, `ProjectPaintStroke.preview` and
 
 The paint-stroke corpus records the preview after every sample and the
 canonical overlay after every commit, then every channel of every volume, an
-unknown volume and an oversized packet: 44 summaries, whole packets and paging
-windows, packets compared by SHA-256 (refined previews reach 547 facets). Rust,
-WASM in Node and Chrome, JNI and 151 Kotlin checks reproduce all of them.
+unknown volume and an oversized packet: 51 summaries, whole packets and paging
+windows, packets compared by SHA-256 (refined previews reach 1,081 facets). Rust,
+WASM in Node and Chrome, JNI and the Kotlin wrapper reproduce all of them.
+
+### Paint facets and the painter's settings
+
+Native renderers colour a volume's own facets instead of drawing a second
+mesh over them, so the core serves overlays in that form too
+(`facets::paint_facets`, the browser's `PaintFacets.ts`): whole source
+facets as `[first, count, state]` runs in source order (a facet two regions
+draw shows the later one), the leaves of subdivided facets as 44-byte
+records (nine float32 corners in volume space, the source facet and the
+state), and each state with the colour the workspace draws it in. The
+colour rule is the browser's, now its own module (`paintOverlayColors.ts`,
+which `OrcaWorkspace` imports): colour paint draws a filament's palette
+display colour (`projectPaintPalette(state, { includeUnavailable: true })`),
+support, seam and fuzzy-skin states their fixed colours, and an unpainted
+state (an erasing preview) or a value nothing names white. An unrefined
+channel is read from its sparse assignments alone, without decoding the
+mesh; a refined one is materialized as the overlay is. A capture owns its
+facets under the facet guard of the state read: a canonical JSON summary
+(`{"colors","facets","guard","leaves","runs","states"}`), then packets of at
+most 16,384 runs or leaves. `ProjectSession::paint_facets` captures the
+canonical facets of a `PaintOverlayRequest`, `PaintStroke::preview_facets` a
+stroke's live preview (its colours read from the opened snapshot).
+
+The painter's settings are shared too (`facets::paint_tool`, the browser's
+`paintSelectionInputs`, which `PaintStrokeService` now selects with, through
+`PaintToolExchange.ts`): one pointer hit (facet, volume-local point and eye,
+the previous point of a drag, and the part's placement) with the paint
+tool's settings makes the paint stroke sample the workspace's painter
+selects with — radius 2 mm, band 1 mm and gap 2 mm² when unset, each clamped
+to the pinned gizmo limits; a smart-fill angle at or below 0° turns edge
+detection off; Gap Fill orders colour by the palette's displayed filaments
+and the other channels by their pinned states; splitting only for brushes
+and bands; the overhang gate only when non-zero — or the painter's refusal
+(`invalid_hit`: no source facet, a placement that is not finite and
+invertible). A stroke takes samples so (`PaintStroke::sample_with`, its
+palette order from the opened snapshot). The exchanges are canonical JSON:
+`{"channel","hit","settings","stateOrder"}` →
+`{"sample":"<PaintStrokeSample wire>"}` or `{"error","message"}`; a stroke's
+`{"hit","settings"}` → `{"reply","sample"}`;
+`{"channel","filaments","states"}` → `{"colors"}`.
+
+The brush measures the bed's millimetres, as the person sees it and as
+Orca's painter gizmo measures it. A hit's `placement` is the canonical
+transforms of the instance it met and of the part inside it
+(`{"instance","volume"}`, each `{"rotation","scale","translationMm"}`);
+`paint_tool::place` (`PaintPlacement.ts`'s `placePaintHit`) composes them as
+three.js composes the display meshes (`picking::compose_parts`, the instance
+after the part) into the sample's facet selection transform — the matrix's
+linear part and translation, and as scaling factors its singular values,
+largest first (square roots of the eigenvalues of `LᵀL` by cyclic Jacobi
+rotations: square roots and the four basic operations only, so every host
+computes the same bits) — and Height Range starts at the hit's bed Z
+(`float((trafo * hit).z())`). The selector divides the radius by the factors
+when they agree (a uniform scale under any rotation or mirror) and selects
+in the part's own millimetres; otherwise it moves the brush centres and the
+eye onto the bed and selects there with the radius as given. So the sphere
+is a ball of the set radius on the bed — on a non-uniformly scaled part an
+ellipsoid in its own coordinates, stretched by the inverse of the scale
+along each axis — the circle a cylinder of that radius along the view, and
+the band a slab of bed Z from the hit's bed Z, across a part laid on its side
+rather than up it. Orca reads uniformity off the diagonal of the polar
+decomposition's scale factor instead; a part turned inside a non-uniform
+instance can make that diagonal look uniform (a (2, 1, 1) stretch along the
+part's (1, 1, 1) diagonal reads (4/3, 4/3, 4/3)) and size the brush in the
+part's millimetres. The singular values never do, so the brush is the size
+set on every placement. A hit without a placement is a part at the bed's
+origin, unscaled and unrotated. Browser defect fixed: the workspace's
+painter passed no placement and took the band's start from the hit's own Z,
+so on a scaled part the brush and the band were measured in the part's
+millimetres (a 200% part took a brush twice the size set) and a band on a
+turned part ran along the part's Z; `OrcaWorkspace` now passes the placement
+of the instance the ray met (regression tests in
+`paint-target-pick.test.ts`: a 200% plate takes with 4 mm what its unscaled
+copy takes with 2 mm, and a band on a stretched or laid-down column stays
+within its bed-Z slab).
+Bindings: WASM `paint_tool_sample`, `paint_facet_colors`,
+`ProjectSession.paint_facets`, `ProjectPaintStroke.preview_facets` /
+`sample_with` and `ProjectPaintFacets`; the JNI exports `paintToolSample`,
+`paintFacetColors`, `sessionPaintFacets`, `paintStrokePreviewFacets`,
+`paintStrokeSampleWith` and `paintFacetsSummary` / `Runs` / `Leaves`; Kotlin
+`PaintTools`, `ProjectSession.paintFacets`, `ProjectPaintStroke.previewFacets`
+/ `sampleWith` and `ProjectPaintFacets`.
+
+`paint-tool-vectors.mjs` drives the production modules over every tool on
+every channel, each parameter absent, inside and past its limits, splitting,
+clipping planes, overhang gates, dragged brushes, awkward numbers, nine
+placements (moved; a uniform 200% turned; laid on its side; non-uniform and
+mirrored; non-uniform turned; a part turned inside a non-uniform instance; a
+half-size part offset in a turned instance; a mirrored uniform scale; an
+unnormalized quaternion) under every tool and a drag, 240 seeded
+combinations and the painter's refusals, two unplaceable placements among
+them (427 samples, 10 of them refusals, 29 malformed requests), and the
+colours of every filament library of the paint palette corpus on every
+channel for every kind of state (775 sets, 5 malformed). The paint-stroke
+corpus now also records paint facets after every sample and commit (51
+captures, runs and leaves by SHA-256, 25 with leaves, and an oversized
+packet), and strokes the painter's settings place: a 200% sphere of 1.6 mm
+(checked against the part's own 0.8 mm), a sphere and a splitting circle on
+an instance stretched (2, 1, 0.5), and a band on a part laid on its side.
+Rust, WASM in Node and JNI answer all of it byte for byte (the Chrome worker
+carries the same replays); 1,661 Kotlin checks replay the painter's corpus
+through the typed wrapper and 53 more the facets through
+`ProjectPaintStrokeChecks`.
 
 ### Ray picking
 
@@ -4898,8 +5007,8 @@ its mesh, a full snapshot for a new renderer, "New project" emptying the
 bed. The Project smoke compares Workspace screenshots on the emulator: an
 imported model changes about 1,500 pixels of the framed bed, a tap on it
 selects and re-tints it, and undo restores the empty bed. Shading is baked
-flat (the browser lights its surface); paint colours and toolpaths are not
-drawn yet.
+flat (the browser lights its surface); paint is drawn as [Android painting](#android-painting)
+describes, toolpaths in Preview.
 
 ### Android project bed and placement edits
 
@@ -5170,6 +5279,113 @@ it has not run on an emulator yet. Not yet done: the browser's mixed
 (virtual) filament library — adding, editing, duplicating, enabling and
 removing recipes — and its inspector selector's height-range scopes in a
 panel of their own (the bar assigns ranges selected in the tree).
+
+### Android painting
+
+The Workspace draws every part in its colour and its paint, as the browser
+draws them, and paints as the browser's painter paints.
+
+Colours. A part's tint is the colour of the filament it resolves to, from the
+render deltas (`volumeDisplayColor`: the part's own filament, then its
+object's; a physical filament's colour or a mixed recipe's display colour;
+the browser draws no height-range colour), or the browser surface's neutral
+`#b8bec8` when nothing is assigned; helper volumes draw as model parts do,
+in the filament they resolve to, as the browser's surface draws every role
+with one material. A change of filament is a retint alone: no mesh or paint
+is sent again. Paint is drawn on the part's own facets: `SceneSync` reads every
+drawn volume's [paint facets](#paint-facets-and-the-painters-settings) of the
+channel shown — colour, or the channel the active paint tool authors (the
+browser's `PAINT_TOOL_CHANNELS[tool] ?? 'color'`), so support, seam and
+fuzzy-skin paint show only while their tool does — into `ScenePaint`
+(renderer-api, platform-free), which keeps each painted volume's vertex
+colours and hands on only the facets whose colour changed, in ranges of at
+most 16,384 facets (short unchanged gaps ride along). A painted facet's
+vertices carry its colour under the facet's baked shade with alpha 0; any
+other facet's its shade with alpha 255. The two materials now mix by that
+alpha — `mix(color, color × tint, color.a)` — then move toward the selection
+accent by a `highlight` parameter, the transparent one premultiplying by its
+opacity in the shader. `FilamentScene` uploads each drawn volume once (its
+mesh's chunks with colour bytes of its own, shared by its object's
+instances; picking indexes stay per mesh asset) and applies a paint change as
+partial colour uploads (`setBufferAt` at the facet's offset) of the chunks a
+range crosses: positions and indices are never sent again. Filament's Java
+API cannot free a `BufferObject`, so positions are not shared between two
+volumes of one asset. Leaves of subdivided facets are a small mesh of their
+own drawn over the volume with a polygon offset, as the browser's overlay is.
+While a stroke is in flight its preview shows over the paint at the browser's
+55% (`PAINT_PREVIEW_MATERIAL`), a refined preview hiding the canonical paint
+as the browser hides its overlay.
+
+Painting. The Workspace's toolbar offers Paint (`tool_paint` on
+`dom-toolbar`, enabled as the core enables it: a selected instance), and its
+panel is the browser's paint panel (`PaintPanel.ts`): the channel (switching
+tools as `configurePaint` does), the palette with its swatches, badges and
+keys (the inheriting row erases) or the channel's states and Erase, the six
+tools, the tool's parameters with the panel's ranges and steps, and Erase all
+painting on selection (`paint_erase_all`); a hardware keyboard's `1`–`9`
+choose the numbered rows (`paint_select_filament_N`) and Escape drops a
+stroke in flight. `PaintToolState` (app, platform-free) holds the browser
+workspace's paint state and statuses (`setTool` taking the first filament,
+`setPaintFilament`, `setPaintFilamentByNumber`, `setPaintTool`,
+`setPaintChannelState`). A drag that starts on a model paints: `PaintModel`
+opens a stroke where the finger first met a part (`ProjectPainter.open`, on
+the actor's authority), samples it on a worker thread at every move over
+that part alone (`FilamentScene.pick` now answers the hit and the eye in the
+part's own millimetres; moves arriving while a sample runs collapse into the
+latest, its capsule sweeping from the last sample), previews it, and commits
+on release as one undoable step with the browser's label ("Paint colour
+facets", "Erase support facets", the refined tree's "Paint refined colour
+facets") — a stroke that touched nothing submits nothing, a stale one nothing
+either — then says what the browser's status says. Refusals use the
+browser's words (`parameter-modifier volumes cannot be colour painted`,
+`The paint placement must be finite and invertible`, `Paint failed: …`).
+Samples are the browser's: the hit and eye in the part's own frame and the
+placement of the draw the finger met (`ProjectScene.Draw.placement`, the
+instance's and the part's canonical transforms), so the core measures the
+brush and the band in the bed's millimetres, as
+[the painter's settings](#paint-facets-and-the-painters-settings) describe.
+Erase all (`ProjectPainter.eraseAll`) resets each model part the selection
+paints as its own "Erase all colour facets". Two browser defects were fixed
+on the way, with a workspace regression test: Erase all took every part on
+the plate while an instance was selected (it now takes the selected
+instance's object, as a selected object), and tried to reset helper volumes,
+which refuse painting, failing part-way. Every tool the browser's panel
+offers is here (Circle, Sphere, Triangle, Fill with its smart-fill angle,
+Height range, Gap fill) and so is erasing; Smart Paint stays out of scope.
+
+`ProjectPaintChecks` (45 checks over JNI) paint a cube given two filaments
+where a pick ray meets it — the palette and its keys, the tools the core
+enables, a Circle stroke previewed in the filament's colour and committed as
+one "Paint colour facets" that undo and redo take back and restore, an erase
+by Fill, support paint in its fixed colour, the painter's refusals (a flat
+placement, an unknown filament, a modifier), the brush on the bed (on a 200%
+placement a 4 mm sphere takes what the part's own 2 mm takes and 2 mm takes
+less; a stretched placement's factors; the band from the hit's bed Z), an
+untouched and a stale stroke committing nothing, and Erase all of the
+selected instance's object, of every model part and of nothing left;
+`ProjectScenePaintChecks` (13, renderer-api) follow a real session through
+`SceneSync`: the object's filament tints its draw, a preview changes facet 0
+alone at 55%, the stroke paints it in its own colour, undo returns its shade,
+support paint shows only while support is the channel drawn, and a renderer
+made afresh gets every painted facet. `ProjectSceneColourChecks` (9,
+renderer-api) follow the base colours: an unassigned cube in the neutral
+colour, its object's physical filament and then a mixed recipe's display
+colour, its part's own filament over its object's, a modifier in its
+object's filament and then its own, a height range's filament changing
+nothing drawn, and undo recolouring — each a retint alone. The render-delta
+corpus now assigns an object a mixed filament, a part its own filament and a
+height range one (313 pages, 265 session requests; 50 Kotlin render checks).
+`ScenePaintTest` (renderer-api) and `PaintToolTest` (app) cover the colour
+arithmetic, ranges, previews, leaves, the panel state, its statuses and
+refusals. `android-paint-smoke.py` (run by `emulator-smoke.py` before the
+adaptive smoke) adds and selects a cube, opens Paint and chooses row 2 with
+the keyboard's 2; assigns the cube to head 2 from the Project area's
+selection filament bar (the project filaments unit's) and finds the
+Workspace's pixels over the cube recoloured, then undoes it and finds them
+as before; drags across the cube and finds the pixels it painted changed,
+to the colour the assigned cube was drawn in; finds "Undo Paint colour
+facets", undoes it and finds the cube drawn as before. It has not run on an
+emulator yet.
 
 ### Android Preview area
 
@@ -5956,13 +6172,16 @@ Kotlin `ProjectSession.render`.
 `render-delta-vectors.mjs` follows real TypeScript sessions opened from the
 19 distinct trace states through a full sync, an empty delta, and deltas
 after acknowledged moves, an added and re-activated plate, an object's
-filament, a duplicate, printable toggles paged across a newer edit, a
-deletion and renames, then an unknown base, an unknown target, an oversized
-page and the released opening snapshot. Rust, WASM in Node and Chrome and
-JNI open each state as a real session, take the same edits (matching their
-replies) and answer all 259 pages byte for byte, with 57 refusals; a Rust
-check applies the delta between every pair of corpus projects to its base
-and rebuilds the target, and 41 Kotlin checks cover the wrapper. Intent
+physical and then mixed filament (drawn in the recipe's display colour), a
+part's own filament over its object's, a height range's filament (an empty
+delta: the browser colours no range), a duplicate, printable toggles paged
+across a newer edit, a deletion and renames, then an unknown base, an
+unknown target, an oversized page and the released opening snapshot. Rust,
+WASM in Node and Chrome and JNI open each state as a real session, take the
+same edits (matching their replies) and answer all 313 pages byte for byte,
+with 57 refusals; a Rust check applies the delta between every pair of
+corpus projects to its base and rebuilds the target, and 50 Kotlin checks
+cover the wrapper. Intent
 encoding in Rust now writes numbers as JavaScript does (`1`, not `1.0`), so
 every binding's wire text is byte-identical to the browser's.
 

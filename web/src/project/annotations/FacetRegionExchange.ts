@@ -154,6 +154,45 @@ export function regionTool(wire: ProjectFacetRegionRequestWire['tool']): FacetRe
   };
 }
 
+/** A selector tool in the wire's encoding; brush and band splitting travel as the sample's own flag. */
+export function regionToolWire(tool: FacetRegionTool): ProjectFacetRegionRequestWire['tool'] {
+  const vector = (value: Vec3): number[] => [value[0], value[1], value[2]];
+  const optional = (value: Vec3 | undefined) => (value === undefined ? { absent: {} } : { value: vector(value) });
+  switch (tool.kind) {
+    case 'triangle':
+      return { triangle: { hit: optional(tool.hit) } };
+    case 'fill':
+      return {
+        fill: {
+          hit: optional(tool.hit),
+          maxAdjacentAngleDegrees: tool.edgeDetection
+            ? { value: tool.edgeDetection.maxAdjacentAngleDegrees }
+            : { absent: {} },
+        },
+      };
+    case 'heightRange':
+      return { heightRange: { startZMm: tool.startZMm, heightMm: tool.heightMm } };
+    case 'gapFill':
+      return {
+        gapFill: {
+          maxAreaMm2: tool.maxAreaMm2,
+          stateOrder: tool.stateOrder.map((value) =>
+            typeof value === 'boolean' ? { flag: value } : { text: wireUnits(String(value)) },
+          ),
+        },
+      };
+    default: {
+      const brush = {
+        center: vector(tool.center),
+        previousCenter: optional(tool.previousCenter),
+        cameraPosition: vector(tool.cameraPosition),
+        radiusMm: tool.radiusMm,
+      };
+      return tool.kind === 'circle' ? { circle: brush } : { sphere: brush };
+    }
+  }
+}
+
 export function regionClippingPlane(wire: {
   readonly normal: readonly number[];
   readonly offset: number;

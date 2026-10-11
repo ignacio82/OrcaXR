@@ -42,4 +42,6 @@
     <string name="filament_colour_apply">Applicera</string>
     <string name="filament_bar_selected">vald</string>
     <string name="filament_bar_default">Standard</string>
+    <string name="workspace_paint">Färglägga</string>
+    <string name="paint_tool_sphere">Sfär</string>
 </resources>

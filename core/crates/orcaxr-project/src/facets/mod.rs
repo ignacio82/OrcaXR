@@ -2,7 +2,9 @@
 //! only subdivided source facets; dense roots are an explicitly budgeted,
 //! temporary editing representation. This is computation, not a project codec.
 pub mod overlay;
+pub mod paint_facets;
 pub mod paint_stroke;
+pub mod paint_tool;
 pub mod palette;
 pub mod region;
 pub mod region_exchange;

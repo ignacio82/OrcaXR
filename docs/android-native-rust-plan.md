@@ -1406,7 +1406,7 @@ and replay coverage for the complete current command inventory.
   - [x] Add renderer projections and revisioned deltas (`render`): normalized
     plate, instance and volume records with resolved colours, paged deltas
     from the snapshot a host shows, retained served targets, reset and stale
-    answers (259 pages and 57 refusals per binding; 23,154 differential
+    answers (313 pages and 57 refusals per binding; 23,154 differential
     pages agree in CI and 144,585 locally; the browser surface shares the
     colour rule).
   - [x] Port the Objects tree (`objects_tree`): the panel's rows, labels,
@@ -1607,7 +1607,17 @@ painting, and FullSpectrum operations that can support real native projects.
     (refined tree or ranges); 11 browser strokes agree in every binding.
   - [x] Serve paint overlay packets: canonical overlays and live stroke
     previews as 40-byte float32 facet packets with a state summary, drawn as
-    the workspace draws them (44 captures exact in every binding).
+    the workspace draws them (51 captures exact in every binding).
+  - [x] Serve paint facets for renderers that colour a volume's own facets
+    (runs of whole facets, leaves of subdivided ones, each state's colour in
+    the workspace's colour rule, unrefined channels read without decoding the
+    mesh) and port the painter's settings (`paintSelectionInputs`: the sample
+    one hit makes with the paint tool's settings, clamped to the gizmo
+    limits, with the brush and band measured in bed millimetres from the
+    hit's placement): 51 facet captures, 427 samples (nine placements:
+    scaled, turned, stretched, mirrored) and 775 colour sets exact in Rust,
+    WASM in Node and JNI; Erase all's two browser defects and the browser
+    painter's part-millimetre brush fixed with regression tests.
   - [x] Port ray picking (`picking`): printer-space rays meet the facet the
     workspace's three.js raycast meets (243 rays checked against three),
     through per-plate pick scenes with exact bounding volume hierarchies;
@@ -1996,8 +2006,21 @@ storage journeys on phone, tablet, and desktop-sized windows.
   centre, scale to fit, drop to bed, arrange; the core's enablement) carry
   them out: a 509-check JNI journey lands the transform-field corpus's edits
   on a real session as the browser computed them and undoes each, and an
-  emulator inspector smoke drives them. Painting, other model-tool UI,
-  lighting and preview controls remain.
+  emulator inspector smoke drives them. The Workspace draws each part in
+  the colour of the filament it resolves to (part, then object; physical or
+  mixed; helper volumes alike; no height-range colour, as the browser) and
+  its paint as the browser does, from the shared core's paint facets (runs
+  of whole facets, leaves of subdivided ones, each state's colour) with
+  colour-only partial uploads, and paints with the browser's paint tool:
+  Paint on the toolbar (the core's enablement), the paint panel's channels,
+  palette (keys `1`–`9`), tools and brush, strokes dragged across a model
+  (sampled off the UI thread with the painter's settings shared in the core,
+  the brush measured in bed millimetres from the part's placement, previewed
+  at 55%) each committed as one step with the browser's label, and Erase all
+  (45 JNI checks of the workflow, 13 of the scene's paint, 9 of its base
+  colours; an emulator paint smoke, which also assigns the cube a filament
+  and compares its colour with the paint's, is written, not yet run).
+  Other model-tool UI, lighting and preview controls remain.
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
   large-file streaming. Validate incoming open/share intents as untrusted input.

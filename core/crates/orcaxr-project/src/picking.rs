@@ -39,7 +39,17 @@ impl Refusal {
 
 /// `Matrix4.compose` after `Quaternion.fromArray(...).normalize()`.
 pub fn compose(transform: &Transform) -> Matrix {
-    let [mut x, mut y, mut z, mut w] = transform.rotation.map(|v| v.get());
+    compose_parts(
+        transform.translation_mm.map(|v| v.get()),
+        transform.rotation.map(|v| v.get()),
+        transform.scale.map(|v| v.get()),
+    )
+}
+
+/// [`compose`] of a canonical transform's translation (mm), rotation
+/// quaternion `[x, y, z, w]` and scale.
+pub fn compose_parts(translation_mm: Vec3, rotation: [f64; 4], scale: Vec3) -> Matrix {
+    let [mut x, mut y, mut z, mut w] = rotation;
     let l = (x * x + y * y + z * z + w * w).sqrt();
     if l == 0.0 {
         (x, y, z, w) = (0.0, 0.0, 0.0, 1.0);
@@ -51,8 +61,8 @@ pub fn compose(transform: &Transform) -> Matrix {
     let (xx, xy, xz) = (x * x2, x * y2, x * z2);
     let (yy, yz, zz) = (y * y2, y * z2, z * z2);
     let (wx, wy, wz) = (w * x2, w * y2, w * z2);
-    let [sx, sy, sz] = transform.scale.map(|v| v.get());
-    let [px, py, pz] = transform.translation_mm.map(|v| v.get());
+    let [sx, sy, sz] = scale;
+    let [px, py, pz] = translation_mm;
     [
         (1.0 - (yy + zz)) * sx,
         (xy + wz) * sx,

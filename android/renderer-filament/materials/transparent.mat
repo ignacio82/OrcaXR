@@ -8,14 +8,20 @@ material {
     parameters : [
         { type : float, name : clipHeight },
         { type : float, name : opacity },
-        { type : float4, name : tint }
+        { type : float4, name : tint },
+        { type : float4, name : highlight }
     ]
 }
 fragment {
     void material(inout MaterialInputs material) {
         prepareMaterial(material);
         if (getUserWorldPosition().y > materialParams.clipHeight) discard;
-        material.baseColor = getColor() * materialParams.tint;
-        material.baseColor.a *= materialParams.opacity;
+        // As the opaque material, then premultiplied by the opacity, as
+        // transparent blending expects.
+        vec4 color = getColor();
+        vec3 rgb = mix(color.rgb, color.rgb * materialParams.tint.rgb, color.a);
+        rgb = mix(rgb, materialParams.highlight.rgb, materialParams.highlight.a);
+        float alpha = materialParams.tint.a * materialParams.opacity;
+        material.baseColor = vec4(rgb * alpha, alpha);
     }
 }

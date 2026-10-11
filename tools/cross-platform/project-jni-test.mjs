@@ -55,6 +55,7 @@ import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
 import { replayFilamentAssignment } from "./filament-assignment-replay.mjs";
+import { replayPaintTool } from "./paint-tool-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -437,6 +438,20 @@ try {
     ].join("\n"),
   );
   assert.equal(transformFieldChecks, 1936);
+  // The painter's settings and paint colours through the JNI exports, then the Kotlin wrapper.
+  const paintToolFixture = await json("testdata/cross-platform/paint-tool-vectors.json");
+  const paintTool = replayPaintTool(projectJniCore(jvm.call), paintToolFixture);
+  assert.deepEqual(Object.values(paintTool), [427, 34, 775]);
+  const paintToolChecks = jvm.call(
+    "paintToolChecks",
+    [
+      ...[...paintToolFixture.samples, ...paintToolFixture.errors].map((c) => `S\t${c.request}\t${c.reply}`),
+      ...paintToolFixture.malformed.map((request) => `X\t${request}`),
+      ...paintToolFixture.colors.map((c) => `C\t${c.request}\t${c.reply}`),
+      ...paintToolFixture.colorRefusals.map((request) => `Y\t${request}`),
+    ].join("\n"),
+  );
+  assert.equal(paintToolChecks, 1661);
   // Primitives and helper volumes through the JNI exports, then the Kotlin wrapper.
   const primitiveFixture = await json("testdata/cross-platform/primitive-vectors.json");
   const primitives = replayPrimitives(projectJniCore(jvm.call), primitiveFixture, layout, (text) => Uint8Array.from(Buffer.from(text, "base64")));
@@ -523,6 +538,15 @@ try {
   // What the Workspace's 3D view says to TalkBack, from a real session as it changes.
   const accessibilityChecks = jvm.call("accessibilityChecks");
   assert.equal(accessibilityChecks, 18);
+  // The painter on a real session: palette, strokes, previews, commits, refusals and Erase all.
+  const paintChecks = jvm.call("paintChecks");
+  assert.equal(paintChecks, 45);
+  // The Workspace's paint as a renderer gets it: changed facets' vertex colours, previews, channels.
+  const scenePaintChecks = jvm.call("scenePaintChecks");
+  assert.equal(scenePaintChecks, 13);
+  // The Workspace's base colours as a renderer gets them: physical, mixed, part over object, modifiers, ranges.
+  const sceneColourChecks = jvm.call("sceneColourChecks");
+  assert.equal(sceneColourChecks, 9);
   const archiveCase = JSON.parse(
     await readFile(new URL("testdata/cross-platform/foreign-import-vectors.json", root)),
   ).cases.find((c) => c.name === ACTOR_ARCHIVE_CASE);
@@ -736,7 +760,7 @@ try {
   const renders = replayRender(projectJniCore(jvm.call), renderFixture, layout);
   assert.deepEqual(
     [renders.renderPages, renders.renderRefusals, renders.renderRequests],
-    [259, 57, 209],
+    [313, 57, 265],
   );
   const renderState = renderFixture.states[0];
   const renderChecks = jvm.call(
@@ -753,7 +777,7 @@ try {
       )
       .join("\n"),
   );
-  assert.equal(renderChecks, 41);
+  assert.equal(renderChecks, 50);
   // Facet region selection over a live session, then the Kotlin wrapper.
   const regionFixture = JSON.parse(
     await readFile(
@@ -789,8 +813,8 @@ try {
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
   );
   assert.deepEqual(
-    [strokes.paintStrokeOpens, strokes.paintStrokeSamples, strokes.paintStrokeOverlays, strokes.paintStrokeCommits, strokes.paintStrokeRefusals, strokes.paintOverlayPackets],
-    [11, 18, 5, 11, 11, 44],
+    [strokes.paintStrokeOpens, strokes.paintStrokeSamples, strokes.paintStrokeOverlays, strokes.paintStrokeCommits, strokes.paintStrokeRefusals, strokes.paintOverlayPackets, strokes.paintFacetCaptures],
+    [14, 22, 5, 14, 13, 51, 51],
   );
   const unitsText = (u) => String.fromCharCode(...u);
   const paintStrokeChecks = jvm.call(
@@ -800,7 +824,11 @@ try {
     Uint8Array.from(strokeFixture.assets[1].bytes),
     strokeFixture.steps
       .map((s) =>
-        "preview" in s
+        "previewFacets" in s
+          ? `F\t${s.stroke}\t${s.summary}\t${s.runs}\t${s.leaves}\t${s.runWindow ?? ""}\t${s.leafWindow ?? ""}`
+          : "canonicalFacets" in s
+            ? `G\t${s.canonicalFacets}\t${s.summary ?? ""}\t${s.runs ?? ""}\t${s.leaves ?? ""}\t${s.runWindow ?? ""}\t${s.leafWindow ?? ""}\t${s.refusal ?? ""}\t${s.count ?? ""}`
+            : "preview" in s
           ? `P\t${s.stroke}\t${s.summary}\t${s.packet}\t${s.window ?? ""}`
           : "canonical" in s
             ? `K\t${s.canonical}\t${s.summary ?? ""}\t${s.packet ?? ""}\t${s.window ?? ""}\t${s.refusal ?? ""}\t${s.count ?? ""}`
@@ -814,7 +842,7 @@ try {
       )
       .join("\n"),
   );
-  assert.equal(paintStrokeChecks, 151);
+  assert.equal(paintStrokeChecks, 231);
   // Ray picking over a live session, then the Kotlin wrapper.
   const pickFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/pick-vectors.json", root)),
@@ -1605,6 +1633,8 @@ try {
     transformEditChecks,
     ...primitives,
     primitiveChecks,
+    ...paintTool,
+    paintToolChecks,
     createEditChecks,
     filamentAssignment,
     filamentChecks,
@@ -1612,6 +1642,9 @@ try {
     stagedRecordChecks,
     projectSceneChecks,
     accessibilityChecks,
+    paintChecks,
+    scenePaintChecks,
+    sceneColourChecks,
     actorArchiveChecks,
     providerDocumentChecks,
     ...preflights,

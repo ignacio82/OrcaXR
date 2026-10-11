@@ -84,7 +84,7 @@ fn encoded<T>(
 ) -> Result<String> {
     encode(value).map_err(|_| "output_limit")
 }
-fn decoded<T>(
+pub(super) fn decoded<T>(
     env: &mut JNIEnv<'_>,
     text: &JString<'_>,
     decode: fn(&str) -> std::result::Result<T, InvalidIntent>,

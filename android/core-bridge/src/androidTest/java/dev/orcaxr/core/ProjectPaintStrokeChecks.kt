@@ -16,11 +16,29 @@ object ProjectPaintStrokeChecks {
             (window.isEmpty() || sha256(it.packet(1, 2)) == window)
     }
 
+    /** One paint facets capture against its recorded summary, runs, leaves and windows. */
+    private fun facets(capture: ProjectPaintFacets, summary: String, runs: String, leaves: String, runWindow: String, leafWindow: String): Boolean = capture.use {
+        val read = it.summary()
+        it.summaryJson() == summary && read.runs == PaintFacetsSummary.read(summary).runs &&
+            sha256(it.runs(0, ProjectPaintFacets.MAX_PAGE)) == runs &&
+            sha256(it.leaves(0, ProjectPaintFacets.MAX_PAGE)) == leaves &&
+            (if (read.runs > 2) sha256(it.runs(1, 2)) else "") == runWindow &&
+            (if (read.leaves > 2) sha256(it.leaves(1, 2)) else "") == leafWindow &&
+            PaintFacetPackets.runs(it.runs(0, ProjectPaintFacets.MAX_PAGE)).let { triples ->
+                triples.size.toLong() == read.runs * 3 && (triples.indices step 3).sumOf { at -> triples[at + 1].toLong() } == read.facets
+            } &&
+            PaintFacetPackets.leaves(it.leaves(0, ProjectPaintFacets.MAX_PAGE)).second.size.toLong() == read.leaves &&
+            read.colors.size == read.states.size
+    }
+
     /** [script] holds one step per line: `O\t<stroke>\t<open>\t<refusal>`,
      * `S\t<stroke>\t<sample>\t<reply>`, `V\t<stroke>\t<overlay>\t<reply>\t<refusal>`,
      * `P\t<stroke>\t<summary>\t<packet>\t<window>` (a live preview),
      * `K\t<request>\t<summary>\t<packet>\t<window>\t<refusal>\t<count>` (a
-     * canonical overlay) or
+     * canonical overlay), `F\t<stroke>\t<summary>\t<runs>\t<leaves>\t<run window>\t<leaf window>`
+     * (a live preview's paint facets),
+     * `G\t<request>\t<summary>\t<runs>\t<leaves>\t<run window>\t<leaf window>\t<refusal>\t<count>`
+     * (canonical paint facets) or
      * `C\t<stroke>\t<label>\t<outcome>\t<revision>\t<hash>\t<undo label>`;
      * an empty field is absent. */
     @JvmStatic fun run(source: String, sphere: ByteArray, terrain: ByteArray, script: String): Long {
@@ -52,6 +70,21 @@ object ProjectPaintStrokeChecks {
                 for (line in script.split("\n")) {
                     val entry = line.split("\t")
                     when (entry[0]) {
+                        "F" -> {
+                            check(facets(strokes.getValue(entry[1]).previewFacets(), entry[2], entry[3], entry[4], entry[5], entry[6])) { "paint_preview_facets_$checks" }; checks++
+                        }
+                        "G" -> {
+                            val request = ProjectIntents.decodePaintOverlayRequest(entry[1])
+                            when {
+                                entry[7].isEmpty() -> check(facets(session.paintFacets(request), entry[2], entry[3], entry[4], entry[5], entry[6])) { "paint_facets_$checks" }
+                                entry[8].isEmpty() -> check(failure { session.paintFacets(request).close() } == entry[7]) { "paint_facets_refusal_$checks" }
+                                else -> session.paintFacets(request).use { capture ->
+                                    check(failure { capture.runs(0, entry[8].toLong()) } == entry[7]) { "paint_runs_refusal_$checks" }
+                                    check(failure { capture.leaves(0, entry[8].toLong()) } == entry[7]) { "paint_leaves_refusal_$checks" }
+                                }
+                            }
+                            checks++
+                        }
                         "P" -> {
                             check(packets(strokes.getValue(entry[1]).preview(), entry[2], entry[3], entry[4])) { "paint_preview_$checks" }; checks++
                         }

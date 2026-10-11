@@ -732,6 +732,20 @@ export class ProjectOpen {
 }
 
 /**
+ * One volume's paint facets: a canonical JSON summary, then packets of
+ * 12-byte runs (uint32 first facet, count, state) and 44-byte leaves (nine
+ * float32 corners, uint32 source facet and state), little-endian.
+ */
+export class ProjectPaintFacets {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    leaves(start: number, count: number): Uint8Array;
+    runs(start: number, count: number): Uint8Array;
+    summary(): string;
+}
+
+/**
  * One paint overlay's facets: a `PaintOverlaySummary`, then packets of
  * 40-byte facets (nine little-endian float32 corners and a uint32 state).
  */
@@ -760,9 +774,18 @@ export class ProjectPaintStroke {
      */
     preview(): ProjectPaintOverlay;
     /**
+     * The stroke's live preview as paint facets.
+     */
+    preview_facets(): ProjectPaintFacets;
+    /**
      * A `PaintStrokeSample`; returns a `PaintStrokeSampleReply`.
      */
     sample(request: string): string;
+    /**
+     * One sample made with the painter's settings: `{"hit","settings"}` in,
+     * `{"reply","sample"}` or the painter's `{"error","message"}` out.
+     */
+    sample_with(request: string): string;
 }
 
 /**
@@ -896,6 +919,11 @@ export class ProjectSession {
      * refusal, and `bytes` pages the chunk table and chunks.
      */
     mesh_packet(request: string): ProjectMeshPacket;
+    /**
+     * The paint facets of one volume's channel: a `PaintOverlayRequest`.
+     * The capture owns its runs, leaves and colours.
+     */
+    paint_facets(request: string): ProjectPaintFacets;
     /**
      * The canonical paint overlay of one volume's channel: a
      * `PaintOverlayRequest`. The capture owns its facets and packets.
@@ -1423,6 +1451,19 @@ export function moonraker_reconnect_policy(request: string): string;
 export function moonraker_subscription(request: string): string;
 
 /**
+ * The colours a filament library paints states in (`paintFacetColorsExchange`):
+ * `{"channel","filaments","states"}` in, `{"colors"}` out.
+ */
+export function paint_facet_colors(request: string): string;
+
+/**
+ * The paint stroke sample a pointer hit makes with the painter's settings
+ * (`paintToolSampleExchange`): `{"channel","hit","settings","stateOrder"}`
+ * in, `{"sample"}` or `{"error","message"}` out.
+ */
+export function paint_tool_sample(request: string): string;
+
+/**
  * The print configuration a plate of a state document overrides
  * (`platePrintOverrides`), as a canonical JSON object of engine wire strings.
  */
@@ -1714,6 +1755,7 @@ export interface InitOutput {
     readonly __wbg_projectmeshpacket_free: (a: number, b: number) => void;
     readonly __wbg_projectmodelupload_free: (a: number, b: number) => void;
     readonly __wbg_projectopen_free: (a: number, b: number) => void;
+    readonly __wbg_projectpaintfacets_free: (a: number, b: number) => void;
     readonly __wbg_projectpaintoverlay_free: (a: number, b: number) => void;
     readonly __wbg_projectpaintstroke_free: (a: number, b: number) => void;
     readonly __wbg_projectpickscene_free: (a: number, b: number) => void;
@@ -1839,6 +1881,8 @@ export interface InitOutput {
     readonly moonrakertransport_take_result: (a: number, b: number) => [number, number, number, number];
     readonly moonrakertransport_timer: (a: number, b: number, c: number) => [number, number, number, number];
     readonly moonrakertransport_upload: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly paint_facet_colors: (a: number, b: number) => [number, number, number, number];
+    readonly paint_tool_sample: (a: number, b: number) => [number, number, number, number];
     readonly plate_print_overrides: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly plate_projection: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly prepare_emboss: (a: number, b: number) => [number, number, number];
@@ -1991,11 +2035,16 @@ export interface InitOutput {
     readonly projectmeshpacket_reply: (a: number) => [number, number, number, number];
     readonly projectmodelupload_append: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectmodelupload_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly projectpaintfacets_leaves: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectpaintfacets_runs: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectpaintfacets_summary: (a: number) => [number, number];
     readonly projectpaintoverlay_packet: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectpaintoverlay_summary: (a: number) => [number, number, number, number];
     readonly projectpaintstroke_overlay: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectpaintstroke_preview: (a: number) => [number, number, number];
+    readonly projectpaintstroke_preview_facets: (a: number) => [number, number, number];
     readonly projectpaintstroke_sample: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectpaintstroke_sample_with: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectpickscene_pick: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectpreflight_issue: (a: number, b: number) => [number, number, number, number];
     readonly projectpreflight_omission: (a: number, b: number) => [number, number, number, number];
@@ -2041,6 +2090,7 @@ export interface InitOutput {
     readonly projectsession_is_open_current: (a: number, b: number) => number;
     readonly projectsession_measure_volume: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_mesh_packet: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectsession_paint_facets: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_paint_overlay: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_pending_count: (a: number) => number;

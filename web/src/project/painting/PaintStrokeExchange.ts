@@ -45,6 +45,8 @@ import type { JsonValue, ProjectVolume, Vec3 } from '../domain/model';
 import { decodeIndexedMeshAsset } from '../meshCodec';
 import type { ProjectSnapshot } from '../store';
 import { guardedFacets, PaintOverlayCapture, paintOverlayFacets } from './PaintOverlay';
+import { guardedPaintFacets, paintFacets, PaintFacetsCapture, strokePaintColors } from './PaintFacets';
+import { paintStateColor } from './paintOverlayColors';
 import { assertPaintTarget, channelLabel, PaintTargetError, type PaintChannel } from './PaintStrokeService';
 
 /** The most overlay ranges one page holds. */
@@ -83,6 +85,8 @@ export class PaintStrokeExchange {
     private readonly mesh: FacetSelectionMesh,
     private readonly channel: PaintChannel,
     private readonly target: FacetRegionState,
+    /** The opened snapshot's palette colours for this channel, as the preview draws them. */
+    private readonly colors: ReadonlyMap<string, string>,
   ) {}
 
   /** Open a stroke against an acknowledged snapshot and its assets. */
@@ -137,7 +141,7 @@ export class PaintStrokeExchange {
       topologyRevision: volume.source.topologyRevision,
       triangleCount: volume.source.triangleCount,
     };
-    return new PaintStrokeExchange(guard, volume, mesh, channel, target);
+    return new PaintStrokeExchange(guard, volume, mesh, channel, target, strokePaintColors(snapshot.state, request));
   }
 
   /**
@@ -267,6 +271,43 @@ export class PaintStrokeExchange {
         this.channel,
         this.triangles.size === 0 ? [] : [{ triangles: [...this.triangles], state: this.target }],
       ),
+    );
+  }
+
+  /**
+   * The live preview as paint facets ({@link preview}'s facets arranged for
+   * a renderer colouring the volume's own facets), each state with the colour
+   * the workspace previews it in.
+   */
+  previewFacets(): PaintFacetsCapture {
+    const triangleCount = this.guard.triangleCount;
+    let facets;
+    if (this.refinement) {
+      const collapsed = collapseFacetRefinementRoots(this.refinement.roots);
+      facets = guardedPaintFacets(() =>
+        paintFacets(
+          triangleCount,
+          this.channel,
+          collapsed.assignments.map((assignment) => ({
+            triangles: assignment.triangles,
+            state: { kind: 'assigned', value: assignment.value },
+          })),
+          collapsed.encoding
+            ? { refinement: collapsed.encoding, topologyRevision: this.guard.topologyRevision, mesh: () => this.mesh }
+            : {},
+        ),
+      );
+    } else {
+      facets = paintFacets(
+        triangleCount,
+        this.channel,
+        this.triangles.size === 0 ? [] : [{ triangles: [...this.triangles], state: this.target }],
+      );
+    }
+    return new PaintFacetsCapture(
+      this.guard,
+      facets,
+      facets.states.map((state) => paintStateColor(this.colors, state)),
     );
   }
 

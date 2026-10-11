@@ -762,6 +762,20 @@ impl ProjectSession {
             .map(|inner| ProjectPaintOverlay { inner })
             .map_err(|refusal| error(refusal.code()))
     }
+    /// The paint facets of one volume's channel: a `PaintOverlayRequest`.
+    /// The capture owns its runs, leaves and colours.
+    pub fn paint_facets(&self, request: &str) -> Result<ProjectPaintFacets, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_paint_overlay_request(request).map_err(|_| error("invalid_request"))?;
+        self.inner
+            .paint_facets(&request)
+            .map(|inner| ProjectPaintFacets { inner })
+            .map_err(|refusal| error(refusal.code()))
+    }
     /// Stage the stroke's whole gesture as one edit for `executeStaged`; 0
     /// when it touched no facet. A stroke whose state changed refuses `stale`.
     pub fn stage_paint_stroke(
@@ -897,6 +911,18 @@ impl ProjectPaintStroke {
             wire::decode_paint_stroke_sample(request).map_err(|_| error("invalid_request"))?;
         wire::encode_paint_stroke_sample_reply(&self.inner.sample(&request))
             .map_err(|_| error("output_limit"))
+    }
+    /// One sample made with the painter's settings: `{"hit","settings"}` in,
+    /// `{"reply","sample"}` or the painter's `{"error","message"}` out.
+    pub fn sample_with(&mut self, request: &str) -> Result<String, JsValue> {
+        self.inner.sample_json(request).map_err(error)
+    }
+    /// The stroke's live preview as paint facets.
+    pub fn preview_facets(&self) -> Result<ProjectPaintFacets, JsValue> {
+        self.inner
+            .preview_facets()
+            .map(|inner| ProjectPaintFacets { inner })
+            .map_err(|refusal| error(refusal.code()))
     }
     /// The stroke's live preview as an overlay capture.
     pub fn preview(&self) -> Result<ProjectPaintOverlay, JsValue> {
@@ -1155,6 +1181,30 @@ impl ProjectPaintOverlay {
     pub fn packet(&self, start: f64, count: f64) -> Result<Vec<u8>, JsValue> {
         self.inner
             .packet(index(start)? as u64, index(count)? as u64)
+            .map_err(|refusal| error(refusal.code()))
+    }
+}
+
+/// One volume's paint facets: a canonical JSON summary, then packets of
+/// 12-byte runs (uint32 first facet, count, state) and 44-byte leaves (nine
+/// float32 corners, uint32 source facet and state), little-endian.
+#[wasm_bindgen]
+pub struct ProjectPaintFacets {
+    inner: orcaxr_project::facets::paint_facets::PaintFacets,
+}
+#[wasm_bindgen]
+impl ProjectPaintFacets {
+    pub fn summary(&self) -> String {
+        self.inner.summary()
+    }
+    pub fn runs(&self, start: f64, count: f64) -> Result<Vec<u8>, JsValue> {
+        self.inner
+            .runs(index(start)? as u64, index(count)? as u64)
+            .map_err(|refusal| error(refusal.code()))
+    }
+    pub fn leaves(&self, start: f64, count: f64) -> Result<Vec<u8>, JsValue> {
+        self.inner
+            .leaves(index(start)? as u64, index(count)? as u64)
             .map_err(|refusal| error(refusal.code()))
     }
 }

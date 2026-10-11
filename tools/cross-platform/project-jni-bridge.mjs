@@ -78,6 +78,10 @@ export function startProjectJni(profile = "debug") {
   signatures.placementEditChecks = ["String", "byte[]"];
   signatures.transformEditChecks = ["byte[]", "String"];
   signatures.primitiveChecks = ["String"];
+  signatures.paintToolChecks = ["String"];
+  signatures.paintChecks = [];
+  signatures.scenePaintChecks = [];
+  signatures.sceneColourChecks = [];
   signatures.stagedRecordChecks = ["String"];
   signatures.stagedRecords = ["String"];
   signatures.createEditChecks = ["String", "byte[]"];
@@ -434,6 +438,12 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return wrap(
         ProjectPaintOverlay,
         call("sessionPaintOverlay", this.handle, request),
+      );
+    }
+    paint_facets(request) {
+      return wrap(
+        ProjectPaintFacets,
+        call("sessionPaintFacets", this.handle, request),
       );
     }
     paint_stroke(guard, request) {
@@ -901,6 +911,12 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     preview() {
       return wrap(ProjectPaintOverlay, call("paintStrokePreview", this.handle));
     }
+    preview_facets() {
+      return wrap(ProjectPaintFacets, call("paintStrokePreviewFacets", this.handle));
+    }
+    sample_with(request) {
+      return call("paintStrokeSampleWith", this.handle, request);
+    }
   }
   class ProjectEmboss extends Handle {
     reply() {
@@ -958,6 +974,17 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     packet(start, count) {
       return call("paintOverlayPacket", this.handle, start, count);
+    }
+  }
+  class ProjectPaintFacets extends Handle {
+    summary() {
+      return call("paintFacetsSummary", this.handle);
+    }
+    runs(start, count) {
+      return call("paintFacetsRuns", this.handle, start, count);
+    }
+    leaves(start, count) {
+      return call("paintFacetsLeaves", this.handle, start, count);
     }
   }
   class CapturedHistory extends Handle {
@@ -1397,6 +1424,8 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     transform_field_edit: (request) => call("transformFieldEdit", request),
     transform_rotation: (request) => call("transformRotation", request),
     primitive_payload: (request) => call("primitivePayload", request),
+    paint_tool_sample: (request) => call("paintToolSample", request),
+    paint_facet_colors: (request) => call("paintFacetColors", request),
     slicing_next_state: (request, words) => call("slicingNextState", request, Array.from(words), zone, profile),
     print_history_plan: (operation) => call("printHistoryPlan", operation),
     print_history_finish: (request) => call("printHistoryFinish", request),

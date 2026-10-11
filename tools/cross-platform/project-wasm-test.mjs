@@ -44,6 +44,7 @@ import { plateProjectionCases, replayPlateProjection } from "./plate-projection-
 import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
+import { replayPaintTool } from "./paint-tool-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
 import { replayFilamentAssignment } from "./filament-assignment-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
@@ -117,7 +118,7 @@ if (isMainThread) {
     // Render deltas over live sessions, edited and paged.
     assert.deepEqual(
       [result.renderPages, result.renderRefusals, result.renderRequests],
-      [259, 57, 209],
+      [313, 57, 265],
     );
     // Facet region selection over a live session.
     assert.deepEqual(
@@ -133,8 +134,9 @@ if (isMainThread) {
         result.paintStrokeCommits,
         result.paintStrokeRefusals,
         result.paintOverlayPackets,
+        result.paintFacetCaptures,
       ],
-      [11, 18, 5, 11, 11, 44],
+      [14, 22, 5, 14, 13, 51, 51],
     );
     // Ray picking over a live session, in both scenes.
     assert.deepEqual([result.picks, result.pickRefusals], [486, 1]);
@@ -323,6 +325,11 @@ if (isMainThread) {
     assert.deepEqual(
       [result.fieldReads, result.rotations, result.fieldEdits, result.fieldRefusals],
       [101, 1720, 94, 19],
+    );
+    // The painter's settings and paint colours: samples and refusals, malformed requests, colour sets.
+    assert.deepEqual(
+      [result.paintToolSamples, result.paintToolRefusals, result.paintColorSets],
+      [427, 34, 775],
     );
     // Primitives and helper volumes: meshes (seven byte for byte), refusals,
     // plans in recorded states and malformed plans.
@@ -843,6 +850,10 @@ if (isMainThread) {
     core,
     JSON.parse(await readFile(new URL("testdata/cross-platform/transform-field-vectors.json", root))),
   );
+  const paintTool = replayPaintTool(
+    core,
+    JSON.parse(await readFile(new URL("testdata/cross-platform/paint-tool-vectors.json", root))),
+  );
   const primitives = replayPrimitives(
     core,
     JSON.parse(await readFile(new URL("testdata/cross-platform/primitive-vectors.json", root))),
@@ -910,6 +921,7 @@ if (isMainThread) {
       ...slicingConfiguration,
       ...workspaceBeds,
       ...transformFields,
+      ...paintTool,
       ...primitives,
       ...filamentAssignment,
       owned,

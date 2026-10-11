@@ -1,6 +1,8 @@
 // Renderer projection references from the production browser: a host that
 // follows a real TypeScript session through its render feed — a full sync
-// from empty, deltas after acknowledged edits (moves, plates, colours,
+// from empty, deltas after acknowledged edits (moves, plates, colours —
+// an object's physical and mixed filaments, a part's own filament over its
+// object's, and a height range's filament, which colours nothing drawn —
 // duplicates, deletions), paging across a newer edit, an unknown base, a
 // stale target and an oversized page — in the shared contract's encoding.
 // Replayed by Rust, by WASM in Node and Chrome, and over JNI.
@@ -17,6 +19,7 @@ import { InMemoryAssetRepository } from "../../web/src/project/assets.ts";
 import {
   RenderFeed,
   RenderRefusal,
+  projectRender,
   renderPageWire,
   renderRequestFromWire,
 } from "../../web/src/project/renderProjection.ts";
@@ -203,6 +206,53 @@ for (const fixture of distinct) {
       },
     });
     sync();
+  }
+  // Each volume draws in the colour of the filament it resolves to: a mixed
+  // recipe's display colour, a part's own filament over its object's; a
+  // height range's filament colours nothing drawn, as in the browser.
+  const colours = () =>
+    new Map(projectRender(state()).volumes.map((v) => [v.volumeId, v.color]));
+  const recipe = state().filaments.mixed.find((f) => fits(f.id) && f.enabled);
+  if (recipe && object) {
+    const reply = await execute({
+      setObjectFilament: {
+        objectId: units(object.id),
+        filamentId: { value: units(recipe.id) },
+      },
+    });
+    assert.ok(!reply.error, JSON.stringify(reply));
+    const drawn = colours();
+    for (const volume of object.volumes.filter((v) => !v.filamentId))
+      assert.equal(drawn.get(volume.id), recipe.displayColor);
+    sync();
+  }
+  const own = state()
+    .filaments.physical.filter((f) => fits(f.id) && f.enabled)
+    .at(-1);
+  const part = object?.volumes.find((v) => fits(v.id));
+  if (own && part) {
+    const reply = await execute({
+      setVolumeFilament: {
+        objectId: units(object.id),
+        volumeId: units(part.id),
+        filamentId: { value: units(own.id) },
+      },
+    });
+    assert.equal(colours().get(part.id), own.color, JSON.stringify(reply));
+    sync();
+  }
+  const range = object?.layerRanges.find((r) => fits(r.id));
+  if (own && range) {
+    const before = colours();
+    await execute({
+      setLayerRangeFilament: {
+        objectId: units(object.id),
+        layerRangeId: units(range.id),
+        filamentId: { value: units(own.id) },
+      },
+    });
+    assert.deepEqual(colours(), before);
+    assert.equal(sync().total, 0);
   }
   if (object) {
     await execute({

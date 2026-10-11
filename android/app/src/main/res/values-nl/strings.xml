@@ -43,4 +43,6 @@
     <string name="filament_colour_apply">Toepassen</string>
     <string name="filament_bar_selected">geselecteerd</string>
     <string name="filament_bar_default">Standaard</string>
+    <string name="workspace_paint">Tekenen</string>
+    <string name="paint_tool_sphere">Bol</string>
 </resources>

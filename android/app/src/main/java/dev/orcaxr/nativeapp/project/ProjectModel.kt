@@ -35,6 +35,7 @@ import dev.orcaxr.core.TransformReset
 import dev.orcaxr.core.TransformTool
 import dev.orcaxr.nativeapp.device.PreferencesTextStore
 import dev.orcaxr.nativeapp.prepare.PlateSource
+import dev.orcaxr.nativeapp.workspace.PaintModel
 import dev.orcaxr.renderer.SceneSync
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
@@ -138,6 +139,13 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     private val profiles = SlicingProfiles(application) { next -> main.post { profilesView = next } }
     /** The project's filament slots the pickers last followed. */
     @Volatile private var followed: SlicingSlots? = null
+
+    /** The Workspace's paint tool over this project's session and scene. */
+    val paint = PaintModel(object : PaintModel.Host {
+        override fun workspace(): ProjectWorkspace? = started.getNow(null)
+        override fun scene(): SceneSync? = sceneSync
+        override fun view(): ProjectView = view
+    })
 
     init {
         work {
@@ -760,6 +768,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     }
 
     override fun onCleared() {
+        paint.close()
         sceneSync?.close()
         worker.execute {
             owners.releaseAll(owner)

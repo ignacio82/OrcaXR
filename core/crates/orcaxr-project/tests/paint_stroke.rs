@@ -5,8 +5,9 @@
 //! and undo label.
 use orcaxr_contracts::{canonical::parse, project_intent_types as wire};
 use orcaxr_project::{
-    assets::*, facets::overlay::Overlay, facets::paint_stroke::PaintStroke, history::*, model::*,
-    selection::*, session::*, validation::*,
+    assets::*, facets::overlay::Overlay, facets::paint_facets::PaintFacets,
+    facets::paint_stroke::PaintStroke, history::*, model::*, selection::*, session::*,
+    validation::*,
 };
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -79,6 +80,36 @@ fn packets(overlay: &Overlay, step: &Value, i: usize) {
     );
 }
 
+/// Paint facets' summary, runs and leaves and, past two of each, their
+/// windows of 1 and 2, as the browser recorded them.
+fn facets(facets: &PaintFacets, step: &Value, i: usize) {
+    assert_eq!(
+        facets.summary(),
+        step["summary"].as_str().unwrap(),
+        "step {i} summary"
+    );
+    assert_eq!(
+        sha256(&facets.runs(0, 16384).unwrap()),
+        step["runs"].as_str().unwrap(),
+        "step {i} runs"
+    );
+    assert_eq!(
+        sha256(&facets.leaves(0, 16384).unwrap()),
+        step["leaves"].as_str().unwrap(),
+        "step {i} leaves"
+    );
+    for (key, count, page) in [
+        ("runWindow", facets.run_count(), facets.runs(1, 2)),
+        ("leafWindow", facets.leaf_count(), facets.leaves(1, 2)),
+    ] {
+        assert_eq!(
+            (count > 2).then(|| sha256(&page.unwrap())),
+            step.get(key).map(|w| w.as_str().unwrap().to_owned()),
+            "step {i} {key}"
+        );
+    }
+}
+
 #[test]
 fn paint_strokes_match_the_browser_over_a_live_session() {
     let f = fixture();
@@ -135,7 +166,42 @@ fn paint_strokes_match_the_browser_over_a_live_session() {
     for (i, step) in f["steps"].as_array().unwrap().iter().enumerate() {
         let name = step["stroke"].as_str().unwrap_or_default().to_owned();
         let refusal = step.get("refusal").map(|code| code.as_str().unwrap());
-        let kind = if step.get("preview").is_some() {
+        let kind = if step.get("previewFacets").is_some() {
+            facets(&strokes[&name].preview_facets().unwrap(), step, i);
+            "preview facets"
+        } else if let Some(canonical) = step.get("canonicalFacets") {
+            let request = wire::decode_paint_overlay_request(canonical.as_str().unwrap()).unwrap();
+            let captured = session.paint_facets(&request);
+            match (refusal, step.get("count")) {
+                (Some(code), Some(count)) => {
+                    let captured = captured.unwrap();
+                    let count = count.as_u64().unwrap();
+                    assert_eq!(
+                        captured.runs(0, count).map_err(|r| r.code()),
+                        Err(code),
+                        "step {i}"
+                    );
+                    assert_eq!(
+                        captured.leaves(0, count).map_err(|r| r.code()),
+                        Err(code),
+                        "step {i}"
+                    );
+                    "refused facets packet"
+                }
+                (Some(code), None) => {
+                    assert_eq!(
+                        captured.map(|_| ()).map_err(|r| r.code()),
+                        Err(code),
+                        "step {i}"
+                    );
+                    "refused facets"
+                }
+                (None, _) => {
+                    facets(&captured.unwrap(), step, i);
+                    "canonical facets"
+                }
+            }
+        } else if step.get("preview").is_some() {
             let preview = strokes[&name].preview().unwrap();
             packets(&preview, step, i);
             "preview"
@@ -263,14 +329,18 @@ fn paint_strokes_match_the_browser_over_a_live_session() {
         BTreeMap::from(
             [
                 ("refused open", 8),
-                ("open", 11),
-                ("sample", 18),
+                ("open", 14),
+                ("sample", 22),
                 ("overlay", 5),
                 ("refused overlay", 2),
                 ("refused packet", 1),
-                ("preview", 18),
-                ("canonical", 26),
-                ("applied", 8),
+                ("preview", 22),
+                ("canonical", 29),
+                ("preview facets", 22),
+                ("canonical facets", 29),
+                ("refused facets", 1),
+                ("refused facets packet", 1),
+                ("applied", 11),
                 ("unchanged", 1),
                 ("noop", 1),
                 ("stale", 1),

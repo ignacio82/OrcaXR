@@ -45,6 +45,7 @@ import type { CommandBus } from '../history/commandBus';
 import { decodeIndexedMeshAsset } from '../meshCodec';
 import type { CancellationToken } from '../ports';
 import { projectPaintPalette } from './paintPalette';
+import { placePaintHit, type PaintPlacement } from './PaintPlacement';
 
 export type PaintToolKind = 'circle' | 'sphere' | 'triangle' | 'heightRange' | 'fill' | 'gapFill';
 
@@ -95,10 +96,12 @@ export interface PaintTargetHit {
   readonly localCameraPosition: Vec3;
   /** Previous drag sample, so a dragged brush sweeps a capsule. */
   readonly previousLocalPoint?: Vec3;
-  /** Plate Z of the hit, required by Height Range. */
-  readonly plateZMm?: number;
-  /** Volume-to-plate placement, so radii respect instance scaling. */
-  readonly transform?: FacetSelectionTransform;
+  /**
+   * Where the part sits on the bed — the instance the hit met and the part's
+   * own transform — so the brush and the band measure bed millimetres. A hit
+   * without one is a part at the bed's origin, unscaled and unrotated.
+   */
+  readonly placement?: PaintPlacement;
 }
 
 export interface PaintStrokeRequest<Channel extends PaintChannel = 'color'> {
@@ -526,9 +529,8 @@ export class PaintStrokeService {
     state: ProjectState,
   ): FacetRegionSelection {
     const { volume } = this.resolveVolume(request.hit.volumeId);
-    if (!Number.isInteger(request.hit.triangleIndex) || request.hit.triangleIndex < 0) {
-      throw new PaintTargetError('The paint hit does not reference a source triangle', 'invalid-hit');
-    }
+    const channel = (request.channel ?? 'color') as PaintChannel;
+    const inputs = paintSelectionInputs(request.settings, request.hit, channel, () => paintStateOrder(state));
     return selectFacetRegion({
       mesh,
       annotations: volume.annotations,
@@ -536,92 +538,127 @@ export class PaintStrokeService {
         topologyRevision: volume.source.topologyRevision,
         triangleCount: volume.source.triangleCount,
       },
-      seedTriangle: request.hit.triangleIndex,
-      channel: (request.channel ?? 'color') as PaintChannel,
+      seedTriangle: inputs.seedTriangle,
+      channel,
       // A gesture in flight owns the working tree; otherwise the canonical
       // subdivisions plus the sparse channel are the whole prior state.
       ...(request.refinement
         ? { refinedRoots: request.refinement.roots as readonly FacetRefinementNode[] }
-        : volume.annotations.refinement?.[(request.channel ?? 'color') as PaintChannel]
+        : volume.annotations.refinement?.[channel]
           ? {
-              refinement: volume.annotations.refinement[(request.channel ?? 'color') as PaintChannel] as never,
+              refinement: volume.annotations.refinement[channel] as never,
             }
           : {}),
-      tool: this.tool(request, state),
-      ...(request.settings.clippingPlane ? { clippingPlane: request.settings.clippingPlane } : {}),
-      ...(request.hit.transform ? { transform: request.hit.transform } : {}),
-      ...(request.settings.highlightByAngleDegrees
-        ? {
-            highlightByAngleDegrees: clamp(
-              request.settings.highlightByAngleDegrees,
-              0,
-              ORCA_OVERHANG_ANGLE_MAX_DEGREES,
-            ),
-          }
+      tool: inputs.tool,
+      ...(inputs.clippingPlane ? { clippingPlane: inputs.clippingPlane } : {}),
+      ...(inputs.transform ? { transform: inputs.transform } : {}),
+      ...(inputs.highlightByAngleDegrees !== undefined
+        ? { highlightByAngleDegrees: inputs.highlightByAngleDegrees }
         : {}),
     });
   }
+}
 
-  private tool<Channel extends PaintChannel>(
-    request: PaintStrokeRequest<Channel>,
-    state: ProjectState,
-  ): FacetRegionTool {
-    const settings = request.settings;
-    const hit = request.hit;
-    switch (settings.tool) {
-      case 'triangle':
-        return { kind: 'triangle', hit: hit.localPoint };
-      case 'circle':
-      case 'sphere': {
-        const radiusMm = clamp(settings.radiusMm ?? 2, ORCA_BRUSH_RADIUS_MIN_MM, ORCA_BRUSH_RADIUS_MAX_MM);
-        return {
-          kind: settings.tool,
-          center: hit.localPoint,
-          ...(hit.previousLocalPoint ? { previousCenter: hit.previousLocalPoint } : {}),
-          cameraPosition: hit.localCameraPosition,
-          radiusMm,
-          ...(settings.triangleSplitting ? { triangleSplitting: true } : {}),
-        };
-      }
-      case 'heightRange': {
-        if (hit.plateZMm === undefined || !Number.isFinite(hit.plateZMm)) {
-          throw new PaintTargetError('Height Range needs the plate Z of the hit', 'invalid-hit');
-        }
-        return {
-          kind: 'heightRange',
-          startZMm: hit.plateZMm,
-          heightMm: clamp(settings.heightRangeMm ?? 1, ORCA_HEIGHT_RANGE_MIN_MM, ORCA_HEIGHT_RANGE_MAX_MM),
-          ...(settings.triangleSplitting ? { triangleSplitting: true } : {}),
-        };
-      }
-      case 'fill': {
-        const angle = settings.smartFillAngleDegrees;
-        return {
-          kind: 'fill',
-          hit: hit.localPoint,
-          edgeDetection:
-            angle === undefined || angle <= ORCA_SMART_FILL_ANGLE_MIN_DEGREES
-              ? false
-              : {
-                  maxAdjacentAngleDegrees: clamp(
-                    angle,
-                    ORCA_SMART_FILL_ANGLE_MIN_DEGREES,
-                    ORCA_SMART_FILL_ANGLE_MAX_DEGREES,
-                  ),
-                },
-        };
-      }
-      case 'gapFill': {
-        const channel = (request.channel ?? 'color') as PaintChannel;
-        return {
-          kind: 'gapFill',
-          maxAreaMm2: clamp(settings.gapAreaMm2 ?? 2, 0, ORCA_GAP_AREA_MAX_MM2),
-          stateOrder: channel === 'color' ? paintStateOrder(state) : CHANNEL_STATE_ORDER[channel],
-        };
-      }
-      default:
-        throw new PaintTargetError(`Unsupported paint tool ${String(settings.tool)}`, 'invalid-settings');
+/** What one pointer sample selects with: the seed facet, the tool and its options. */
+export interface PaintSelectionInputs {
+  readonly seedTriangle: number;
+  readonly tool: FacetRegionTool;
+  readonly clippingPlane?: FacetClippingPlane;
+  readonly transform?: FacetSelectionTransform;
+  readonly highlightByAngleDegrees?: number;
+}
+
+/**
+ * The selector's input for one pointer sample with the painter's settings:
+ * the hit's facet, the active tool with its parameters clamped to the pinned
+ * gizmo limits and the defaults filled in, and the optional clipping plane,
+ * the transform the hit's placement makes (`placePaintHit`: the brush in bed
+ * millimetres, the band from the hit's bed Z) and the overhang gate. Gap
+ * Fill's colour precedence is the palette's displayed order ([stateOrder]);
+ * the other channels use their pinned order.
+ * The Rust core maps settings the same way (`orcaxr_project::facets::paint_tool`).
+ */
+export function paintSelectionInputs(
+  settings: PaintToolSettings,
+  hit: Omit<PaintTargetHit, 'volumeId'>,
+  channel: PaintChannel,
+  stateOrder: () => readonly JsonValue[],
+): PaintSelectionInputs {
+  if (!Number.isInteger(hit.triangleIndex) || hit.triangleIndex < 0) {
+    throw new PaintTargetError('The paint hit does not reference a source triangle', 'invalid-hit');
+  }
+  const placed = hit.placement ? placePaintHit(hit.placement, hit.localPoint) : undefined;
+  if (hit.placement && !placed) {
+    throw new PaintTargetError('The paint placement must be finite and invertible', 'invalid-hit');
+  }
+  const tool = paintRegionTool(settings, hit, placed?.plateZMm ?? Math.fround(hit.localPoint[2]), channel, stateOrder);
+  return {
+    seedTriangle: hit.triangleIndex,
+    tool,
+    ...(settings.clippingPlane ? { clippingPlane: settings.clippingPlane } : {}),
+    ...(placed ? { transform: placed.transform } : {}),
+    ...(settings.highlightByAngleDegrees
+      ? { highlightByAngleDegrees: clamp(settings.highlightByAngleDegrees, 0, ORCA_OVERHANG_ANGLE_MAX_DEGREES) }
+      : {}),
+  };
+}
+
+/** The active tool with its parameters clamped to the pinned gizmo limits. */
+function paintRegionTool(
+  settings: PaintToolSettings,
+  hit: Omit<PaintTargetHit, 'volumeId'>,
+  plateZMm: number,
+  channel: PaintChannel,
+  stateOrder: () => readonly JsonValue[],
+): FacetRegionTool {
+  switch (settings.tool) {
+    case 'triangle':
+      return { kind: 'triangle', hit: hit.localPoint };
+    case 'circle':
+    case 'sphere': {
+      const radiusMm = clamp(settings.radiusMm ?? 2, ORCA_BRUSH_RADIUS_MIN_MM, ORCA_BRUSH_RADIUS_MAX_MM);
+      return {
+        kind: settings.tool,
+        center: hit.localPoint,
+        ...(hit.previousLocalPoint ? { previousCenter: hit.previousLocalPoint } : {}),
+        cameraPosition: hit.localCameraPosition,
+        radiusMm,
+        ...(settings.triangleSplitting ? { triangleSplitting: true } : {}),
+      };
     }
+    case 'heightRange': {
+      return {
+        kind: 'heightRange',
+        startZMm: plateZMm,
+        heightMm: clamp(settings.heightRangeMm ?? 1, ORCA_HEIGHT_RANGE_MIN_MM, ORCA_HEIGHT_RANGE_MAX_MM),
+        ...(settings.triangleSplitting ? { triangleSplitting: true } : {}),
+      };
+    }
+    case 'fill': {
+      const angle = settings.smartFillAngleDegrees;
+      return {
+        kind: 'fill',
+        hit: hit.localPoint,
+        edgeDetection:
+          angle === undefined || angle <= ORCA_SMART_FILL_ANGLE_MIN_DEGREES
+            ? false
+            : {
+                maxAdjacentAngleDegrees: clamp(
+                  angle,
+                  ORCA_SMART_FILL_ANGLE_MIN_DEGREES,
+                  ORCA_SMART_FILL_ANGLE_MAX_DEGREES,
+                ),
+              },
+      };
+    }
+    case 'gapFill':
+      return {
+        kind: 'gapFill',
+        maxAreaMm2: clamp(settings.gapAreaMm2 ?? 2, 0, ORCA_GAP_AREA_MAX_MM2),
+        stateOrder: channel === 'color' ? stateOrder() : CHANNEL_STATE_ORDER[channel],
+      };
+    default:
+      throw new PaintTargetError(`Unsupported paint tool ${String(settings.tool)}`, 'invalid-settings');
   }
 }
 

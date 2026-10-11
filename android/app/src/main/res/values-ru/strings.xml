@@ -45,4 +45,6 @@
     <string name="filament_colour_apply">Применить</string>
     <string name="filament_bar_selected">выбрано</string>
     <string name="filament_bar_default">По умолчанию</string>
+    <string name="workspace_paint">Рисовать</string>
+    <string name="paint_tool_sphere">Сфера</string>
 </resources>

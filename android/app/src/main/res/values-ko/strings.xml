@@ -45,4 +45,6 @@
     <string name="filament_colour_apply">적용</string>
     <string name="filament_bar_selected">선택됨</string>
     <string name="filament_bar_default">기본값</string>
+    <string name="workspace_paint">칠하기</string>
+    <string name="paint_tool_sphere">구체</string>
 </resources>

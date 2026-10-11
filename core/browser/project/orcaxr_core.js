@@ -3701,6 +3701,74 @@ export class ProjectOpen {
 if (Symbol.dispose) ProjectOpen.prototype[Symbol.dispose] = ProjectOpen.prototype.free;
 
 /**
+ * One volume's paint facets: a canonical JSON summary, then packets of
+ * 12-byte runs (uint32 first facet, count, state) and 44-byte leaves (nine
+ * float32 corners, uint32 source facet and state), little-endian.
+ */
+export class ProjectPaintFacets {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectPaintFacets.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectPaintFacetsFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectPaintFacetsFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectpaintfacets_free(ptr, 0);
+    }
+    /**
+     * @param {number} start
+     * @param {number} count
+     * @returns {Uint8Array}
+     */
+    leaves(start, count) {
+        const ret = wasm.projectpaintfacets_leaves(this.__wbg_ptr, start, count);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * @param {number} start
+     * @param {number} count
+     * @returns {Uint8Array}
+     */
+    runs(start, count) {
+        const ret = wasm.projectpaintfacets_runs(this.__wbg_ptr, start, count);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * @returns {string}
+     */
+    summary() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.projectpaintfacets_summary(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ProjectPaintFacets.prototype[Symbol.dispose] = ProjectPaintFacets.prototype.free;
+
+/**
  * One paint overlay's facets: a `PaintOverlaySummary`, then packets of
  * 40-byte facets (nine little-endian float32 corners and a uint32 state).
  */
@@ -3817,6 +3885,17 @@ export class ProjectPaintStroke {
         return ProjectPaintOverlay.__wrap(ret[0]);
     }
     /**
+     * The stroke's live preview as paint facets.
+     * @returns {ProjectPaintFacets}
+     */
+    preview_facets() {
+        const ret = wasm.projectpaintstroke_preview_facets(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectPaintFacets.__wrap(ret[0]);
+    }
+    /**
      * A `PaintStrokeSample`; returns a `PaintStrokeSampleReply`.
      * @param {string} request
      * @returns {string}
@@ -3828,6 +3907,32 @@ export class ProjectPaintStroke {
             const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.projectpaintstroke_sample(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * One sample made with the painter's settings: `{"hit","settings"}` in,
+     * `{"reply","sample"}` or the painter's `{"error","message"}` out.
+     * @param {string} request
+     * @returns {string}
+     */
+    sample_with(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.projectpaintstroke_sample_with(this.__wbg_ptr, ptr0, len0);
             var ptr2 = ret[0];
             var len2 = ret[1];
             if (ret[3]) {
@@ -4604,6 +4709,21 @@ export class ProjectSession {
             throw takeFromExternrefTable0(ret[1]);
         }
         return ProjectMeshPacket.__wrap(ret[0]);
+    }
+    /**
+     * The paint facets of one volume's channel: a `PaintOverlayRequest`.
+     * The capture owns its runs, leaves and colours.
+     * @param {string} request
+     * @returns {ProjectPaintFacets}
+     */
+    paint_facets(request) {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectsession_paint_facets(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectPaintFacets.__wrap(ret[0]);
     }
     /**
      * The canonical paint overlay of one volume's channel: a
@@ -7024,6 +7144,61 @@ export function moonraker_subscription(request) {
 }
 
 /**
+ * The colours a filament library paints states in (`paintFacetColorsExchange`):
+ * `{"channel","filaments","states"}` in, `{"colors"}` out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function paint_facet_colors(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.paint_facet_colors(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * The paint stroke sample a pointer hit makes with the painter's settings
+ * (`paintToolSampleExchange`): `{"channel","hit","settings","stateOrder"}`
+ * in, `{"sample"}` or `{"error","message"}` out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function paint_tool_sample(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.paint_tool_sample(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * The print configuration a plate of a state document overrides
  * (`platePrintOverrides`), as a canonical JSON object of engine wire strings.
  * @param {string} state
@@ -8379,6 +8554,9 @@ const ProjectModelUploadFinalization = (typeof FinalizationRegistry === 'undefin
 const ProjectOpenFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectopen_free(ptr, 1));
+const ProjectPaintFacetsFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectpaintfacets_free(ptr, 1));
 const ProjectPaintOverlayFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectpaintoverlay_free(ptr, 1));

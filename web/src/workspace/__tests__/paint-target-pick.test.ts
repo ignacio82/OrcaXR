@@ -41,9 +41,10 @@ for (const [name, value] of Object.entries(browserGlobals)) {
   Object.defineProperty(globalThis, name, { value, configurable: true });
 }
 
-const [{ OrcaWorkspace }, { buildRegistry }] = await Promise.all([
+const [{ OrcaWorkspace }, { buildRegistry }, xb] = await Promise.all([
   import('../OrcaWorkspace'),
   import('../../actions/catalog'),
+  import('xrblocks'),
 ]);
 
 let passed = 0;
@@ -310,6 +311,202 @@ await test('measure picks are in printer millimetres, not the scaled scene', asy
   } finally {
     workspace.dispose();
   }
+});
+
+await test('Erase all painting erases the selected instance’s model parts and skips helper volumes', async () => {
+  const registry = buildRegistry();
+  const workspace = new OrcaWorkspace(registry);
+  workspace.actionContext = new ActionContext(workspace, new UiState(), registry);
+  const internals = workspace as unknown as PaintInternals & {
+    paintService: {
+      submitTriangles(request: {
+        volumeId: string;
+        triangleIndices: number[];
+        channel: 'support';
+        value: string;
+        mode: 'paint';
+      }): Promise<{ status: string }>;
+    };
+  };
+  try {
+    const controller = internals.canonicalProject;
+    const geometry = new THREE.BoxGeometry(10, 10, 10);
+    controller.importBufferGeometry(geometry, { name: 'First' });
+    controller.importBufferGeometry(geometry, { name: 'Second' });
+    geometry.dispose();
+    const displays = () =>
+      controller.surface.root.children.flatMap((group) => group.children.filter((c) => c instanceof THREE.Mesh));
+    const [first, second] = displays().map((mesh) => getThreeProjectEntity(mesh)!);
+    // A modifier on the first object: a helper volume, never painted.
+    controller.selectInstance(first.instanceId);
+    await controller.addHelperVolume('parameter-modifier');
+    workspace.setPaintChannel('support');
+    for (const entity of [first, second]) {
+      const result = await internals.paintService.submitTriangles({
+        volumeId: entity.volumeId!,
+        triangleIndices: [0, 1, 2],
+        channel: 'support',
+        value: 'enforce',
+        mode: 'paint',
+      });
+      assert.equal(result.status, 'applied');
+    }
+    const painted = () => [...controller.getFacetOverlayByVolume('support').keys()].sort();
+    assert.deepEqual(painted(), [first.volumeId, second.volumeId].sort());
+
+    // A selected instance scopes the erase to its object, as a selected object does.
+    controller.selectInstance(second.instanceId);
+    assert.equal(await workspace.eraseAllPaint(), 1);
+    assert.deepEqual(painted(), [first.volumeId]);
+
+    // With nothing selected every model part is erased; the modifier is not refused mid-way.
+    controller.clearSelection();
+    assert.equal(await workspace.eraseAllPaint(), 1);
+    assert.deepEqual(painted(), []);
+  } finally {
+    workspace.dispose();
+  }
+});
+
+interface StrokeInternals extends PaintInternals {
+  paintStroke: { volumeId: string; triangles: Set<number> } | null;
+  paintSettings: Record<string, unknown>;
+  cancelPaintStroke(): void;
+}
+
+/**
+ * Two copies of [geometry] side by side, the second placed by [transform]
+ * (scale and rotation over its import placement); [paint] strokes one of them
+ * at a point of its own mesh, looking straight down the bed's Z from above
+ * (or along [view] in the part's own frame), and answers the source facets
+ * the brush took with their corners in bed millimetres.
+ */
+async function withPlacedCopies(
+  geometry: THREE.BufferGeometry,
+  transform: { scale: [number, number, number]; rotation?: [number, number, number, number] },
+  run: (
+    paint: (
+      copy: 0 | 1,
+      settings: Record<string, unknown>,
+      local: THREE.Vector3,
+      view?: THREE.Vector3,
+    ) => {
+      triangles: Set<number>;
+      bed: (triangle: number) => THREE.Vector3[];
+      hitBedZ: number;
+    },
+  ) => void,
+): Promise<void> {
+  const registry = buildRegistry();
+  const workspace = new OrcaWorkspace(registry);
+  workspace.actionContext = new ActionContext(workspace, new UiState(), registry);
+  const internals = workspace as unknown as StrokeInternals;
+  try {
+    const controller = internals.canonicalProject;
+    controller.importBufferGeometry(geometry, { name: 'First' });
+    controller.importBufferGeometry(geometry, { name: 'Second' });
+    const root = controller.surface.root;
+    const meshes = () =>
+      root.children.flatMap((group) => group.children.filter((c): c is THREE.Mesh => c instanceof THREE.Mesh));
+    const second = getThreeProjectEntity(meshes()[1])!.instanceId;
+    const placed = controller.getInstanceTransform(second)!;
+    await controller.setInstanceTransforms([
+      {
+        instanceId: second,
+        transform: {
+          translationMm: [placed.translationMm[0] + 80, placed.translationMm[1], placed.translationMm[2]],
+          rotation: transform.rotation ?? placed.rotation,
+          scale: transform.scale,
+        },
+      },
+    ]);
+    root.updateMatrixWorld(true);
+    run((copy, settings, local, view = new THREE.Vector3(0, 0, -1)) => {
+      const display = meshes()[copy];
+      // Printer millimetres: the instance group's matrix after the part's.
+      const toBed = display.parent!.matrix.clone().multiply(display.matrix);
+      const target = display.localToWorld(local.clone());
+      const eye = display.localToWorld(local.clone().addScaledVector(view, -40));
+      xb.core.camera.position.copy(eye);
+      xb.core.camera.updateMatrixWorld(true);
+      internals.paintSettings = settings;
+      const raycaster = new THREE.Raycaster(eye, target.clone().sub(eye).normalize());
+      assert.ok(internals.beginPaintStroke(raycaster, 1), 'the ray meets the part');
+      const stroke = internals.paintStroke!;
+      assert.equal(stroke.volumeId, getThreeProjectEntity(display)!.volumeId);
+      const triangles = new Set(stroke.triangles);
+      internals.cancelPaintStroke();
+      const index = display.geometry.index!;
+      const positions = display.geometry.getAttribute('position');
+      const bed = (triangle: number) =>
+        [0, 1, 2].map((corner) =>
+          new THREE.Vector3().fromBufferAttribute(positions, index.getX(triangle * 3 + corner)).applyMatrix4(toBed),
+        );
+      return { triangles, bed, hitBedZ: local.clone().applyMatrix4(toBed).z };
+    });
+  } finally {
+    workspace.dispose();
+  }
+}
+
+await test('a 200% part takes a brush of the size set on the bed, not twice it', async () => {
+  // A 20 × 20 mm plate on a 0.5 mm grid.
+  const geometry = new THREE.BoxGeometry(20, 20, 2, 40, 40, 1);
+  await withPlacedCopies(geometry, { scale: [2, 2, 2] }, (paint) => {
+    geometry.computeBoundingBox();
+    const top = new THREE.Vector3(0.3, 0.2, geometry.boundingBox!.max.z);
+    // 2 mm on the unscaled plate, 4 mm on the bed over the 200% one: the same
+    // 2 mm of either part's own mesh.
+    const unscaled = paint(0, { tool: 'circle', radiusMm: 2 }, top);
+    const scaled = paint(1, { tool: 'circle', radiusMm: 4 }, top);
+    assert.ok(unscaled.triangles.size > 8, `the brush takes ${unscaled.triangles.size} facets`);
+    assert.deepEqual([...scaled.triangles].sort(), [...unscaled.triangles].sort());
+    // The radius it was given, on the bed: 2 mm reaches no facet of the 200%
+    // plate more than 2 mm (and a facet's 1 mm diagonal) from the hit.
+    const small = paint(1, { tool: 'circle', radiusMm: 2 }, top);
+    const centre = top.clone().multiplyScalar(2);
+    for (const triangle of small.triangles) {
+      const nearest = Math.min(
+        ...small.bed(triangle).map((corner) => Math.hypot(corner.x - centre.x - 80, corner.y - centre.y)),
+      );
+      assert.ok(nearest < 2 + Math.SQRT2, `facet ${triangle} lies ${nearest} mm from the hit`);
+    }
+    assert.ok(small.triangles.size < unscaled.triangles.size);
+  });
+  geometry.dispose();
+});
+
+await test('a band on a stretched or turned part is the height set in bed Z', async () => {
+  // A 10 mm column on a 0.25 mm grid up its sides.
+  const geometry = new THREE.BoxGeometry(4, 4, 10, 1, 1, 40);
+  geometry.computeBoundingBox();
+  const side = new THREE.Vector3(geometry.boundingBox!.max.x, 0.1, 0.6);
+  const facing = new THREE.Vector3(-1, 0, 0);
+  const halfTurn = Math.SQRT1_2;
+  for (const transform of [
+    // Stretched twice up Z: 1 mm on the bed is half a millimetre of the part.
+    { scale: [1, 1, 2] as [number, number, number] },
+    // Laid on its side: the part's Z runs along the bed's Y, so the band
+    // crosses the column instead of running up it.
+    {
+      scale: [1, 1, 1] as [number, number, number],
+      rotation: [halfTurn, 0, 0, halfTurn] as [number, number, number, number],
+    },
+  ]) {
+    await withPlacedCopies(geometry, transform, (paint) => {
+      const band = paint(1, { tool: 'heightRange', heightRangeMm: 1 }, side, facing);
+      assert.ok(band.triangles.size > 0);
+      for (const triangle of band.triangles) {
+        const z = band.bed(triangle).map((corner) => corner.z);
+        // Every facet the band takes meets [hit, hit + 1 mm] of bed Z.
+        assert.ok(
+          Math.min(...z) <= band.hitBedZ + 1 + 0.02 && Math.max(...z) >= band.hitBedZ - 0.02,
+          `facet ${triangle} spans ${Math.min(...z)}–${Math.max(...z)} mm against a band from ${band.hitBedZ} mm`,
+        );
+      }
+    });
+  }
+  geometry.dispose();
 });
 
 console.log(`\nWorkspace paint target picking: ${passed} tests passed.`);

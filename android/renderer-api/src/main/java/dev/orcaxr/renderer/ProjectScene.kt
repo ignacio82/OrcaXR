@@ -1,5 +1,6 @@
 package dev.orcaxr.renderer
 
+import dev.orcaxr.core.PaintPlacement
 import dev.orcaxr.core.ProjectIntents
 
 /**
@@ -23,6 +24,8 @@ class ProjectScene {
         val role: ProjectIntents.VolumeRoleName,
         /** The instance's transform after the volume's: the volume placed inside its instance. */
         val transform: ModelTransform,
+        /** The canonical transforms [transform] composes, which a paint hit carries so the brush measures the bed. */
+        val placement: PaintPlacement,
         val argb: Int,
         val printable: Boolean,
     )
@@ -135,6 +138,7 @@ class ProjectScene {
                 Draw(
                     "$instanceId/$volumeId", plateId, instanceId, objectId, volumeId, text(volume.assetId), volume.role,
                     placed * ModelTransform.fromCanonical(volume.transform),
+                    PaintPlacement(instance.transform, volume.transform),
                     color((volume.color as? ProjectIntents.OptionalText.Value)?.let { text(it.value) }),
                     instance.printable,
                 )

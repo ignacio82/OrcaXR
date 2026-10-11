@@ -16,14 +16,21 @@ import java.util.IdentityHashMap
 import java.util.concurrent.Executors
 import kotlin.math.*
 
-/** A project's meshes drawn where its instances place them, for the flat
- * Workspace. All Filament access belongs to the UI thread. Each mesh asset is
- * uploaded once, in [MeshPacking] chunks, and shared by every draw that places
- * it; a draw has its own transform and its own material instance tinted with
- * its colour. The single worker owns chunk packing and picking indexes, one job
- * at a time, and the next chunk is admitted only once all three native buffer
- * copies of the previous one completed. A replaced or removed mesh cancels its
- * work; nothing it prepared reaches the GPU. */
+/** A project's volumes drawn where its instances place them, for the flat
+ * Workspace. All Filament access belongs to the UI thread. Each drawn volume
+ * is uploaded once, in [MeshPacking] chunks of its mesh asset, and shared by
+ * every draw that places it (its object's instances); a draw has its own
+ * transform and its own material instance tinted with its colour. Picking
+ * indexes are built once per mesh asset. The single worker owns chunk packing
+ * and picking indexes, one job at a time, and the next chunk is admitted only
+ * once all native buffer copies of the previous one completed. A replaced or
+ * removed volume cancels its work; nothing it prepared reaches the GPU.
+ *
+ * A volume's vertex colours are its own, so paint ([setPaint]) uploads only
+ * the colour bytes of the facets whose colour changed — never positions or
+ * indices. Leaves of subdivided facets are a small mesh of their own, drawn
+ * over the volume with a polygon offset as the browser draws its paint
+ * overlay. */
 class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     data class Metrics(
         val state: String, val meshes: Int, val facets: Int, val uploadedFacets: Int,
@@ -31,23 +38,49 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         val peakUploadBytes: Long, val totalUploadBytes: Long, val bufferUploads: Long,
         val frames: Long, val maxFrameCpuMs: Double, val closed: Boolean,
         val toolpathSegments: Int = 0,
+        /** Volumes uploaded, those painted, and the colour bytes paint changes uploaded. */
+        val volumes: Int = 0,
+        val paintedVolumes: Int = 0,
+        val paintUploadBytes: Long = 0,
     )
-    /** The draw [key] a pick met: [facet] of volume [volumeId]'s mesh as placed by instance [instanceId]. */
-    data class Pick(val key: String, val instanceId: String, val facet: Int, val distanceMetres: Double, val volumeId: String = "")
+    /**
+     * The draw [key] a pick met: [facet] of volume [volumeId]'s mesh as placed
+     * by instance [instanceId], with the hit and the ray's origin (the eye) in
+     * the volume's own millimetres, as a paint brush takes them.
+     */
+    data class Pick(
+        val key: String, val instanceId: String, val facet: Int, val distanceMetres: Double, val volumeId: String = "",
+        val localPoint: Point3? = null, val localOrigin: Point3? = null,
+    )
 
-    private class Chunk(val vertices: VertexBuffer, val indices: IndexBuffer, val count: Int,
-        val facetCount: Int, val center: FloatArray, val extent: FloatArray, val bytes: Long)
+    /** One mesh asset: its source and the picking index its volumes share. */
     private class Mesh(val assetId: String, val source: TriangleMesh) {
-        val chunks = mutableListOf<Chunk>()
-        var uploadedFacets = 0
         var picking: MeshPicking? = null
         var failed = false
         /** Read by the worker: a replaced, removed or closed mesh stops its job. */
         @Volatile var cancelled = false
-        val complete get() = uploadedFacets == source.facetCount && picking != null
     }
+    private class Chunk(val vertices: VertexBuffer, val indices: IndexBuffer, val count: Int, val firstFacet: Int,
+        val facetCount: Int, val center: FloatArray, val extent: FloatArray, val bytes: Long)
+    /** One drawn volume on the GPU: its mesh's chunks with colour bytes of its own, shared by its draws. */
+    private class Geometry(val volumeId: String, val mesh: Mesh) {
+        val chunks = mutableListOf<Chunk>()
+        var uploadedFacets = 0
+        /** Every facet's vertex colour once the volume is painted; null while it shows its mesh's own shades. */
+        var colors: IntArray? = null
+        var leaves: Leaves? = null
+        var failed = false
+        /** Read by the worker: a replaced, removed or closed volume stops its job. */
+        @Volatile var cancelled = false
+        val uploaded get() = uploadedFacets == mesh.source.facetCount
+    }
+    private class Leaves(val vertices: VertexBuffer, val indices: IndexBuffer, val count: Int,
+        val center: FloatArray, val extent: FloatArray, val bytes: Long)
     private class Placed(var draw: ProjectScene.Draw, var material: MaterialInstance) {
         val entities = IdentityHashMap<Chunk, Int>()
+        /** The leaves drawn over this draw, with their own offset material. */
+        var leafMaterial: MaterialInstance? = null
+        var leafEntity: Int? = null
     }
     private class Lines(val vertices: VertexBuffer, val indices: IndexBuffer, val entity: Int, val bytes: Long)
     /** The viewport's vertical wash: a quad at the far end of the view, carried with the camera. */
@@ -69,6 +102,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private val scheduler = Choreographer.getInstance()
     private var swapChain: SwapChain? = null
     private val meshes = LinkedHashMap<String, Mesh>()
+    /** Uploaded volumes, by volume. */
+    private val geometries = LinkedHashMap<String, Geometry>()
     private val placed = LinkedHashMap<String, Placed>()
     private var bed: Lines? = null
     private var bedSize: Pair<Double, Double>? = null
@@ -89,6 +124,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private var peakPending = 0L
     private var uploaded = 0L
     private var uploads = 0L
+    private var paintUploaded = 0L
     private var state = "Empty"
     private var active = false
     private var scheduled = false
@@ -116,10 +152,12 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             bedMaterial.setParameter("opacity", 1f)
             // The bed's lines carry their own colours.
             bedMaterial.setParameter("tint", 1f, 1f, 1f, 1f)
+            bedMaterial.setParameter("highlight", 0f, 0f, 0f, 0f)
             toolpathMaterial = opaque.createInstance()
             toolpathMaterial.setParameter("clipHeight", clipHeight)
             toolpathMaterial.setParameter("opacity", 1f)
             toolpathMaterial.setParameter("tint", 1f, 1f, 1f, 1f)
+            toolpathMaterial.setParameter("highlight", 0f, 0f, 0f, 0f)
             view.scene = scene
             view.camera = camera
             view.isPostProcessingEnabled = false
@@ -171,11 +209,12 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
 
     fun metrics(): Metrics {
         requireUi()
-        return Metrics(state, meshes.size, meshes.values.sumOf { it.source.facetCount },
-            meshes.values.sumOf { it.uploadedFacets }, placed.size,
-            placed.values.sumOf { it.entities.size } + (if (bed == null) 0 else 1) + (if (toolpath == null) 0 else 1),
-            meshes.values.sumOf { mesh -> mesh.chunks.sumOf { it.bytes } } + (bed?.bytes ?: 0) + (toolpath?.bytes ?: 0),
-            pending, peakPending, uploaded, uploads, frames, maxFrameCpuMs, closed, toolpathSegments)
+        return Metrics(state, meshes.size, geometries.values.sumOf { it.mesh.source.facetCount },
+            geometries.values.sumOf { it.uploadedFacets }, placed.size,
+            placed.values.sumOf { it.entities.size + (if (it.leafEntity == null) 0 else 1) } + (if (bed == null) 0 else 1) + (if (toolpath == null) 0 else 1),
+            geometries.values.sumOf { geometry -> geometry.chunks.sumOf { it.bytes } + (geometry.leaves?.bytes ?: 0) } + (bed?.bytes ?: 0) + (toolpath?.bytes ?: 0),
+            pending, peakPending, uploaded, uploads, frames, maxFrameCpuMs, closed, toolpathSegments,
+            geometries.size, geometries.values.count { it.colors != null }, paintUploaded)
     }
 
     fun setActive(value: Boolean) {
@@ -183,11 +222,14 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         if (value) invalidate() else unschedule()
     }
 
-    /** Uploads [mesh] for [assetId], replacing the mesh it had: draws placing it show each chunk as it lands. */
+    /** Takes [mesh] for [assetId], replacing the mesh it had (and every volume uploaded from it): draws placing it show each chunk as it lands. */
     fun setMesh(assetId: String, mesh: TriangleMesh) {
         checkOpen(); require(assetId.isNotEmpty())
         meshes.remove(assetId)?.let(::discard)
         meshes[assetId] = Mesh(assetId, mesh)
+        // Volumes already drawn from this asset upload from the new mesh.
+        for (draw in placed.values.map { it.draw }) if (draw.assetId == assetId) geometryFor(draw)
+        for (each in placed.values) if (each.draw.assetId == assetId) geometries[each.draw.volumeId]?.chunks?.forEach { attach(each, it) }
         pump()
         invalidate()
     }
@@ -199,13 +241,34 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         invalidate()
     }
 
-    /** Detaches every draw from [mesh]'s chunks and frees them; its job in flight is dropped when it answers. */
+    /** Drops [mesh] and every volume uploaded from it; a job in flight is dropped when it answers. */
     private fun discard(mesh: Mesh) {
         mesh.cancelled = true
-        for (each in placed.values) for (chunk in mesh.chunks) each.entities.remove(chunk)?.let(::destroyEntity)
-        mesh.chunks.forEach { engine.destroyVertexBuffer(it.vertices); engine.destroyIndexBuffer(it.indices) }
-        mesh.chunks.clear()
         mesh.picking = null
+        for ((volumeId, geometry) in geometries.entries.toList()) if (geometry.mesh === mesh) dropGeometry(volumeId)
+    }
+
+    /** [draw]'s volume uploaded from its asset's mesh, made once; null while the mesh is unknown. */
+    private fun geometryFor(draw: ProjectScene.Draw): Geometry? {
+        val mesh = meshes[draw.assetId] ?: return null
+        val existing = geometries[draw.volumeId]
+        if (existing != null && existing.mesh === mesh) return existing
+        if (existing != null) dropGeometry(draw.volumeId)
+        return Geometry(draw.volumeId, mesh).also { geometries[draw.volumeId] = it }
+    }
+
+    /** Detaches every draw from volume [volumeId]'s chunks and leaves and frees them. */
+    private fun dropGeometry(volumeId: String) {
+        val geometry = geometries.remove(volumeId) ?: return
+        geometry.cancelled = true
+        for (each in placed.values) {
+            for (chunk in geometry.chunks) each.entities.remove(chunk)?.let(::destroyEntity)
+            if (each.draw.volumeId == volumeId) detachLeaves(each)
+        }
+        geometry.chunks.forEach { engine.destroyVertexBuffer(it.vertices); engine.destroyIndexBuffer(it.indices) }
+        geometry.chunks.clear()
+        geometry.leaves?.let(::destroyLeaves)
+        geometry.leaves = null
     }
 
     /** The draws to show, keyed by [ProjectScene.Draw.key]: new ones placed, changed ones moved or retinted, the rest removed. */
@@ -214,19 +277,29 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         val wanted = LinkedHashMap<String, ProjectScene.Draw>()
         for (draw in draws) require(wanted.put(draw.key, draw) == null) { "Repeated draw ${draw.key}" }
         for (key in placed.keys.toList()) if (key !in wanted) placed.remove(key)?.let(::destroyPlaced)
+        // A volume no draw shows is not kept on the GPU; one whose asset changed uploads again.
+        val shown = wanted.values.associateBy { it.volumeId }
+        for ((volumeId, geometry) in geometries.entries.toList()) {
+            val draw = shown[volumeId]
+            if (draw == null || geometry.mesh !== meshes[draw.assetId]) dropGeometry(volumeId)
+        }
         for ((key, draw) in wanted) {
+            val geometry = geometryFor(draw)
             val current = placed[key]
             if (current == null) {
                 val created = Placed(draw, materialFor(draw))
                 placed[key] = created
-                meshes[draw.assetId]?.chunks?.forEach { attach(created, it) }
+                geometry?.chunks?.forEach { attach(created, it) }
+                attachLeaves(created)
                 continue
             }
             val before = current.draw
             current.draw = draw
-            if (before.assetId != draw.assetId) {
+            val reshaped = before.assetId != draw.assetId || before.volumeId != draw.volumeId
+            if (reshaped) {
                 current.entities.values.forEach(::destroyEntity)
                 current.entities.clear()
+                detachLeaves(current)
             }
             if (before.printable != draw.printable) {
                 val replaced = current.material
@@ -235,15 +308,22 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
                     engine.renderableManager.setMaterialInstanceAt(engine.renderableManager.getInstance(entity), 0, current.material)
                 }
                 engine.destroyMaterialInstance(replaced)
+                if (!reshaped) { detachLeaves(current); attachLeaves(current) }
             } else if (before.argb != draw.argb || before.instanceId != draw.instanceId) {
                 tint(current.material, draw)
+                current.leafMaterial?.let { tint(it, draw) }
             }
             val matrix = draw.transform.renderMatrix()
             if (!before.transform.renderMatrix().contentEquals(matrix)) {
                 for (entity in current.entities.values) place(entity, matrix)
+                current.leafEntity?.let { place(it, matrix) }
             }
-            if (before.assetId != draw.assetId) meshes[draw.assetId]?.chunks?.forEach { attach(current, it) }
+            if (reshaped) {
+                geometry?.chunks?.forEach { attach(current, it) }
+                attachLeaves(current)
+            }
         }
+        pump()
         invalidate()
     }
 
@@ -255,13 +335,11 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         return instance
     }
 
-    /** The draw's colour; a selected instance's draws shift toward the selection accent. */
+    /** The draw's colour as its tint; a selected instance's draws move toward the selection accent. */
     private fun tint(instance: MaterialInstance, draw: ProjectScene.Draw) {
-        val colour = floatArrayOf(((draw.argb ushr 16) and 255) / 255f, ((draw.argb ushr 8) and 255) / 255f, (draw.argb and 255) / 255f)
-        if (draw.instanceId in selected) for (n in 0..2) colour[n] = colour[n] * (1 - SELECTED_MIX) + SELECTED_ACCENT[n] * SELECTED_MIX
-        // The transparent material blends premultiplied colour.
-        val alpha = if (draw.printable) 1f else NOT_PRINTABLE_OPACITY
-        instance.setParameter("tint", colour[0] * alpha, colour[1] * alpha, colour[2] * alpha, 1f)
+        instance.setParameter("tint", ((draw.argb ushr 16) and 255) / 255f, ((draw.argb ushr 8) and 255) / 255f, (draw.argb and 255) / 255f, 1f)
+        val mix = if (draw.instanceId in selected) SELECTED_MIX else 0f
+        instance.setParameter("highlight", SELECTED_ACCENT[0], SELECTED_ACCENT[1], SELECTED_ACCENT[2], mix)
     }
 
     private fun place(entity: Int, matrix: FloatArray) {
@@ -296,62 +374,72 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private fun destroyPlaced(value: Placed) {
         value.entities.values.forEach(::destroyEntity)
         value.entities.clear()
+        detachLeaves(value)
         engine.destroyMaterialInstance(value.material)
     }
 
     private fun refreshState() {
         if (busy) return
         state = when {
-            meshes.isEmpty() -> "Empty"
-            meshes.values.any { it.failed } -> "Geometry upload failed"
-            meshes.values.all { it.complete } -> "Ready"
+            geometries.isEmpty() -> "Empty"
+            meshes.values.any { it.failed } || geometries.values.any { it.failed } -> "Geometry upload failed"
+            geometries.values.all { it.uploaded && it.mesh.picking != null } -> "Ready"
             else -> state
         }
     }
 
-    /** Admits one job at a time: a mesh's next chunk, then its picking index once
-     * every chunk has landed. Nothing starts while an upload is still being copied. */
+    /** Admits one job at a time: a volume's next chunk, then a drawn mesh's picking index once
+     * its volumes have landed. Nothing starts while an upload is still being copied. */
     private fun pump() {
         if (closed || busy || pending != 0L) return
-        val target = meshes.values.firstOrNull { !it.failed && !it.complete }
-        if (target == null) { refreshState(); return }
-        val upload = target.uploadedFacets < target.source.facetCount
-        val first = target.uploadedFacets
+        val geometry = geometries.values.firstOrNull { !it.failed && !it.mesh.failed && !it.uploaded }
+        val mesh = if (geometry != null) null else geometries.values.map { it.mesh }.firstOrNull { !it.failed && it.picking == null }
+        if (geometry == null && mesh == null) { refreshState(); return }
+        val source = geometry?.mesh?.source ?: mesh!!.source
+        val first = geometry?.uploadedFacets ?: 0
         busy = true
-        state = if (upload) "Uploading ${target.source.facetCount} facets" else "Indexing ${target.source.facetCount} facets"
+        state = if (geometry != null) "Uploading ${source.facetCount} facets" else "Indexing ${source.facetCount} facets"
         worker.execute {
             var chunk: MeshChunk? = null
             var index: MeshPicking? = null
             var failed = false
             try {
-                val cancelled = { target.cancelled || Thread.currentThread().isInterrupted }
+                val cancelled = { (geometry?.cancelled ?: false) || (mesh?.cancelled ?: false) || Thread.currentThread().isInterrupted }
                 check(!cancelled())
-                if (upload) chunk = MeshPacking.chunk(target.source, first) else index = MeshPicking(target.source, cancelled)
+                if (geometry != null) chunk = MeshPacking.chunk(source, first) else index = MeshPicking(source, cancelled)
                 check(!cancelled())
             } catch (_: Exception) { failed = true }
             handler.post {
                 busy = false
                 if (closed) return@post
-                if (target.cancelled || meshes[target.assetId] !== target) { pump(); refreshState(); return@post }
-                if (failed) {
-                    target.failed = true
-                } else {
-                    index?.let { target.picking = it }
-                    chunk?.let {
-                        try {
-                            val gpu = createChunk(it)
-                            target.chunks.add(gpu)
-                            target.uploadedFacets += it.facetCount
-                            for (each in placed.values) if (each.draw.assetId == target.assetId) attach(each, gpu)
-                        } catch (_: RuntimeException) {
-                            target.failed = true
-                        }
-                    }
+                if (geometry != null) landChunk(geometry, chunk, failed)
+                if (mesh != null && !mesh.cancelled && meshes[mesh.assetId] === mesh) {
+                    if (failed) mesh.failed = true else mesh.picking = index
                 }
                 pump()
                 refreshState()
                 invalidate()
             }
+        }
+    }
+
+    /** A packed chunk of [geometry] reaching the UI thread: uploaded in the volume's paint colours, then drawn. */
+    private fun landChunk(geometry: Geometry, packed: MeshChunk?, failed: Boolean) {
+        if (geometry.cancelled || geometries[geometry.volumeId] !== geometry) return
+        if (failed || packed == null) { geometry.failed = true; return }
+        geometry.colors?.let { colors ->
+            // Painted already: the chunk's colours are the volume's, not the mesh's shades.
+            packed.colors.clear()
+            for (facet in packed.firstFacet until packed.firstFacet + packed.facetCount) repeat(3) { MeshPacking.rgba(packed.colors, colors[facet]) }
+            packed.colors.flip()
+        }
+        try {
+            val gpu = createChunk(packed)
+            geometry.chunks.add(gpu)
+            geometry.uploadedFacets += packed.facetCount
+            for (each in placed.values) if (each.draw.volumeId == geometry.volumeId) attach(each, gpu)
+        } catch (_: RuntimeException) {
+            geometry.failed = true
         }
     }
 
@@ -399,8 +487,136 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             engine.destroyVertexBuffer(vertices); engine.destroyIndexBuffer(indices)
             throw failure
         }
-        return Chunk(vertices, indices, count, chunk.facetCount, chunk.center, chunk.halfExtent,
+        return Chunk(vertices, indices, count, chunk.firstFacet, chunk.facetCount, chunk.center, chunk.halfExtent,
             chunk.positions.remaining().toLong() + chunk.colors.remaining() + chunk.indices.remaining())
+    }
+
+    // --- Paint ---------------------------------------------------------------------------
+
+    /**
+     * Applies one volume's paint change: the colour bytes of the facets whose
+     * colour changed, one partial upload per chunk a range crosses (chunks
+     * still to come are packed in the new colours), and its leaves when they
+     * changed. Positions and indices are never uploaded again.
+     */
+    fun setPaint(update: PaintUpdate) {
+        checkOpen()
+        val geometry = geometries[update.volumeId] ?: return
+        if (geometry.mesh.assetId != update.assetId) return
+        require(update.facetCount == geometry.mesh.source.facetCount) { "Paint for another mesh" }
+        val colors = geometry.colors ?: IntArray(geometry.mesh.source.facetCount, geometry.mesh.source::facetColor).also {
+            if (update.ranges.isEmpty()) return@also
+            geometry.colors = it
+        }
+        val chunks = geometry.chunks.associateBy { it.firstFacet }
+        for (range in update.ranges) {
+            val end = range.first + range.colors.size
+            require(range.first >= 0 && end <= colors.size) { "Paint range outside the mesh" }
+            range.colors.copyInto(colors, range.first)
+            // Each chunk the range crosses: a partial upload of its colour bytes alone.
+            var facet = range.first
+            while (facet < end) {
+                val first = facet / MeshPacking.FACETS_PER_CHUNK * MeshPacking.FACETS_PER_CHUNK
+                val stop = min(end, first + MeshPacking.FACETS_PER_CHUNK)
+                chunks[first]?.let { chunk ->
+                    val from = facet
+                    val bytes = MeshPacking.direct((stop - from) * 12)
+                    for (painted in from until stop) repeat(3) { MeshPacking.rgba(bytes, colors[painted]) }
+                    bytes.flip()
+                    val size = bytes.remaining()
+                    submit(bytes) { callback -> chunk.vertices.setBufferAt(engine, 1, bytes, (from - first) * 12, size, handler, callback) }
+                    paintUploaded += size
+                }
+                facet = stop
+            }
+        }
+        if (update.ranges.isNotEmpty()) engine.flush()
+        if (update.leavesChanged) {
+            for (each in placed.values) if (each.draw.volumeId == update.volumeId) detachLeaves(each)
+            geometry.leaves?.let(::destroyLeaves)
+            geometry.leaves = update.leaves?.let(::createLeaves)
+            for (each in placed.values) if (each.draw.volumeId == update.volumeId) attachLeaves(each)
+        }
+        invalidate()
+    }
+
+    private fun createLeaves(leaves: PaintLeaves): Leaves {
+        val count = leaves.count * 3
+        val positions = MeshPacking.direct(count * 12)
+        val colors = MeshPacking.direct(count * 4)
+        val indices = MeshPacking.direct(count * 4)
+        val low = FloatArray(3) { Float.POSITIVE_INFINITY }; val high = FloatArray(3) { Float.NEGATIVE_INFINITY }
+        for (leaf in 0 until leaves.count) repeat(3) { corner ->
+            val at = leaf * 9 + corner * 3
+            val point = RenderSpace.point(Point3(leaves.corners[at].toDouble(), leaves.corners[at + 1].toDouble(), leaves.corners[at + 2].toDouble()))
+            val coordinates = floatArrayOf(point.x.toFloat(), point.y.toFloat(), point.z.toFloat())
+            for (axis in 0..2) {
+                positions.putFloat(coordinates[axis])
+                low[axis] = min(low[axis], coordinates[axis]); high[axis] = max(high[axis], coordinates[axis])
+            }
+            MeshPacking.rgba(colors, leaves.colors[leaf])
+            indices.putInt(indices.position() / 4)
+        }
+        positions.flip(); colors.flip(); indices.flip()
+        val vertices = VertexBuffer.Builder().bufferCount(2).vertexCount(count)
+            .attribute(VertexBuffer.VertexAttribute.POSITION, 0, VertexBuffer.AttributeType.FLOAT3, 0, 12)
+            .attribute(VertexBuffer.VertexAttribute.COLOR, 1, VertexBuffer.AttributeType.UBYTE4, 0, 4)
+            .normalized(VertexBuffer.VertexAttribute.COLOR)
+            .build(engine)
+        val index = try {
+            IndexBuffer.Builder().indexCount(count).bufferType(IndexBuffer.Builder.IndexType.UINT).build(engine)
+        } catch (failure: Throwable) {
+            engine.destroyVertexBuffer(vertices)
+            throw failure
+        }
+        val size = positions.remaining().toLong() + colors.remaining() + indices.remaining()
+        try {
+            submit(positions) { callback -> vertices.setBufferAt(engine, 0, positions, 0, positions.remaining(), handler, callback) }
+            submit(colors) { callback -> vertices.setBufferAt(engine, 1, colors, 0, colors.remaining(), handler, callback) }
+            submit(indices) { callback -> index.setBuffer(engine, indices, 0, indices.remaining(), handler, callback) }
+            engine.flush()
+        } catch (failure: Throwable) {
+            engine.destroyVertexBuffer(vertices); engine.destroyIndexBuffer(index)
+            throw failure
+        }
+        paintUploaded += size
+        return Leaves(vertices, index, count, FloatArray(3) { (low[it] + high[it]) * .5f }, FloatArray(3) { max((high[it] - low[it]) * .5f, 1e-5f) }, size)
+    }
+
+    private fun destroyLeaves(leaves: Leaves) {
+        engine.destroyVertexBuffer(leaves.vertices); engine.destroyIndexBuffer(leaves.indices)
+    }
+
+    /** Draws its volume's leaves over [target], with an offset copy of its material. */
+    private fun attachLeaves(target: Placed) {
+        if (target.leafEntity != null) return
+        val leaves = geometries[target.draw.volumeId]?.leaves ?: return
+        val material = materialFor(target.draw)
+        material.setPolygonOffset(LEAF_OFFSET, LEAF_OFFSET)
+        val entity = engine.entityManager.create()
+        try {
+            RenderableManager.Builder(1)
+                .boundingBox(Box(leaves.center[0], leaves.center[1], leaves.center[2], leaves.extent[0], leaves.extent[1], leaves.extent[2]))
+                .geometry(0, RenderableManager.PrimitiveType.TRIANGLES, leaves.vertices, leaves.indices, 0, leaves.count)
+                .material(0, material)
+                .culling(false).castShadows(false).receiveShadows(false)
+                .build(engine, entity)
+            place(entity, target.draw.transform.renderMatrix())
+            scene.addEntity(entity)
+        } catch (failure: Throwable) {
+            destroyEntity(entity)
+            engine.destroyMaterialInstance(material)
+            throw failure
+        }
+        target.leafEntity = entity
+        target.leafMaterial = material
+    }
+
+    private fun detachLeaves(target: Placed) {
+        target.leafEntity?.let(::destroyEntity)
+        target.leafMaterial?.let { engine.destroyMaterialInstance(it) }
+        target.leafEntity = null
+        target.leafMaterial = null
     }
 
     /**
@@ -418,7 +634,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             clear = true
             clearColor = doubleArrayOf(bottom[0].toDouble(), bottom[1].toDouble(), bottom[2].toDouble(), 1.0)
         }
-        backdrop?.let { upload(it.vertices, 1, washColours()) }
+        backdrop?.let { uploadBackdrop(it.vertices, 1, washColours()) }
         invalidate()
     }
 
@@ -442,7 +658,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     }
 
     /** Copies [buffer] into [vertices]' buffer [index], keeping it alive until Filament has it. Not counted as mesh upload. */
-    private fun upload(vertices: VertexBuffer, index: Int, buffer: ByteBuffer) {
+    private fun uploadBackdrop(vertices: VertexBuffer, index: Int, buffer: ByteBuffer) {
         backdropBuffers.add(buffer)
         vertices.setBufferAt(engine, index, buffer, 0, buffer.remaining(), handler) { backdropBuffers.remove(buffer) }
     }
@@ -451,7 +667,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
      * A quad filling the view at [BACKDROP_DEPTH] metres, in the camera's own
      * space (so it moves with it): exactly the vertical field of view high, far
      * wider than any window. Drawn after everything else, at the far end of the
-     * depth range, it shows only where nothing else is drawn.
+     * depth range, it shows only where nothing else is drawn. Its colours are
+     * its vertices' own (alpha 1 under a white tint), never highlighted.
      */
     private fun createBackdrop(): Backdrop {
         val half = (BACKDROP_DEPTH * tan(Math.toRadians(FIELD_OF_VIEW / 2))).toFloat()
@@ -468,6 +685,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         material.setParameter("clipHeight", Float.MAX_VALUE)
         material.setParameter("opacity", 1f)
         material.setParameter("tint", 1f, 1f, 1f, 1f)
+        material.setParameter("highlight", 0f, 0f, 0f, 0f)
         val vertices = VertexBuffer.Builder().bufferCount(2).vertexCount(4)
             .attribute(VertexBuffer.VertexAttribute.POSITION, 0, VertexBuffer.AttributeType.FLOAT3, 0, 12)
             .attribute(VertexBuffer.VertexAttribute.COLOR, 1, VertexBuffer.AttributeType.FLOAT4, 0, 16)
@@ -482,8 +700,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             .culling(false).castShadows(false).receiveShadows(false)
             .build(engine, entity)
         scene.addEntity(entity)
-        upload(vertices, 0, positions)
-        upload(vertices, 1, washColours())
+        uploadBackdrop(vertices, 0, positions)
+        uploadBackdrop(vertices, 1, washColours())
         backdropBuffers.add(indices)
         index.setBuffer(engine, indices, 0, indices.remaining(), handler) { backdropBuffers.remove(indices) }
         return Backdrop(vertices, index, entity, material)
@@ -590,7 +808,10 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         checkOpen()
         if (instances == selected) return
         selected = instances.toSet()
-        for (each in placed.values) tint(each.material, each.draw)
+        for (each in placed.values) {
+            tint(each.material, each.draw)
+            each.leafMaterial?.let { tint(it, each.draw) }
+        }
         invalidate()
     }
 
@@ -599,7 +820,10 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         clipHeight = height?.times(.001f) ?: 10000f
         bedMaterial.setParameter("clipHeight", clipHeight)
         toolpathMaterial.setParameter("clipHeight", clipHeight)
-        for (each in placed.values) each.material.setParameter("clipHeight", clipHeight)
+        for (each in placed.values) {
+            each.material.setParameter("clipHeight", clipHeight)
+            each.leafMaterial?.setParameter("clipHeight", clipHeight)
+        }
         invalidate()
     }
 
@@ -635,22 +859,27 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         invalidate()
     }
 
-    /** The nearest uploaded facet under view position ([x], [y]), over every draw, below the clip height. */
-    fun pick(x: Double, y: Double): Pick? {
+    /**
+     * The nearest uploaded facet under view position ([x], [y]), over every
+     * draw (or only the draw keyed [only], as a stroke in flight samples its
+     * own part), below the clip height.
+     */
+    fun pick(x: Double, y: Double, only: String? = null): Pick? {
         checkOpen()
         if (view.viewport.width <= 0 || view.viewport.height <= 0) return null
         val world = RenderSpace.rayToMillimetres(orbit.ray(x, y, view.viewport.width, view.viewport.height))
         var closest: Pick? = null
         for ((key, each) in placed) {
-            val mesh = meshes[each.draw.assetId] ?: continue
-            val index = mesh.picking ?: continue
+            if (only != null && key != only) continue
+            val geometry = geometries[each.draw.volumeId] ?: continue
+            val index = geometry.mesh.picking ?: continue
             val transform = each.draw.transform
             val local = runCatching { transform.localRay(world) }.getOrNull() ?: continue
             // An affine map keeps the ray parameter, so distances compare across draws.
             val hit = index.pick(local, closest?.distanceMetres ?: Double.POSITIVE_INFINITY) { facet, point ->
-                facet < mesh.uploadedFacets && transform.point(point).z * .001 <= clipHeight
+                facet < geometry.uploadedFacets && transform.point(point).z * .001 <= clipHeight
             }
-            if (hit != null) closest = Pick(key, each.draw.instanceId, hit.facet, hit.distance, each.draw.volumeId)
+            if (hit != null) closest = Pick(key, each.draw.instanceId, hit.facet, hit.distance, each.draw.volumeId, hit.positionMm, local.origin)
         }
         return closest
     }
@@ -681,6 +910,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         unschedule(); worker.shutdownNow(); helper.detach()
         placed.values.forEach(::destroyPlaced); placed.clear()
         meshes.values.forEach(::discard); meshes.clear()
+        for (volumeId in geometries.keys.toList()) dropGeometry(volumeId)
         bed?.let(::destroyLines); bed = null
         toolpath?.let(::destroyLines); toolpath = null; toolpathSegments = 0
         backdrop?.let {
@@ -717,5 +947,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         const val MAX_BED_LINES = 1000.0
         /** The viewport experiment's toolpath bound and `ToolpathGeometry`'s default budget. */
         const val MAX_TOOLPATH_SEGMENTS = 240_000
+        /** Leaves are pulled toward the eye, as the browser offsets its paint overlay (`polygonOffsetFactor/Units -2`). */
+        const val LEAF_OFFSET = -2f
     }
 }

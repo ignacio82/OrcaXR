@@ -326,6 +326,20 @@ final class NativeProject {
     static native long paintStrokePreview(long handle);
     static native String paintOverlaySummary(long handle);
     static native byte[] paintOverlayPacket(long handle, long start, long count);
+    // Paint facets: a volume channel's canonical facets or a stroke's live
+    // preview, then its summary (with each state's colour), 12-byte runs of
+    // whole facets and 44-byte leaves of subdivided ones.
+    static native long sessionPaintFacets(long handle, String request);
+    static native long paintStrokePreviewFacets(long handle);
+    static native String paintFacetsSummary(long handle);
+    static native byte[] paintFacetsRuns(long handle, long start, long count);
+    static native byte[] paintFacetsLeaves(long handle, long start, long count);
+    // The painter (orcaxr_project::facets::paint_tool): the sample a hit makes
+    // with the paint tool's settings, alone or on a stroke, and the colours a
+    // filament library paints states in, as canonical JSON.
+    static native String paintToolSample(String request);
+    static native String paintStrokeSampleWith(long handle, String request);
+    static native String paintFacetColors(String request);
     // Picking: one plate captured for picking, then printer-space rays.
     static native long sessionPickScene(long handle, String request);
     static native String pickScenePick(long handle, String ray);
