@@ -12,7 +12,7 @@
     "contracts/gcode-preview.json": "2b4135fe1989495e51e40038d2af98fa90d77261403ef3a347acc6f9ff8e2668",
     "contracts/gcode-requests.json": "17a7f24c34c347bfc902c91dd5dd52e370090a1a2ac9abd4c34ed3cb913f57fa",
     "contracts/gcode-view-buffer.json": "ab3e178016528e1268717587e1753756da58b9af4253d2d7556f3f50b73dada5",
-    "contracts/generated/migration-inventory.json": "6f635b5e6f696f017583b2a22765c378972b1f954f20792afd14957ed605081a",
+    "contracts/generated/migration-inventory.json": "682fa8f2a3db01903ab12e96dd55cc1090b0f260e8bac3988b3f03cb7f0dd4a5",
     "contracts/opc-lowercase.json": "3b1ac9fb9776d3b8114ac2dfbf26a705dffd911eebb6b40ebd5049345fc1303b",
     "contracts/package.json": "0cc1bbbf03a3aa99c73fae9f3d52a1b0118eaae49bb6c9e76612ae5a7d47d85d",
     "contracts/pinned-engine-provenance.json": "4ff7a0995266f9467c1b0487b3a0e648f65607d6956165bd33b5cf221089c813",
