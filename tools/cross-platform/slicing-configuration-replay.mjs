@@ -1,5 +1,5 @@
-// Catalog profile selection and slicing configuration through a binding
-// (`slicing-configuration-vectors.json`): the bundled and synthetic catalogs
+// Catalog profile selection, slicing configuration and filament slots through
+// a binding (`slicing-configuration-vectors.json`): the bundled and synthetic catalogs
 // streamed in and built, then every exchange's reply compared with the
 // browser's — large ones by the SHA-256 of their text (`sha256` resolves a hex
 // digest of bytes) — each configuration and next state fed forward as a host
@@ -49,7 +49,33 @@ export async function replaySlicingConfiguration(
     bundled: build(bundledBytes, collator),
     synthetic: build(encoder.encode(fixture.syntheticCatalogJson), collator),
   };
-  const counts = { replies: 0, refusals: 0, commits: 0, undone: 0 };
+  const counts = { replies: 0, refusals: 0, commits: 0, undone: 0, slots: 0, projectSlots: 0 };
+  /** A session opened from a state document, without assets. */
+  const open = (stateJson) => {
+    const source = encoder.encode(stateJson);
+    const options = {
+      documentBytes: source.length,
+      documentNodes: 1_000_000,
+      documentTextUnits: 2_000_000,
+      numberBytes: 1024,
+      depth: 128,
+      assets: 0,
+      assetBytes: 16 * 1024 * 1024,
+      totalAssetBytes: 32 * 1024 * 1024,
+      historyEntries: 16,
+      historyBytes: 64 * 1024 * 1024,
+    };
+    const upload = new core.ProjectUpload(layout.version, source.length, Float64Array.from(layout.options.map((k) => options[k])));
+    try {
+      for (let p = 0; p < source.length; p += layout.maxChunkBytes)
+        upload.append_document(p, source.subarray(p, p + layout.maxChunkBytes));
+      upload.seal_document();
+    } catch (e) {
+      upload.free();
+      throw e;
+    }
+    return upload.open(Float64Array.from([1, 2, 3, 4]));
+  };
   /** A reply pinned by its text, or by the SHA-256 and UTF-16 length of its text. */
   const pinned = async (reply, entry, label) => {
     if ("replyJson" in entry) return eq(reply, entry.replyJson, label);
@@ -105,6 +131,7 @@ export async function replaySlicingConfiguration(
       default: (r) => catalogs.bundled.slicing_default(r),
       configuration: (r) => catalogs.bundled.slicing_configuration(r),
       next: (r) => core.slicing_next_state(r, new Float64Array(0)),
+      slots: (r) => catalogs.bundled.slicing_slots(r),
     };
     for (const [i, r] of fixture.refusals.entries()) {
       refuses(() => exchanges[r.exchange](r.requestJson), `refusal ${i}`);
@@ -188,10 +215,38 @@ export async function replaySlicingConfiguration(
         session.free();
       }
     }
+    // The Filament tab's slot edits on live choices, and the slots each
+    // state's own physical filaments describe, read from its captured project.
+    for (const [i, c] of fixture.slotEdits.entries()) {
+      eq(catalogs[c.catalog].slicing_slots(c.requestJson), c.replyJson, `slot edit ${i}`);
+      counts.slots++;
+    }
+    for (const name of new Set(fixture.projectSlots.map((c) => c.state))) {
+      const session = open(fixture.states[name]);
+      const captured = session.snapshot();
+      try {
+        for (const [i, c] of fixture.projectSlots.entries()) {
+          if (c.state !== name) continue;
+          eq(captured.filament_slots(c.requestJson), c.replyJson, `project slots ${i}`);
+          counts.projectSlots++;
+        }
+      } finally {
+        captured.free();
+        session.free();
+      }
+    }
   } finally {
     for (const catalog of Object.values(catalogs)) catalog.free();
   }
   return {
-    slicingConfigurationAnswers: [counts.replies, counts.refusals, counts.commits, counts.undone, fixture.commits.length],
+    slicingConfigurationAnswers: [
+      counts.replies,
+      counts.refusals,
+      counts.commits,
+      counts.undone,
+      fixture.commits.length,
+      counts.slots,
+      counts.projectSlots,
+    ],
   };
 }

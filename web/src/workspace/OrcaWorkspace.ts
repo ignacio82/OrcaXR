@@ -216,9 +216,10 @@ import {
   ManipulationBehavior,
 } from 'xrblocks/addons/uiblocks/src/index.js';
 
-import { FilamentPalette, FILAMENT_PALETTE_MAX_SLOTS } from './FilamentPalette';
+import { FilamentPalette } from './FilamentPalette';
 import {
   catalogDefaultProfile,
+  editFilamentSlots,
   filamentPresetChoices,
   headSelectionFromProfile,
   liveSlicingConfiguration,
@@ -226,13 +227,15 @@ import {
   matchPresetOption,
   processPresetChoices,
   profileExtruderCount,
-  profileNozzleForTool,
+  projectFilamentSlots,
   resolvedProfileSlots,
   resolveProfileSelection,
   resolveProfileSelectionByNames,
   synchronizedHeadSlots,
   unambiguousProfileScalar,
   type HeadFilamentSelection,
+  type LiveProfileSlots,
+  type LiveSlicingChoice,
   type ProfileSelectionOutcome,
   type WorkspacePresetId,
   type WorkspacePresetOption,
@@ -3900,36 +3903,54 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public setHeadNozzle(index: number, nozzle: string): void {
-    if (index < 0 || index >= this.headNozzles.length || this.headNozzles[index] === nozzle) return;
-    this.headNozzles[index] = nozzle;
+    const outcome = editFilamentSlots(this.liveFilamentSlots(), { kind: 'nozzle', index, nozzle });
+    if (outcome.kind !== 'edited') return;
+    this.headFilaments = [...outcome.slots.heads];
+    this.headNozzles = [...outcome.slots.nozzles];
     void this.applyLiveSlicingConfiguration();
     this.recomputePreflight();
     this.rebuildHeadsPanel();
   }
 
   public addFilamentSlot(): void {
-    if (this.palette.count() >= FILAMENT_PALETTE_MAX_SLOTS) {
+    const outcome = editFilamentSlots(this.liveFilamentSlots(), { kind: 'add' });
+    if (outcome.kind === 'refused') {
       this.setStatus(
         t('workspace.orcaWorkspace.the16SlotFilamentLimit', 'The 16-slot filament limit has been reached.'),
       );
       return;
     }
-    this.headFilaments.push(headSelectionFromProfile(this.profile));
-    this.headNozzles.push(profileNozzleForTool(this.profile, this.headNozzles.length));
-    this.palette.add();
+    if (outcome.kind !== 'edited') return;
+    this.applyFilamentSlots(outcome.slots);
     void this.applyLiveSlicingConfiguration();
     this.rebuildHeadsPanel();
     this.onProfileChanged?.();
   }
 
   public removeAuxiliaryFilamentSlot(index: number): void {
-    if (index < this.extruderCount || index >= this.palette.count()) return;
-    this.headFilaments.splice(index, 1);
-    this.headNozzles.splice(index, 1);
-    this.palette.remove(index);
+    const outcome = editFilamentSlots(this.liveFilamentSlots(), { kind: 'remove', index });
+    if (outcome.kind !== 'edited') return;
+    this.applyFilamentSlots(outcome.slots);
     void this.applyLiveSlicingConfiguration();
     this.rebuildHeadsPanel();
     this.onProfileChanged?.();
+  }
+
+  /** The live choice the slot edits read: the profile, each slot's filament and nozzle, and the palette. */
+  private liveFilamentSlots(): LiveSlicingChoice {
+    return {
+      profile: this.profile,
+      heads: this.headFilaments,
+      nozzles: this.headNozzles,
+      palette: this.palette.list(),
+    };
+  }
+
+  /** Adopts edited slots: their filaments and nozzles, then the palette, whose change commits them. */
+  private applyFilamentSlots(slots: LiveProfileSlots): void {
+    this.headFilaments = [...slots.heads];
+    this.headNozzles = [...slots.nozzles];
+    this.palette.replace(slots.palette);
   }
   private drag: {
     controller: THREE.Object3D;
@@ -9430,24 +9451,15 @@ export class OrcaWorkspace extends xb.Script {
       this.profile = null;
       const slicing = this.canonicalProject.getSlicingConfiguration();
       const physical = [...slicing.filaments.physical].sort((left, right) => left.toolId - right.toolId);
-      this.headFilaments = physical.map((filament) =>
-        Object.freeze({
-          name: filament.name,
-          ...(filament.presetId?.startsWith('preset:') ? { presetId: filament.presetId as WorkspacePresetId } : {}),
-        }),
-      );
-      this.headNozzles = physical.map((filament) => String(filament.nozzleDiameterMm ?? 0.4));
+      const slots = projectFilamentSlots(physical, this.palette.list());
+      this.headFilaments = [...slots.heads];
+      this.headNozzles = [...slots.nozzles];
       this.virtualFilaments = virtualFilamentsFromConfig({
         ...slicing.config,
         filament_colour: physical.map((filament) => filament.color),
       });
       this.projectPrimeTower = null;
-      if (physical.length > 0) {
-        this.palette.setFrom(
-          physical.map((filament) => filament.color),
-          physical.map((filament) => filament.material),
-        );
-      }
+      if (physical.length > 0) this.palette.replace(slots.palette);
       this.synchronizePrinterMappingFromCanonicalConfig();
       this.unselectModel();
       this.onProfileChanged?.();

@@ -33,4 +33,8 @@
     <string name="project_add_modifier">新增修改器</string>
     <string name="device_cancel">取消</string>
     <string name="device_tab_camera">攝影機</string>
+    <string name="filament_remove">刪除</string>
+    <string name="filament_colour_apply">套用</string>
+    <string name="filament_bar_selected">已選取</string>
+    <string name="filament_bar_default">預設</string>
 </resources>

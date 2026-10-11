@@ -25,9 +25,9 @@ import dev.orcaxr.nativeapp.project.ProfilesView
 
 /**
  * The browser's profile pickers: Printer, Process and Filament — one
- * filament per head on a printer with several (the browser keeps those, and
- * the palette's further colours, on its Filament tab) — over the catalog, with the
- * selection's own messages. With nothing chosen a picker says the project's
+ * filament per head on a printer with several, and one per extra palette
+ * slot the Filaments list added (the browser keeps those on its Filament
+ * tab) — over the catalog, with the selection's own messages. With nothing chosen a picker says the project's
  * own settings are in use, never showing a printer nobody chose; an empty
  * list says no preset fits.
  */
@@ -56,6 +56,12 @@ fun ProfilePickers(
                 Picker(stringResource(R.string.prepare_head_filament, (index + 1).toString()), profiles.filaments, profiles.heads.getOrNull(index), enabled) {
                     onFilament(index, it)
                 }
+            }
+        }
+        // The extra palette slots past the heads (the Filaments list's `A-n` rows) have theirs too, as the browser's heads panel.
+        for (index in profiles.extruders.coerceAtLeast(1) until profiles.heads.size) {
+            Picker(stringResource(R.string.prepare_palette_filament, (index + 1).toString()), profiles.filaments, profiles.heads[index], enabled) {
+                onFilament(index, it)
             }
         }
         for (message in profiles.status) {

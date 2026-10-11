@@ -4,11 +4,15 @@
 // over the bundled catalog and a synthetic one, typed-name matching, the
 // default triple, selections by ID and by name, the slicing configuration of
 // each resulting live choice against project states, and the project state
-// each configuration leads to under every auto-pair policy. Hostile cases:
-// orphaned mixed components, unchanged configurations, override overlays,
-// more than four physical filaments, missing exact filament profiles, unknown
-// presets, disambiguated labels, a palette past its limit, exhausted
-// identity words and malformed requests. Replayed by Rust, WASM and JNI.
+// each configuration leads to under every auto-pair policy; then the Filament
+// tab's slot edits (add, remove an extra slot, colour, nozzle) on live
+// choices, the slots each state's own physical filaments describe (as an
+// opened project's), and edited choices committed. Hostile cases: orphaned
+// mixed components, unchanged configurations, override overlays, more than
+// four physical filaments, missing exact filament profiles, unknown presets,
+// disambiguated labels, a palette past its limit, unsynchronized slots,
+// colours without `#` or with alpha, lone surrogates, exhausted identity words
+// and malformed requests. Replayed by Rust, WASM and JNI.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -23,6 +27,8 @@ import {
   presetMatchExchange,
   profileSelectionByNamesExchange,
   profileSelectionExchange,
+  filamentSlotsExchange,
+  projectFilamentSlotsExchange,
   slicingChoicesExchange,
   slicingConfigurationExchange,
 } from "../../web/src/workspace/CatalogSlicingConfigurationExchange.ts";
@@ -648,6 +654,116 @@ for (const each of configurations.filter((c) => JSON.parse(c.replyJson).error).s
     expectedJson: json({ unchanged: true }),
   });
 }
+
+// --- Filament slots ----------------------------------------------------------------------------
+
+// The slots an opened project's physical filaments describe, against a
+// palette it keeps when it has none: by tool, presets only when they are the
+// catalog's, colours and materials as the palette takes them.
+states.slotted = (() => {
+  const state = clone(fourTools);
+  state.printer.toolCount = 5;
+  state.filaments.physical = [
+    physical("import:physical:c", 2, { color: "FF0000", material: "PETG", presetId: "Generic PETG", nozzleDiameterMm: 0.6 }),
+    physical("import:physical:a", 0, { color: "#00ff00aa", material: "", presetId: "preset:Snapmaker:filament:Snapmaker%20PLA" }),
+    physical("import:physical:e", 4, { color: "#\ud800ab", material: "TPU", name: "\ud83d lone", nozzleDiameterMm: 0.25 }),
+    physical("import:physical:b", 1, { color: "", material: "PLA-CF", presetId: "", nozzleDiameterMm: 1e-7 }),
+    physical("import:physical:d", 3, { color: "#0000FF", material: "ABS", presetId: "preset:", nozzleDiameterMm: 0.30000000000000004 }),
+  ];
+  return valid(state);
+})();
+const projectSlots = [];
+for (const name of Object.keys(states)) {
+  for (const kept of [palette, [], [{ color: "#000000", type: "ABS" }]]) {
+    const requestJson = json({ palette: kept });
+    projectSlots.push({ state: name, requestJson, replyJson: projectFilamentSlotsExchange(states[name], requestJson) });
+  }
+}
+assert.ok(projectSlots.some((each) => JSON.parse(each.replyJson).heads.length === 0), "a project without filaments");
+
+// The Filament tab's slot edits on live choices, each reply feeding the next.
+const slotEdits = [];
+function editSlots(catalog, live, edit) {
+  const requestJson = json({ edit, live });
+  const replyJson = filamentSlotsExchange(catalogs[catalog], requestJson);
+  slotEdits.push({ catalog, requestJson, replyJson });
+  return JSON.parse(replyJson).live;
+}
+const add = { add: {} };
+const remove = (index) => ({ remove: { index } });
+const color = (index, value) => ({ color: { color: value, index } });
+const nozzle = (index, value) => ({ nozzle: { index, nozzle: value } });
+const edited = [];
+{
+  // The U1: a fifth slot, then to the limit and past it.
+  let live = editSlots("bundled", u1, add);
+  edited.push(live);
+  for (const index of [0, 3, 5, 99]) editSlots("bundled", live, remove(index));
+  edited.push(editSlots("bundled", live, remove(4)));
+  edited.push(editSlots("bundled", live, color(4, "#123abc")));
+  edited.push(editSlots("bundled", u1, color(0, "#ff8800")));
+  editSlots("bundled", u1, color(4, "#ff8800"));
+  for (const value of ["", "red", "#\ud800", "#ABCDEF"]) editSlots("bundled", u1, color(1, value));
+  edited.push(editSlots("bundled", live, nozzle(0, "0.6")));
+  editSlots("bundled", live, nozzle(0, live.nozzles[0]));
+  editSlots("bundled", live, nozzle(5, "0.6"));
+  editSlots("bundled", live, nozzle(4, ""));
+  while (live.palette.length < 16) live = editSlots("bundled", live, add);
+  edited.push(live);
+  editSlots("bundled", live, add);
+  editSlots("bundled", live, remove(15));
+  // Slots that do not match the palette: synchronized first.
+  editSlots("bundled", { ...u1, heads: u1.heads.slice(0, 1), nozzles: [] }, add);
+  editSlots("bundled", { ...u1, heads: [...u1.heads, head(undefined, "spare")], nozzles: [...u1.nozzles, "0.8", "0.2"] }, remove(4));
+  editSlots("bundled", { ...u1, palette: [...palette, { color: "#101010", type: "PLA" }], heads: [], nozzles: [] }, remove(4));
+  editSlots("bundled", { ...u1, palette: [...palette, { color: "#101010", type: "PLA" }], heads: [], nozzles: [] }, nozzle(4, "0.6"));
+  // A profile the catalog no longer holds reads as none: one head, any later slot removable.
+  editSlots("bundled", { ...u1, profile: { ...u1.profile, machinePresetId: "preset:Gone:machine:Gone" } }, remove(1));
+  // No profile at all.
+  for (const edit of [add, remove(0), remove(1), remove(4), color(3, "#000000"), nozzle(0, "0.4"), nozzle(0, "0.6")])
+    editSlots("bundled", empty, edit);
+  // The project's own slots, adopted as an opened project's, then edited.
+  const adopted = { ...u1, ...JSON.parse(projectSlots.find((each) => each.state === "slotted").replyJson) };
+  edited.push(editSlots("bundled", adopted, add));
+  edited.push(editSlots("bundled", adopted, remove(4)));
+  edited.push(editSlots("bundled", adopted, color(2, "#00ffff")));
+  // The synthetic printers: two heads, one shared nozzle, odd nozzles, a full palette.
+  for (const live of lives.synthetic) {
+    const grown = editSlots("synthetic", live, add);
+    if (grown) {
+      editSlots("synthetic", grown, remove(grown.palette.length - 1));
+      editSlots("synthetic", grown, remove(0));
+      editSlots("synthetic", grown, nozzle(grown.palette.length - 1, "0.8"));
+    }
+  }
+}
+const slotOutcomes = outcomes(slotEdits.map((each) => ({ replyJson: each.replyJson })));
+for (const key of ["slot-limit", "unchanged"]) assert.ok(slotOutcomes.get(key) > 0, `a ${key} slot edit`);
+// Edited choices commit as any other live choice. A commit carries its live
+// choice as a document, so one with a lone UTF-16 unit stays in the slot
+// edits' texts above.
+for (const live of edited.filter((each) => !JSON.stringify(each).includes("\\ud"))) {
+  for (const stateName of ["fourTools", "slotted"]) {
+    const configurationJson = configure("bundled", live, stateName);
+    if (!configurationJson) continue;
+    const reply = advance(stateName, configurations.length - 1, "off");
+    commits.push({
+      catalog: "bundled",
+      state: stateName,
+      live,
+      autoPairs: policies.off,
+      words: [],
+      expectedJson: json(
+        reply.stateJson
+          ? { stateHash: projectFingerprint(JSON.parse(reply.stateJson)) }
+          : reply.unchanged
+            ? { unchanged: true }
+            : reply,
+      ),
+    });
+  }
+}
+
 const commitOutcomes = new Map();
 for (const each of commits) {
   const expected = JSON.parse(each.expectedJson);
@@ -674,6 +790,19 @@ const refusals = [
   { exchange: "next", requestJson: json({ autoPairs: { enabled: "yes", confirmedCounts: [] }, configurationJson: "{}", stateJson: json(fresh) }) },
   { exchange: "next", requestJson: json({ autoPairs: policies.off, configurationJson: "{}", stateJson: json(fresh) }) },
   { exchange: "next", requestJson: json({ autoPairs: policies.off, configurationJson: json({ config: {}, filaments: { mixed: [] }, printer: {} }), stateJson: json(fresh) }) },
+  { exchange: "slots", requestJson: json({ edit: { add: {}, remove: { index: 4 } }, live: u1 }) },
+  { exchange: "slots", requestJson: json({ edit: {}, live: u1 }) },
+  { exchange: "slots", requestJson: json({ edit: { rename: { index: 0 } }, live: u1 }) },
+  { exchange: "slots", requestJson: json({ edit: { add: { index: 0 } }, live: u1 }) },
+  { exchange: "slots", requestJson: json({ edit: { remove: { index: -1 } }, live: u1 }) },
+  { exchange: "slots", requestJson: json({ edit: { remove: { index: 4.5 } }, live: u1 }) },
+  { exchange: "slots", requestJson: json({ edit: { remove: { index: "4" } }, live: u1 }) },
+  { exchange: "slots", requestJson: json({ edit: { remove: { index: 9007199254740992 } }, live: u1 }) },
+  { exchange: "slots", requestJson: json({ edit: { color: { index: 0 } }, live: u1 }) },
+  { exchange: "slots", requestJson: json({ edit: { color: { color: 255, index: 0 } }, live: u1 }) },
+  { exchange: "slots", requestJson: json({ edit: { nozzle: { index: 0, nozzle: 0.6 } }, live: u1 }) },
+  { exchange: "slots", requestJson: json({ edit: { add: {} } }) },
+  { exchange: "slots", requestJson: json({ edit: { add: {} }, live: { ...u1, palette: [{ color: "#000000" }] } }) },
 ];
 const exchanges = {
   choices: (r) => slicingChoicesExchange(catalogs.bundled, r),
@@ -683,6 +812,7 @@ const exchanges = {
   default: (r) => defaultProfileSelectionExchange(catalogs.bundled, r),
   configuration: (r) => slicingConfigurationExchange(catalogs.bundled, r),
   next: (r) => nextSlicingStateExchange(r, []),
+  slots: (r) => filamentSlotsExchange(catalogs.bundled, r),
 };
 for (const refusal of refusals) assert.throws(() => exchanges[refusal.exchange](refusal.requestJson), /invalid_request/);
 
@@ -727,6 +857,8 @@ const output =
     configurations: configurations.map(pinned),
     nextStates: nextStates.map(pinned),
     commits,
+    projectSlots,
+    slotEdits,
     refusals,
   }) + "\n";
 const path = new URL("testdata/cross-platform/slicing-configuration-vectors.json", root);
@@ -736,6 +868,6 @@ const describe = (counts) => [...counts].map(([k, v]) => `${v} ${k}`).join(", ")
 console.log(
   `Slicing configuration references: ${choices.length} choices, ${matches.length} matches, ` +
     `${selections.length} selections, ${configurations.length} configurations (${describe(outcomes(configurations))}), ` +
-    `${nextStates.length} next states (${describe(nextOutcomes)}), ${commits.length} commits (${describe(commitOutcomes)}), ` +
-    `${refusals.length} refusals.`,
+    `${nextStates.length} next states (${describe(outcomes(nextStates))}), ${commits.length} commits (${describe(commitOutcomes)}), ` +
+    `${projectSlots.length} project slots, ${slotEdits.length} slot edits (${describe(slotOutcomes)}), ${refusals.length} refusals.`,
 );

@@ -31,4 +31,8 @@
     <string name="project_add_modifier">Přidat modifikátor</string>
     <string name="device_cancel">Zrušit</string>
     <string name="device_tab_camera">Kamera</string>
+    <string name="filament_remove">Smazat</string>
+    <string name="filament_colour_apply">Použít</string>
+    <string name="filament_bar_selected">vybráno</string>
+    <string name="filament_bar_default">Výchozí</string>
 </resources>

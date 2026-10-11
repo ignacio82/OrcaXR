@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.pluralMessage
+import dev.orcaxr.nativeapp.project.FilamentList
 import dev.orcaxr.nativeapp.project.ProjectModel
 import dev.orcaxr.nativeapp.device.DeviceModel
 import dev.orcaxr.nativeapp.send.SendGuard
@@ -112,6 +113,17 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                 onMachine = project::chooseMachine,
                 onProcess = project::chooseProcess,
                 onFilament = project::chooseFilament,
+            )
+        }
+        item {
+            FilamentList(
+                view,
+                profiles,
+                enabled = !project.busy,
+                onAdd = project::addFilament,
+                onRemove = project::removeFilament,
+                onColor = project::recolorFilament,
+                onNozzle = project::setFilamentNozzle,
             )
         }
         item {

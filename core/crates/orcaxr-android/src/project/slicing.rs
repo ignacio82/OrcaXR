@@ -67,6 +67,14 @@ pub(super) fn catalog_slicing_default(
 ) -> Result<jstring> {
     catalog_exchange(env, handle, request, exchange::default_selection_json)
 }
+/// `{"edit","live"}` → the live choice with one filament slot edited.
+pub(super) fn catalog_slicing_slots(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    catalog_exchange(env, handle, request, exchange::slots_json)
+}
 /// `{"live","stateJson"}` → the live choice's configuration, the state
 /// admitted under the host's resolver and integer profile.
 pub(super) fn catalog_slicing_configuration(

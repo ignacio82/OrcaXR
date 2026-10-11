@@ -1906,8 +1906,18 @@ storage journeys on phone, tablet, and desktop-sized windows.
   choice is one undoable "Update slicing configuration"
   (`ProjectWorkspace.applySlicingChoice`), and the preflight checks the
   chosen profile's exact presets; an opened project slices with its own
-  printer and filaments until a profile is chosen. The palette's further
-  colours (the browser's Filament tab) remain.
+  printer and filaments until a profile is chosen. The project's filaments
+  are the browser's, through the shared core (`filaments::assignment`,
+  `slicing::choices` slot edits; 36 + 18 browser cases and a 10-step
+  controller journey, 96 slot edits): Prepare lists them as the browser's
+  Filament tab (H-n heads, A-n extra palette colours, mixed recipes; "+",
+  Del, colour and nozzle, each one undoable "Update slicing configuration",
+  sixteen at most, adopted from the project so undo never resurrects a
+  slot), and the Project area's selection filament bar assigns the
+  selection's objects, parts and ranges ("Assign filament", "Assign n
+  scopes") with the tree's filament badges (a 76-check JNI journey; an
+  emulator filament smoke, not yet run). The mixed (virtual) filament
+  library's editing remains.
 - [ ] Adapt inspector/object tree, toolbars, menus, command palette, dialogs,
   settings, and progress states to narrow, medium, and wide windows. Support
   keyboard traversal, shortcuts, hover, context menus, trackpad navigation,

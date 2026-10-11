@@ -23,6 +23,23 @@ export class CapturedProject {
      * run on a production authority worker until task isolation is provided.
      */
     export_json(max_bytes: number): ProjectBytes;
+    /**
+     * A selection's assignable scopes, unsupported refs and offered
+     * filaments (`filamentAssignmentExchange`): `{"refs"}` in,
+     * `{"options","scopes","unsupportedSelection"}` or `{"error"}` out.
+     */
+    filament_assignment(request: string): string;
+    /**
+     * The assignments a filament choice makes (`filamentAssignmentChangesExchange`):
+     * `{"entities","filamentId"}` in, `{"assignments"}` or `{"error"}` out.
+     */
+    filament_assignment_changes(request: string): string;
+    /**
+     * The filament slots this project's physical filaments describe
+     * (`projectFilamentSlotsExchange`): `{"palette"}` in,
+     * `{"heads","nozzles","palette"}` out.
+     */
+    filament_slots(request: string): string;
     hash(): string;
     id(start: number, count: number): Uint16Array;
     id_length(): number;
@@ -406,6 +423,12 @@ export class ProfileCatalog {
      * A selection by typed names (`profileSelectionByNamesExchange`).
      */
     slicing_select_by_names(request: string): string;
+    /**
+     * One edit of a live choice's filament slots (`filamentSlotsExchange`):
+     * `{"edit","live"}` in, `{"live"}`, `{"unchanged":true}` or
+     * `{"error":"slot-limit","message"}` out.
+     */
+    slicing_slots(request: string): string;
 }
 
 /**
@@ -1725,6 +1748,9 @@ export interface InitOutput {
     readonly capturedhistory_redo_count: (a: number) => number;
     readonly capturedhistory_undo_count: (a: number) => number;
     readonly capturedproject_export_json: (a: number, b: number) => [number, number, number];
+    readonly capturedproject_filament_assignment: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_filament_assignment_changes: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_filament_slots: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_hash: (a: number) => [number, number];
     readonly capturedproject_id: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_id_length: (a: number) => number;
@@ -1905,6 +1931,7 @@ export interface InitOutput {
     readonly profilecatalog_slicing_default: (a: number, b: number, c: number) => [number, number, number, number];
     readonly profilecatalog_slicing_select: (a: number, b: number, c: number) => [number, number, number, number];
     readonly profilecatalog_slicing_select_by_names: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly profilecatalog_slicing_slots: (a: number, b: number, c: number) => [number, number, number, number];
     readonly profilecatalogupload_append: (a: number, b: number, c: number, d: number) => [number, number];
     readonly profilecatalogupload_build: (a: number, b: number) => [number, number, number];
     readonly profilecatalogupload_new: (a: number, b: number, c: number) => [number, number, number];

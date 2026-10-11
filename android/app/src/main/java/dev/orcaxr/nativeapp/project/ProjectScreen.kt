@@ -147,6 +147,10 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
         if (view.totalRows > view.rows.size) {
             item { Text(stringResource(R.string.project_more_rows, view.totalRows - view.rows.size), style = MaterialTheme.typography.bodySmall) }
         }
+        // The selection's filament, one press away (the browser's selection filament bar).
+        item(key = "filament-bar") {
+            SelectionFilamentBar(view.filaments, model.filamentStatus, model.busy) { id, name -> model.assignFilament(id, name) }
+        }
         // The transform inspector of the selected instance, under the tree.
         view.inspector?.let { inspector ->
             items(TransformInspector.TOOLS, key = { "inspector:" + it.name }) { tool ->
@@ -530,6 +534,7 @@ private fun TreeRow(row: ProjectIntents.ObjectTreeRow, view: ProjectView, model:
             Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
                 Text(label, style = MaterialTheme.typography.bodyLarge)
                 (row.description as? ProjectIntents.OptionalText.Value)?.let { Text(text(it.value), style = MaterialTheme.typography.bodySmall) }
+                TreeIndicators(row)
             }
         }
         DropdownMenu(expanded = menu && choices.isNotEmpty(), onDismissRequest = { menu = false }) {

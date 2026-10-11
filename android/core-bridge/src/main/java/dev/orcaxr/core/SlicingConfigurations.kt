@@ -56,6 +56,32 @@ data class LiveSlicingChoice(
     }
 }
 
+/** Each palette slot's filament and nozzle, and the palette: a live choice without its profile. */
+data class SlicingSlots(val heads: List<SlicingHead>, val nozzles: List<String>, val palette: List<SlicingSlot>)
+
+/** [live] with [slots] in place of its own. */
+fun LiveSlicingChoice.with(slots: SlicingSlots) = copy(heads = slots.heads, nozzles = slots.nozzles, palette = slots.palette)
+
+/**
+ * One edit of the filament slots, as the browser's Filament tab makes it:
+ * a slot added (the profile's own filament, the nozzle it gives that tool,
+ * the new slot's grey PLA), a palette slot past the printer's heads removed,
+ * a slot's colour or a head's nozzle changed.
+ */
+sealed interface SlotEdit {
+    data object Add : SlotEdit
+    data class Remove(val index: Int) : SlotEdit
+    data class Color(val index: Int, val color: String) : SlotEdit
+    data class Nozzle(val index: Int, val nozzle: String) : SlotEdit
+}
+
+/** What a slot edit does: the edited choice, nothing, or a refusal (`slot-limit`) in the browser's words. */
+sealed interface SlotEditResult {
+    data class Edited(val live: LiveSlicingChoice) : SlotEditResult
+    data object Unchanged : SlotEditResult
+    data class Refused(val code: String, val message: String) : SlotEditResult
+}
+
 enum class SelectionSeverity(internal val wire: String) { INFO("info"), WARNING("warning"), ERROR("error") }
 
 /** What a selection tells the operator: whether it applied, how serious, and why. */
@@ -186,6 +212,28 @@ object SlicingConfigurations {
         )
         fun stageRequest(live: LiveSlicingChoice, policy: AutoPairPolicy) =
             obj("autoPairs" to policy(policy), "live" to live(live))
+        private fun slotJson(slot: SlicingSlot) = obj("color" to string(slot.color), "type" to string(slot.type))
+        fun paletteRequest(palette: List<SlicingSlot>) = obj("palette" to array(palette, ::slotJson))
+        fun slotsRequest(live: LiveSlicingChoice, edit: SlotEdit) = obj(
+            "edit" to when (edit) {
+                SlotEdit.Add -> obj("add" to "{}")
+                is SlotEdit.Remove -> obj("remove" to obj("index" to edit.index.toString()))
+                is SlotEdit.Color -> obj("color" to obj("color" to string(edit.color), "index" to edit.index.toString()))
+                is SlotEdit.Nozzle -> obj("nozzle" to obj("index" to edit.index.toString(), "nozzle" to string(edit.nozzle)))
+            },
+            "live" to live(live),
+        )
+        /** `{"heads","nozzles","palette"}`. */
+        fun slots(json: String): SlicingSlots =
+            live(CanonicalJson.read(json) as ProjectJsonObject, profile = false).let { SlicingSlots(it.heads, it.nozzles, it.palette) }
+        fun slotEdit(json: String): SlotEditResult {
+            val reply = CanonicalJson.read(json) as ProjectJsonObject
+            return when {
+                "error" in keys(reply) -> SlotEditResult.Refused(reply.get("error") as String, reply.get("message") as String)
+                "live" in keys(reply) -> SlotEditResult.Edited(live(reply.get("live") as ProjectJsonObject))
+                else -> SlotEditResult.Unchanged
+            }
+        }
 
         private fun keys(value: ProjectJsonObject) = value.keys().asSequence().toSet()
         private fun strings(value: Any) = (value as ProjectJsonArray).let { list -> List(list.length()) { list.get(it) as String } }
@@ -200,10 +248,10 @@ object SlicingConfigurations {
                 (reply.get("extruders") as Double).toInt(),
             )
         }
-        fun live(value: ProjectJsonObject): LiveSlicingChoice {
+        fun live(value: ProjectJsonObject, profile: Boolean = true): LiveSlicingChoice {
             val heads = value.get("heads") as ProjectJsonArray
             val palette = value.get("palette") as ProjectJsonArray
-            val profile = value.get("profile") as? ProjectJsonObject
+            val profile = if (profile) value.get("profile") as? ProjectJsonObject else null
             return LiveSlicingChoice(
                 profile?.let {
                     SlicingProfile(it.get("machinePresetId") as String, it.get("processPresetId") as String, it.get("filamentPresetId") as String)

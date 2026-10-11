@@ -194,6 +194,12 @@ impl ProfileCatalog {
     pub fn slicing_default(&self, request: &str) -> Result<String, JsValue> {
         slicing::default_selection_json(self.inner.catalog(), request).map_err(error)
     }
+    /// One edit of a live choice's filament slots (`filamentSlotsExchange`):
+    /// `{"edit","live"}` in, `{"live"}`, `{"unchanged":true}` or
+    /// `{"error":"slot-limit","message"}` out.
+    pub fn slicing_slots(&self, request: &str) -> Result<String, JsValue> {
+        slicing::slots_json(self.inner.catalog(), request).map_err(error)
+    }
     /// A live choice's slicing configuration against a state document,
     /// admitted under the host's `Date.parse` (`slicingConfigurationExchange`).
     pub fn slicing_configuration(&self, request: &str) -> Result<String, JsValue> {

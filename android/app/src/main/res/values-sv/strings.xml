@@ -31,4 +31,8 @@
     <string name="project_add_modifier">Lägg till Modifierare</string>
     <string name="device_cancel">Avbryt</string>
     <string name="device_tab_camera">Kamera</string>
+    <string name="filament_remove">Del</string>
+    <string name="filament_colour_apply">Applicera</string>
+    <string name="filament_bar_selected">vald</string>
+    <string name="filament_bar_default">Standard</string>
 </resources>

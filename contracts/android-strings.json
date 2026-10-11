@@ -100,6 +100,44 @@
     },
     "device_no_longer_on_printer": {
       "key": "ui.printHistoryPanel.noLongerOnThePrinter"
+    },
+    "prepare_palette_filament": {
+      "key": "app.main.paletteFilament",
+      "arguments": ["index"]
+    },
+    "filament_add": { "key": "app.main.addAnAuxiliaryPaletteColor" },
+    "filament_head_colour": {
+      "key": "app.main.headColour",
+      "arguments": ["index"]
+    },
+    "filament_palette_colour": {
+      "key": "app.main.paletteColour",
+      "arguments": ["index"]
+    },
+    "filament_head_nozzle": {
+      "key": "app.main.headNozzle",
+      "arguments": ["index"]
+    },
+    "filament_remove": { "key": "app.main.del" },
+    "filament_remove_slot": {
+      "key": "app.main.removePaletteSlot",
+      "arguments": ["index"]
+    },
+    "filament_colour_apply": { "key": "ui.xrKeypad.apply" },
+    "filament_bar_title": {
+      "key": "ui.selectionFilamentBar.filamentForSelection"
+    },
+    "filament_bar_selected": { "key": "ui.selectionFilamentBar.selectedScopes" },
+    "filament_bar_head": { "key": "ui.selectionFilamentBar.head" },
+    "filament_bar_mixed": { "key": "ui.selectionFilamentBar.mixed" },
+    "filament_bar_default": { "key": "ui.selectionFilamentBar.default" },
+    "filament_bar_default_hint": {
+      "key": "ui.selectionFilamentBar.removeLocalAssignment"
+    },
+    "filament_bar_assigning": { "key": "ui.selectionFilamentBar.assigning" },
+    "filament_bar_assigned": { "key": "ui.selectionFilamentBar.assigned" },
+    "filament_bar_cleared": {
+      "key": "ui.selectionFilamentBar.assignmentCleared"
     }
   },
   "english": [
@@ -216,7 +254,16 @@
     "device_tab_status",
     "device_tab_files",
     "device_tab_history",
-    "device_tab_console"
+    "device_tab_console",
+    "filament_title",
+    "filament_mixed_title",
+    "filament_colour_hex",
+    "tree_not_printable",
+    "tree_filament_mixed",
+    "tree_filament_inherited",
+    "tree_color_facets",
+    "tree_support_facets",
+    "tree_settings"
   ],
   "kotlin": [
     {

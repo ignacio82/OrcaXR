@@ -10,6 +10,10 @@ import dev.orcaxr.core.ProjectIntents
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
 import dev.orcaxr.core.SelectionSeverity
+import dev.orcaxr.core.SlicingSlots
+import dev.orcaxr.core.SlotEdit
+import dev.orcaxr.core.SlotEditResult
+import dev.orcaxr.core.with
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -92,11 +96,54 @@ class SlicingProfiles(context: Context, private val publish: (ProfilesView) -> U
 
     private fun objects(view: ProjectView) = view.rows.count { it.kind == ProjectIntents.ObjectTreeRowKind.Object }
 
-    /** A project was opened (or restored) with its own printer and filaments: it slices as authored. */
-    fun opened() {
+    /**
+     * A project was opened (or restored) with its own printer and filaments:
+     * it slices as authored, and its filaments become the slots a later
+     * choice starts from, as the browser adopts an opened project's.
+     */
+    fun opened(workspace: ProjectWorkspace) {
         authored = true
-        live = live.copy(profile = null)
+        live = adopted(workspace, live.copy(profile = null))
         feedback = emptyList<String>() to false
+        show()
+    }
+
+    /**
+     * [current] with the project's own filament slots, which every choice and
+     * slot edit starts from (the browser's live palette is the project's,
+     * except where its undo leaves the two apart): a slot an undo removed is
+     * not brought back by the next choice.
+     */
+    private fun adopted(workspace: ProjectWorkspace, current: LiveSlicingChoice = live): LiveSlicingChoice =
+        current.with(workspace.filamentSlots(current.palette).get())
+
+    /** The project's filaments changed (an edit, undo or redo): the pickers follow them. On the project worker. */
+    fun follow(slots: SlicingSlots) {
+        if (catalog == null || slots.palette.isEmpty()) return
+        val next = live.with(slots)
+        if (next == live) return
+        live = next
+        show()
+    }
+
+    /**
+     * One of the Filaments list's edits (the browser's Filament tab: add a
+     * slot, remove an extra one, a slot's colour, a head's nozzle) on the
+     * project's own slots, as one undoable "Update slicing configuration".
+     * Edits wait for a chosen profile, as the browser commits none without
+     * one; a slot past the palette's limit is refused in the browser's words.
+     */
+    fun editSlot(workspace: ProjectWorkspace, edit: SlotEdit) {
+        val loaded = catalog ?: return
+        if (authored || live.profile == null) return
+        when (val result = workspace.editFilamentSlots(loaded, live, edit).get()) {
+            is SlotEditResult.Edited -> {
+                live = result.live
+                feedback = emptyList<String>() to false
+            }
+            is SlotEditResult.Refused -> feedback = listOf(result.message) to true
+            SlotEditResult.Unchanged -> return
+        }
         show()
     }
 
@@ -108,7 +155,7 @@ class SlicingProfiles(context: Context, private val publish: (ProfilesView) -> U
         filaments: List<String?>? = null,
     ) {
         val loaded = catalog ?: return
-        val selection = loaded.selectPresets(live, machine, process, filaments)
+        val selection = loaded.selectPresets(adopted(workspace), machine, process, filaments)
         feedback = selection.feedback.messages to (selection.feedback.severity != SelectionSeverity.INFO)
         val next = selection.live
         if (!selection.feedback.applied || next == null) return show()
@@ -121,7 +168,7 @@ class SlicingProfiles(context: Context, private val publish: (ProfilesView) -> U
 
     /** One head's filament preset, the rest kept. */
     fun selectHead(workspace: ProjectWorkspace, index: Int, filament: String) {
-        val heads = live.heads.map { it.presetId }.toMutableList()
+        val heads = (if (catalog != null) adopted(workspace) else live).heads.map { it.presetId }.toMutableList()
         while (heads.size <= index) heads += null
         heads[index] = filament
         select(workspace, filaments = heads)

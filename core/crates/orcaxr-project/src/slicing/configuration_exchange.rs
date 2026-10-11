@@ -271,6 +271,95 @@ fn selection_reply(outcome: &Outcome<'_>, live: &Live<'_>) -> Answer {
         ),
     ])
 }
+fn slot_index(value: Option<Value>) -> Result<u64, &'static str> {
+    match value {
+        Some(Value::Number(n))
+            if (0.0..=9_007_199_254_740_991.0).contains(&n) && n.trunc() == n =>
+        {
+            Ok(n as u64)
+        }
+        _ => Err(INVALID_REQUEST),
+    }
+}
+/// `{"add":{}}`, `{"remove":{"index"}}`, `{"color":{"color","index"}}` or
+/// `{"nozzle":{"index","nozzle"}}`.
+fn slot_edit(value: Option<Value>) -> Result<choices::SlotEdit, &'static str> {
+    let fields = object(
+        value.ok_or(INVALID_REQUEST)?,
+        &[],
+        &["add", "color", "nozzle", "remove"],
+    )?;
+    let mut entries = fields.into_iter();
+    let (Some((kind, value)), None) = (entries.next(), entries.next()) else {
+        return Err(INVALID_REQUEST);
+    };
+    let is = |name: &str| units(name) == kind;
+    if is("add") {
+        object(value, &[], &[])?;
+        Ok(choices::SlotEdit::Add)
+    } else if is("remove") {
+        let mut fields = object(value, &["index"], &[])?;
+        Ok(choices::SlotEdit::Remove(slot_index(take(
+            &mut fields,
+            "index",
+        ))?))
+    } else if is("color") {
+        let mut fields = object(value, &["color", "index"], &[])?;
+        let index = slot_index(take(&mut fields, "index"))?;
+        Ok(choices::SlotEdit::Color(
+            index,
+            string(take(&mut fields, "color"))?,
+        ))
+    } else {
+        let mut fields = object(value, &["index", "nozzle"], &[])?;
+        let index = slot_index(take(&mut fields, "index"))?;
+        Ok(choices::SlotEdit::Nozzle(
+            index,
+            string(take(&mut fields, "nozzle"))?,
+        ))
+    }
+}
+
+/// `{"edit","live"}` → `{"live"}` (the edited choice), `{"unchanged":true}`
+/// or `{"error":"slot-limit","message"}` (`filamentSlotsExchange`).
+pub fn slots_json(catalog: Option<&ProfileCatalog>, request: &str) -> Answer {
+    let profiles = profiles(catalog);
+    let mut fields = object(read(request)?, &["edit", "live"], &[])?;
+    let live = live_of(profiles, take(&mut fields, "live").ok_or(INVALID_REQUEST)?)?;
+    let edit = slot_edit(take(&mut fields, "edit"))?;
+    match choices::edit_slots(
+        live.profile,
+        &live.heads,
+        &live.nozzles,
+        &live.palette,
+        &edit,
+    ) {
+        choices::SlotEditOutcome::Edited(slots) => answer([(
+            "live",
+            live_value(live.profile, &slots.heads, &slots.nozzles, &slots.palette),
+        )]),
+        choices::SlotEditOutcome::Unchanged => answer([("unchanged", Value::Bool(true))]),
+        choices::SlotEditOutcome::Refused(message) => refusal("slot-limit", units(message)),
+    }
+}
+
+/// `{"palette"}` against a project → `{"heads","nozzles","palette"}`: the
+/// slots its own physical filaments describe (`projectFilamentSlotsExchange`).
+pub fn project_slots_json(state: &ProjectState, request: &str) -> Answer {
+    let mut fields = object(read(request)?, &["palette"], &[])?;
+    let palette = list(take(&mut fields, "palette"))?
+        .into_iter()
+        .map(slot_of)
+        .collect::<Result<Vec<_>, _>>()?;
+    let slots = choices::project_slots(&state.filaments.physical, &palette);
+    let Value::Object(mut live) = live_value(None, &slots.heads, &slots.nozzles, &slots.palette)
+    else {
+        return Err(OUTPUT_LIMIT);
+    };
+    live.remove(&units("profile"));
+    canonical(&Value::Object(live))
+}
+
 /// A state document, decoded and admitted under `timestamps`.
 fn state_of<P: TimestampPolicy>(
     value: Option<Value>,

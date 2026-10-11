@@ -33,4 +33,8 @@
     <string name="project_add_modifier">수정자 추가</string>
     <string name="device_cancel">취소</string>
     <string name="device_tab_camera">카메라</string>
+    <string name="filament_remove">Del</string>
+    <string name="filament_colour_apply">적용</string>
+    <string name="filament_bar_selected">선택됨</string>
+    <string name="filament_bar_default">기본값</string>
 </resources>

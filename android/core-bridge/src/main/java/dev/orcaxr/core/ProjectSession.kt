@@ -671,6 +671,23 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
     fun workspaceBed(plateId: String?): WorkspaceBed = read {
         WorkspaceBeds.read(NativeProject.projectWorkspaceBed(it, "{\"plateId\":${plateId?.let(CanonicalJson::quote) ?: "null"}}"))
     }
+    /** What the selected [refs] can be assigned and every filament the project
+     * offers (the browser's `getFilamentAssignmentSnapshot`); a ref the project
+     * lacks is refused in the browser's words. */
+    fun filamentAssignment(refs: List<FilamentRef>): FilamentAssignmentResult = read {
+        FilamentAssignments.resolution(NativeProject.projectFilamentAssignment(it, FilamentAssignments.refsRequest(refs)))
+    }
+    /** The assignments giving [entities] (objects, parts, height ranges)
+     * [filamentId] — null inheriting — as one command submits them, or the
+     * browser controller's refusal. */
+    fun filamentAssignmentChanges(entities: List<FilamentRef>, filamentId: String?): FilamentAssignmentChanges = read {
+        FilamentAssignments.changes(NativeProject.projectFilamentAssignmentChanges(it, FilamentAssignments.changesRequest(entities, filamentId)))
+    }
+    /** The filament slots this project's own physical filaments describe, as
+     * the browser adopts an opened project's; one without keeps [palette]. */
+    fun filamentSlots(palette: List<SlicingSlot>): SlicingSlots = read {
+        SlicingConfigurations.Json.slots(NativeProject.projectFilamentSlots(it, SlicingConfigurations.Json.paletteRequest(palette)))
+    }
     /** The filament library as the painting palette, with stable IDs. */
     fun paintPalette(request: ProjectIntents.PaintPaletteRequest): ProjectIntents.PaintPalette = read {
         ProjectIntents.decodePaintPalette(NativeProject.projectPaintPalette(it, ProjectIntents.encodePaintPaletteRequest(request)))

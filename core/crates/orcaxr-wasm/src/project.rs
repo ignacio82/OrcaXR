@@ -1450,6 +1450,29 @@ impl CapturedProject {
     pub fn workspace_bed(&self, request: &str) -> Result<String, JsValue> {
         orcaxr_project::placement::bed::state_bed_json(self.inner.state(), request).map_err(error)
     }
+    /// A selection's assignable scopes, unsupported refs and offered
+    /// filaments (`filamentAssignmentExchange`): `{"refs"}` in,
+    /// `{"options","scopes","unsupportedSelection"}` or `{"error"}` out.
+    pub fn filament_assignment(&self, request: &str) -> Result<String, JsValue> {
+        orcaxr_project::filaments::assignment::resolution_json(self.inner.state(), request)
+            .map_err(error)
+    }
+    /// The assignments a filament choice makes (`filamentAssignmentChangesExchange`):
+    /// `{"entities","filamentId"}` in, `{"assignments"}` or `{"error"}` out.
+    pub fn filament_assignment_changes(&self, request: &str) -> Result<String, JsValue> {
+        orcaxr_project::filaments::assignment::changes_json(self.inner.state(), request)
+            .map_err(error)
+    }
+    /// The filament slots this project's physical filaments describe
+    /// (`projectFilamentSlotsExchange`): `{"palette"}` in,
+    /// `{"heads","nozzles","palette"}` out.
+    pub fn filament_slots(&self, request: &str) -> Result<String, JsValue> {
+        orcaxr_project::slicing::configuration_exchange::project_slots_json(
+            self.inner.state(),
+            request,
+        )
+        .map_err(error)
+    }
     pub fn id_length(&self) -> usize {
         self.inner.state().id.as_utf16().len()
     }

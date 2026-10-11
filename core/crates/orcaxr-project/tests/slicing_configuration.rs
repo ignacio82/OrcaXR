@@ -208,7 +208,7 @@ fn configurations_and_next_states_feed_forward_as_the_browser_does() {
             ("auto-pairs".to_owned(), 3),
             ("ids-exhausted".to_owned(), 3),
             ("invalid".to_owned(), 2),
-            ("ok".to_owned(), 101),
+            ("ok".to_owned(), 115),
             ("unchanged".to_owned(), 10),
         ])
     );
@@ -310,7 +310,53 @@ fn a_session_commits_the_live_choice_as_one_undoable_replacement() {
     }
     assert_eq!(
         outcomes,
-        BTreeMap::from([("committed", 29), ("refused", 2), ("unchanged", 1)])
+        BTreeMap::from([("committed", 43), ("refused", 2), ("unchanged", 1)])
+    );
+}
+
+#[test]
+fn filament_slots_edit_and_adopt_as_the_browser_does() {
+    let f = corpus();
+    let catalogs = catalogs(&f);
+    let states = f["states"].as_object().unwrap();
+    for (i, case) in f["projectSlots"].as_array().unwrap().iter().enumerate() {
+        let state = ProjectState::from_value(
+            parse(states[case["state"].as_str().unwrap()].as_str().unwrap()).unwrap(),
+        )
+        .unwrap();
+        let reply =
+            exchange::project_slots_json(&state, case["requestJson"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            reply,
+            case["replyJson"].as_str().unwrap(),
+            "project slots {i}"
+        );
+    }
+    let mut outcomes = BTreeMap::new();
+    for (i, case) in f["slotEdits"].as_array().unwrap().iter().enumerate() {
+        let catalog = Some(&catalogs[case["catalog"].as_str().unwrap()]);
+        let reply = exchange::slots_json(catalog, case["requestJson"].as_str().unwrap()).unwrap();
+        assert_eq!(reply, case["replyJson"].as_str().unwrap(), "slot edit {i}");
+        // A reply may carry a lone UTF-16 unit, which serde_json cannot read.
+        let key = if reply.starts_with("{\"error\":\"slot-limit\"") {
+            "slot-limit"
+        } else if reply == "{\"unchanged\":true}" {
+            "unchanged"
+        } else {
+            "edited"
+        };
+        *outcomes.entry(key.to_owned()).or_insert(0) += 1;
+    }
+    assert_eq!(
+        (f["projectSlots"].as_array().unwrap().len(), outcomes),
+        (
+            27,
+            BTreeMap::from([
+                ("edited".to_owned(), 69),
+                ("slot-limit".to_owned(), 4),
+                ("unchanged".to_owned(), 23),
+            ])
+        )
     );
 }
 
@@ -328,6 +374,7 @@ fn malformed_requests_are_refused() {
             "names" => exchange::select_by_names_json(bundled, request),
             "default" => exchange::default_selection_json(bundled, request),
             "configuration" => exchange::configuration_json(bundled, request, &mut utc()),
+            "slots" => exchange::slots_json(bundled, request),
             _ => exchange::next_state_json(request, &[], &mut utc()),
         };
         assert_eq!(result, Err(exchange::INVALID_REQUEST), "{request}");

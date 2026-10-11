@@ -95,6 +95,10 @@ data class ProjectView(
     val plateMenu: List<ProjectActionState> = emptyList(),
     /** The transform inspector of the selection's primary instance; none without one. */
     val inspector: ProjectInspector? = null,
+    /** What the selection can be assigned and every filament the project offers (the browser's assignment snapshot). */
+    val filaments: FilamentAssignment = FilamentAssignment(),
+    /** The filament slots the project's own physical filaments describe: each one's preset, nozzle, colour and type. */
+    val filamentSlots: SlicingSlots = SlicingSlots(emptyList(), emptyList(), emptyList()),
 )
 
 /** An operation the session refused or could not confirm, in an operator's words. */
@@ -338,10 +342,12 @@ class ProjectWorkspace(
         // The bed the project's own configuration states, with the active plate's wipe-tower keep-out.
         val bed = snapshot.workspaceBed(active?.id)
         val inspector = snapshot.query().use { root -> ProjectInspection.inspector(root, selection) }
+        val (filaments, filamentSlots) = filamentsOf(snapshot, selection)
         return { view: ProjectView ->
             view.copy(
                 name = name, plates = count, rows = page?.rows.orEmpty(), totalRows = page?.totalRows ?: 0,
                 activePlate = active, plateList = plates, selection = selection, bed = bed, inspector = inspector,
+                filaments = filaments, filamentSlots = filamentSlots,
             )
         }
     }
@@ -771,6 +777,95 @@ class ProjectWorkspace(
                     is ProjectOutcome.Completed -> true
                     ProjectOutcome.SlicingUnchanged -> false
                     is ProjectOutcome.SlicingRefused -> throw ProjectFailure(result.message)
+                    else -> throw failure(result, null)
+                }
+            }
+    }
+
+    // --- Filaments ---------------------------------------------------------------------------
+    // The browser's filament list (its Filament tab's slots, committed as the live slicing
+    // configuration) and filament assignment (its selection filament bar and assignment
+    // selector), in the shared core: `slicing::choices` edits the slots,
+    // `filaments::assignment` resolves the selection's scopes and the assignments a choice makes.
+
+    /** The assignment snapshot of [selection] and the project's own filament slots, from [snapshot]. Holds [showing]. */
+    private fun filamentsOf(snapshot: ProjectSnapshot, selection: ProjectSelectionView): Pair<FilamentAssignment, SlicingSlots> {
+        val assignment = when (val resolved = snapshot.filamentAssignment(selection.refs.mapNotNull(FilamentRef::of))) {
+            is FilamentAssignmentResult.Resolved -> resolved.assignment
+            // The session prunes what the project lacks from its selection; were a ref left, the filaments still show.
+            is FilamentAssignmentResult.Refused -> (snapshot.filamentAssignment(emptyList()) as FilamentAssignmentResult.Resolved).assignment
+        }
+        return assignment to snapshot.filamentSlots(emptyList())
+    }
+
+    /**
+     * The selection filament bar's press (`objects_assign_filament`, the
+     * browser's `SelectionFilamentBar` and assignment selector): [filamentId]
+     * — null removes the local assignments, so each scope follows its object —
+     * given to every scope the session's selection can assign (an instance
+     * stands for its object), as one undoable step the core labels "Assign
+     * filament" or "Assign n scopes". Planned on the authority from the
+     * selection and state it reads there and executed under that state's
+     * guard. A selection with nothing assignable, or holding anything that
+     * cannot take a filament (a plate), assigns nothing and answers null, as
+     * the bar does not show; a destination the project lacks or has disabled
+     * is refused in the browser's words. Answers how many scopes it assigned.
+     */
+    fun assignFilament(filamentId: String?): CompletableFuture<Int?> = edit { session, snapshot ->
+        val assignment = when (val resolved = snapshot.filamentAssignment(whole(session).refs.mapNotNull(FilamentRef::of))) {
+            is FilamentAssignmentResult.Refused -> throw ProjectFailure(resolved.message)
+            is FilamentAssignmentResult.Resolved -> resolved.assignment
+        }
+        if (!assignment.assignable) return@edit null
+        when (val changes = snapshot.filamentAssignmentChanges(assignment.scopes.map { it.entity }, filamentId)) {
+            is FilamentAssignmentChanges.Refused -> throw ProjectFailure(changes.message)
+            is FilamentAssignmentChanges.Changes -> Edit(
+                listOf(ProjectIntents.Command.SetFilamentAssignments(ProjectIntents.SetFilamentAssignments(changes.assignments))),
+                changes.assignments.size,
+            )
+        }
+    }
+
+    /** The filament slots the project's own physical filaments describe, read on the authority; [palette] when it has none. */
+    fun filamentSlots(palette: List<SlicingSlot>): CompletableFuture<SlicingSlots> =
+        inspect { session -> session.snapshot().use { it.filamentSlots(palette) } }
+
+    /**
+     * One of the browser's Filament-tab edits ([SlotEdit]: a filament slot
+     * added, a palette slot past the printer's heads removed, a slot's colour
+     * or a head's nozzle changed) on the project's own filament slots —
+     * adopted on the authority as the browser adopts an opened project's, so
+     * a slot an undo removed is never brought back — then committed as the
+     * browser's `commitLiveSlicingConfiguration`: one undoable "Update slicing
+     * configuration" under [live]'s profile. Answers the edit: the live choice
+     * it made (the project unchanged when it already had it), nothing to do,
+     * or the browser's refusal of a slot past the palette's limit. A
+     * configuration the core refuses (a mixed filament that would lose a
+     * component) fails with the browser's message.
+     */
+    fun editFilamentSlots(
+        catalog: ProfileCatalog,
+        live: LiveSlicingChoice,
+        edit: SlotEdit,
+        policy: AutoPairPolicy = AutoPairPolicy(enabled = false),
+    ): CompletableFuture<SlotEditResult> {
+        val edited = java.util.concurrent.atomic.AtomicReference<SlotEditResult>()
+        return outcome(
+            actor.configureSlicing { session ->
+                val adopted = session.snapshot().use { live.with(it.filamentSlots(live.palette)) }
+                when (val result = catalog.editSlots(adopted, edit).also(edited::set)) {
+                    is SlotEditResult.Edited ->
+                        session.stageSlicingConfiguration(catalog, result.live, policy, SlicingConfigurations.words(result.live.palette.size))
+                    SlotEditResult.Unchanged -> SlicingStage.Unchanged
+                    is SlotEditResult.Refused -> SlicingStage.Refused(result.code, result.message)
+                }
+            },
+        )
+            .thenCompose { result -> query().handle { _, _ -> result } }
+            .thenApply { result ->
+                when (result) {
+                    is ProjectOutcome.Completed, ProjectOutcome.SlicingUnchanged -> checkNotNull(edited.get())
+                    is ProjectOutcome.SlicingRefused -> edited.get() as? SlotEditResult.Refused ?: throw ProjectFailure(result.message)
                     else -> throw failure(result, null)
                 }
             }

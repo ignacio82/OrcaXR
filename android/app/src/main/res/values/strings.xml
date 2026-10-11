@@ -208,6 +208,34 @@
     <!-- The browser's printer files and history panels (web/src/ui/dom/PrinterStoragePanel.ts, PrintHistoryPanel.ts). -->
     <string name="device_folder_empty">This folder is empty.</string>
     <string name="device_no_longer_on_printer">No longer on the printer</string>
+    <!-- The project's filaments: the browser's Filament tab (its heads panel and extra palette colours, web/src/main.ts),
+         its selection filament bar (web/src/ui/dom/SelectionFilamentBar.ts) and its Objects panel's indicators (ObjectsPanel.ts). -->
+    <string name="prepare_palette_filament">Palette filament %1$s</string>
+    <string name="filament_title">Filaments</string>
+    <string name="filament_add">Add an auxiliary palette color (not a virtual recipe)</string>
+    <string name="filament_head_colour">Head %1$s colour</string>
+    <string name="filament_palette_colour">Palette colour %1$s</string>
+    <string name="filament_head_nozzle">Head %1$s nozzle</string>
+    <string name="filament_remove">Del</string>
+    <string name="filament_remove_slot">Remove palette colour %1$s</string>
+    <string name="filament_mixed_title">Mixed filaments</string>
+    <string name="filament_colour_hex">Colour (#rrggbb)</string>
+    <string name="filament_colour_apply">Apply</string>
+    <string name="filament_bar_title">Filament for the selection</string>
+    <string name="filament_bar_selected">selected</string>
+    <string name="filament_bar_head">Head</string>
+    <string name="filament_bar_mixed">Mixed</string>
+    <string name="filament_bar_default">Default</string>
+    <string name="filament_bar_default_hint">Remove the local assignment so the selection follows its object default</string>
+    <string name="filament_bar_assigning">Assigning…</string>
+    <string name="filament_bar_assigned">assigned</string>
+    <string name="filament_bar_cleared">Local assignment removed</string>
+    <string name="tree_not_printable">Not printable</string>
+    <string name="tree_filament_mixed">%1$s (mixed)</string>
+    <string name="tree_filament_inherited">%1$s (inherited)</string>
+    <string name="tree_color_facets">%1$s color-painted facets</string>
+    <string name="tree_support_facets">%1$s support-painted facets</string>
+    <string name="tree_settings">%1$s custom settings</string>
     <!-- The browser's drop overlay (app.main.dropA3MFSTLOBJ in web/src/main.ts), shown while a file is dragged over the window. -->
     <string name="drop_prompt">Drop a 3MF, STL, OBJ, AMF, ZIP, or G-code file to load it</string>
 </resources>

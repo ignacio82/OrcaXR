@@ -33,4 +33,8 @@
     <string name="project_add_modifier">Pridėti modifikatorių</string>
     <string name="device_cancel">Atšaukti</string>
     <string name="device_tab_camera">Kamera</string>
+    <string name="filament_remove">Del</string>
+    <string name="filament_colour_apply">Taikyti</string>
+    <string name="filament_bar_selected">pasirinkta</string>
+    <string name="filament_bar_default">Numatytas</string>
 </resources>

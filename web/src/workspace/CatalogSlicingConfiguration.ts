@@ -27,6 +27,7 @@ import type { CanonicalSlicingConfiguration } from './CanonicalWorkspaceControll
 import {
   FILAMENT_PALETTE_MAX_SLOTS,
   NEW_FILAMENT_SLOT,
+  paletteSlotsFrom,
   slicerOverridesForSlots,
   type FilamentSlot,
 } from './FilamentPalette';
@@ -462,6 +463,95 @@ export function synchronizedHeadSlots(
   while (nextHeads.length < slotCount) nextHeads.push(headSelectionFromProfile(profile));
   while (nextNozzles.length < slotCount) nextNozzles.push(profileNozzleForTool(profile, nextNozzles.length));
   return { heads: nextHeads, nozzles: nextNozzles };
+}
+
+/** One edit of the filament slots, as the Filament tab makes it. */
+export type FilamentSlotEdit =
+  | { readonly kind: 'add' }
+  | { readonly kind: 'remove'; readonly index: number }
+  | { readonly kind: 'color'; readonly index: number; readonly color: string }
+  | { readonly kind: 'nozzle'; readonly index: number; readonly nozzle: string };
+
+/** What a slot edit does: the slots that result, nothing, or a refusal in the browser's words. */
+export type FilamentSlotEditOutcome =
+  | { readonly kind: 'edited'; readonly slots: LiveProfileSlots }
+  | { readonly kind: 'unchanged' }
+  | { readonly kind: 'refused'; readonly message: string };
+
+/** The refusal of a slot added past `FILAMENT_PALETTE_MAX_SLOTS`. */
+export const FILAMENT_SLOT_LIMIT_MESSAGE = 'The 16-slot filament limit has been reached.';
+
+/**
+ * The Filament tab's slot edits (`OrcaWorkspace.addFilamentSlot`,
+ * `removeAuxiliaryFilamentSlot`, `setHeadNozzle` and the palette's
+ * `setColor`) on the live slots, each slot's filament and nozzle first
+ * synchronized to the palette as the workspace keeps them. Adding appends a
+ * `NEW_FILAMENT_SLOT` holding the profile's own filament and the nozzle the
+ * profile gives that tool, refused at the palette's limit; only a palette
+ * slot past the printer's heads can be removed; a colour or nozzle changes
+ * only a slot that exists, a nozzle only when it differs.
+ */
+export function editFilamentSlots(live: LiveSlicingChoice, edit: FilamentSlotEdit): FilamentSlotEditOutcome {
+  const palette = live.palette.map((slot) => ({ ...slot }));
+  const { heads, nozzles } = synchronizedHeadSlots(live.profile, live.heads, live.nozzles, palette.length);
+  const edited = (): FilamentSlotEditOutcome => ({ kind: 'edited', slots: { palette, heads, nozzles } });
+  switch (edit.kind) {
+    case 'add':
+      if (palette.length >= FILAMENT_PALETTE_MAX_SLOTS)
+        return { kind: 'refused', message: FILAMENT_SLOT_LIMIT_MESSAGE };
+      heads.push(headSelectionFromProfile(live.profile));
+      nozzles.push(profileNozzleForTool(live.profile, nozzles.length));
+      palette.push({ ...NEW_FILAMENT_SLOT });
+      return edited();
+    case 'remove':
+      if (edit.index < profileExtruderCount(live.profile) || edit.index >= palette.length) return { kind: 'unchanged' };
+      heads.splice(edit.index, 1);
+      nozzles.splice(edit.index, 1);
+      palette.splice(edit.index, 1);
+      return edited();
+    case 'color':
+      if (!palette[edit.index]) return { kind: 'unchanged' };
+      palette[edit.index].color = edit.color;
+      return edited();
+    case 'nozzle':
+      if (edit.index < 0 || edit.index >= nozzles.length || nozzles[edit.index] === edit.nozzle) {
+        return { kind: 'unchanged' };
+      }
+      nozzles[edit.index] = edit.nozzle;
+      return edited();
+  }
+}
+
+/**
+ * The slots an opened project's own filaments describe (`OrcaWorkspace`'s
+ * project open): each physical filament by tool, its name and — when it is
+ * a catalog preset (`preset:`) — its preset, its nozzle (0.4 mm when it
+ * states none) and its colour and material as the palette takes them
+ * (`paletteSlotsFrom`). A project without physical filaments keeps `palette`.
+ */
+export function projectFilamentSlots(
+  physical: readonly Readonly<
+    Pick<PhysicalFilament, 'name' | 'toolId' | 'presetId' | 'material' | 'color' | 'nozzleDiameterMm'>
+  >[],
+  palette: readonly FilamentSlot[],
+): LiveProfileSlots {
+  const sorted = [...physical].sort((left, right) => left.toolId - right.toolId);
+  return {
+    palette:
+      sorted.length > 0
+        ? paletteSlotsFrom(
+            sorted.map((filament) => filament.color),
+            sorted.map((filament) => filament.material),
+          )
+        : palette.map((slot) => ({ ...slot })),
+    heads: sorted.map((filament) =>
+      Object.freeze({
+        name: filament.name,
+        ...(filament.presetId?.startsWith('preset:') ? { presetId: filament.presetId as WorkspacePresetId } : {}),
+      }),
+    ),
+    nozzles: sorted.map((filament) => String(filament.nozzleDiameterMm ?? 0.4)),
+  };
 }
 
 // --- Configuration ----------------------------------------------------------------------------

@@ -7,6 +7,7 @@ import { entityId, type EntityId, type IdSource } from '../../project/domain/ids
 import { BbsProjectImportParser } from '../../project/import/BbsProjectImportParser';
 import { Bbs3mfProjectSerializer } from '../../project/serialization/Bbs3mfProjectSerializer';
 import { CanonicalWorkspaceController, StaleCanonicalFilamentAssignmentError } from '../CanonicalWorkspaceController';
+import { canonicalFilamentOptions } from '../FilamentAssignment';
 
 const NOW = '2026-07-23T12:00:00.000Z';
 const MAPPING = { bedSizeMm: [270, 270] as const, worldUnitsPerMm: 0.00175 };
@@ -217,6 +218,31 @@ await test('fails stale, unknown, duplicate, empty, and missing-scope requests w
   assert.equal(controller.getFilamentAssignmentSnapshot([object]).scopes[0].localFilamentId, fixture.ids.physical0);
 
   controller.dispose();
+});
+
+await test('lists mixed filaments in code-unit order, whatever the browser language', () => {
+  const { state } = createProjectFixture();
+  const [mix] = state.filaments.mixed;
+  state.filaments.mixed = ['b blend', 'B blend', 'ä blend', 'a blend', 'B blend'].map((name, index) => ({
+    ...structuredClone(mix),
+    id: entityId<'mixed-filament'>(`import:filament-controller-test:mixed-${4 - index}`),
+    name,
+  }));
+  // `localeCompare` ordered these by the runtime's collation (a, ä, b, B — and
+  // differently again in a Swedish browser); code units order them the same
+  // everywhere, as the shared core does. Equal names fall back to their IDs.
+  assert.deepEqual(
+    canonicalFilamentOptions(state)
+      .filter((option) => option.kind === 'mixed')
+      .map((option) => [option.name, option.id.slice(-1)]),
+    [
+      ['B blend', '0'],
+      ['B blend', '3'],
+      ['a blend', '1'],
+      ['b blend', '4'],
+      ['ä blend', '2'],
+    ],
+  );
 });
 
 console.log(`\nCanonical filament assignment: ${passed} tests passed.`);

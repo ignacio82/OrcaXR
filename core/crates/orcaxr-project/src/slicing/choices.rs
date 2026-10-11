@@ -355,6 +355,158 @@ pub fn synchronized_heads(
     (next_heads, next_nozzles)
 }
 
+/// `FilamentSlotEdit`: one edit of the filament slots, as the Filament tab
+/// makes it. Indices are safe integers, so they are not bounded by `usize`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SlotEdit {
+    Add,
+    Remove(u64),
+    Color(u64, Vec<u16>),
+    Nozzle(u64, Vec<u16>),
+}
+
+/// `FilamentSlotEditOutcome`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SlotEditOutcome {
+    Edited(Slots),
+    Unchanged,
+    /// Refused in the browser's words ([`SLOT_LIMIT_MESSAGE`]).
+    Refused(&'static str),
+}
+
+/// `FILAMENT_SLOT_LIMIT_MESSAGE`.
+pub const SLOT_LIMIT_MESSAGE: &str = "The 16-slot filament limit has been reached.";
+
+/// `editFilamentSlots`: the Filament tab's slot edits on the live slots, each
+/// slot's filament and nozzle first synchronized to the palette. Adding
+/// appends [`new_slot`] holding the profile's own filament and the nozzle it
+/// gives that tool, refused at [`MAX_SLOTS`]; only a slot past the printer's
+/// heads can be removed; a colour or nozzle changes only a slot that exists,
+/// a nozzle only when it differs.
+pub fn edit_slots(
+    profile: Option<&Profile>,
+    heads: &[Head],
+    nozzles: &[Vec<u16>],
+    palette: &[Slot],
+    edit: &SlotEdit,
+) -> SlotEditOutcome {
+    let mut palette = palette.to_vec();
+    let (mut heads, mut nozzles) = synchronized_heads(profile, heads, nozzles, palette.len());
+    let slot = |index: u64, len: usize| usize::try_from(index).ok().filter(|i| *i < len);
+    match edit {
+        SlotEdit::Add => {
+            if palette.len() >= MAX_SLOTS {
+                return SlotEditOutcome::Refused(SLOT_LIMIT_MESSAGE);
+            }
+            heads.push(head_from_profile(profile));
+            nozzles.push(nozzle_for_tool(profile, nozzles.len()));
+            palette.push(new_slot());
+        }
+        SlotEdit::Remove(index) => {
+            if *index < extruder_count(profile) as u64 {
+                return SlotEditOutcome::Unchanged;
+            }
+            let Some(index) = slot(*index, palette.len()) else {
+                return SlotEditOutcome::Unchanged;
+            };
+            heads.remove(index);
+            nozzles.remove(index);
+            palette.remove(index);
+        }
+        SlotEdit::Color(index, color) => {
+            let Some(index) = slot(*index, palette.len()) else {
+                return SlotEditOutcome::Unchanged;
+            };
+            palette[index].color = color.clone();
+        }
+        SlotEdit::Nozzle(index, nozzle) => {
+            let Some(index) = slot(*index, nozzles.len()).filter(|i| nozzles[*i] != *nozzle) else {
+                return SlotEditOutcome::Unchanged;
+            };
+            nozzles[index] = nozzle.clone();
+        }
+    }
+    SlotEditOutcome::Edited(Slots {
+        palette,
+        heads,
+        nozzles,
+    })
+}
+
+/// `paletteSlotsFrom`: `#` added where missing, an alpha channel dropped
+/// (nine UTF-16 units become the first seven), each slot typed by `types`.
+pub fn palette_slots_from(colors: &[&[u16]], types: &[&[u16]]) -> Vec<Slot> {
+    let hash = u16::from(b'#');
+    colors
+        .iter()
+        .enumerate()
+        .map(|(index, color)| {
+            let mut hex = if color.first() == Some(&hash) {
+                color.to_vec()
+            } else {
+                [&[hash][..], color].concat()
+            };
+            if hex.len() == 9 {
+                hex.truncate(7);
+            }
+            Slot {
+                color: hex,
+                kind: types
+                    .get(index)
+                    .map_or_else(|| units("PLA"), |t| t.to_vec()),
+            }
+        })
+        .collect()
+}
+
+/// `projectFilamentSlots`: the slots a project's own physical filaments
+/// describe, as an opened project's — by tool, each one's name and (when a
+/// catalog preset, `preset:`) its preset, its nozzle (0.4 mm when it states
+/// none) and its colour and material as [`palette_slots_from`] takes them. A
+/// project without physical filaments keeps `palette`.
+pub fn project_slots(
+    physical: &[std::sync::Arc<crate::model::PhysicalFilament>],
+    palette: &[Slot],
+) -> Slots {
+    let mut sorted: Vec<_> = physical.iter().collect();
+    sorted.sort_by(|a, b| {
+        a.tool_id
+            .get()
+            .partial_cmp(&b.tool_id.get())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let preset = units("preset:");
+    Slots {
+        palette: if sorted.is_empty() {
+            palette.to_vec()
+        } else {
+            let colors: Vec<&[u16]> = sorted.iter().map(|f| f.color.units()).collect();
+            let types: Vec<&[u16]> = sorted.iter().map(|f| f.material.units()).collect();
+            palette_slots_from(&colors, &types)
+        },
+        heads: sorted
+            .iter()
+            .map(|f| Head {
+                preset_id: f
+                    .preset_id
+                    .as_ref()
+                    .map(|p| p.units())
+                    .filter(|p| p.starts_with(&preset))
+                    .map(<[u16]>::to_vec),
+                name: f.name.units().to_vec(),
+            })
+            .collect(),
+        nozzles: sorted
+            .iter()
+            .map(|f| {
+                units(&crate::js_math::convert::number_to_string(
+                    f.nozzle_diameter_mm.map_or(0.4, |n| n.get()),
+                ))
+            })
+            .collect(),
+    }
+}
+
 // --- Selection -------------------------------------------------------------------------------
 
 names!(

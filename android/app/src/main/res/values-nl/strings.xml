@@ -31,4 +31,8 @@
     <string name="project_add_modifier">Aanpasser toevoegen</string>
     <string name="device_cancel">Annuleren</string>
     <string name="device_tab_camera">Camera</string>
+    <string name="filament_remove">Del</string>
+    <string name="filament_colour_apply">Toepassen</string>
+    <string name="filament_bar_selected">geselecteerd</string>
+    <string name="filament_bar_default">Standaard</string>
 </resources>

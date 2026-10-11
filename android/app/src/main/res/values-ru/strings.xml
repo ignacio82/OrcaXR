@@ -33,4 +33,8 @@
     <string name="project_add_modifier">Добавление модификатора</string>
     <string name="device_cancel">Отмена</string>
     <string name="device_tab_camera">Камера</string>
+    <string name="filament_remove">Del</string>
+    <string name="filament_colour_apply">Применить</string>
+    <string name="filament_bar_selected">выбрано</string>
+    <string name="filament_bar_default">По умолчанию</string>
 </resources>

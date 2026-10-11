@@ -29,6 +29,8 @@ import dev.orcaxr.core.ProjectRowSelection
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
 import dev.orcaxr.core.RecentDocuments
+import dev.orcaxr.core.SlicingSlots
+import dev.orcaxr.core.SlotEdit
 import dev.orcaxr.core.TransformReset
 import dev.orcaxr.core.TransformTool
 import dev.orcaxr.nativeapp.device.PreferencesTextStore
@@ -134,6 +136,8 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     var profilesView by mutableStateOf(ProfilesView())
         private set
     private val profiles = SlicingProfiles(application) { next -> main.post { profilesView = next } }
+    /** The project's filament slots the pickers last followed. */
+    @Volatile private var followed: SlicingSlots? = null
 
     init {
         work {
@@ -143,6 +147,12 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             subscription = workspace.subscribe {
                 main.post { view = workspace.view }
                 sync.request()
+                // The Prepare pickers follow the project's filaments through edits, undo and redo.
+                val slots = workspace.view.filamentSlots
+                if (slots != followed) {
+                    followed = slots
+                    worker.execute { profiles.follow(slots) }
+                }
             }
             sync.request()
             started.complete(workspace)
@@ -252,7 +262,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun restore(entry: ProjectRecovery.Entry) = unlessDirty {
         work {
             workspace.restore(entry).await()
-            profiles.opened()
+            profiles.opened(workspace)
             savedUri = null
             hold(null)
             main.post { message = "Restored ${entry.projectName}. Save it to keep it." }
@@ -326,7 +336,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             claimed(uri) {
                 val document = DigestingDocument(ContentProjectDocument(resolver, uri), null)
                 val format = workspace.open(document, name).await()
-                profiles.opened()
+                profiles.opened(workspace)
                 adopt(uri, format, document.digest)
             }
             remember(uri, name)
@@ -350,7 +360,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
                 }
                 throw failure
             }
-            profiles.opened()
+            profiles.opened(workspace)
             adopt(uri, format, document.digest)
             remember(uri, entry.name)
         }
@@ -369,7 +379,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         unlessDirty {
             work {
                 workspace.open(ContentProjectDocument(resolver, uri), displayName(uri)).await()
-                profiles.opened()
+                profiles.opened(workspace)
                 // A one-time grant: this window does not write it back, so it holds nothing.
                 savedUri = null
                 hold(null)
@@ -535,6 +545,34 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun chooseProcess(id: String) = work { profiles.select(workspace, process = id) }
     /** Chooses head [index]'s filament (the first is the profile's own). */
     fun chooseFilament(index: Int, id: String) = work { profiles.selectHead(workspace, index, id) }
+
+    // ---- The project's filaments: the Filaments list and the selection filament bar ----
+
+    /** Adds a filament slot (the browser's "+"), one undoable step; past sixteen it is refused in the browser's words. */
+    fun addFilament() = work { profiles.editSlot(workspace, SlotEdit.Add) }
+    /** Removes extra palette slot [index] (the browser's Del). */
+    fun removeFilament(index: Int) = work { profiles.editSlot(workspace, SlotEdit.Remove(index)) }
+    /** Slot [index]'s colour, `#rrggbb`. */
+    fun recolorFilament(index: Int, color: String) = work { profiles.editSlot(workspace, SlotEdit.Color(index, color)) }
+    /** Head [index]'s nozzle. */
+    fun setFilamentNozzle(index: Int, nozzle: String) = work { profiles.editSlot(workspace, SlotEdit.Nozzle(index, nozzle)) }
+
+    /** What the selection filament bar's last press did, as the bar says it. */
+    var filamentStatus by mutableStateOf<Filaments.Status?>(null)
+        private set
+
+    /**
+     * The selection filament bar's press: [filamentId] (null: the object
+     * default) for every scope the selection can assign, as one undoable step;
+     * the bar says what happened, a refusal in the browser's words.
+     */
+    fun assignFilament(filamentId: String?, name: String) {
+        filamentStatus = Filaments.Status.Assigning
+        work {
+            val failure = runCatching { workspace.assignFilament(filamentId).await() }.exceptionOrNull()?.let(::cause)
+            main.post { filamentStatus = Filaments.finished(filamentId, name, failure) }
+        }
+    }
 
     /** The plate's one-plate slice archive ([ProjectWorkspace.projectPlate]); the project's saved state is untouched. */
     override fun projectPlate(plateId: String, output: ProjectDocumentOutput): CompletableFuture<ProjectPlateArchive> =

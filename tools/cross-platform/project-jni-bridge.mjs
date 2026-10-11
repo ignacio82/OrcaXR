@@ -79,6 +79,7 @@ export function startProjectJni(profile = "debug") {
   signatures.stagedRecordChecks = ["String"];
   signatures.stagedRecords = ["String"];
   signatures.createEditChecks = ["String", "byte[]"];
+  signatures.filamentChecks = ["String", "byte[]", "byte[]", "byte[]"];
   signatures.projectSceneChecks = ["byte[]"];
   signatures.printerDiscoveryChecks = ["String", "String"];
   signatures.printerExchangesChecks = ["String"];
@@ -795,6 +796,15 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     workspace_bed(request) {
       return call("projectWorkspaceBed", this.handle, request);
     }
+    filament_slots(request) {
+      return call("projectFilamentSlots", this.handle, request);
+    }
+    filament_assignment(request) {
+      return call("projectFilamentAssignment", this.handle, request);
+    }
+    filament_assignment_changes(request) {
+      return call("projectFilamentAssignmentChanges", this.handle, request);
+    }
     id_length() {
       return call("projectIdLength", this.handle);
     }
@@ -1020,6 +1030,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     slicing_default(request) {
       return call("catalogSlicingDefault", this.handle, request);
+    }
+    slicing_slots(request) {
+      return call("catalogSlicingSlots", this.handle, request);
     }
     slicing_configuration(request) {
       return call("catalogSlicingConfiguration", this.handle, request, zone, profile);

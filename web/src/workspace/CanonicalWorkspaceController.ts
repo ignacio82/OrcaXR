@@ -1,4 +1,11 @@
 import { AsyncTransformGesture, type TransformGestureHost } from './AsyncTransformGesture';
+import {
+  filamentAssignmentChanges,
+  filamentAssignmentResolution,
+  type CanonicalFilamentAssignableEntityRef,
+  type CanonicalFilamentAssignmentScope,
+  type CanonicalFilamentOption,
+} from './FilamentAssignment';
 import { nextSlicingState, withReconciledAutoPairs, type SlicingAutoPairPolicy } from './CatalogSlicingConfiguration';
 import {
   LocalProjectSessionTransport,
@@ -104,14 +111,7 @@ import {
   type VolumeRole,
   type WipeTowerState,
 } from '../project/domain/model';
-import {
-  findInstance,
-  findLayerRange,
-  findObject,
-  findPlate,
-  findVolume,
-  resolveFilament,
-} from '../project/domain/selectors';
+import { findInstance, findLayerRange, findObject, findPlate, findVolume } from '../project/domain/selectors';
 import {
   AddLayerEventCommand,
   DeleteLayerEventCommand,
@@ -124,7 +124,6 @@ import {
   SetFilamentAssignmentsCommand,
   SyncPhysicalFilamentsFromPrinterCommand,
   type PrinterFilamentSyncSummary,
-  type FilamentAssignmentChange,
   type PrinterFilamentSlotFacts,
 } from '../project/filaments/commands';
 import {
@@ -563,39 +562,11 @@ export interface CanonicalObjectsTreeSnapshot {
   readonly selection: CanonicalObjectsTreeSelection;
 }
 
-export type CanonicalFilamentAssignableEntityRef = Extract<
-  ObjectTreeEntityRef,
-  { kind: 'object' | 'volume' | 'layer-range' }
->;
-
-export interface CanonicalFilamentOption {
-  readonly id: FilamentId;
-  readonly kind: 'physical' | 'mixed';
-  readonly name: string;
-  readonly color: string;
-  readonly enabled: boolean;
-  readonly material?: string;
-  readonly presetId?: string;
-  readonly toolId?: number;
-  readonly distributionMode?: MixedFilament['distribution']['mode'];
-  readonly recipe: readonly {
-    /** Recipes always reference stable physical-head IDs, never virtual rows. */
-    readonly filamentId: PhysicalFilamentId;
-    readonly name: string;
-    readonly color: string;
-    readonly weight: number;
-  }[];
-  readonly warnings: readonly string[];
-}
-
-export interface CanonicalFilamentAssignmentScope {
-  readonly entity: CanonicalFilamentAssignableEntityRef;
-  readonly objectId: ObjectId;
-  readonly label: string;
-  readonly localFilamentId?: FilamentId;
-  readonly inheritedFilamentId?: FilamentId;
-  readonly effectiveFilamentId?: FilamentId;
-}
+export type {
+  CanonicalFilamentAssignableEntityRef,
+  CanonicalFilamentAssignmentScope,
+  CanonicalFilamentOption,
+} from './FilamentAssignment';
 
 export interface CanonicalFilamentAssignmentSnapshot {
   readonly sourceRevision: number;
@@ -1298,29 +1269,13 @@ export class CanonicalWorkspaceController {
     this.assertActive();
     const project = this.session.project.getSnapshot();
     const requestedRefs = refs ?? freezeObjectsTreeSelection(this.session.selection.getSnapshot()).refs;
-    const scopes: CanonicalFilamentAssignmentScope[] = [];
-    const unsupportedSelection: ObjectTreeEntityRef[] = [];
-    const seen = new Set<string>();
-    for (const requested of requestedRefs) {
-      // Clicking a model in the viewport selects an *instance*, and upstream
-      // has no per-copy filament: every copy of an object prints from the
-      // object's own assignment. Resolving the instance to its object is what
-      // makes "click the model, pick a filament" mean something, and it also
-      // collapses a multi-copy selection to the one scope it really is.
-      const ref = instanceAssignmentScopeRef(project.state, requested);
-      const key = objectTreeEntityKey(ref);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const scope = resolveFilamentAssignmentScope(project.state, ref);
-      if (scope) scopes.push(scope);
-      else unsupportedSelection.push(Object.freeze({ ...ref }));
-    }
+    const resolution = filamentAssignmentResolution(project.state, requestedRefs);
     return Object.freeze({
       sourceRevision: project.revision,
       sourceHash: project.hash,
-      scopes: Object.freeze(scopes),
-      unsupportedSelection: Object.freeze(unsupportedSelection),
-      options: canonicalFilamentOptions(project.state),
+      scopes: resolution.scopes,
+      unsupportedSelection: resolution.unsupportedSelection,
+      options: resolution.options,
     });
   }
 
@@ -1339,15 +1294,7 @@ export class CanonicalWorkspaceController {
     if (before.revision !== guard.sourceRevision || before.hash !== guard.sourceHash) {
       throw new StaleCanonicalFilamentAssignmentError();
     }
-    if (entities.length === 0) throw new Error('Filament assignment requires at least one assignable scope');
-    if (filamentId) {
-      const destination = [...before.state.filaments.physical, ...before.state.filaments.mixed].find(
-        (candidate) => candidate.id === filamentId,
-      );
-      if (!destination) throw new Error(`Unknown filament ${filamentId}`);
-      if (!destination.enabled) throw new Error(`Destination filament ${filamentId} is disabled`);
-    }
-    const assignments = entities.map((entity) => filamentAssignmentChange(before.state, entity, filamentId));
+    const assignments = filamentAssignmentChanges(before.state, entities, filamentId);
     new SetFilamentAssignmentsCommand(assignments);
     const receipt = await this.executeEditIntent((text) => ({
       setFilamentAssignments: {
@@ -5230,186 +5177,6 @@ function assertObjectsTreeEntityExists(state: ProjectState, ref: ObjectTreeEntit
             ? findInstance(state, ref.id)
             : findLayerRange(state, ref.id);
   if (!exists) throw new Error(`Unknown ${ref.kind} ${ref.id}`);
-}
-
-/**
- * The ref a filament assignment should act on: an instance stands for the
- * object it is a copy of, everything else stands for itself. An instance whose
- * object no longer exists stays an instance and is reported unsupported.
- */
-function instanceAssignmentScopeRef(state: ProjectState, ref: ObjectTreeEntityRef): ObjectTreeEntityRef {
-  if (ref.kind !== 'instance') return ref;
-  const found = findInstance(state, ref.id);
-  return found ? { kind: 'object', id: found.object.id } : ref;
-}
-
-function resolveFilamentAssignmentScope(
-  state: ProjectState,
-  ref: ObjectTreeEntityRef,
-): CanonicalFilamentAssignmentScope | undefined {
-  switch (ref.kind) {
-    case 'object': {
-      const found = findObject(state, ref.id);
-      if (!found) throw new Error(`Unknown object ${ref.id}`);
-      return freezeFilamentAssignmentScope({
-        entity: ref,
-        objectId: found.object.id,
-        label: found.object.name,
-        localFilamentId: found.object.filamentId,
-        effectiveFilamentId: found.object.filamentId,
-      });
-    }
-    case 'volume': {
-      const found = findVolume(state, ref.id);
-      if (!found) throw new Error(`Unknown volume ${ref.id}`);
-      const resolved = resolveFilament(found.object, found.volume);
-      return freezeFilamentAssignmentScope({
-        entity: ref,
-        objectId: found.object.id,
-        label: `${found.object.name} / ${found.volume.name}`,
-        localFilamentId: resolved.local,
-        inheritedFilamentId: resolved.inherited,
-        effectiveFilamentId: resolved.effective,
-      });
-    }
-    case 'layer-range': {
-      const found = findLayerRange(state, ref.id);
-      if (!found) throw new Error(`Unknown layer-range ${ref.id}`);
-      const resolved = resolveFilament(found.object, found.layerRange);
-      return freezeFilamentAssignmentScope({
-        entity: ref,
-        objectId: found.object.id,
-        label: `${found.object.name} / ${formatZ(found.layerRange.minZMm)}–${formatZ(found.layerRange.maxZMm)} mm`,
-        localFilamentId: resolved.local,
-        inheritedFilamentId: resolved.inherited,
-        effectiveFilamentId: resolved.effective,
-      });
-    }
-    case 'plate':
-    case 'instance':
-      return undefined;
-  }
-}
-
-function freezeFilamentAssignmentScope(scope: CanonicalFilamentAssignmentScope): CanonicalFilamentAssignmentScope {
-  return Object.freeze({
-    entity: Object.freeze({ ...scope.entity }),
-    objectId: scope.objectId,
-    label: scope.label,
-    ...(scope.localFilamentId ? { localFilamentId: scope.localFilamentId } : {}),
-    ...(scope.inheritedFilamentId ? { inheritedFilamentId: scope.inheritedFilamentId } : {}),
-    ...(scope.effectiveFilamentId ? { effectiveFilamentId: scope.effectiveFilamentId } : {}),
-  });
-}
-
-function canonicalFilamentOptions(state: ProjectState): readonly CanonicalFilamentOption[] {
-  const physicalById = new Map(state.filaments.physical.map((filament) => [filament.id, filament]));
-  const physical = [...state.filaments.physical]
-    .sort((left, right) => left.toolId - right.toolId || left.id.localeCompare(right.id))
-    .map((filament): CanonicalFilamentOption => {
-      const warnings: string[] = [];
-      if (!filament.enabled) warnings.push('This physical filament is disabled.');
-      if (filament.toolId < 0 || filament.toolId >= state.printer.toolCount) {
-        warnings.push(`Tool ${filament.toolId} is outside the printer's configured head range.`);
-      }
-      if (!filament.presetId) warnings.push('No filament preset snapshot is linked to this head.');
-      return Object.freeze({
-        id: filament.id,
-        kind: 'physical',
-        name: filament.name,
-        color: filament.color,
-        enabled: filament.enabled,
-        material: filament.material,
-        ...(filament.presetId ? { presetId: filament.presetId } : {}),
-        toolId: filament.toolId,
-        recipe: Object.freeze([]),
-        warnings: Object.freeze(warnings),
-      });
-    });
-  const mixed = [...state.filaments.mixed]
-    .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id))
-    .map((filament): CanonicalFilamentOption => {
-      const warnings: string[] = [];
-      if (!filament.enabled) warnings.push('This virtual filament is disabled.');
-      const recipe = filament.components.map((component) => {
-        const physicalFilament = physicalById.get(component.filamentId);
-        if (!physicalFilament) warnings.push(`Recipe component ${component.filamentId} is missing.`);
-        else if (!physicalFilament.enabled) warnings.push(`Recipe component ${physicalFilament.name} is disabled.`);
-        return Object.freeze({
-          filamentId: component.filamentId,
-          name: physicalFilament?.name ?? 'Missing physical filament',
-          color: physicalFilament?.color ?? '#808080',
-          weight: component.weight,
-        });
-      });
-      const materials = [
-        ...new Set(
-          filament.components.flatMap((component) => {
-            const material = physicalById.get(component.filamentId)?.material;
-            return material ? [material] : [];
-          }),
-        ),
-      ].sort();
-      if (materials.length > 1) {
-        warnings.push(`Recipe combines ${materials.join(' and ')}; verify material compatibility before slicing.`);
-      }
-      return Object.freeze({
-        id: filament.id,
-        kind: 'mixed',
-        name: filament.name,
-        color: filament.displayColor,
-        enabled: filament.enabled,
-        ...(materials.length > 0 ? { material: materials.join(' + ') } : {}),
-        distributionMode: filament.distribution.mode,
-        recipe: Object.freeze(recipe),
-        warnings: Object.freeze(warnings),
-      });
-    });
-  return Object.freeze([...physical, ...mixed]);
-}
-
-function filamentAssignmentChange(
-  state: ProjectState,
-  entity: CanonicalFilamentAssignableEntityRef,
-  filamentId: FilamentId | null,
-): FilamentAssignmentChange {
-  switch (entity.kind) {
-    case 'object': {
-      const found = findObject(state, entity.id);
-      if (!found) throw new Error(`Unknown object ${entity.id}`);
-      return { target: { kind: 'object', objectId: found.object.id }, filamentId };
-    }
-    case 'volume': {
-      const found = findVolume(state, entity.id);
-      if (!found) throw new Error(`Unknown volume ${entity.id}`);
-      return {
-        target: { kind: 'volume', objectId: found.object.id, volumeId: found.volume.id },
-        filamentId,
-      };
-    }
-    case 'layer-range': {
-      const found = findLayerRange(state, entity.id);
-      if (!found) throw new Error(`Unknown layer-range ${entity.id}`);
-      return {
-        target: {
-          kind: 'layer-range',
-          objectId: found.object.id,
-          layerRangeId: found.layerRange.id,
-        },
-        filamentId,
-      };
-    }
-    default:
-      throw new Error(`Unsupported filament assignment scope ${String((entity as ObjectTreeEntityRef).kind)}`);
-  }
-}
-
-function objectTreeEntityKey(ref: ObjectTreeEntityRef): string {
-  return `${ref.kind}:${ref.id}`;
-}
-
-function formatZ(value: number): string {
-  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)));
 }
 
 function suggestedStlFilename(name: string): string {

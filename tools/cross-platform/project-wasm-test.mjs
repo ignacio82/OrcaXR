@@ -45,6 +45,7 @@ import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
+import { replayFilamentAssignment } from "./filament-assignment-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -309,9 +310,13 @@ if (isMainThread) {
     // One plate for an external slicer: projected, refused, and its overrides.
     assert.deepEqual(result.plateProjectionAnswers, [16, 3, 19]);
     // Catalog profiles chosen and turned into the project's slicing
-    // configuration: replies, refusals, session commits, their undos, and
-    // every commit case (refused and unchanged ones included).
-    assert.deepEqual(result.slicingConfigurationAnswers, [349, 14, 29, 29, 32]);
+    // configuration: replies, refusals, session commits, their undos, every
+    // commit case (refused and unchanged ones included), filament slot edits
+    // and the slots captured projects describe.
+    assert.deepEqual(result.slicingConfigurationAnswers, [377, 27, 43, 43, 46, 96, 27]);
+    // Filament assignment: selections resolved, assignments planned, those
+    // refused in the browser's words, and malformed requests.
+    assert.deepEqual(result.filamentAssignmentAnswers, [36, 18, 15, 16]);
     // The workspace bed: configurations, refusals and opened projects' plates.
     assert.deepEqual([result.beds, result.bedRefusals, result.projectBeds], [74, 14, 12]);
     // The transform inspector's fields: reads, rotations, edits and refusals.
@@ -844,6 +849,12 @@ if (isMainThread) {
     layout,
     (text) => Uint8Array.from(Buffer.from(text, "base64")),
   );
+  const filamentAssignment = replayFilamentAssignment(
+    core,
+    JSON.parse(await readFile(new URL("testdata/cross-platform/filament-assignment-vectors.json", root))),
+    layout,
+    fixture.generation,
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -900,6 +911,7 @@ if (isMainThread) {
       ...workspaceBeds,
       ...transformFields,
       ...primitives,
+      ...filamentAssignment,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

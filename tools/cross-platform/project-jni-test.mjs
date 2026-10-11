@@ -54,6 +54,7 @@ import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
+import { replayFilamentAssignment } from "./filament-assignment-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -445,6 +446,24 @@ try {
     Buffer.from(editFixture.archive, "base64"),
   );
   assert.equal(placementEditChecks, 127);
+  // Filament assignment through the JNI exports, then the project's filaments on
+  // real sessions: the browser's snapshot, hash and undo label after every
+  // assignment of its journey and every undo, and the filament list's slot edits.
+  const filamentFixture = await json("testdata/cross-platform/filament-assignment-vectors.json");
+  const filamentAssignment = replayFilamentAssignment(projectJniCore(jvm.call), filamentFixture, layout, fixture.generation);
+  assert.deepEqual(filamentAssignment.filamentAssignmentAnswers, [36, 18, 15, 16]);
+  const filamentChecks = jvm.call(
+    "filamentChecks",
+    JSON.stringify({
+      opened: filamentFixture.journey.opened,
+      steps: filamentFixture.journey.steps,
+      undo: filamentFixture.journey.undo,
+    }),
+    Buffer.from(filamentFixture.journey.archive, "base64"),
+    decodeBytes("stl-binary/cube"),
+    await readFile(new URL("web/public/profiles/catalog.json", root)),
+  );
+  assert.equal(filamentChecks, 76);
   // The transform inspector on a real session: every field edit of the corpus
   // lands as the browser computed it (or is refused in its words), one undo
   // entry each that never coalesces; the Edit menu's placement on the selection.
@@ -1429,7 +1448,7 @@ try {
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
     verified,
   );
-  assert.deepEqual(sliced.slicingConfigurationAnswers, [349, 14, 29, 29, 32]);
+  assert.deepEqual(sliced.slicingConfigurationAnswers, [377, 27, 43, 43, 46, 96, 27]);
   const digest = (text) => createHash("sha256").update(text).digest("hex");
   /** What the Kotlin wrapper must answer: a payload by its digest, or the reply itself. */
   const expect = (reply, payload, key) => {
@@ -1455,10 +1474,12 @@ try {
       (c) =>
         `K\t${c.catalog}\t${c.state}\t${JSON.stringify(c.live)}\t${JSON.stringify(c.autoPairs)}\t${JSON.stringify(c.words)}\t${c.expectedJson}`,
     ),
+    ...slicingFixture.slotEdits.map((c) => `E\t${c.catalog}\t${c.requestJson}\t${c.replyJson}`),
+    ...slicingFixture.projectSlots.map((c) => `P\t${c.state}\t${c.requestJson}\t${c.replyJson}`),
   ];
   assert.equal(
     jvm.call("slicingConfigurationChecks", catalogBytes, slicingFixture.syntheticCatalogJson, slicingScript.join("\n")),
-    412,
+    591,
   );
   // The Moonraker transport through the real JNI exports, then the Kotlin
   // wrapper: step and state, or reply, for each input.
@@ -1536,6 +1557,8 @@ try {
     ...primitives,
     primitiveChecks,
     createEditChecks,
+    filamentAssignment,
+    filamentChecks,
     kotlinStagedWorks,
     stagedRecordChecks,
     projectSceneChecks,

@@ -31,4 +31,7 @@
     <string name="project_add_modifier">モディファイアの追加</string>
     <string name="device_cancel">取消し</string>
     <string name="device_tab_camera">カメラ</string>
+    <string name="filament_remove">Del</string>
+    <string name="filament_colour_apply">適用</string>
+    <string name="filament_bar_default">デフォルト</string>
 </resources>

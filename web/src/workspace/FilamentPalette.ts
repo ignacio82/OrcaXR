@@ -30,6 +30,22 @@ export function slicerOverridesForSlots(slots: readonly FilamentSlot[]): Record<
   };
 }
 
+/**
+ * Slots for a filament list's colours and types: `#` added where missing, an
+ * alpha channel dropped (`#rrggbbaa` → `#rrggbb`), the type `PLA` where none
+ * is given.
+ */
+export function paletteSlotsFrom(colors: readonly string[], types?: readonly string[]): FilamentSlot[] {
+  return colors.map((c, i) => {
+    let hex = c.startsWith('#') ? c : `#${c}`;
+    if (hex.length === 9) hex = hex.substring(0, 7); // Strip alpha channel if present (#rrggbbaa -> #rrggbb)
+    return {
+      color: hex,
+      type: types?.[i] ?? 'PLA',
+    };
+  });
+}
+
 const DEFAULT_SLOTS: FilamentSlot[] = [
   { color: '#5F605F', type: 'PLA' },
   { color: '#E22B22', type: 'PLA' },
@@ -76,14 +92,12 @@ export class FilamentPalette {
   /** Replace all slots (e.g. from a loaded 3MF's filament_colour). */
   setFrom(colors: string[], types?: string[]) {
     if (!colors.length) return;
-    this.slots = colors.map((c, i) => {
-      let hex = c.startsWith('#') ? c : `#${c}`;
-      if (hex.length === 9) hex = hex.substring(0, 7); // Strip alpha channel if present (#rrggbbaa -> #rrggbb)
-      return {
-        color: hex,
-        type: types?.[i] ?? 'PLA',
-      };
-    });
+    this.replace(paletteSlotsFrom(colors, types));
+  }
+
+  /** Replace all slots with `slots`. */
+  replace(slots: readonly FilamentSlot[]) {
+    this.slots = slots.map((s) => ({ ...s }));
     this.emit();
   }
 

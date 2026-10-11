@@ -33,4 +33,8 @@
     <string name="project_add_modifier">Afegir modificador</string>
     <string name="device_cancel">Cancel·lar</string>
     <string name="device_tab_camera">Càmera</string>
+    <string name="filament_remove">Esborrar</string>
+    <string name="filament_colour_apply">Aplicar</string>
+    <string name="filament_bar_selected">sel·leccionat</string>
+    <string name="filament_bar_default">Per defecte</string>
 </resources>

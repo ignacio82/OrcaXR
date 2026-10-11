@@ -34,7 +34,9 @@ object ProjectSlicingConfigurationChecks {
      * `G\t<catalog>\t<live>\t<state name>\t<expected>` (`{"configurationSha256"}`,
      * `{"none":true}` or the refusal), `N\t<state:name|after:index>\t<index:n|json>\t<auto pairs>\t<words>\t<expected>`
      * (`{"stateSha256"}`, `{"unchanged":true}` or the refusal; a JSON configuration
-     * follows `json:`) and `K\t<catalog>\t<state name>\t<live>\t<auto pairs>\t<words>\t<expected>`. */
+     * follows `json:`), `K\t<catalog>\t<state name>\t<live>\t<auto pairs>\t<words>\t<expected>`,
+     * `E\t<catalog>\t<slot edit request>\t<reply>` (one Filament-tab edit of a live choice)
+     * and `P\t<state name>\t<request>\t<reply>` (the slots a captured project describes). */
     @JvmStatic fun run(bundled: ByteArray, synthetic: String, script: String): Long {
         var checks = 0L
         ProjectPreparation().use { scope ->
@@ -128,11 +130,41 @@ object ProjectSlicingConfigurationChecks {
                         checks++
                     }
                     "K" -> checks += commit(catalogs.getValue(entry[1]), states.getValue(entry[2]), live(entry[3]), policy(entry[4]), words(entry[5]), obj(entry[6]), label)
+                    "E" -> {
+                        val request = obj(entry[2])
+                        val edit = request.get("edit") as ProjectJsonObject
+                        fun index(of: ProjectJsonObject) = (of.get("index") as Double).toInt()
+                        val slotEdit = when (val kind = edit.keys().next()) {
+                            "add" -> SlotEdit.Add
+                            "remove" -> SlotEdit.Remove(index(edit.get(kind) as ProjectJsonObject))
+                            "color" -> (edit.get(kind) as ProjectJsonObject).let { SlotEdit.Color(index(it), it.get("color") as String) }
+                            else -> (edit.get(kind) as ProjectJsonObject).let { SlotEdit.Nozzle(index(it), it.get("nozzle") as String) }
+                        }
+                        val current = SlicingConfigurations.Json.live(request.get("live") as ProjectJsonObject)
+                        check(catalogs.getValue(entry[1]).editSlots(current, slotEdit) == SlicingConfigurations.Json.slotEdit(entry[3])) { label }
+                        checks++
+                    }
+                    "P" -> {
+                        val list = obj(entry[2]).get("palette") as ProjectJsonArray
+                        val palette = List(list.length()) { (list.get(it) as ProjectJsonObject).let { slot -> SlicingSlot(slot.get("color") as String, slot.get("type") as String) } }
+                        check(slots(states.getValue(entry[1]), palette) == SlicingConfigurations.Json.slots(entry[3])) { label }
+                        checks++
+                    }
                     else -> error("unknown script entry ${entry[0]}")
                 }
             }
         }
         return checks
+    }
+
+    /** The filament slots a session opened from [state] reads from its captured project. */
+    private fun slots(state: String, palette: List<SlicingSlot>): SlicingSlots = ProjectPreparation().use { scope ->
+        val bytes = state.toByteArray(Charsets.UTF_8)
+        val upload = scope.own(ProjectUpload(bytes.size.toLong(), ProjectHostOptions(bytes.size.toLong(), 1_000_000, 2_000_000, 1024, 128, 0, 16_777_216, 33_554_432, 16, 67_108_864), utc, ProjectIntegerProfile.NODE))
+        for (start in bytes.indices step ProjectHost.MAX_CHUNK_BYTES) upload.appendDocument(start.toLong(), bytes.copyOfRange(start, minOf(start + ProjectHost.MAX_CHUNK_BYTES, bytes.size)))
+        upload.sealDocument()
+        val session = scope.own(upload.open(longArrayOf(1, 2, 3, 4)))
+        session.snapshot().use { it.filamentSlots(palette) }
     }
 
     /** The live choice staged on a session opened from [state], executed and undone. */

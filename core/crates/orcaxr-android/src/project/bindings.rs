@@ -375,6 +375,30 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_catalogSlicingSlots, catalog_slicing_slots, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectFilamentSlots, project_filament_slots, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectFilamentAssignment, project_filament_assignment, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectFilamentAssignmentChanges, project_filament_assignment_changes, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_workspaceBed, workspace_bed, jstring,
     request: JString<'local>,
 }

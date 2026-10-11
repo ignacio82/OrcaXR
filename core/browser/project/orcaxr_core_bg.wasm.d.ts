@@ -64,6 +64,9 @@ export const capturedhistory_label_text: (a: number, b: number, c: number, d: nu
 export const capturedhistory_redo_count: (a: number) => number;
 export const capturedhistory_undo_count: (a: number) => number;
 export const capturedproject_export_json: (a: number, b: number) => [number, number, number];
+export const capturedproject_filament_assignment: (a: number, b: number, c: number) => [number, number, number, number];
+export const capturedproject_filament_assignment_changes: (a: number, b: number, c: number) => [number, number, number, number];
+export const capturedproject_filament_slots: (a: number, b: number, c: number) => [number, number, number, number];
 export const capturedproject_hash: (a: number) => [number, number];
 export const capturedproject_id: (a: number, b: number, c: number) => [number, number, number, number];
 export const capturedproject_id_length: (a: number) => number;
@@ -244,6 +247,7 @@ export const profilecatalog_slicing_configuration: (a: number, b: number, c: num
 export const profilecatalog_slicing_default: (a: number, b: number, c: number) => [number, number, number, number];
 export const profilecatalog_slicing_select: (a: number, b: number, c: number) => [number, number, number, number];
 export const profilecatalog_slicing_select_by_names: (a: number, b: number, c: number) => [number, number, number, number];
+export const profilecatalog_slicing_slots: (a: number, b: number, c: number) => [number, number, number, number];
 export const profilecatalogupload_append: (a: number, b: number, c: number, d: number) => [number, number];
 export const profilecatalogupload_build: (a: number, b: number) => [number, number, number];
 export const profilecatalogupload_new: (a: number, b: number, c: number) => [number, number, number];

@@ -32,4 +32,8 @@
     <string name="project_add_modifier">Módosító hozzáadása</string>
     <string name="device_cancel">Mégse</string>
     <string name="device_tab_camera">Kamera</string>
+    <string name="filament_remove">Del</string>
+    <string name="filament_colour_apply">Alkalmaz</string>
+    <string name="filament_bar_selected">kiválasztva</string>
+    <string name="filament_bar_default">Alapértelmezett</string>
 </resources>

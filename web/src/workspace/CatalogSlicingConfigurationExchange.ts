@@ -22,6 +22,7 @@ import type { SlicerProfile } from '../slicer/ProfileLoader';
 import type { CanonicalSlicingConfiguration } from './CanonicalWorkspaceController';
 import {
   catalogDefaultProfile,
+  editFilamentSlots,
   filamentPresetChoices,
   headSelectionFromProfile,
   liveSlicingConfiguration,
@@ -30,9 +31,11 @@ import {
   nextSlicingState,
   processPresetChoices,
   profileExtruderCount,
+  projectFilamentSlots,
   resolvedProfileSlots,
   resolveProfileSelection,
   resolveProfileSelectionByNames,
+  type FilamentSlotEdit,
   type HeadFilamentSelection,
   type LiveSlicingChoice,
   type ProfileSelectionOutcome,
@@ -224,6 +227,62 @@ export function defaultProfileSelectionExchange(catalog: SlicingProfileCatalog, 
     }),
     live,
   );
+}
+
+function slotIndex(value: Json | undefined): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) invalid();
+  return value;
+}
+function slotEdit(value: Json | undefined): FilamentSlotEdit {
+  const fields = object(value, [], ['add', 'color', 'nozzle', 'remove']);
+  const kinds = Object.keys(fields);
+  if (kinds.length !== 1) invalid();
+  switch (kinds[0]) {
+    case 'add':
+      object(fields.add, []);
+      return { kind: 'add' };
+    case 'remove':
+      return { kind: 'remove', index: slotIndex(object(fields.remove, ['index']).index) };
+    case 'color': {
+      const color = object(fields.color, ['color', 'index']);
+      return { kind: 'color', index: slotIndex(color.index), color: text(color.color) };
+    }
+    default: {
+      const nozzle = object(fields.nozzle, ['index', 'nozzle']);
+      return { kind: 'nozzle', index: slotIndex(nozzle.index), nozzle: text(nozzle.nozzle) };
+    }
+  }
+}
+
+/**
+ * `{"edit","live"}` in, an edit being `{"add":{}}`, `{"remove":{"index"}}`,
+ * `{"color":{"color","index"}}` or `{"nozzle":{"index","nozzle"}}`;
+ * `{"live"}` (the edited choice), `{"unchanged":true}` or
+ * `{"error":"slot-limit","message"}` out.
+ */
+export function filamentSlotsExchange(catalog: SlicingProfileCatalog, requestJson: string): string {
+  const request = object(read(requestJson), ['edit', 'live']);
+  const live = liveOf(catalog, request.live);
+  const outcome = editFilamentSlots(live, slotEdit(request.edit));
+  switch (outcome.kind) {
+    case 'edited':
+      return canonicalStringify({ live: liveJson({ profile: live.profile, ...outcome.slots }) });
+    case 'unchanged':
+      return canonicalStringify({ unchanged: true });
+    case 'refused':
+      return canonicalStringify({ error: 'slot-limit', message: outcome.message });
+  }
+}
+
+/**
+ * `{"palette"}` in, against a project; `{"heads","nozzles","palette"}` out:
+ * the slots its own physical filaments describe, as an opened project's.
+ */
+export function projectFilamentSlotsExchange(state: ProjectState, requestJson: string): string {
+  const request = object(read(requestJson), ['palette']);
+  const slots = projectFilamentSlots(state.filaments.physical, list(request.palette).map(slot));
+  const json = liveJson({ profile: null, ...slots }) as JsonObject;
+  return canonicalStringify({ heads: json.heads, nozzles: json.nozzles, palette: json.palette });
 }
 
 function stateOf(json: Json | undefined): ProjectState {

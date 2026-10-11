@@ -103,6 +103,12 @@ class ProfileCatalog internal constructor(handle: Long) : ProjectHandle(handle) 
     fun defaultSelection(live: LiveSlicingChoice): ProfileSelection? = read {
         SlicingConfigurations.Json.selection(NativeProject.catalogSlicingDefault(it, SlicingConfigurations.Json.liveRequest(live)))
     }
+    /** [live] with one filament slot edited as the browser's Filament tab edits
+     * it (its slots first synchronized to the palette); a full palette refuses
+     * to grow (`slot-limit`) in the browser's words. */
+    fun editSlots(live: LiveSlicingChoice, edit: SlotEdit): SlotEditResult = read {
+        SlicingConfigurations.Json.slotEdit(NativeProject.catalogSlicingSlots(it, SlicingConfigurations.Json.slotsRequest(live, edit)))
+    }
     /** The slicing configuration [live] describes against the state document
      * [stateJson], admitted under [resolver] and [profile]. */
     fun slicingConfiguration(

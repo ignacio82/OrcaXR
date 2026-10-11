@@ -85,6 +85,15 @@ final class NativeProject {
     static native String slicingMatch(String request);
     static native String slicingNextState(String request, double[] words, LocalTimestampResolver resolver, int integerMode);
     static native String stageSlicingConfiguration(long handle, long catalog, String request, double[] words);
+    // Filament slots (the Filament tab's edits on a live choice, and the slots
+    // a captured project's physical filaments describe) and filament
+    // assignment over a captured project: canonical JSON requests and replies
+    // (the browser's CatalogSlicingConfigurationExchange and
+    // FilamentAssignmentExchange).
+    static native String catalogSlicingSlots(long handle, String request);
+    static native String projectFilamentSlots(long handle, String request);
+    static native String projectFilamentAssignment(long handle, String request);
+    static native String projectFilamentAssignmentChanges(long handle, String request);
     // The workspace's bed (a configuration's, or a captured project's for one
     // plate) and the transform inspector's fields: canonical JSON requests and
     // replies (the browser's WorkspaceBedExchange and TransformFieldsExchange).

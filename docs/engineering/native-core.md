@@ -3730,6 +3730,67 @@ Rust matches all of them; WASM in Node and Chrome and JNI answer the 943 on
 the fixture states with the host's own folding, refuse a non-ASCII filter
 without a folder, and 605 Kotlin checks cover the wrapper.
 
+### Filament assignment and filament slots
+
+`filaments::assignment` ports what the browser's assignment selector, its
+selection filament bar and the headset's swatch row read
+(`web/src/workspace/FilamentAssignment.ts`, extracted from
+`CanonicalWorkspaceController.getFilamentAssignmentSnapshot` and
+`setFilamentAssignments`): the selection's assignable scopes — an object, a
+part or a height range, labelled as the browser labels them
+(`Object / Part`, `Object / 0.3–7.1235 mm` by `formatZ`), with their own,
+inherited and effective filament — each once in first-selected order, an
+instance standing for its object (upstream has no per-copy filament); what
+cannot take a filament (a plate, an instance the project lacks) kept apart
+so a UI never applies to part of a selection; every filament offered,
+physical heads by tool then mixed recipes by name, with the selector's
+warnings (a disabled head or recipe, a tool outside the printer's heads, no
+preset snapshot, a missing or disabled component, mixed materials); and the
+assignments a choice makes, refused as the controller refuses them (no
+scope, an unknown or disabled destination, an entity the project lacks). The
+options were ordered by `localeCompare` in the runtime's locale, so a
+Swedish or Turkish browser listed recipes differently; they are now ordered
+by code unit (`compareCanonicalText`), as the core orders them — a browser
+defect fixed with a regression test. The exchange is canonical JSON
+(`FilamentAssignmentExchange.ts`: `{"refs"}` and `{"entities","filamentId"}`
+against a project, a refusal as `{"error": message}`), served by captured
+projects (`CapturedProject.filament_assignment`/`_changes`, JNI
+`projectFilamentAssignment`/`Changes`).
+
+The browser's Filament tab edits its slots — the palette, each slot's
+filament and nozzle — and commits them as the live slicing configuration.
+Its rules are now production functions in `CatalogSlicingConfiguration.ts`
+that `OrcaWorkspace` calls: `editFilamentSlots` (`addFilamentSlot`: the
+profile's own filament in `#cccccc` PLA, refused past 16 slots in the
+browser's words; `removeAuxiliaryFilamentSlot`: only a slot past the
+printer's heads; the palette's `setColor`; `setHeadNozzle`: only a slot
+that exists, a nozzle only when it differs — each on slots first
+synchronized to the palette) and `projectFilamentSlots` (an opened project's
+adoption: physical filaments by tool, a `preset:` preset kept, the nozzle or
+0.4, colours as `FilamentPalette.paletteSlotsFrom` normalizes them — `#`
+added, an alpha channel dropped — a project without filaments keeping the
+palette). `slicing::choices::{edit_slots, project_slots}` port them and
+`configuration_exchange::{slots_json, project_slots_json}` answer the
+browser's `filamentSlotsExchange` and `projectFilamentSlotsExchange`
+(catalog `slicing_slots`, captured `filament_slots`; JNI
+`catalogSlicingSlots`, `projectFilamentSlots`).
+
+`filament-assignment-vectors.mjs` drives the production module and the
+production controller: 36 selections over three states derived from the
+browser fixture (heads out of tool order, a disabled head and recipe,
+recipe names whose order differs between code units and any locale, every
+distribution mode, mixed materials, inherited and local assignments,
+non-ASCII and lone-surrogate names, fractional and 1e21 heights; 5 refused),
+18 choices (10 refused) and 16 malformed requests, and a 10-step journey
+over the state's canonical 3MF in which the controller's snapshot is the
+exchange's answer after every step and each assignment leaves its hash and
+undo label ("Assign filament", "Assign 3 scopes", nothing for a choice
+already made, a disabled destination refused), then 7 undos. The slot cases
+extend `slicing-configuration-vectors.mjs` (below): 96 slot edits (69
+edited, 23 unchanged, 4 refused at the limit) and 27 project slots, edited
+choices committed. Rust replays both; WASM in Node and a Chrome 150 worker
+and the JNI exports answer every reply ([36, 18, 15, 16] and 96 + 27).
+
 ### Printer policy
 
 `orcaxr-printer` holds Moonraker workflow policy shared by every host, with
@@ -5004,6 +5065,82 @@ copies and pastes, pastes with Ctrl+V, adds an instance, cuts it with Ctrl+X
 and pastes it back, and adds and undoes a modifier, each by its undo label; it
 passes on both emulators.
 
+### Android filaments
+
+The app lists and assigns the project's filaments as the browser's
+workspace does, through the shared core ([Filament assignment and filament
+slots](#filament-assignment-and-filament-slots)) — never a second filament
+list.
+
+The Prepare area shows the browser's Filament tab under its pickers
+(`FilamentList`): one row per filament slot of the project — its colour
+swatch, `H-n` for a printer head or `A-n` for an extra palette colour, the
+filament's name and type, a head's nozzle (the browser's 0.2/0.4/0.6/0.8)
+or an extra colour's Del — then "+" (described as the browser's "Add an
+auxiliary palette color (not a virtual recipe)") and the project's mixed
+filaments, read-only. A swatch opens a colour editor (the palette's colours
+or a typed `#rrggbb`, applied in lower case as the browser's colour input
+reports it). `ProjectView.filamentSlots` (`ProjectSnapshot.filamentSlots`,
+the slots the project's own physical filaments describe) and
+`ProjectView.filaments` (the assignment snapshot of the selection) are read
+with every project or selection effect. Each edit is
+`ProjectWorkspace.editFilamentSlots`: on the actor's authority it adopts the
+project's own slots (as the browser adopts an opened project's), applies the
+browser's edit and stages the live configuration as one undoable "Update
+slicing configuration"; a seventeenth slot is refused in the browser's words
+(shown under the pickers), a head's slot is never removed. Adopting first is
+deliberate: the browser's workspace keeps its palette beside the project and
+does not follow undo, so after undoing an added slot its next colour edit
+brings the slot back — a browser defect not fixed here (its palette, head
+presets and nozzles would have to follow history navigation without
+committing a new step); the app never resurrects a slot. The Prepare pickers
+follow the project's slots too (`SlicingProfiles.follow` on each change, so
+undo and redo move them), choices start from the project's slots, an opened
+or restored project's filaments become the slots a later choice starts from
+(the browser's open; before this the app kept its previous palette), and
+each extra slot has its own "Palette filament n" picker beside the heads',
+as the browser's heads panel. Edits wait for a chosen profile: the browser
+commits none for a project that slices as authored.
+
+The Project area shows the browser's selection filament bar under the tree
+(`SelectionFilamentBar`), only while the selection can take a filament and
+holds nothing that cannot: the one scope's label or "n selected", a chip per
+head and mixed filament (swatch, head number or M, name; described "Head n ·
+name" with its warnings; the choice every scope shares pressed; disabled ones
+not pressable) and "Default", which removes the local assignment. A press is
+`ProjectWorkspace.assignFilament`: planned on the authority from the
+session's whole selection — the core resolves the scopes and the
+assignments, refusing as the browser's controller does — and executed as
+one `setFilamentAssignments` under that state's guard, labelled by the core
+("Assign filament", "Assign n scopes"); the bar then says "<name> assigned",
+"Local assignment removed" or the refusal. Tree rows show the Objects
+panel's indicators (not printable, a part's role, the filament — "(mixed)",
+"(inherited)" — with its swatch, painted facets, custom settings). The
+browser binds no shortcut to assignment: its digit keys pick the paint
+filament, which belongs to painting.
+
+`ProjectFilamentChecks` (76 checks over JNI) open the assignment corpus's
+3MF in a `ProjectWorkspace` with the browser's hash and replay its journey —
+each selection's snapshot equal to the browser's, each assignment's hash and
+undo label (or refusal), the tree's physical and mixed badges, every undo —
+then, on a cube configured with the catalog's default profile, add a slot
+(grey PLA, the profile's filament), refuse a head's removal, undo and
+recolour without bringing the slot back, change a nozzle, remove an extra
+slot, fill sixteen and refuse the seventeenth, and assign the cube to the
+last slot (its row's badge, one step, undone). `ProjectSlicingConfigurationChecks`
+replay the slot edits and project slots through the Kotlin wrapper;
+`FilamentsTest` (app JVM, 6 tests) covers the rows' labels, the bar's
+visibility, chips, shared choice and status, the tree's indicators and
+colour parsing. `android-filament-smoke.py` (run by `emulator-smoke.py`
+before the adaptive smoke) adds a cube, adds a fifth slot in Prepare (A-5
+and its picker), selects the cube with Select All, assigns it from the bar's
+"Head 5" chip ("Undo Assign filament", the filament under the cube's row),
+undoes it (the row shows none) and recolours the new slot from its swatch;
+it has not run on an emulator yet. Not yet done: the browser's mixed
+(virtual) filament library — adding, editing, duplicating, enabling and
+removing recipes — and its inspector selector's height-range scopes in a
+panel of their own (the bar assigns ranges selected in the tree).
+
 ### Android Preview area
 
 The Preview area is the browser's "Open G-code Viewer…" (`file_open_gcode`)
@@ -5069,7 +5206,7 @@ with them while the pickers say so. Its first run
 found the client's stale keep-alive connection (above) and a server defect:
 results in a temporary directory under a dot directory were never delivered
 ([runtime and deployment](runtime-and-deployment.md)). Not yet matched: local slicing,
-the palette's further colours (the browser's Filament tab), the wave-overhang engine check,
+the wave-overhang engine check,
 preflight actions (reveal, drop to bed), troubleshooting text, slicing all
 plates, and the shared artifact summary (layers are the browser's fallback
 count).
@@ -5950,20 +6087,23 @@ qualifier, ambiguous filament types, odd nozzle lists): 80 choice lists, 46
 matches (Final_Sigma, `İ`, `ß`, `ﬀ`, the Kelvin sign, lone surrogates,
 ambiguity), 46 selections by ID, name and default (unknown printers,
 processes and filaments, substitutions, wider and narrower palettes, a stale
-profile), 58 configurations against eight states (model-corpus states with
+profile), 72 configurations against nine states (model-corpus states with
 unknown members, lone surrogates and `__proto__` keys, overrides, a wipe
-tower on a dropped tool, a mixed filament on a dropped tool) — 46
-configured, 9 orphaned, 3 without a profile — and 119 next states under
-every auto-pair policy (101 changed, 10 unchanged, 2 invalid, 3 auto-pair
-refusals, 3 exhausted words), fed forward as a host feeds them, plus 32
-session commits and 14 malformed requests. Large replies are pinned by the
+tower on a dropped tool, a mixed filament on a dropped tool, physical
+filaments out of tool order with odd colours and nozzles) — 60
+configured, 9 orphaned, 3 without a profile — and 133 next states under
+every auto-pair policy (115 changed, 10 unchanged, 2 invalid, 3 auto-pair
+refusals, 3 exhausted words), fed forward as a host feeds them, plus the
+Filament tab's 96 slot edits and 27 project slots ([above](#filament-assignment-and-filament-slots)),
+46 session commits and 27 malformed requests. Large replies are pinned by the
 SHA-256 of their text. Rust replays all of it, committing on real sessions
 with undo; WASM in Node and a Chrome 150 worker and the JNI exports answer
-349 replies and 14 refusals and commit 29 live choices (undone each time);
+377 replies and 27 refusals, commit 43 live choices (undone each time) and
+answer every slot edit and project's slots;
 the Kotlin wrapper (`ProfileCatalog.slicingChoices`, `selectPresets`,
-`selectByNames`, `defaultSelection`, `slicingConfiguration`;
+`selectByNames`, `defaultSelection`, `slicingConfiguration`, `editSlots`;
 `SlicingConfigurations.match`, `nextState`, `words`;
-`ProjectSession.stageSlicingConfiguration`) passes 412 checks, including that
+`ProjectSession.stageSlicingConfiguration`, `ProjectSnapshot.filamentSlots`) passes 591 checks, including that
 `LiveSlicingChoice.EMPTY` selects the browser's default. Porting found two
 browser defects, fixed with regression tests: a slot with neither a preset
 nor a name recorded `presetId: undefined`, so the canonical comparison threw
@@ -6356,6 +6496,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/worksp
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/transform-field-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/placement-edit-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/primitive-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/filament-assignment-vectors.mjs
 node tools/cross-platform/generate-bbs-filament-keys.mjs
 node web/scripts/run-tests.mjs opc-lowercase.test.ts
 node tools/cross-platform/canonical-requests.mjs
