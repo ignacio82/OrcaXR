@@ -81,7 +81,6 @@ import { matchFlowPatches } from '../project/calibration/resourceObjects';
  * are non-print options and they do not behave alike.
  */
 const RANGE_INERT_KEYS = new Set(['nozzle_temperature']);
-import { facetAnnotationsHaveAssignments } from '../project/domain/facetRefinement';
 import type { EmbossTextConfiguration, EmbossedMesh, GlyphOutlineSource } from '../project/objects/emboss';
 import type { EmbossSvgPart } from '../project/domain/model';
 import { prepareSvgPart, svgPartName, svgVolumeIdentity, type PreparedSvgPart } from '../project/objects/svgCommands';
@@ -245,6 +244,7 @@ import {
 import { MagnetOp, MagnetShape, type MagnetSpec } from '../features/MagnetOp';
 import type { PreparedVolumeSplitPart } from '../project/objects/splitCommands';
 import { prepareVolumeSplit, type PreparedVolumeSplit } from '../project/objects/volumeSplitExchange';
+import { assertSplitToObjectsSource, splitSourceOf } from './SplitSource';
 import { prepareVolumeSimplify } from '../project/objects/simplifyExchange';
 import { BrimEarRefusal, objectModelMesh, type ObjectModelMesh } from '../project/objects/brimEarExchange';
 import {
@@ -335,7 +335,6 @@ const MAX_UI_NAME_LENGTH = 160;
 const MAX_PLATE_NAME_LENGTH = 120;
 const MAX_FILENAME_LENGTH = 255;
 const MAX_GESTURE_ID_LENGTH = 96;
-const CORE_FACET_ATTRIBUTES_KEY = 'https://orcaxr.martinez.fyi/3mf/project/1/core-facet-attributes';
 
 /**
  * Residual browser limitation: connected-component discovery is synchronous.
@@ -528,17 +527,7 @@ export class StaleCanonicalSplitToObjectsError extends Error {
   }
 }
 
-export class CanonicalSplitToObjectsTriangleLimitError extends Error {
-  constructor(
-    readonly triangleCount: number,
-    readonly limit: number,
-  ) {
-    super(
-      `Split to Objects is limited to ${limit.toLocaleString('en-US')} triangles while connected-component analysis remains synchronous; this model has ${triangleCount.toLocaleString('en-US')}`,
-    );
-    this.name = 'CanonicalSplitToObjectsTriangleLimitError';
-  }
-}
+export { CanonicalSplitToObjectsTriangleLimitError } from './SplitSource';
 
 export type CanonicalObjectEntityRef = ObjectTreeEntityRef;
 
@@ -3074,24 +3063,21 @@ export class CanonicalWorkspaceController {
     if (primary?.kind !== 'instance') {
       throw new Error('Split to Objects requires a primary selected model instance');
     }
-    const found = findInstance(project.state, primary.id);
-    if (!found) throw new Error(`Selected instance ${primary.id} is no longer in the canonical project`);
-    assertSplitToObjectsSource(found.object, this.splitToObjectsSynchronousTriangleLimit);
-    const strategy = found.object.volumes.length > 1 ? 'existing-volumes' : 'connected-components';
+    const source = splitSourceOf(project.state, primary.id, 'objects', this.splitToObjectsSynchronousTriangleLimit);
     return deepFreeze({
       guard: {
         expectedRevision: project.revision,
         sourceHash: project.hash,
         selectionFingerprint: canonicalStringify(selection),
-        plateId: found.plate.id,
-        objectId: found.object.id,
+        plateId: source.plateId,
+        objectId: source.objectId,
         primaryInstanceId: primary.id,
       },
-      objectName: found.object.name,
-      strategy,
-      volumeCount: found.object.volumes.length,
-      triangleCount: found.object.volumes.reduce((total, volume) => total + volume.source.triangleCount, 0),
-      affectedInstanceIds: found.object.instances.map((instance) => instance.id),
+      objectName: source.objectName,
+      strategy: source.strategy,
+      volumeCount: source.volumeIds.length,
+      triangleCount: source.triangleCount,
+      affectedInstanceIds: [...source.instanceIds],
     });
   }
 
@@ -3189,18 +3175,8 @@ export class CanonicalWorkspaceController {
     if (primary?.kind !== 'instance') {
       throw new Error('Split to Parts requires an instance selection');
     }
-    const found = findInstance(project.state, primary.id);
-    if (!found) {
-      throw new Error(`Selected instance ${primary.id} not found`);
-    }
-    const sourceObject = found.object;
-    assertSplitToObjectsSource(sourceObject, this.splitToObjectsSynchronousTriangleLimit);
-
-    if (sourceObject.volumes.length !== 1) {
-      throw new Error(`Object "${sourceObject.name}" already has ${sourceObject.volumes.length} parts`);
-    }
-
-    const split = prepareVolumeSplit(project.state, this.assets, sourceObject.volumes[0].id);
+    const source = splitSourceOf(project.state, primary.id, 'parts', this.splitToObjectsSynchronousTriangleLimit);
+    const split = prepareVolumeSplit(project.state, this.assets, source.volumeIds[0]);
     const { volumeIds, assetIds } = this.drawVolumeSplitIds(split);
     const parts = split.parts(project.state, this.assets, volumeIds, assetIds);
     await this.sessionTransport.executeStaged(split.work(parts, undefined, MESH_INPUT_LIMITS), {
@@ -3208,7 +3184,7 @@ export class CanonicalWorkspaceController {
     });
     return {
       partCount: parts.length,
-      objectName: sourceObject.name,
+      objectName: source.objectName,
     };
   }
 
@@ -4797,38 +4773,6 @@ export class CanonicalWorkspaceController {
 
   private assertActive(): void {
     if (this.disposed) throw new Error('CanonicalWorkspaceController is disposed');
-  }
-}
-
-function assertSplitToObjectsSource(object: ProjectObject, synchronousTriangleLimit: number): void {
-  if (object.volumes.length === 0) throw new Error('Split to Objects requires at least one model volume');
-  if (object.volumes.some((volume) => volume.role !== 'model')) {
-    throw new Error('Split to Objects cannot discard modifier, negative, support-enforcer, or support-blocker volumes');
-  }
-  if (object.volumes.some((volume) => volume.source.triangleCount < 3)) {
-    throw new Error('Split to Objects cannot preserve volumes or connected components below three facets');
-  }
-  if (object.layerRanges.length > 0) {
-    throw new Error('Split to Objects requires an explicit layer-range distribution before promotion');
-  }
-  if (object.extensionData && Object.keys(object.extensionData).length > 0) {
-    throw new Error('Split to Objects requires an explicit object-extension distribution before promotion');
-  }
-  if (object.volumes.length !== 1) return;
-
-  const volume = object.volumes[0];
-  if (volume.source.triangleCount > synchronousTriangleLimit) {
-    throw new CanonicalSplitToObjectsTriangleLimitError(volume.source.triangleCount, synchronousTriangleLimit);
-  }
-  if (facetAnnotationsHaveAssignments(volume.annotations)) {
-    throw new Error(
-      'Split to Objects cannot yet remap painted facet annotations onto connected components; clear or preserve them explicitly first',
-    );
-  }
-  if (Object.prototype.hasOwnProperty.call(volume.extensionData ?? {}, CORE_FACET_ATTRIBUTES_KEY)) {
-    throw new Error(
-      'Split to Objects cannot preserve opaque triangle-indexed 3MF extension metadata without an explicit facet map',
-    );
   }
 }
 

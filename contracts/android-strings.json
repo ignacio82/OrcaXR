@@ -220,7 +220,39 @@
     },
     "vf_delete_description": {
       "key": "ui.virtualFilamentLibrary.deletionIsSentAsOne"
-    }
+    },
+    "project_split_to_objects": { "key": "action.split_to_objects.label" },
+    "project_split_to_parts": { "key": "action.split_to_parts.label" },
+    "project_simplify_model": { "key": "action.simplify_model.label" },
+    "project_measure": { "key": "action.tool_measure.label" },
+    "project_split_parts_done": {
+      "key": "workspace.orcaWorkspace.splitToPartsSuccess"
+    },
+    "project_split_parts_failed": {
+      "key": "workspace.orcaWorkspace.splitToPartsFailed"
+    },
+    "simplify_decimate_by": { "key": "ui.simplifyPanel.decimateBy" },
+    "simplify_apply": { "key": "ui.xrKeypad.apply" },
+    "simplify_select_model": {
+      "key": "ui.simplifyPanel.selectAModelToSimplify"
+    },
+    "simplify_preview_hint": {
+      "key": "ui.simplifyPanel.previewShowsTheResultOn"
+    },
+    "simplify_nothing_at_ratio": {
+      "key": "workspace.orcaWorkspace.nothingToSimplifyAtThat"
+    },
+    "simplify_no_preview": {
+      "key": "workspace.orcaWorkspace.thereIsNoSimplifyPreview"
+    },
+    "measure_start": {
+      "key": "workspace.orcaWorkspace.measureClickTwoFeaturesA"
+    },
+    "measure_cleared": { "key": "workspace.orcaWorkspace.measurementCleared" },
+    "measure_missed": {
+      "key": "workspace.orcaWorkspace.clickAModelSurfaceTo"
+    },
+    "measure_picked_features": { "key": "ui.measurePanel.pickedFeatures" }
   },
   "english": [
     "app_name",
@@ -445,7 +477,24 @@
     "vf_delete_title",
     "vf_dependency_review",
     "vf_no_dependencies",
-    "vf_delete_confirm"
+    "vf_delete_confirm",
+    "simplify_title",
+    "simplify_by_count",
+    "simplify_by_error",
+    "simplify_remove",
+    "simplify_max_error",
+    "simplify_preview",
+    "measure_first",
+    "measure_second",
+    "measure_next",
+    "measure_choose",
+    "measure_distance",
+    "measure_distance_infinite",
+    "measure_xyz",
+    "measure_angle",
+    "measure_diameter",
+    "measure_unsupported",
+    "measure_clear"
   ],
   "kotlin": [
     {
@@ -641,6 +690,11 @@
       "text": "Plate",
       "key": "ui.xrToolRail.group.plate",
       "reason": "The send dialog's Plate fact is not the XR tool rail's Plate group, whose upstream translations name an action (de: Aktuelle Platte drucken, print the current plate)."
+    },
+    {
+      "resource": "simplify_preview",
+      "key": "ui.workspaceViews.preview",
+      "reason": "The Simplify panel's Preview decimates the model to show the result (a verb); the browser's Preview messages name the G-code Preview area and its mode."
     }
   ]
 }

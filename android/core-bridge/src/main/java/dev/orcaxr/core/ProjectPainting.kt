@@ -28,7 +28,6 @@ data class PaintEraseAll(val volumes: Int, val cleared: Int)
  */
 class ProjectPainter(private val workspace: ProjectWorkspace) {
     private fun units(text: String) = text.map { it.code }
-    private fun text(units: List<Int>) = String(CharArray(units.size) { units[it].toChar() })
 
     /** The painting palette as the paint panel lists it (`getPaintPalette(true)`): disabled recipes included as unselectable rows. */
     fun palette(): CompletableFuture<ProjectIntents.PaintPalette> = workspace.inspect { session ->
@@ -130,29 +129,11 @@ class ProjectPainter(private val workspace: ProjectWorkspace) {
      * object or instance is selected — the browser's
      * `paintableSelectedVolumes`, which took every part on the plate while an
      * instance was selected and tried to erase helper volumes, which cannot be
-     * painted (both fixed there too).
+     * painted (both fixed there too). The rule is
+     * [ProjectFacts.selectedModelParts], which Simplify takes as well.
      */
-    private fun paintable(session: ProjectSession, snapshot: ProjectSnapshot): List<Part> {
-        val refs = workspace.whole(session).refs
-        val parts = refs.filterIsInstance<ProjectIntents.SelectionEntity.Volume>().map { text(it.value) }.toSet()
-        val objects = refs.filterIsInstance<ProjectIntents.SelectionEntity.Object>().map { text(it.value) }.toMutableSet()
-        val instances = refs.filterIsInstance<ProjectIntents.SelectionEntity.Instance>().map { text(it.value) }.toSet()
-        return snapshot.query().use { root ->
-            val plate = ProjectFacts.plates(root).firstOrNull { it.active } ?: return@use emptyList()
-            val placed = ProjectFacts.instances(root, plate.id)
-            placed.filter { it.id in instances }.forEach { objects += it.objectId }
-            val everything = parts.isEmpty() && objects.isEmpty()
-            val found = LinkedHashMap<String, Part>()
-            val read = HashSet<String>()
-            for (instance in placed) {
-                if (!read.add(instance.objectId)) continue
-                for (part in parts(root, instance.objectId)) {
-                    if (everything || part.id in parts || instance.objectId in objects) found.putIfAbsent(part.id, part)
-                }
-            }
-            found.values.toList()
-        }
-    }
+    private fun paintable(session: ProjectSession, snapshot: ProjectSnapshot): List<String> =
+        snapshot.query().use { root -> ProjectFacts.selectedModelParts(root, workspace.whole(session).refs).map { it.id } }
 
     /**
      * Erase all painting (`paint_erase_all`) of [channel] on the model parts
@@ -163,7 +144,7 @@ class ProjectPainter(private val workspace: ProjectWorkspace) {
      * nothing.
      */
     fun eraseAll(channel: PaintChannel): CompletableFuture<PaintEraseAll?> =
-        workspace.inspect { session -> session.snapshot().use { snapshot -> paintable(session, snapshot).map { it.id } } }
+        workspace.inspect { session -> session.snapshot().use { snapshot -> paintable(session, snapshot) } }
             .thenCompose { volumes ->
                 if (volumes.isEmpty()) return@thenCompose CompletableFuture.completedFuture(null)
                 var chain: CompletableFuture<Int> = CompletableFuture.completedFuture(0)

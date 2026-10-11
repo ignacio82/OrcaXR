@@ -4,6 +4,7 @@ mod annotations;
 mod graph;
 mod mixed;
 mod report;
+pub(crate) use annotations::has_assignments;
 pub use graph::validate_project;
 pub use report::*;
 pub mod timestamp;

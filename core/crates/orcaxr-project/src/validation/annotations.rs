@@ -18,7 +18,9 @@ fn channels(a: &FacetAnnotations) -> [(Channel, &Value); 5] {
         (Channel::Brim, a.brim.value()),
     ]
 }
-pub(super) fn has_assignments(a: &FacetAnnotations) -> bool {
+/// `facetAnnotationsHaveAssignments`: any channel holds an assignment, or the
+/// dense refinement holds a root.
+pub(crate) fn has_assignments(a: &FacetAnnotations) -> bool {
     channels(a)
         .iter()
         .any(|(_, value)| matches!(value, Value::Array(a) if !a.is_empty()))

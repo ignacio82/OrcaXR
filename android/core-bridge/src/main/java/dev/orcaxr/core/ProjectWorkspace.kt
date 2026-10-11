@@ -194,10 +194,25 @@ class ProjectWorkspace(
          */
         val PAINT_TOOLBAR_ACTIONS = PaintChannel.entries.map { it.toolAction }
         val PAINT_INSPECTOR_ACTIONS = listOf("paint_erase_all") + (1..9).map { "paint_select_filament_$it" }
-        /** The capability host facts of the Android shell: the flat (non-XR) workspace, preparing, without a printer job; [clipboard] while a copy is held. */
-        private fun host(clipboard: Boolean) = ProjectIntents.CapabilityHostState(
+        /**
+         * The model tools the Project area offers where the browser does: its
+         * menu's split and simplify (`dom-menu`; split and simplify are also
+         * an object's context actions), its toolbar's Measure (`dom-toolbar`)
+         * and the Simplify and Measure panels' controls (`dom-inspector`).
+         */
+        val MODEL_TOOL_MENU_ACTIONS = listOf("split_to_objects", "split_to_parts", "simplify_model")
+        val MODEL_TOOL_TOOLBAR_ACTIONS = listOf("tool_measure")
+        val MODEL_TOOL_INSPECTOR_ACTIONS = listOf("simplify_preview", "simplify_apply", "simplify_cancel", "measure_clear")
+        /** The browser's words for a Split to Objects whose confirmation no longer describes the project (`StaleCanonicalSplitToObjectsError`). */
+        const val STALE_SPLIT = "Split to Objects confirmation is stale; reselect the model and review the affected instances again"
+        /** The quadric error a one-shot Simplify allows (`SIMPLIFY_DEFAULT_MAX_ERROR`). */
+        const val SIMPLIFY_DEFAULT_MAX_ERROR = 1.0
+        /** Measure captures kept, by mesh asset; an asset ID names immutable bytes, so none goes stale. */
+        private const val MEASURE_CAPTURES = 8
+        /** The capability host facts of the Android shell: the flat (non-XR) workspace, preparing, without a printer job; [clipboard] while a copy is held, [previewing] while a simplify preview is shown. */
+        private fun host(clipboard: Boolean, previewing: Boolean) = ProjectIntents.CapabilityHostState(
             ProjectIntents.OptionalStartupSnapshot.Absent(ProjectIntents.Empty), ProjectIntents.WorkspaceMode.Prepare,
-            simplifyPreviewing = false, calibrationSessionOpen = false, projectionHealthy = true, hasClipboard = clipboard,
+            simplifyPreviewing = previewing, calibrationSessionOpen = false, projectionHealthy = true, hasClipboard = clipboard,
             isSlicing = false, gcodeReady = false, preflightBlocked = false, printerJobState = ProjectIntents.PrinterJobUiState.Disconnected,
         )
         private const val MAX_PLATES = 4096L
@@ -427,7 +442,7 @@ class ProjectWorkspace(
         val request = actor.inspect { session ->
             actionsQueued.set(false)
             fun page(surface: ProjectIntents.ActionSurface, query: ProjectIntents.CapabilityQuery) =
-                session.capabilities(ProjectIntents.CapabilityRequest(surface, host(clipboard != null), query)).actions.map { action ->
+                session.capabilities(ProjectIntents.CapabilityRequest(surface, host(clipboard != null, simplifyPreview != null), query)).actions.map { action ->
                     val availability = action.availability
                     val reason = (availability as? ProjectIntents.ActionAvailability.Disabled)?.value?.text
                         ?: (availability as? ProjectIntents.ActionAvailability.Hidden)?.value?.text
@@ -444,7 +459,10 @@ class ProjectWorkspace(
                 actions(ProjectIntents.ActionSurface.DomInspector, TRANSFORM_ACTIONS)
             val painting = actions(ProjectIntents.ActionSurface.DomToolbar, PAINT_TOOLBAR_ACTIONS) +
                 actions(ProjectIntents.ActionSurface.DomInspector, PAINT_INSPECTOR_ACTIONS)
-            Triple((all + placement + painting).associateBy { it.id }, context(ProjectIntents.ActionContextTarget.Object), context(ProjectIntents.ActionContextTarget.Plate))
+            val tools = actions(ProjectIntents.ActionSurface.DomMenu, MODEL_TOOL_MENU_ACTIONS) +
+                actions(ProjectIntents.ActionSurface.DomToolbar, MODEL_TOOL_TOOLBAR_ACTIONS) +
+                actions(ProjectIntents.ActionSurface.DomInspector, MODEL_TOOL_INSPECTOR_ACTIONS)
+            Triple((all + placement + painting + tools).associateBy { it.id }, context(ProjectIntents.ActionContextTarget.Object), context(ProjectIntents.ActionContextTarget.Plate))
         }
         request.completion.whenComplete { outcome, _ ->
             @Suppress("UNCHECKED_CAST")
@@ -1864,8 +1882,445 @@ class ProjectWorkspace(
         }
     }
 
+    // ---- Model tools: split, simplify and measure, as the browser's workspace runs them ----
+    // Split to Objects and Split to Parts (CanonicalWorkspaceController's splitSelectedToObjects
+    // and splitSelectedToParts, behind CanonicalSplitToObjectsFlow), the Simplify panel's preview,
+    // apply and cancel and the menu's one-shot Simplify (OrcaWorkspace.previewSimplify,
+    // applySimplifyPreview, cancelSimplifyPreview, simplifySelected) and the Measure tool's picks
+    // (pickMeasureFeature), each through the shared core: what a split would split
+    // (`split::source`), its components (`split`), the decimation (`simplify`) and the features
+    // and measurement (`measure`). Each edit is one guarded step with the core's label: "Split to
+    // objects", "Split volume to parts", and "Replace mesh topology" for each simplified part.
+
+    /** A step staged on the authority: true once it committed, false when the plan staged nothing; a refusal fails in the browser's words. */
+    private fun stagedStep(result: ProjectOutcome): Boolean = when (result) {
+        ProjectOutcome.NothingToDo -> false
+        is ProjectOutcome.Completed -> when (val reply = result.reply.result) {
+            is ProjectIntents.SessionResult.Acknowledged, is ProjectIntents.SessionResult.ReceiptUnavailable -> true
+            is ProjectIntents.SessionResult.Error -> throw refusedBy(reply.value)
+            else -> throw failure(result, null)
+        }
+        else -> throw failure(result, null)
+    }
+
+    /** The primary selected instance, or the browser's refusal in [words]. */
+    private fun primaryInstance(selection: ProjectSelectionView, words: String): String =
+        (selection.primary as? ProjectIntents.SelectionEntity.Instance)?.value?.let(::text) ?: throw ProjectFailure(words)
+
+    /** [target]'s source for [instanceId] in [snapshot], or its refusal in the browser's words. */
+    private fun splitSource(snapshot: ProjectSnapshot, instanceId: String, target: SplitTarget): SplitSource =
+        when (val found = snapshot.splitSource(instanceId, target)) {
+            is SplitSourceResult.Refused -> throw ProjectFailure(found.message)
+            is SplitSourceResult.Found -> found.source
+        }
+
+    /** A volume's split prepared on [session]'s current state: the handle and its parts, or the core's refusal (the handle closed). */
+    private fun prepareSplit(session: ProjectSession, volumeId: String): Pair<ProjectVolumeSplit, ProjectIntents.VolumeSplitPreview> {
+        val split = session.captureGuard().use { guard -> session.volumeSplit(guard, ProjectIntents.VolumeSplitRequest(units(volumeId))) }
+        try {
+            return when (val reply = split.reply()) {
+                is ProjectIntents.VolumeSplitReply.Refused -> throw ProjectFailure(text(reply.value.message))
+                is ProjectIntents.VolumeSplitReply.Prepared -> split to reply.value
+            }
+        } catch (failure: Throwable) {
+            split.close()
+            throw failure
+        }
+    }
+
+    /** One volume ID per part and one asset ID per distinct geometry, drawn in part order as each geometry first appears (`drawVolumeSplitIds`). */
+    private fun drawSplitIds(preview: ProjectIntents.VolumeSplitPreview): Pair<List<String>, List<String>> {
+        val volumeIds = ArrayList<String>()
+        val assetIds = ArrayList<String>()
+        for (part in preview.parts) {
+            if (part.geometry == assetIds.size.toLong()) assetIds += ids.next()
+            volumeIds += ids.next()
+        }
+        return volumeIds to assetIds
+    }
+
+    /** An object per volume, each with fresh instances for all [instances] of the source (`allocateSeparatedObjectIdentities`). */
+    private fun separated(volumeIds: List<String>, instances: Int): List<ProjectIntents.SeparatedObject> = volumeIds.map { volumeId ->
+        ProjectIntents.SeparatedObject(units(volumeId), units(ids.next()), ids.next(instances).map(::units))
+    }
+
+    /** A split prepared on the authority, staged and executed there as one step; the prepared split is closed either way. */
+    private fun <T> stageSplit(split: ProjectVolumeSplit, stage: ProjectIntents.VolumeSplitStage, result: T): CompletableFuture<T> =
+        outcome(actor.stage { session, _ -> session.stageVolumeSplit(split, stage) })
+            .whenComplete { _, _ -> split.close() }
+            .thenApply { outcome ->
+                stagedStep(outcome)
+                result
+            }
+
+    /** A split planned on the authority: the existing volumes' promotion as an intent, or prepared components to stage. */
+    private sealed interface SplitPlan<T> {
+        class Promote<T>(val edit: Edit<T>, val guard: ProjectIntents.SessionGuard) : SplitPlan<T>
+        class Components<T>(val split: ProjectVolumeSplit, val stage: ProjectIntents.VolumeSplitStage, val result: T) : SplitPlan<T>
+    }
+
+    /** Plans a split on the authority with [plan], then commits it: an intent under the planned state's guard, or the staged components. */
+    private fun <T> split(plan: (ProjectSession) -> SplitPlan<T>): CompletableFuture<T> = refreshed(
+        outcome(actor.inspect(plan)).thenCompose { result ->
+            @Suppress("UNCHECKED_CAST")
+            when (val planned = ((result as? ProjectOutcome.Inspected) ?: throw failure(result, null)).result.getOrThrow() as SplitPlan<T>) {
+                is SplitPlan.Promote -> commit(planned.guard, planned.edit)
+                is SplitPlan.Components -> stageSplit(planned.split, planned.stage, planned.result)
+            }
+        },
+    )
+
+    /**
+     * What Split to Objects will replace, for the operator to confirm (the
+     * browser's `getSplitToObjectsConfirmation`): the object of the primary
+     * selected instance, how it splits — its volumes promoted, or its one
+     * volume separated by connected body —, its triangles and the instances
+     * the split replaces. A selection without a primary instance, or an
+     * object the workspace would not split, fails in the browser's words.
+     */
+    fun splitToObjectsConfirmation(): CompletableFuture<SplitConfirmation> = inspect { session ->
+        val selection = whole(session)
+        val instanceId = primaryInstance(selection, "Split to Objects requires a primary selected model instance")
+        session.snapshot().use { snapshot ->
+            val source = splitSource(snapshot, instanceId, SplitTarget.OBJECTS)
+            SplitConfirmation(
+                source.objectName, source.strategy, source.volumeIds.size, source.triangleCount, source.instanceIds,
+                snapshot.revision(), snapshot.hash(), selection, source.plateId, source.objectId, instanceId,
+            )
+        }
+    }
+
+    /**
+     * Split to Objects of a [confirmation] the operator accepted (the
+     * browser's `splitSelectedToObjects`), as one undoable "Split to
+     * objects": the object's volumes promoted to objects of their own
+     * (`separateObjectVolumes`), or its one volume's connected bodies staged
+     * as objects, each with an instance for every instance of the source.
+     * The project or the selection having changed since refuses it as stale;
+     * a source the workspace would not split fails in the browser's words.
+     */
+    fun splitSelectedToObjects(confirmation: SplitConfirmation): CompletableFuture<SplitToObjectsResult> = split { session ->
+        session.snapshot().use { snapshot ->
+            val selection = whole(session)
+            val primary = (selection.primary as? ProjectIntents.SelectionEntity.Instance)?.value?.let(::text)
+            if (snapshot.revision() != confirmation.revision || snapshot.hash() != confirmation.hash ||
+                selection != confirmation.selection || primary != confirmation.primaryInstanceId
+            ) {
+                throw ProjectFailure(STALE_SPLIT)
+            }
+            val source = splitSource(snapshot, confirmation.primaryInstanceId, SplitTarget.OBJECTS)
+            if (source.plateId != confirmation.plateId || source.objectId != confirmation.objectId) throw ProjectFailure(STALE_SPLIT)
+            fun result(identities: List<ProjectIntents.SeparatedObject>) =
+                SplitToObjectsResult(identities.map { text(it.objectId) }, identities.flatMap { it.instanceIds.map(::text) })
+            if (source.volumeIds.size > 1) {
+                val identities = separated(source.volumeIds, source.instanceIds.size)
+                val command = ProjectIntents.Command.SeparateObjectVolumes(
+                    ProjectIntents.SeparateObjectVolumes(
+                        ProjectIntents.SettingsGuard(snapshot.revision(), units(snapshot.hash())), units(source.objectId), identities,
+                    ),
+                )
+                SplitPlan.Promote(Edit(listOf(command), result(identities)), guardOf(session, snapshot))
+            } else {
+                val (prepared, preview) = prepareSplit(session, source.volumeIds.single())
+                try {
+                    val (volumeIds, assetIds) = drawSplitIds(preview)
+                    val identities = separated(volumeIds, source.instanceIds.size)
+                    val stage = ProjectIntents.VolumeSplitStage(
+                        volumeIds.map(::units), assetIds.map(::units), ProjectIntents.OptionalSeparatedObjects.Value(identities),
+                    )
+                    SplitPlan.Components(prepared, stage, result(identities))
+                } catch (failure: Throwable) {
+                    prepared.close()
+                    throw failure
+                }
+            }
+        }
+    }
+
+    /**
+     * Split to Parts of the primary selected instance's object (the browser's
+     * `splitSelectedToParts`): its one volume's connected bodies staged as
+     * parts of the same object, one undoable "Split volume to parts". A
+     * selection without a primary instance, an object that already has parts
+     * or one the workspace would not split fails in the browser's words.
+     */
+    fun splitSelectedToParts(): CompletableFuture<SplitToPartsResult> = split { session ->
+        val instanceId = primaryInstance(whole(session), "Split to Parts requires an instance selection")
+        val source = session.snapshot().use { splitSource(it, instanceId, SplitTarget.PARTS) }
+        val (prepared, preview) = prepareSplit(session, source.volumeIds.single())
+        try {
+            val (volumeIds, assetIds) = drawSplitIds(preview)
+            val stage = ProjectIntents.VolumeSplitStage(
+                volumeIds.map(::units), assetIds.map(::units), ProjectIntents.OptionalSeparatedObjects.Absent(ProjectIntents.Empty),
+            )
+            SplitPlan.Components(prepared, stage, SplitToPartsResult(preview.parts.size, source.objectName))
+        } catch (failure: Throwable) {
+            prepared.close()
+            throw failure
+        }
+    }
+
+    /** The simplify preview shown, until it is applied or cancelled (the browser's `simplifyPreview`). */
+    @Volatile var simplifyPreview: SimplifyPreview? = null
+        private set
+
+    /** Shows [preview] (or none) in place of [expected] and reads the actions that enables (Apply, Cancel); false when another was shown meanwhile. */
+    private fun showPreview(preview: SimplifyPreview?, expected: SimplifyPreview?): Boolean {
+        synchronized(lock) {
+            if (simplifyPreview !== expected) return false
+            simplifyPreview = preview
+        }
+        if (expected !== preview) expected?.parts?.forEach(SimplifyPart::release)
+        refreshActions()
+        return true
+    }
+
+    /** The volumes the workspace's Simplify takes: the model parts the selection paints ([ProjectFacts.selectedModelParts]). */
+    private fun simplifyTargets(session: ProjectSession, root: ProjectQueryNode): List<VolumeFacts> =
+        ProjectFacts.selectedModelParts(root, whole(session).refs)
+
+    private fun simplifyRequest(volumeId: String, configuration: SimplifyConfiguration) =
+        ProjectIntents.VolumeSimplifyRequest(units(volumeId), configuration.useCount, configuration.decimateRatio, configuration.maxError)
+
+    /**
+     * The Simplify panel's Preview (`previewSimplify`): every part the
+     * selection simplifies decimated with [configuration] and shown, nothing
+     * installed — the preview before dropped. Answers the preview, nothing
+     * selected, or nothing to simplify (no part would lose a triangle); a part
+     * the workspace cannot simplify fails in the browser's words.
+     */
+    fun previewSimplify(configuration: SimplifyConfiguration): CompletableFuture<SimplifyPreviewResult> {
+        cancelSimplifyPreview()
+        return inspect { session ->
+            session.snapshot().use { snapshot ->
+                val targets = snapshot.query().use { root -> simplifyTargets(session, root) }
+                if (targets.isEmpty()) return@inspect SimplifyPreviewResult.NothingSelected
+                val revision = snapshot.revision()
+                val parts = ArrayList<SimplifyPart>()
+                try {
+                    session.captureGuard().use { guard ->
+                        for (volume in targets) {
+                            val run = session.volumeSimplify(guard, simplifyRequest(volume.id, configuration))
+                            when (val reply = run.reply()) {
+                                is ProjectIntents.VolumeSimplifyReply.Prepared -> parts += SimplifyPart(
+                                    volume.id, reply.value.beforeTriangles, reply.value.afterTriangles, reply.value.vertexCount,
+                                    reply.value.stoppedOnError, text(reply.value.digest), reply.value.byteLength,
+                                    volume.assetId, volume.topologyRevision, revision, run,
+                                )
+                                is ProjectIntents.VolumeSimplifyReply.Unchanged -> run.close()
+                                is ProjectIntents.VolumeSimplifyReply.Refused -> {
+                                    run.close()
+                                    throw ProjectFailure(text(reply.value.message))
+                                }
+                            }
+                        }
+                    }
+                } catch (failure: Throwable) {
+                    parts.forEach(SimplifyPart::release)
+                    throw failure
+                }
+                if (parts.isEmpty()) return@inspect SimplifyPreviewResult.NothingToSimplify(configuration.useCount)
+                val preview = SimplifyPreview(configuration, parts)
+                if (!showPreview(preview, null)) {
+                    // Another preview was shown meanwhile: this one is not.
+                    parts.forEach(SimplifyPart::release)
+                    throw ProjectFailure("The project changed meanwhile; try again.")
+                }
+                SimplifyPreviewResult.Previewing(preview)
+            }
+        }
+    }
+
+    /** The panel's Cancel (`cancelSimplifyPreview`): the preview is dropped; the project never changed. Answers whether one was shown. */
+    fun cancelSimplifyPreview(): Boolean {
+        val shown = simplifyPreview ?: return false
+        return showPreview(null, shown)
+    }
+
+    /**
+     * One previewed part installed as one "Replace mesh topology" under a
+     * fresh asset ID (`applyPreparedSimplify`), guarded as the browser guards
+     * it, by the part's mesh alone: a volume whose mesh changed since the
+     * preview is refused in the browser's words, and one that did not is
+     * installed even after other edits — the same decimation of the same mesh
+     * run again, which must give the previewed bytes, when the session's
+     * state moved on.
+     */
+    private fun applyPart(part: SimplifyPart, configuration: SimplifyConfiguration): CompletableFuture<Unit> {
+        val refusal = java.util.concurrent.atomic.AtomicReference<String?>()
+        return outcome(
+            actor.stage { session, guard ->
+                val stage = ProjectIntents.VolumeSimplifyStage(units(ids.next()))
+                val now = session.snapshot().use { snapshot ->
+                    snapshot.query().use { root -> ProjectFacts.objects(root).firstNotNullOfOrNull { o -> o.volumes.firstOrNull { it.id == part.volumeId } } }
+                }
+                val stale = when {
+                    now == null -> "is missing"
+                    now.assetId != part.assetId -> "changed mesh asset"
+                    now.topologyRevision != part.topologyRevision -> "changed topology revision"
+                    now.triangleCount != part.beforeTriangles -> "changed triangle count"
+                    else -> null
+                }
+                if (stale != null) {
+                    refusal.set("Stale topology guard: volume ${part.volumeId} $stale")
+                    return@stage null
+                }
+                val held = synchronized(part) { part.run }
+                if (held == null) {
+                    refusal.set("There is no simplify preview to apply.")
+                    return@stage null
+                }
+                try {
+                    session.stageVolumeSimplify(held, stage)
+                } catch (moved: IllegalStateException) {
+                    if (moved.message != "stale") throw moved
+                    session.volumeSimplify(guard, simplifyRequest(part.volumeId, configuration)).use { again ->
+                        val prepared = again.reply() as? ProjectIntents.VolumeSimplifyReply.Prepared
+                        if (prepared == null || text(prepared.value.digest) != part.digest) {
+                            refusal.set("Stale topology guard: volume ${part.volumeId} asset topology changed")
+                            null
+                        } else {
+                            session.stageVolumeSimplify(again, stage)
+                        }
+                    }
+                }
+            },
+        ).thenApply { result ->
+            refusal.get()?.let { throw ProjectFailure(it) }
+            if (!stagedStep(result)) throw ProjectFailure("Unexpected answer from the project.")
+        }
+    }
+
+    /**
+     * The panel's Apply (`applySimplifyPreview`): exactly the previewed
+     * meshes installed, part by part, each its own "Replace mesh topology";
+     * the preview is gone either way. A part refused (its mesh changed under
+     * the preview) stops there in the browser's words, the parts before it
+     * installed. Answers what was installed, or null without a preview.
+     */
+    fun applySimplifyPreview(): CompletableFuture<SimplifyApplied?> {
+        val preview = simplifyPreview ?: return CompletableFuture.completedFuture(null)
+        fun from(index: Int): CompletableFuture<Unit> =
+            if (index == preview.parts.size) CompletableFuture.completedFuture(Unit)
+            else applyPart(preview.parts[index], preview.configuration).thenCompose { from(index + 1) }
+        return refreshed(
+            from(0).handle { _, error ->
+                showPreview(null, preview)
+                if (error != null) throw (error as? java.util.concurrent.CompletionException)?.cause ?: error
+                SimplifyApplied(preview.parts.size, preview.beforeTriangles, preview.afterTriangles)
+            },
+        )
+    }
+
+    /**
+     * The menu's Simplify (`simplify_model`, the browser's
+     * `simplifySelected`): each part the selection simplifies decimated by
+     * [decimateRatio] percent of its triangles and installed at once, each a
+     * "Replace mesh topology"; a part with nothing to remove is left. Answers
+     * the parts changed and the triangles before and after (the unchanged
+     * counted), or null with nothing selected; a part the workspace cannot
+     * simplify stops there in the browser's words.
+     */
+    fun simplifySelected(decimateRatio: Double = 50.0): CompletableFuture<SimplifyApplied?> {
+        val configuration = SimplifyConfiguration(useCount = true, decimateRatio = decimateRatio, maxError = SIMPLIFY_DEFAULT_MAX_ERROR)
+        var before = 0L
+        var after = 0L
+        var changed = 0
+        fun from(targets: List<String>, index: Int): CompletableFuture<SimplifyApplied?> {
+            if (index == targets.size) return CompletableFuture.completedFuture(SimplifyApplied(changed, before, after))
+            val refusal = java.util.concurrent.atomic.AtomicReference<String?>()
+            val counts = java.util.concurrent.atomic.AtomicReference<Pair<Long, Long>?>()
+            return outcome(
+                actor.stage { session, guard ->
+                    session.volumeSimplify(guard, simplifyRequest(targets[index], configuration)).use { run ->
+                        when (val reply = run.reply()) {
+                            is ProjectIntents.VolumeSimplifyReply.Prepared -> {
+                                counts.set(reply.value.beforeTriangles to reply.value.afterTriangles)
+                                session.stageVolumeSimplify(run, ProjectIntents.VolumeSimplifyStage(units(ids.next())))
+                            }
+                            is ProjectIntents.VolumeSimplifyReply.Unchanged -> {
+                                counts.set(reply.value.triangleCount to reply.value.triangleCount)
+                                null
+                            }
+                            is ProjectIntents.VolumeSimplifyReply.Refused -> {
+                                refusal.set(text(reply.value.message))
+                                null
+                            }
+                        }
+                    }
+                },
+            ).thenCompose { result ->
+                refusal.get()?.let { throw ProjectFailure(it) }
+                stagedStep(result)
+                val (was, now) = counts.get() ?: throw failure(result, null)
+                before += was
+                after += now
+                if (now < was) changed++
+                from(targets, index + 1)
+            }
+        }
+        return refreshed(
+            inspect { session -> session.snapshot().use { snapshot -> snapshot.query().use { root -> simplifyTargets(session, root).map { it.id } } } }
+                .thenCompose { targets -> if (targets.isEmpty()) CompletableFuture.completedFuture(null) else from(targets, 0) },
+        )
+    }
+
+    /** Measure captures by mesh asset, least recently used first (the browser keeps its extractors by asset). */
+    private val measured = object : LinkedHashMap<String, ProjectMeasureVolume>(MEASURE_CAPTURES, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ProjectMeasureVolume>): Boolean =
+            (size > MEASURE_CAPTURES).also { if (it) eldest.value.close() }
+    }
+
+    /**
+     * A Measure pick (`pickMeasureFeature`): the feature the workspace claims
+     * at volume-local [point] on facet [triangle] of volume [volumeId], as
+     * instance [instanceId] places it, in printer millimetres
+     * ([ProjectMeasures.placedTransform]), with its one-line description. A
+     * hole an uneven scale distorts answers the browser's words
+     * ([MeasurePickResult.Uneven]); a volume or facet the core cannot measure
+     * fails in its words.
+     */
+    fun measurePick(instanceId: String, volumeId: String, triangle: Long, point: List<Double>): CompletableFuture<MeasurePickResult> = inspect { session ->
+        val placed = session.snapshot().use { snapshot ->
+            snapshot.query().use { root ->
+                ProjectFacts.objects(root).firstNotNullOfOrNull { o ->
+                    val instance = o.instances.firstOrNull { it.first == instanceId }
+                    val volume = o.volumes.firstOrNull { it.id == volumeId }
+                    if (instance == null || volume == null) null else volume.assetId to ProjectMeasures.placedTransform(instance.second, volume.transform)
+                }
+            }
+        } ?: throw ProjectFailure("Click a model surface to measure it.")
+        val (assetId, transform) = placed
+        val capture = synchronized(measured) { measured[assetId] } ?: session.measureVolume(ProjectIntents.MeasureVolumeRequest(units(volumeId))).let { fresh ->
+            when (val reply = fresh.reply()) {
+                is ProjectIntents.MeasureVolumeReply.Refused -> {
+                    fresh.close()
+                    throw ProjectFailure(text(reply.value.message))
+                }
+                is ProjectIntents.MeasureVolumeReply.Captured -> synchronized(measured) {
+                    measured.getOrPut(assetId) { fresh }.also { if (it !== fresh) fresh.close() }
+                }
+            }
+        }
+        when (val reply = capture.feature(ProjectIntents.MeasureFeatureRequest(triangle, point, false, ProjectIntents.OptionalWorldTransform.Value(transform)))) {
+            is ProjectIntents.MeasureFeatureReply.Feature -> MeasurePickResult.Picked(MeasurePick(reply.value.feature, text(reply.value.summary), instanceId))
+            is ProjectIntents.MeasureFeatureReply.Refused ->
+                if (reply.value.code == ProjectIntents.MeasureRefusalCode.UnevenScale) MeasurePickResult.Uneven(text(reply.value.message))
+                else throw ProjectFailure(text(reply.value.message))
+        }
+    }
+
+    /** The measurement of two picks (`measureSurfaceFeatures`): distances, their X/Y/Z parts and the angle; null when it is not finite. */
+    fun measure(first: MeasurePick, second: MeasurePick): ProjectIntents.MeasureResult? =
+        (ProjectMeasureVolume.measure(ProjectIntents.MeasureRequest(first.feature, second.feature)) as? ProjectIntents.MeasureReply.Measured)?.value
+
     override fun close() {
         synchronized(lock) { timer?.close() }
+        cancelSimplifyPreview()
+        synchronized(measured) {
+            measured.values.forEach(ProjectMeasureVolume::close)
+            measured.clear()
+        }
         actor.close()
         synchronized(lock) { listeners.clear() }
         synchronized(showing) {

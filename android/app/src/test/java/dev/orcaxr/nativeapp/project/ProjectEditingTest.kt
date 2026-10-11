@@ -41,7 +41,7 @@ class ProjectEditingTest {
     private fun action(id: String, enabled: Boolean = true) = ProjectActionState(id, id, enabled)
 
     private val view = ProjectView(
-        objectMenu = listOf(action("edit_duplicate"), action("split_to_objects"), action("edit_delete_selected"), action("toggle_printable", false)),
+        objectMenu = listOf(action("edit_duplicate"), action("tool_cut"), action("edit_delete_selected"), action("toggle_printable", false)),
         plateMenu = listOf(action("arrange_all"), action("edit_select_all"), action("add_plate"), action("delete_plate", false)),
         actions = mapOf("edit_select_all" to action("edit_select_all"), "edit_delete_selected" to action("edit_delete_selected", false)),
     )
@@ -124,7 +124,7 @@ class ProjectEditingTest {
         // Not answered yet: disabled.
         assertFalse(menu.first { it.id == "drop_to_bed" }.enabled)
         // An object row's menu offers the catalogue's placement actions the app performs, in its order.
-        val objectMenu = view.copy(objectMenu = listOf(action("tool_lay_on_face"), action("split_to_objects"), action("mirror_x"), action("drop_to_bed", false)))
+        val objectMenu = view.copy(objectMenu = listOf(action("tool_lay_on_face"), action("tool_cut"), action("mirror_x"), action("drop_to_bed", false)))
         val ids = ProjectEditing.rowMenu(instanceRow, objectMenu).filterIsInstance<ProjectEditing.Choice.Action>().map { it.state.id }
         assertEquals(listOf("tool_lay_on_face", "mirror_x", "drop_to_bed"), ids)
     }
@@ -157,6 +157,28 @@ class ProjectEditingTest {
     }
 
     @Test
+    fun modelToolsFollowPlacementAndObjectsOfferSplitAndSimplify() {
+        // The browser's Tools menu split and simplify, then its toolbar's Measure: performed, with the core's enablement.
+        assertEquals(listOf("split_to_objects", "split_to_parts", "simplify_model", "tool_measure"), ProjectEditing.TOOLS_MENU)
+        assertTrue(ProjectEditing.PERFORMED.containsAll(ProjectEditing.TOOLS_MENU))
+        val tooled = view.copy(
+            actions = mapOf("split_to_parts" to action("split_to_parts"), "tool_measure" to action("tool_measure", false)),
+            objectMenu = listOf(action("split_to_objects"), action("split_to_parts", false), action("simplify_model"), action("tool_cut")),
+        )
+        val menu = ProjectEditing.toolsMenu(tooled)
+        assertEquals(ProjectEditing.TOOLS_MENU, menu.map { it.id })
+        assertTrue(menu.first { it.id == "split_to_parts" }.enabled)
+        assertFalse(menu.first { it.id == "tool_measure" }.enabled)
+        // Not answered yet: disabled.
+        assertFalse(menu.first { it.id == "split_to_objects" }.enabled)
+        // An object's menu (and an instance's, which points at it) offers the catalogue's split and simplify in its order.
+        fun ids(row: ProjectIntents.ObjectTreeRow) = ProjectEditing.rowMenu(row, tooled)
+            .filterIsInstance<ProjectEditing.Choice.Action>().map { it.state.id to it.state.enabled }
+        assertEquals(listOf("split_to_objects" to true, "split_to_parts" to false, "simplify_model" to true), ids(instanceRow))
+        assertEquals(ids(instanceRow), ids(objectRow))
+    }
+
+    @Test
     fun creationOffersTheBrowsersClipboardAddMenuAndBedFill() {
         // The clipboard opens the Edit menu, as in the browser's; instance creations close it.
         assertEquals(listOf("edit_cut", "edit_copy", "edit_paste"), ProjectEditing.editMenu(view).take(3).map { it.id })
@@ -171,7 +193,7 @@ class ProjectEditingTest {
         )
         val creating = view.copy(
             actions = mapOf("add_primitive_cube" to action("add_primitive_cube"), "add_modifier" to action("add_modifier", false)),
-            objectMenu = listOf(action("add_instance"), action("fill_bed_with_instances"), action("split_to_objects")),
+            objectMenu = listOf(action("add_instance"), action("fill_bed_with_instances"), action("tool_cut")),
             plateMenu = listOf(action("add_primitive_torus"), action("arrange_all")),
         )
         val add = ProjectEditing.addMenu(creating)

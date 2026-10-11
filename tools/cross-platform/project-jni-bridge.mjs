@@ -77,6 +77,8 @@ export function startProjectJni(profile = "debug") {
   signatures.transformFieldChecks = ["String"];
   signatures.placementEditChecks = ["String", "byte[]"];
   signatures.transformEditChecks = ["byte[]", "String"];
+  signatures.splitSourceChecks = ["String", "byte[]", "byte[]", "byte[]", "byte[]", "String"];
+  signatures.modelToolChecks = ["String", "byte[]"];
   signatures.primitiveChecks = ["String"];
   signatures.paintToolChecks = ["String"];
   signatures.paintChecks = [];
@@ -809,6 +811,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     workspace_bed(request) {
       return call("projectWorkspaceBed", this.handle, request);
+    }
+    split_source(request) {
+      return call("projectSplitSource", this.handle, request);
     }
     filament_slots(request) {
       return call("projectFilamentSlots", this.handle, request);

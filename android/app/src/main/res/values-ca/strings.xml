@@ -46,6 +46,8 @@
     <string name="filament_bar_selected">sel·leccionat</string>
     <string name="filament_bar_default">Per defecte</string>
     <string name="vf_delete">Esborrar</string>
+    <string name="project_measure">Mesurar</string>
+    <string name="simplify_apply">Aplicar</string>
     <string name="workspace_paint">Pintar</string>
     <string name="paint_tool_sphere">Esfera</string>
 </resources>

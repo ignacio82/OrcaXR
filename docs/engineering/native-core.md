@@ -2974,6 +2974,27 @@ source is the object holding the first part, fingerprinted after the split
 commits. That matches the browser's in-transaction guard capture, including
 the three publications of a promotion that fails inside the transaction.
 
+### Split sources
+
+`split::source` is what a split of the selected instance would split
+(`SplitSource.ts`, which the browser's controller now reads for its
+confirmation, its commit and Split to Parts). It answers the object holding
+the instance — plate, ID, name, strategy (its volumes promoted, or its one
+volume separated by connected body), volumes, their triangles and every
+instance the split replaces — or the workspace's refusal in its words and
+order: an instance the project no longer has (worded per split), an object
+with no volume, a non-model volume, a volume below three facets, height
+ranges or object extension data; for a single volume, more triangles than
+the synchronous limit (written as `toLocaleString('en-US')` writes them),
+paint or opaque triangle-indexed 3MF metadata; and, splitting to parts, an
+object that already has parts. The exchange is canonical JSON over a captured
+project (`SplitSourceExchange.ts`, `source_json`; WASM `split_source`, JNI
+`projectSplitSource`, Kotlin `ProjectSnapshot.splitSource`).
+`model-tool-vectors.mjs` asks it of every instance of a project covering
+each refusal, under both splits and several limits: 100 replies (61 refused)
+and 12 malformed requests agree in Rust, WASM in Node and over JNI, and 143
+Kotlin checks read them through the wrapper.
+
 ### SVG and embossed-text parts
 
 The four recipe-carrying commands are two native kinds:
@@ -5299,6 +5320,133 @@ are the browser's messages (`contracts/android-strings.json`).
 copies and pastes, pastes with Ctrl+V, adds an instance, cuts it with Ctrl+X
 and pastes it back, and adds and undoes a modifier, each by its undo label; it
 passes on both emulators.
+
+### Android model tools
+
+The Project area splits, simplifies and measures as the browser's workspace
+does, through the shared core, each edit one guarded step with the core's
+label.
+
+Split. `ProjectWorkspace.splitToObjectsConfirmation` reads, on the actor's
+authority, what Split to Objects would replace for the primary selected
+instance ([split sources](#split-sources)), bound to the state and selection
+it was read from; the screen shows the browser's confirmation (main.ts's
+`window.confirm` words, the triangle count in the device's locale, OK and
+Cancel). `splitSelectedToObjects` refuses it as stale in the browser's words
+once the project or the selection changed, checks the source again and
+commits one "Split to objects": an object of several volumes promotes them
+(`separateObjectVolumes`), an object of one volume has its connected bodies
+prepared on the authority (`volumeSplit`, its refusal in the core's words)
+and staged as objects (`stageVolumeSplit`). `splitSelectedToParts` stages the
+bodies as parts, one "Split volume to parts". IDs are drawn in the browser's
+order (`drawVolumeSplitIds`, then `allocateSeparatedObjectIdentities`), and
+the statuses are the flow's (`ModelToolStatus`: unavailable, cancelled, split
+into n objects across all m instances, failed). The workspace's synchronous
+limit of 50,000 triangles for one volume is kept, so the two refuse the same
+models.
+
+Simplify. The selection simplifies the model parts the browser's
+`paintableSelectedVolumes` takes, the parts the painter erases — selected
+parts, the parts of selected objects and of selected instances' objects,
+else every model part on the active plate, never a helper volume, each once,
+in the scene's order (`ProjectFacts.selectedModelParts`, the one Kotlin copy
+of the rule, which the painter's Erase all takes too).
+`previewSimplify(configuration)`
+decimates each on the authority (`volumeSimplify`) and keeps the prepared
+runs (`SimplifyPreview`, `SimplifyPart`): their counts, and the very payload
+Apply installs, paged for the Workspace. The core then enables Apply and
+Cancel (its `simplifyPreviewing` host fact). `applySimplifyPreview` installs
+the parts one by one, each one "Replace mesh topology" under a fresh asset ID.
+As in the browser, a part is guarded by its own mesh: a volume whose mesh
+changed under the preview is refused with the browser's "Stale topology
+guard" words. One whose mesh did not change is installed even after other
+edits: the session stages only on the state a run was prepared on, so the
+same decimation of the same mesh runs again and must give the previewed
+digest. `cancelSimplifyPreview` drops the preview. `simplifySelected` is the
+menu's Simplify (`simplify_model`): half of each part's triangles at once,
+with the browser's statuses (nothing to simplify, simplified n parts, failed).
+
+Measure. A pick is a tap in the Workspace while the Edit menu's Measure tool
+is on; one Workspace tool runs at a time, as the browser's `setTool` allows,
+so Lay flat, Measure and the paint tool turn each other off. The tap's hit in
+the volume's own millimetres (`FilamentScene.Pick.localPoint`, as the painter
+takes it) is what `ProjectWorkspace.measurePick` places in printer millimetres
+(`ProjectMeasures.placedTransform`: the instance's then the volume's
+transform, composed and multiplied as three.js does). The browser reaches the
+same frame through its scene root's inverse; the two agree to rounding. The
+pick resolves through the volume's captured features (`measureVolume`, kept by
+mesh asset as the browser keeps its extractors, at most eight). A hole an
+uneven scale distorts answers the browser's own words. `measure` compares two
+picks, a third pick starting a new pair. `ProjectMeasures.readout` is the
+Measure panel's readout: the bounded distance or else the line's or
+plane's, its X/Y/Z parts, the angle in degrees and each circle's diameter,
+written as `Number(value.toFixed(3))` writes them, with the panel's hints.
+
+The app. The Edit menu gains Split to Objects, Split to Parts, Simplify
+(decimate) and the Measure tool after its placement actions; an object's or
+instance's long-press menu offers the catalogue's split and simplify. The
+Project area's tools hold the Simplify panel (`SimplifyPanel`, opened from its
+heading as the browser's Tools card section opens): decimate by triangle count
+or shape error, Remove (%) and Max error fields that hand their values over as
+an `<input type=number>` does (`SimplifyFields`), Preview, Apply, Cancel and
+the panel's statuses. The Workspace draws a preview's decimated meshes in
+place of the parts' own: `WorkspaceRenderer` uploads them under their own
+keys and points those parts' draws at them, so `FilamentScene` uploads those
+volumes from them. When the preview ends, the volumes are uploaded from their
+own meshes again and take back the paint the scene shows
+(`ProjectModel.sceneSnapshot`). A tool never takes a previewed part's facet:
+Lay flat, Measure and the painter work on the project's mesh, not the
+preview's. A card beneath the view's top strip shows the panel's status, Apply
+and Cancel, whichever tool is on. The tool's panel takes the view's foot in
+turn — the paint panel, the Measure panel (status, hint, picked features,
+readout, Clear, Done; at most a third of the view, scrolling) or the Lay flat
+card. While measuring, the Workspace draws the measured line and its distance
+over the model, as the browser draws its annotation: a Compose overlay
+projected through the camera (`OrbitCamera.project`, the inverse of its pick
+ray), under the panels.
+
+Repair is not offered. The browser's `repair_model` exports each selected
+part as an STL and runs libslic3r's ADMesh cleanup and CGAL self-union in its
+slicing engine. Android's engine runs only in the `:engine` slicing service,
+and routing geometry-kernel operations through that job service is still
+open (Phase 5).
+
+Checking found a browser defect, which the painting unit fixed too.
+`paintableSelectedVolumes` ignored selected instances, which is what a click
+on a model selects. So with a model clicked, Simplify, Repair and Erase all
+acted on every model on the plate. A selected instance now stands for its
+object's model parts; `paint-target-pick.test.ts` holds a simplify regression
+beside the painting's.
+
+`model-tool-vectors.mjs` runs the production controller over a canonical
+3MF (a scaled, turned 20 mm block, a two-body pair with two instances, a
+two-body object, a guarded object with a modifier, a sphere) with seeded IDs.
+Its 31-step journey covers:
+
+- splits: refusals before and after the confirmation, both strategies,
+  parts then promotion;
+- simplifications: previews applied by count and by error, nothing to
+  simplify, a cancelled preview, a one-shot simplification and a whole
+  plate's preview;
+- picks and measurements: plane-to-plane distances, a corner to an edge and
+  an angle between split parts.
+
+After every step it records the semantic hash and undo label, then undoes all
+six entries. `ProjectModelToolChecks.journey` (155 checks over JNI) takes the
+same steps through `ProjectWorkspace`. It has the browser's hash and label
+after each, its flow statuses, confirmations, simplified parts and counts,
+and its features and readout rows to rounding, and undoes back to the opened
+state. `ProjectEditingTest` and `ModelToolsTest` (app JVM) cover the menus,
+the fields, the statuses, the readout and the transform composition.
+`renderer-api` tests cover the projection's round trip and the payload
+decoding. `android-modeltools-smoke.py`, added to `emulator-smoke.py` before
+the accessibility smoke, has not run on an emulator yet. Its steps:
+
+1. Import a two-body STL, split it to parts and to objects, and undo each.
+2. Preview a sphere's simplification and apply it from the Workspace, by its
+   counts and undo label.
+3. Move a 20 mm cube beside the pair and read the 10 mm between the two
+   tops picked with two taps.
 
 ### Android filaments
 

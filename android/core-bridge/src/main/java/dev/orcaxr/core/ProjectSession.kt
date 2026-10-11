@@ -699,6 +699,13 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
     fun workspaceBed(plateId: String?): WorkspaceBed = read {
         WorkspaceBeds.read(NativeProject.projectWorkspaceBed(it, "{\"plateId\":${plateId?.let(CanonicalJson::quote) ?: "null"}}"))
     }
+    /** What [target] would split for instance [instanceId] (the browser's
+     * `splitSourceOf`): the object holding it, or the workspace's refusal in
+     * its words — an instance this project lacks, an object the split would
+     * lose data from, a volume over [triangleLimit], an object with parts. */
+    fun splitSource(instanceId: String, target: SplitTarget, triangleLimit: Long = SplitSources.SYNC_TRIANGLE_LIMIT): SplitSourceResult = read {
+        SplitSources.read(NativeProject.projectSplitSource(it, SplitSources.request(instanceId, target, triangleLimit)))
+    }
     /** What the selected [refs] can be assigned and every filament the project
      * offers (the browser's `getFilamentAssignmentSnapshot`); a ref the project
      * lacks is refused in the browser's words. */

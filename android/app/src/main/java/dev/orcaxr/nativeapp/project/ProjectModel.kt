@@ -17,11 +17,17 @@ import dev.orcaxr.core.ContentProjectDocument
 import dev.orcaxr.core.DigestingDocument
 import dev.orcaxr.core.DocumentOwners
 import dev.orcaxr.core.HelperVolumeRole
+import dev.orcaxr.core.MeasurePick
+import dev.orcaxr.core.MeasurePickResult
+import dev.orcaxr.core.MeasureReadout
+import dev.orcaxr.core.ModelToolStatus
+import dev.orcaxr.core.PaintChannel
 import dev.orcaxr.core.PrimitiveShape
 import dev.orcaxr.core.ProjectActorImport
 import dev.orcaxr.core.ProjectArchiveFormat
 import dev.orcaxr.core.ProjectDocumentOutput
 import dev.orcaxr.core.ProjectIntents
+import dev.orcaxr.core.ProjectMeasures
 import dev.orcaxr.core.ProjectPlateArchive
 import dev.orcaxr.core.ProjectPlatePreflight
 import dev.orcaxr.core.ProjectRecovery
@@ -29,8 +35,12 @@ import dev.orcaxr.core.ProjectRowSelection
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
 import dev.orcaxr.core.RecentDocuments
+import dev.orcaxr.core.SimplifyConfiguration
+import dev.orcaxr.core.SimplifyPreview
+import dev.orcaxr.core.SimplifyPreviewResult
 import dev.orcaxr.core.SlicingSlots
 import dev.orcaxr.core.SlotEdit
+import dev.orcaxr.core.SplitConfirmation
 import dev.orcaxr.core.TransformReset
 import dev.orcaxr.core.TransformTool
 import dev.orcaxr.core.VirtualFilamentEdit
@@ -41,10 +51,13 @@ import dev.orcaxr.core.VirtualFilamentOperation
 import dev.orcaxr.core.VirtualFilamentRow
 import dev.orcaxr.core.VirtualFilamentSearch
 import dev.orcaxr.core.VirtualFilaments
+import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.device.PreferencesTextStore
 import dev.orcaxr.nativeapp.prepare.PlateSource
 import dev.orcaxr.nativeapp.workspace.PaintModel
+import dev.orcaxr.renderer.PacketMeshes
 import dev.orcaxr.renderer.SceneSync
+import dev.orcaxr.renderer.TriangleMesh
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
 import java.util.concurrent.ExecutionException
@@ -154,6 +167,14 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         override fun scene(): SceneSync? = sceneSync
         override fun view(): ProjectView = view
     })
+
+    /** The Workspace toolbar's Paint (`tool_paint`), when the core enables it: Lay flat and Measure go off, one tool at a time as the browser's `setTool`. */
+    fun startPaint() {
+        if (!paint.enabled(PaintChannel.COLOR.toolAction)) return
+        layFlat(false)
+        if (measuring) measure(false)
+        paint.start(PaintChannel.COLOR)
+    }
 
     init {
         work {
@@ -802,6 +823,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "scale_to_fit_volume" -> work { status(ProjectEditing.scaledStatus(workspace.scaleSelectedToFit().await())) }
             "drop_to_bed" -> work { status(ProjectEditing.droppedStatus(workspace.dropSelectedToBed().await())) }
             "arrange_all" -> work { status(ProjectEditing.arrangedStatus(workspace.arrangeActivePlate().await())) }
+            "split_to_objects" -> splitToObjects()
+            "split_to_parts" -> splitToParts()
+            "simplify_model" -> simplifyNow()
+            "tool_measure" -> measure(!measuring)
         }
     }
 
@@ -839,6 +864,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         private set
 
     fun layFlat(on: Boolean) {
+        // One Workspace tool at a time, as the browser's `setTool`.
+        if (on && measuring) measure(false)
+        if (on && paint.state.active) paint.stop()
         layingFlat = on
         layFlatMissed = false
     }
@@ -862,6 +890,216 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
                 workspace.layOnFacet(instanceId, volumeId, facet.toLong()).await()
             } catch (failure: Throwable) {
                 throw IllegalStateException(ProjectEditing.layFlatFailed(cause(failure).message))
+            }
+        }
+    }
+
+    // ---- Model tools: split, simplify and measure, as the browser's workspace runs them ----
+
+    private fun words(id: Int): String = getApplication<Application>().getString(id)
+
+    /** A Split to Objects waiting for the operator's answer: what it will replace (the browser's confirmation). */
+    var pendingSplit by mutableStateOf<SplitConfirmation?>(null)
+        private set
+
+    /**
+     * Split to Objects (`split_to_objects`): what it would replace is read and
+     * offered for confirmation, as the browser's flow asks before it splits;
+     * a selection or object it cannot split says why in the browser's words.
+     */
+    fun splitToObjects() = work {
+        val confirmation = try {
+            workspace.splitToObjectsConfirmation().await()
+        } catch (failure: Throwable) {
+            val reason = cause(failure).message
+            main.post { message = ModelToolStatus.splitUnavailable(reason) }
+            return@work
+        }
+        main.post { pendingSplit = confirmation }
+    }
+
+    /** The operator's answer to [pendingSplit]: split as confirmed, or leave the project as it is. */
+    fun answerSplit(accept: Boolean) {
+        val confirmation = pendingSplit ?: return
+        pendingSplit = null
+        if (!accept) {
+            message = ModelToolStatus.SPLIT_CANCELLED
+            return
+        }
+        work {
+            val status = try {
+                val split = workspace.splitSelectedToObjects(confirmation).await()
+                ModelToolStatus.splitDone(confirmation.objectName, split.objectIds.size, confirmation.affectedInstanceIds.size)
+            } catch (failure: Throwable) {
+                ModelToolStatus.splitFailed(cause(failure).message)
+            }
+            main.post { message = status }
+        }
+    }
+
+    /** Split to Parts (`split_to_parts`): the selected object's connected bodies as its parts, one undoable step. */
+    fun splitToParts() = work {
+        val status = try {
+            workspace.splitSelectedToParts().await()
+            words(R.string.project_split_parts_done)
+        } catch (failure: Throwable) {
+            "${words(R.string.project_split_parts_failed)}: ${cause(failure).message.orEmpty()}"
+        }
+        main.post { message = status }
+    }
+
+    /** The configuration the Simplify panel last previewed with, which its fields show again after Apply or Cancel (the browser's `requested`). */
+    var simplifyRequested by mutableStateOf(SimplifyConfiguration.DEFAULT)
+        private set
+    /** The preview shown, until Apply or Cancel. */
+    var simplifyPreview by mutableStateOf<SimplifyPreview?>(null)
+        private set
+    /** The preview's meshes, by volume, for the Workspace to draw in place of the volumes' own. */
+    var simplifyMeshes by mutableStateOf<Map<String, TriangleMesh>>(emptyMap())
+        private set
+
+    private fun showPreview(preview: SimplifyPreview?, meshes: Map<String, TriangleMesh>) {
+        simplifyPreview = preview
+        simplifyMeshes = meshes
+    }
+
+    /**
+     * The Simplify panel's Preview (`simplify_preview`): every part the
+     * selection simplifies decimated with [configuration] and drawn in the
+     * Workspace, nothing installed until Apply.
+     */
+    fun previewSimplify(configuration: SimplifyConfiguration) {
+        simplifyRequested = configuration
+        showPreview(null, emptyMap())
+        work {
+            val result = try {
+                workspace.previewSimplify(configuration).await()
+            } catch (failure: Throwable) {
+                val reason = cause(failure).message
+                main.post { message = ModelToolStatus.simplifyFailed(reason) }
+                return@work
+            }
+            when (result) {
+                SimplifyPreviewResult.NothingSelected -> main.post { message = words(R.string.simplify_select_model) }
+                is SimplifyPreviewResult.NothingToSimplify -> main.post {
+                    message = if (result.byCount) words(R.string.simplify_nothing_at_ratio) else ModelToolStatus.NOTHING_WITHIN_ERROR
+                }
+                is SimplifyPreviewResult.Previewing -> {
+                    val preview = result.preview
+                    val meshes = preview.parts.mapNotNull { part ->
+                        part.mesh()?.let { bytes -> part.volumeId to PacketMeshes.indexed("simplify:${part.volumeId}", bytes, part.vertexCount, part.afterTriangles) }
+                    }.toMap()
+                    main.post {
+                        showPreview(preview, meshes)
+                        message = ModelToolStatus.simplifyPreview(preview.beforeTriangles, preview.afterTriangles)
+                    }
+                }
+            }
+        }
+    }
+
+    /** The panel's Apply (`simplify_apply`): exactly the previewed meshes installed, each part one undoable step. */
+    fun applySimplify() = work {
+        val status = try {
+            val applied = workspace.applySimplifyPreview().await()
+            if (applied == null) words(R.string.simplify_no_preview) else ModelToolStatus.simplified(applied.parts, applied.beforeTriangles, applied.afterTriangles)
+        } catch (failure: Throwable) {
+            ModelToolStatus.simplifyFailed(cause(failure).message)
+        }
+        main.post {
+            showPreview(null, emptyMap())
+            message = status
+        }
+    }
+
+    /** The panel's Cancel (`simplify_cancel`): the model shown as it is; the project never changed. */
+    fun cancelSimplify() {
+        showPreview(null, emptyMap())
+        quietly { workspace.cancelSimplifyPreview() }
+    }
+
+    /** The menu's Simplify (`simplify_model`): the selection decimated by half at once, each part one undoable step. */
+    fun simplifyNow() = work {
+        val status = try {
+            val applied = workspace.simplifySelected().await()
+            when {
+                applied == null -> words(R.string.simplify_select_model)
+                applied.parts == 0 -> words(R.string.simplify_nothing_at_ratio)
+                else -> ModelToolStatus.simplified(applied.parts, applied.beforeTriangles, applied.afterTriangles)
+            }
+        } catch (failure: Throwable) {
+            ModelToolStatus.simplifyFailed(cause(failure).message)
+        }
+        main.post { message = status }
+    }
+
+    /** The Measure tool (`tool_measure`): while on, a tap in the Workspace picks a feature instead of selecting. */
+    var measuring by mutableStateOf(false)
+        private set
+    /** The Measure panel's readout of the picks (at most two), while the tool is on. */
+    var measureReadout by mutableStateOf<MeasureReadout?>(null)
+        private set
+    /** The workspace's last Measure status (a pick, a miss, a failure, a cleared measurement). */
+    var measureStatus by mutableStateOf<String?>(null)
+        private set
+    private var measurePicks: List<MeasurePick> = emptyList()
+
+    /** Turns the Measure tool on — with a fresh pair of picks, as the browser's `measureTool` — or off; Lay flat and painting go off. */
+    fun measure(on: Boolean) {
+        if (on) layFlat(false)
+        if (on && paint.state.active) paint.stop()
+        measuring = on
+        measurePicks = emptyList()
+        measureStatus = if (on) words(R.string.measure_start) else null
+        measured()
+    }
+
+    /** The panel's Clear (`measure_clear`): both picks dropped for a new measurement. */
+    fun clearMeasure() {
+        measurePicks = emptyList()
+        measureStatus = words(R.string.measure_cleared)
+        measured()
+    }
+
+    /** The readout of the picks now (main thread). */
+    private fun measured() {
+        val picks = measurePicks
+        val result = if (picks.size >= 2 && ::workspace.isInitialized) workspace.measure(picks[0], picks[1]) else null
+        measureReadout = if (measuring) ProjectMeasures.readout(true, picks, result) else null
+    }
+
+    /**
+     * A tap in the Workspace while measuring (`pickMeasureFeature`): facet
+     * [facet] of volume [volumeId] as instance [instanceId] places it, at the
+     * volume-local [point] the tap met, picks the feature there — a third
+     * pick starts a new measurement —; a tap on nothing is told to pick a
+     * surface. As the browser's registry gate, nothing happens while the core
+     * does not enable the tool.
+     */
+    fun measureAt(instanceId: String?, volumeId: String?, facet: Int, point: List<Double>?) {
+        if (!ProjectEditing.enabled(view, "tool_measure")) return
+        if (instanceId == null || volumeId.isNullOrEmpty() || point == null) {
+            measureStatus = words(R.string.measure_missed)
+            return
+        }
+        quietly {
+            val result = try {
+                workspace.measurePick(instanceId, volumeId, facet.toLong(), point).await()
+            } catch (failure: Throwable) {
+                val reason = cause(failure).message
+                main.post { measureStatus = ModelToolStatus.measureFailed(reason) }
+                return@quietly
+            }
+            main.post {
+                if (!measuring) return@post
+                when (result) {
+                    is MeasurePickResult.Uneven -> measureStatus = result.message
+                    is MeasurePickResult.Picked -> {
+                        measurePicks = (if (measurePicks.size >= 2) emptyList() else measurePicks) + result.pick
+                        measureStatus = ModelToolStatus.measurePicked(result.pick.summary)
+                        measured()
+                    }
+                }
             }
         }
     }
@@ -927,6 +1165,11 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         sceneListeners += listener
         sceneSync?.snapshot { everything -> main.post { if (listener in sceneListeners) listener(everything) } }
         return AutoCloseable { sceneListeners -= listener }
+    }
+
+    /** Everything the scene shows now — every mesh, draw and painted volume — handed to [to] on the main thread. */
+    fun sceneSnapshot(to: (SceneSync.Update) -> Unit) {
+        sceneSync?.snapshot { everything -> main.post { to(everything) } }
     }
 
     override fun onCleared() {

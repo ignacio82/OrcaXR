@@ -62,6 +62,17 @@ class RenderGeometryTest {
         assertThrows(IllegalStateException::class.java) { MeshPicking(mesh){true} }
         assertThrows(IllegalStateException::class.java) { TriangleMesh.grid(1000){true} }
     }
+    @Test fun projectingAPointAlongAPickRayGivesBackItsPixel() {
+        for (camera in listOf(OrbitCamera(), OrbitCamera(yaw=-2.4,pitch=.3,distance=1.2,target=Point3(.1,0.0,-.05)))) {
+            for ((x, y) in listOf(400.0 to 300.0, 12.5 to 590.0, 799.0 to 1.0)) {
+                val ray = camera.ray(x, y, 800, 600)
+                val (px, py) = camera.project(ray.origin + ray.direction * .37, 800, 600)!!
+                assertEquals(x, px, 1e-6); assertEquals(y, py, 1e-6)
+            }
+            // Behind the camera nothing shows.
+            assertNull(camera.project(camera.eye + (camera.eye - camera.target), 800, 600))
+        }
+    }
     @Test fun cameraCenterRayHitsItsTargetAndCornerRaysDiverge() {
         val camera=OrbitCamera();val center=camera.ray(400.0,300.0,800,600)
         near(camera.target,center.origin+center.direction*camera.distance)

@@ -22,6 +22,24 @@ internal data class InstanceFacts(
     val objectRanges: Int,
 )
 
+/** One volume of a captured project as the model tools read it: whether it is a model part, its mesh's identity and its transform inside its object. */
+internal data class VolumeFacts(
+    val id: String,
+    val model: Boolean,
+    val assetId: String,
+    val triangleCount: Long,
+    val topologyRevision: Double,
+    val transform: ProjectIntents.Transform,
+)
+
+/** One object of a captured project with its instances' transforms and its volumes, each in the object's order. */
+internal data class ObjectFacts(
+    val id: String,
+    val plateId: String,
+    val instances: List<Pair<String, ProjectIntents.Transform>>,
+    val volumes: List<VolumeFacts>,
+)
+
 /**
  * Facts the workspace's edits read from a captured project through the
  * query projection (`ProjectSnapshot.query`), as the browser's controller
@@ -35,6 +53,8 @@ internal object ProjectFacts {
     private const val MAX_PLATES = 4096L
     /** Objects and instances keep their own order: no sort budget. */
     private const val UNSORTED = 0L
+    /** `VolumeRole::Model`'s index in the query projection's role. */
+    private const val MODEL_ROLE = 0.0
 
     /** The whole of [field] of [node], read in bounded chunks; null when the node has none. */
     fun text(node: ProjectQueryNode, field: QueryText): String? {
@@ -124,6 +144,87 @@ internal object ProjectFacts {
             }
         }
         return found
+    }
+
+    /**
+     * Every object of the project (or of plate [plateId] alone) in project
+     * order — plates in their list's order, then each plate's objects — with
+     * its instances' IDs and transforms and its volumes.
+     */
+    fun objects(root: ProjectQueryNode, plateId: String? = null): List<ObjectFacts> {
+        val found = ArrayList<ObjectFacts>()
+        root.children(QueryRelation.PLATES, MAX_PLATES).use { plates ->
+            rows(plates) { position, _ ->
+                plates.node(position).use { plate ->
+                    val id = checkNotNull(text(plate, QueryText.ID)) { "invalid_projection" }
+                    if (plateId == null || id == plateId) plate.children(QueryRelation.OBJECTS, UNSORTED).use { objects ->
+                        rows(objects) { at, _ ->
+                            objects.node(at).use { node ->
+                                val objectId = checkNotNull(text(node, QueryText.ID)) { "invalid_projection" }
+                                val instances = node.children(QueryRelation.INSTANCES, UNSORTED).use { list ->
+                                    buildList {
+                                        rows(list) { index, row ->
+                                            val instanceId = list.node(index).use { checkNotNull(text(it, QueryText.ID)) { "invalid_projection" } }
+                                            add(instanceId to ProjectInspection.transform(row))
+                                            true
+                                        }
+                                    }
+                                }
+                                val volumes = node.children(QueryRelation.VOLUMES, UNSORTED).use { list ->
+                                    buildList {
+                                        rows(list) { index, row ->
+                                            add(
+                                                list.node(index).use { volume ->
+                                                    VolumeFacts(
+                                                        checkNotNull(text(volume, QueryText.ID)) { "invalid_projection" },
+                                                        row.values[QueryNumber.ROLE] == MODEL_ROLE,
+                                                        checkNotNull(text(volume, QueryText.ASSET_ID)) { "invalid_projection" },
+                                                        (row.values[QueryNumber.TRIANGLE_COUNT] ?: 0.0).toLong(),
+                                                        row.values[QueryNumber.TOPOLOGY_REVISION] ?: 0.0,
+                                                        ProjectInspection.transform(row),
+                                                    )
+                                                },
+                                            )
+                                            true
+                                        }
+                                    }
+                                }
+                                found += ObjectFacts(objectId, id, instances, volumes)
+                            }
+                            true
+                        }
+                    }
+                }
+                true
+            }
+        }
+        return found
+    }
+
+    /**
+     * The model parts the selection [refs] takes on the active plate — the
+     * browser's `paintableSelectedVolumes`, what it paints, erases, simplifies
+     * and repairs: the selected parts, the parts of selected objects and of
+     * selected instances' objects, or every model part on the plate when no
+     * part or object is selected and no instance stands for one. Each once,
+     * in the plate's order (its instances, each one's object's parts); helper
+     * volumes are never taken.
+     */
+    fun selectedModelParts(root: ProjectQueryNode, refs: List<ProjectIntents.SelectionEntity>): List<VolumeFacts> {
+        fun id(units: List<Int>) = String(CharArray(units.size) { units[it].toChar() })
+        val parts = refs.mapNotNullTo(HashSet()) { (it as? ProjectIntents.SelectionEntity.Volume)?.value?.let(::id) }
+        val objects = refs.mapNotNullTo(HashSet()) { (it as? ProjectIntents.SelectionEntity.Object)?.value?.let(::id) }
+        val instances = refs.mapNotNullTo(HashSet()) { (it as? ProjectIntents.SelectionEntity.Instance)?.value?.let(::id) }
+        val plate = plates(root).firstOrNull { it.active } ?: return emptyList()
+        val placed = objects(root, plate.id).filter { object_ -> object_.instances.isNotEmpty() && object_.volumes.any { it.model } }
+        // An instance shares its object's parts.
+        for (object_ in placed) if (object_.instances.any { (instanceId, _) -> instanceId in instances }) objects += object_.id
+        val everything = parts.isEmpty() && objects.isEmpty()
+        val found = LinkedHashMap<String, VolumeFacts>()
+        for (object_ in placed) for (volume in object_.volumes) {
+            if (volume.model && (everything || volume.id in parts || object_.id in objects)) found.putIfAbsent(volume.id, volume)
+        }
+        return found.values.toList()
     }
 
     /** One instance by its ID, or null. */

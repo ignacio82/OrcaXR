@@ -80,6 +80,7 @@ export const capturedproject_settings_editor: (a: number, b: number, c: number, 
 export const capturedproject_settings_explain: (a: number, b: number, c: number) => [number, number, number, number];
 export const capturedproject_settings_snapshot: (a: number, b: number, c: number) => [number, number, number, number];
 export const capturedproject_settings_targets: (a: number, b: number, c: number) => [number, number, number, number];
+export const capturedproject_split_source: (a: number, b: number, c: number) => [number, number, number, number];
 export const capturedproject_virtual_filament_library: (a: number, b: number, c: number) => [number, number, number, number];
 export const capturedproject_virtual_filament_mutation: (a: number, b: number, c: number) => [number, number, number, number];
 export const capturedproject_workspace_bed: (a: number, b: number, c: number) => [number, number, number, number];

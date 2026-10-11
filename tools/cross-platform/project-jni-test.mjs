@@ -54,6 +54,7 @@ import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
+import { replaySplitSources } from "./split-source-replay.mjs";
 import { replayFilamentAssignment } from "./filament-assignment-replay.mjs";
 import { replayPaintTool } from "./paint-tool-replay.mjs";
 import { replayVirtualFilaments } from "./virtual-filament-replay.mjs";
@@ -549,6 +550,34 @@ try {
     fieldFixture.edits.map((c) => `E\t${c.request}\t${c.reply}`).join("\n"),
   );
   assert.equal(transformEditChecks, 509);
+  // The model tools: what a split would split through the JNI exports and the
+  // Kotlin wrapper, then the browser's journey of splits, simplifications and
+  // measurements through ProjectWorkspace on a real session.
+  const toolFixture = await json("testdata/cross-platform/model-tool-vectors.json");
+  const splitSources = replaySplitSources(projectJniCore(jvm.call), toolFixture, layout, (text) => Uint8Array.from(Buffer.from(text, "base64")));
+  assert.deepEqual([splitSources.splitSources, splitSources.splitSourceRefusals], [100, 12]);
+  const declaredAssets = JSON.parse(toolFixture.splitSources.stateJson).sourceAssets.map((declared) =>
+    Buffer.from(toolFixture.splitSources.assets.find((a) => JSON.parse(a.descriptorJson).id === declared.id).bytes, "base64"),
+  );
+  const splitSourceChecks = jvm.call(
+    "splitSourceChecks",
+    toolFixture.splitSources.stateJson,
+    ...declaredAssets,
+    toolFixture.splitSources.cases.map((c) => `C\t${c.request}\t${c.reply}`).join("\n"),
+  );
+  assert.equal(splitSourceChecks, 143);
+  const modelToolChecks = jvm.call(
+    "modelToolChecks",
+    JSON.stringify({
+      seed: toolFixture.journey.seed,
+      skippedIds: toolFixture.journey.skippedIds,
+      opened: toolFixture.journey.opened,
+      steps: toolFixture.journey.steps,
+      undo: toolFixture.journey.undo,
+    }),
+    Buffer.from(toolFixture.journey.archive, "base64"),
+  );
+  assert.equal(modelToolChecks, 155);
   // The renderer's view of a real session: render deltas and mesh packets into the scene.
   const projectSceneChecks = jvm.call("projectSceneChecks", decodeBytes("stl-binary/cube"));
   assert.equal(projectSceneChecks, 13);
@@ -1648,6 +1677,9 @@ try {
     transformFieldChecks,
     placementEditChecks,
     transformEditChecks,
+    ...splitSources,
+    splitSourceChecks,
+    modelToolChecks,
     ...primitives,
     primitiveChecks,
     ...paintTool,

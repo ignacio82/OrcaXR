@@ -46,6 +46,8 @@
     <string name="filament_bar_selected">pasirinkta</string>
     <string name="filament_bar_default">Numatytas</string>
     <string name="vf_delete">Ištrinti</string>
+    <string name="project_measure">Matuoti</string>
+    <string name="simplify_apply">Taikyti</string>
     <string name="workspace_paint">Piešti</string>
     <string name="paint_tool_sphere">Sfera</string>
 </resources>

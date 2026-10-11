@@ -1,7 +1,8 @@
-//! The workspace's bed, the transform inspector's fields and new geometry
-//! (`orcaxr_project::placement::{bed, fields}`, `orcaxr_project::primitives`):
-//! canonical JSON requests and replies over a configuration, a captured
-//! project, a session or three field texts.
+//! The workspace's bed, the transform inspector's fields, new geometry and
+//! what a split would split (`orcaxr_project::placement::{bed, fields}`,
+//! `orcaxr_project::primitives`, `orcaxr_project::split::source`): canonical
+//! JSON requests and replies over a configuration, a captured project, a
+//! session or three field texts.
 use super::*;
 use orcaxr_contracts::generated::MAX_INPUT_BYTES;
 use orcaxr_project::placement::{bed, fields};
@@ -28,6 +29,19 @@ pub(super) fn project_workspace_bed(
 ) -> Result<jstring> {
     let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
     let json = with_project(handle, |p| bed::state_bed_json(p.state(), &request))?;
+    string(env, json)
+}
+/// `{"instanceId","target","triangleLimit"}` → what a split of a captured
+/// project would split (`orcaxr_project::split::source`), or its refusal.
+pub(super) fn project_split_source(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let json = with_project(handle, |p| {
+        orcaxr_project::split::source::source_json(p.state(), &request)
+    })?;
     string(env, json)
 }
 /// `{"tool","transform"}` → what the tool's three fields show.

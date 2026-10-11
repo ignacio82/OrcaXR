@@ -44,6 +44,8 @@
     <string name="filament_bar_selected">kiválasztva</string>
     <string name="filament_bar_default">Alapértelmezett</string>
     <string name="vf_delete">Törlés</string>
+    <string name="project_measure">Mérés</string>
+    <string name="simplify_apply">Alkalmaz</string>
     <string name="workspace_paint">Festés</string>
     <string name="paint_tool_sphere">Gömb</string>
 </resources>

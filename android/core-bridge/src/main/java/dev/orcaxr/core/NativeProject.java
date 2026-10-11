@@ -109,6 +109,9 @@ final class NativeProject {
     // replies (the browser's WorkspaceBedExchange and TransformFieldsExchange).
     static native String workspaceBed(String request);
     static native String projectWorkspaceBed(long handle, String request);
+    // What a split of a captured project would split (orcaxr_project::split::source,
+    // the browser's SplitSourceExchange): canonical JSON request and reply.
+    static native String projectSplitSource(long handle, String request);
     static native String transformFields(String request);
     static native String transformFieldEdit(String request);
     static native String transformRotation(String request);

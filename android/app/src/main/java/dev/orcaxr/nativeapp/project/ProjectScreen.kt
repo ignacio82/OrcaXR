@@ -162,6 +162,8 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+        // The browser's Tools: the Simplify panel.
+        item(key = "simplify") { SimplifyPanel(view, model) }
         if (model.recent.isNotEmpty()) {
             item { Text(stringResource(R.string.project_recent), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium) }
             items(model.recent, key = { "recent:" + it.uri }) { entry ->
@@ -185,6 +187,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     }
 
     renaming?.let { request -> RenameDialog(request, model) { renaming = null } }
+    model.pendingSplit?.let { confirmation -> SplitDialog(confirmation, model) }
     model.pendingDiscard?.let { pending ->
         AlertDialog(
             onDismissRequest = { model.answerDiscard(DiscardAnswer.Cancel) },
@@ -298,6 +301,10 @@ private fun actionLabel(action: ProjectActionState): String = when (action.id) {
     "scale_to_fit_volume" -> stringResource(R.string.project_scale_to_fit_volume)
     "drop_to_bed" -> stringResource(R.string.project_drop_to_bed)
     "arrange_all" -> stringResource(R.string.project_arrange_all)
+    "split_to_objects" -> stringResource(R.string.project_split_to_objects)
+    "split_to_parts" -> stringResource(R.string.project_split_to_parts)
+    "simplify_model" -> stringResource(R.string.project_simplify_model)
+    "tool_measure" -> stringResource(R.string.project_measure)
     else -> action.label
 }
 
@@ -332,6 +339,21 @@ private fun EditMenu(view: ProjectView, model: ProjectModel) {
                     enabled = action.enabled || on,
                     trailingIcon = if (on) ({ Text("✓") }) else null,
                     modifier = if (action.id == "tool_lay_on_face") Modifier.semantics { selected = on } else Modifier,
+                )
+            }
+            HorizontalDivider()
+            // The model tools: split and simplify on the selection, Measure a tool that stays on until it is chosen again.
+            for (action in ProjectEditing.toolsMenu(view)) {
+                val on = action.id == "tool_measure" && model.measuring
+                DropdownMenuItem(
+                    text = { Text(actionLabel(action)) },
+                    onClick = {
+                        open = false
+                        model.perform(action.id)
+                    },
+                    enabled = action.enabled || on,
+                    trailingIcon = if (on) ({ Text("✓") }) else null,
+                    modifier = if (action.id == "tool_measure") Modifier.semantics { selected = on } else Modifier,
                 )
             }
         }

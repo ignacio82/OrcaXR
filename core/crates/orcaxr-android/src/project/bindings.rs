@@ -442,6 +442,12 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_projectSplitSource, project_split_source, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_transformFields, transform_fields, jstring,
     request: JString<'local>,
 }

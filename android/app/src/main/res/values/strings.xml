@@ -352,6 +352,41 @@
     <string name="vf_dependency_review">Canonical dependency review</string>
     <string name="vf_no_dependencies">No dependencies were reported in this snapshot</string>
     <string name="vf_delete_confirm">Delete virtual filament</string>
+    <!-- The browser's model tools: split to objects and to parts, the Simplify panel (web/src/ui/dom/SimplifyPanel.ts)
+         and the Measure tool's panel (MeasurePanel.ts), with the workspace's statuses its catalogue carries. -->
+    <string name="project_split_to_objects">Split to Objects</string>
+    <string name="project_split_to_parts">Split to Parts</string>
+    <string name="project_simplify_model">Simplify (decimate)</string>
+    <string name="project_measure">Measure</string>
+    <string name="project_split_parts_done">Split object into parts in one undoable edit.</string>
+    <string name="project_split_parts_failed">Split to Parts failed</string>
+    <string name="simplify_title">Simplify</string>
+    <string name="simplify_decimate_by">Decimate by</string>
+    <string name="simplify_by_count">Triangle count</string>
+    <string name="simplify_by_error">Shape error</string>
+    <string name="simplify_remove">Remove (%)</string>
+    <string name="simplify_max_error">Max error</string>
+    <string name="simplify_preview">Preview</string>
+    <string name="simplify_apply">Apply</string>
+    <string name="simplify_select_model">Select a model to simplify.</string>
+    <string name="simplify_preview_hint">Preview shows the result on the model; nothing is changed until you apply.</string>
+    <string name="simplify_nothing_at_ratio">Nothing to simplify at that ratio.</string>
+    <string name="simplify_no_preview">There is no simplify preview to apply.</string>
+    <string name="measure_start">Measure: click two features (a face, edge, corner, or hole).</string>
+    <string name="measure_cleared">Measurement cleared.</string>
+    <string name="measure_missed">Click a model surface to measure it.</string>
+    <string name="measure_picked_features">Picked features</string>
+    <string name="measure_first">Click the first feature to measure from.</string>
+    <string name="measure_second">Click the second feature to measure to.</string>
+    <string name="measure_next">Click another feature to start a new measurement.</string>
+    <string name="measure_choose">Choose the Measure tool, then click two features.</string>
+    <string name="measure_distance">Distance</string>
+    <string name="measure_distance_infinite">Distance (to line/plane)</string>
+    <string name="measure_xyz">Δ X / Y / Z</string>
+    <string name="measure_angle">Angle</string>
+    <string name="measure_diameter">Diameter</string>
+    <string name="measure_unsupported">Two circles in non-parallel planes need the engine’s polynomial solver, which this build does not carry.</string>
+    <string name="measure_clear">Clear</string>
     <!-- The browser's drop overlay (app.main.dropA3MFSTLOBJ in web/src/main.ts), shown while a file is dragged over the window. -->
     <string name="drop_prompt">Drop a 3MF, STL, OBJ, AMF, ZIP, or G-code file to load it</string>
     <!-- The Workspace's paint tool: the browser's Paint action (scene.ts), its paint panel (web/src/ui/dom/PaintPanel.ts) and its painter's statuses (OrcaWorkspace). -->

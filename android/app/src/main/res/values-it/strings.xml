@@ -46,6 +46,8 @@
     <string name="filament_bar_selected">selezionato</string>
     <string name="filament_bar_default">Predefinito</string>
     <string name="vf_delete">Elimina</string>
+    <string name="project_measure">Misura</string>
+    <string name="simplify_apply">Applica</string>
     <string name="workspace_paint">Pittura</string>
     <string name="paint_tool_sphere">Sfera</string>
 </resources>

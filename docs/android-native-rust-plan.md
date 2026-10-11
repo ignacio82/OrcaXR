@@ -2027,7 +2027,21 @@ storage journeys on phone, tablet, and desktop-sized windows.
   (45 JNI checks of the workflow, 13 of the scene's paint, 9 of its base
   colours; an emulator paint smoke, which also assigns the cube a filament
   and compares its colour with the paint's, is written, not yet run).
-  Other model-tool UI, lighting and preview controls remain.
+  The browser's model tools run through the shared core
+  ([§](engineering/native-core.md#android-model-tools)): Split to Objects
+  (its confirmation, both strategies) and Split to Parts from the Edit and
+  row menus, checked by a new `split::source` port of the workspace's split
+  checks (100 browser replies in every binding); the Simplify panel's
+  preview — drawn in the Workspace in the parts' place, applied part by
+  part under the browser's topology guard — and the menu's one-shot
+  Simplify, both taking the model parts the painter takes; and the Measure
+  tool's Workspace taps, readout and drawn line, its panel taking the
+  view's foot in turn with the paint panel and the Lay flat card. A
+  155-check JNI journey matches the browser controller's hash, label,
+  statuses, counts and readout after all 31 steps and undoes them;
+  `android-modeltools-smoke.py` has not run yet. Repair is not offered: it
+  needs libslic3r's mesh kernels in the `:engine` job service. Lighting and
+  preview controls remain.
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
   large-file streaming. Validate incoming open/share intents as untrusted input.

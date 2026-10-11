@@ -79,6 +79,12 @@ export class CapturedProject {
      */
     settings_targets(request: string): string;
     /**
+     * What a split would split (`splitSourceExchange`):
+     * `{"instanceId","target","triangleLimit"}` in, `{"source"}` or
+     * `{"refusal"}` out (`orcaxr_project::split::source`).
+     */
+    split_source(request: string): string;
+    /**
      * The virtual filament library this project shows
      * (`virtualFilamentLibraryExchange`): `{}` in,
      * `{"matchCandidates","mixedRows","physicalChoices","status"}` or `{"error"}` out.
@@ -1841,6 +1847,7 @@ export interface InitOutput {
     readonly capturedproject_settings_explain: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_settings_snapshot: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_settings_targets: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_split_source: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_virtual_filament_library: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_virtual_filament_mutation: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_workspace_bed: (a: number, b: number, c: number) => [number, number, number, number];

@@ -46,6 +46,8 @@
     <string name="filament_bar_selected">已選取</string>
     <string name="filament_bar_default">預設</string>
     <string name="vf_delete">刪除</string>
+    <string name="project_measure">測量</string>
+    <string name="simplify_apply">套用</string>
     <string name="workspace_paint">繪製</string>
     <string name="paint_tool_sphere">球體</string>
 </resources>

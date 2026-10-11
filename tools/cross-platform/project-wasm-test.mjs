@@ -46,6 +46,7 @@ import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
 import { replayPaintTool } from "./paint-tool-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
+import { replaySplitSources } from "./split-source-replay.mjs";
 import { replayFilamentAssignment } from "./filament-assignment-replay.mjs";
 import { replayVirtualFilaments } from "./virtual-filament-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
@@ -342,6 +343,9 @@ if (isMainThread) {
       [result.primitiveMeshes, result.exactPrimitiveMeshes, result.primitiveMeshRefusals, result.primitivePlans, result.primitivePlanRefusals],
       [48, 7, 11, 35, 13],
     );
+    // What a split would split: every instance under both splits and several
+    // limits (61 refused in the workspace's words), and malformed requests.
+    assert.deepEqual([result.splitSources, result.splitSourceRefusals], [100, 12]);
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],
@@ -865,6 +869,12 @@ if (isMainThread) {
     layout,
     (text) => Uint8Array.from(Buffer.from(text, "base64")),
   );
+  const splitSources = replaySplitSources(
+    core,
+    JSON.parse(await readFile(new URL("testdata/cross-platform/model-tool-vectors.json", root))),
+    layout,
+    (text) => Uint8Array.from(Buffer.from(text, "base64")),
+  );
   const filamentAssignment = replayFilamentAssignment(
     core,
     JSON.parse(await readFile(new URL("testdata/cross-platform/filament-assignment-vectors.json", root))),
@@ -934,6 +944,7 @@ if (isMainThread) {
       ...transformFields,
       ...paintTool,
       ...primitives,
+      ...splitSources,
       ...filamentAssignment,
       ...virtualFilaments,
       owned,

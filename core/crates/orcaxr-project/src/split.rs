@@ -9,6 +9,8 @@
 //! ID per distinct geometry), reuses any project asset already holding a
 //! part's exact bytes, and captures one staged work: parts of the source's
 //! object or, with object identities, one object per part.
+pub mod source;
+
 use crate::assets::{AssetLease, AssetPayload, AssetRepository};
 use crate::commands::staged::{CaptureError, CapturedCommand, StagedWork};
 use crate::commands::{SeparatedObject, SplitPart, StagedAsset, VolumeSplitGuard};

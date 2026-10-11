@@ -1500,6 +1500,12 @@ impl CapturedProject {
     pub fn workspace_bed(&self, request: &str) -> Result<String, JsValue> {
         orcaxr_project::placement::bed::state_bed_json(self.inner.state(), request).map_err(error)
     }
+    /// What a split would split (`splitSourceExchange`):
+    /// `{"instanceId","target","triangleLimit"}` in, `{"source"}` or
+    /// `{"refusal"}` out (`orcaxr_project::split::source`).
+    pub fn split_source(&self, request: &str) -> Result<String, JsValue> {
+        orcaxr_project::split::source::source_json(self.inner.state(), request).map_err(error)
+    }
     /// A selection's assignable scopes, unsupported refs and offered
     /// filaments (`filamentAssignmentExchange`): `{"refs"}` in,
     /// `{"options","scopes","unsupportedSelection"}` or `{"error"}` out.

@@ -368,6 +368,40 @@ await test('Erase all painting erases the selected instance’s model parts and 
   }
 });
 
+await test('a clicked model is what simplify decimates, not every model on the plate', async () => {
+  const registry = buildRegistry();
+  const workspace = new OrcaWorkspace(registry);
+  workspace.actionContext = new ActionContext(workspace, new UiState(), registry);
+  const internals = workspace as unknown as PaintInternals;
+  try {
+    const controller = internals.canonicalProject;
+    const geometry = new THREE.SphereGeometry(10, 24, 16);
+    controller.importBufferGeometry(geometry, { name: 'First' });
+    controller.importBufferGeometry(geometry, { name: 'Second' });
+    geometry.dispose();
+    const meshes = controller.surface.root.children.flatMap((group) =>
+      group.children.filter((c) => c instanceof THREE.Mesh),
+    );
+    assert.equal(meshes.length, 2);
+    const second = getThreeProjectEntity(meshes[1])!;
+    // A click on a model selects its instance, as `selectModel` does.
+    controller.selectInstance(second.instanceId!);
+    assert.ok(workspace.previewSimplify({ useCount: true, decimateRatio: 50, maxError: 1 }));
+    const preview = workspace.getSimplifySnapshot();
+    assert.equal(preview.parts, 1, 'only the clicked model is previewed');
+    const triangles = controller.getVolumeMesh(second.volumeId!)!.triangles.length;
+    assert.equal(preview.beforeTriangles, triangles);
+    // Nothing a model can be found by selects every model on the plate, as before.
+    workspace.cancelSimplifyPreview();
+    controller.setObjectsTreeSelection([]);
+    assert.ok(workspace.previewSimplify({ useCount: true, decimateRatio: 50, maxError: 1 }));
+    assert.equal(workspace.getSimplifySnapshot().parts, 2);
+    workspace.cancelSimplifyPreview();
+  } finally {
+    workspace.dispose();
+  }
+});
+
 interface StrokeInternals extends PaintInternals {
   paintStroke: { volumeId: string; triangles: Set<number> } | null;
   paintSettings: Record<string, unknown>;

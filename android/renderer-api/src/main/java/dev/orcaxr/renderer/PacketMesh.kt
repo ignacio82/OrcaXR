@@ -61,6 +61,35 @@ object PacketMeshes {
         return ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
     }
 
+    /**
+     * A canonical indexed-mesh payload as one [TriangleMesh]: [vertexCount]
+     * float32 xyz positions, then [triangleCount] triangles of uint32
+     * indices, little-endian (the bytes a simplify preview pages, which Apply
+     * installs as the volume's mesh), shaded as packets are.
+     */
+    fun indexed(id: String, bytes: ByteArray, vertexCount: Long, triangleCount: Long): TriangleMesh {
+        require(vertexCount in 3..TriangleMesh.MAX_FACETS * 3L && triangleCount in 1..TriangleMesh.MAX_FACETS.toLong()) { "Indexed mesh counts out of range" }
+        require(bytes.size.toLong() == vertexCount * 12 + triangleCount * 12) { "Indexed mesh length differs from its counts" }
+        val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+        val xyz = FloatArray((vertexCount * 3).toInt()) { buffer.getFloat(it * 4) }
+        val base = xyz.size * 4
+        val indices = IntArray((triangleCount * 3).toInt()) { index ->
+            buffer.getInt(base + index * 4).also { require(it >= 0 && it < vertexCount) { "Indexed mesh index outside its vertices" } }
+        }
+        return TriangleMesh.owning(id, xyz, indices, shaded(xyz, indices))
+    }
+
+    /** Each facet's baked shade from its unit normal (`(b − a) × (c − a)`). */
+    private fun shaded(xyz: FloatArray, indices: IntArray): IntArray {
+        fun point(vertex: Int) = Point3(xyz[vertex * 3].toDouble(), xyz[vertex * 3 + 1].toDouble(), xyz[vertex * 3 + 2].toDouble())
+        return IntArray(indices.size / 3) { facet ->
+            val a = point(indices[facet * 3])
+            val normal = (point(indices[facet * 3 + 1]) - a).cross(point(indices[facet * 3 + 2]) - a)
+            val length = sqrt(normal.dot(normal))
+            shade(if (length > 1e-12 && length.isFinite()) normal * (1 / length) else null)
+        }
+    }
+
     fun mesh(id: String, source: MeshPacketSource, cancelled: () -> Boolean = { false }): TriangleMesh {
         val packet = source.packet
         require(packet.indexBytes == 2L || packet.indexBytes == 4L) { "Unsupported index width" }
@@ -82,7 +111,6 @@ object PacketMeshes {
         require(vertices <= TriangleMesh.MAX_FACETS * 3L) { "Mesh packet vertex count out of range" }
         val xyz = FloatArray((vertices * 3).toInt())
         val indices = IntArray((triangles * 3).toInt())
-        val colors = IntArray(triangles.toInt())
         var firstVertex = 0
         for (chunk in chunks) {
             check(!cancelled()) { "Cancelled mesh decoding" }
@@ -98,13 +126,6 @@ object PacketMeshes {
             }
             firstVertex += count
         }
-        fun point(vertex: Int) = Point3(xyz[vertex * 3].toDouble(), xyz[vertex * 3 + 1].toDouble(), xyz[vertex * 3 + 2].toDouble())
-        for (facet in colors.indices) {
-            val a = point(indices[facet * 3])
-            val normal = (point(indices[facet * 3 + 1]) - a).cross(point(indices[facet * 3 + 2]) - a)
-            val length = sqrt(normal.dot(normal))
-            colors[facet] = shade(if (length > 1e-12 && length.isFinite()) normal * (1 / length) else null)
-        }
-        return TriangleMesh.owning(id, xyz, indices, colors)
+        return TriangleMesh.owning(id, xyz, indices, shaded(xyz, indices))
     }
 }

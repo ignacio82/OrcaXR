@@ -36,11 +36,18 @@ object ProjectEditing {
         "scale_to_fit_volume", "drop_to_bed", "arrange_all",
     )
 
+    /**
+     * The model tools, after the placement actions: the browser's split and
+     * simplify (its Tools menu, also an object's context actions) and its
+     * toolbar's Measure, a Workspace tap tool as Lay flat is.
+     */
+    val TOOLS_MENU = listOf("split_to_objects", "split_to_parts", "simplify_model", "tool_measure")
+
     /** The catalogue actions the app performs, by ID. */
     val PERFORMED = setOf(
         "edit_select_all", "edit_deselect_all", "edit_duplicate", "add_instance", "edit_delete_selected", "edit_delete_all",
         "toggle_printable", "instance_to_object", "add_plate", "duplicate_plate", "delete_plate",
-    ) + PLACEMENT_MENU
+    ) + PLACEMENT_MENU + TOOLS_MENU
 
     /** The Edit menu, in the browser's menu order (web/src/actions/groups/edit.ts, then the scene's object edits). */
     val EDIT_MENU = listOf(
@@ -106,6 +113,10 @@ object ProjectEditing {
     /** The Edit menu's placement actions with the core's enablement; one the core has not answered for yet is disabled. */
     fun placementMenu(view: ProjectView): List<ProjectActionState> =
         PLACEMENT_MENU.map { id -> view.actions[id] ?: ProjectActionState(id, id, enabled = false) }
+
+    /** The Edit menu's model tools with the core's enablement; one the core has not answered for yet is disabled. */
+    fun toolsMenu(view: ProjectView): List<ProjectActionState> =
+        TOOLS_MENU.map { id -> view.actions[id] ?: ProjectActionState(id, id, enabled = false) }
 
     /** Whether the core enables action [id] now. */
     fun enabled(view: ProjectView, id: String): Boolean = view.actions[id]?.enabled == true

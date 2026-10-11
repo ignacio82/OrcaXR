@@ -46,6 +46,8 @@
     <string name="filament_bar_selected">Seçili</string>
     <string name="filament_bar_default">Varsayılan</string>
     <string name="vf_delete">Sil</string>
+    <string name="project_measure">Ölçüm</string>
+    <string name="simplify_apply">Uygula</string>
     <string name="workspace_paint">Boyama</string>
     <string name="paint_tool_sphere">Küre</string>
 </resources>

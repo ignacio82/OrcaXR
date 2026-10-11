@@ -131,4 +131,16 @@ data class OrbitCamera(val yaw: Double=.65, val pitch: Double=.8, val distance: 
         val extent=tan(Math.toRadians(45.0)/2)
         return PickRay(eye,(forward+right*((2*x/width-1)*extent*width/height)+up*((1-2*y/height)*extent)).normalized())
     }
+    /** Where render-space [point] (metres) shows in a [width] × [height] view: the inverse of [ray];
+     * null for a point not in front of the camera. */
+    fun project(point: Point3, width: Int, height: Int): Pair<Double, Double>? {
+        require(width>0 && height>0 && point.finite())
+        val forward=(target-eye).normalized();val right=forward.cross(Point3(0.0,1.0,0.0)).normalized()
+        val up=right.cross(forward)
+        val offset=point-eye;val depth=offset.dot(forward)
+        if(depth<=1e-9) return null
+        val extent=tan(Math.toRadians(45.0)/2)
+        val x=offset.dot(right)/(depth*extent*width/height);val y=offset.dot(up)/(depth*extent)
+        return (x+1)/2*width to (1-y)/2*height
+    }
 }

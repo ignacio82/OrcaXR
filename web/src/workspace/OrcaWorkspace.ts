@@ -3517,10 +3517,13 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /**
-   * Model parts the current selection paints: the selected parts, the parts of
-   * selected objects and of selected instances' objects, or every model part
-   * on the plate when no part, object or instance is selected. Helper volumes
-   * are never painted, so they are never erased either.
+   * Model parts the current selection paints, simplifies and repairs: the
+   * selected parts, the parts of selected objects and of selected instances'
+   * objects, or every model part on the plate when no part, object or instance
+   * is selected. A selected instance — what a click on a model selects — used
+   * to be ignored, so a clicked model was simplified, repaired or erased with
+   * every other model on the plate. Helper volumes are never painted, so they
+   * are never erased either.
    */
   private paintableSelectedVolumes(): VolumeId[] {
     const refs = this.canonicalProject.getObjectsTree().selection.refs;

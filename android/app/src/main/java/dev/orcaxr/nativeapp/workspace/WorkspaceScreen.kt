@@ -36,12 +36,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
@@ -50,6 +52,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -66,9 +69,11 @@ import dev.orcaxr.nativeapp.theme.OrcaThemeTokens
 import dev.orcaxr.nativeapp.theme.ThemeSwitch
 import dev.orcaxr.renderer.CameraView
 import dev.orcaxr.renderer.CameraViews
+import dev.orcaxr.renderer.OrbitCamera
 import dev.orcaxr.renderer.PreviewFraming
 import dev.orcaxr.renderer.ProjectScene
 import dev.orcaxr.renderer.SceneSync
+import dev.orcaxr.renderer.TriangleMesh
 import dev.orcaxr.renderer.filament.FilamentScene
 import java.util.Locale
 import kotlin.math.abs
@@ -81,11 +86,18 @@ import kotlin.math.abs
  * Drag orbits, pinch zooms; a tap selects the instance under the finger in
  * the project (Shift, Ctrl or Meta held toggles it, a tap on nothing
  * deselects all), as a click on a model does in the browser, and the scene
- * highlights the project's selection. While the Lay flat tool is on (the
+ * highlights the project's selection. One tool at a time owns the touch, as
+ * the browser's `setTool` allows one: while the Lay flat tool is on (the
  * Edit menu's), a tap lays the tapped facet on the bed instead; while the
- * paint tool is on (the toolbar's Paint), a drag that starts on a model
- * paints it, as the browser's painter does, and its panel chooses the
- * channel, palette row, tool and brush.
+ * Measure tool is on (the Edit menu's), a tap picks the feature under it,
+ * the readout shows in the browser's Measure panel and the measured line is
+ * drawn on the model; while the paint tool is on (the toolbar's Paint), a
+ * drag that starts on a model paints it, as the browser's painter does, and
+ * its panel chooses the channel, palette row, tool and brush. The tool's
+ * panel — the paint panel, the Measure panel or the Lay flat card — takes
+ * the view's foot. A simplify preview draws the decimated parts in place of
+ * the model's, with the Simplify panel's Apply and Cancel beneath the strip
+ * at the view's top, whichever tool is on.
  *
  * It wears the theme's viewport wash and plate colours, and offers the
  * browser's theme switch at its top end. To an accessibility service the
@@ -120,6 +132,9 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     val selected = view.selection.instances
     SideEffect { renderer.highlight(selected) }
     LaunchedEffect(view.bed.widthMm, view.bed.depthMm) { renderer.bed(view.bed.widthMm, view.bed.depthMm) }
+    // A simplify preview's meshes drawn in place of the previewed volumes' own.
+    val previewed = model.simplifyMeshes
+    SideEffect { renderer.preview(previewed) }
     val theme = LocalOrcaTheme.current.tokens
     SideEffect { renderer.theme(theme) }
     val words = ViewDescription.Words(
@@ -136,31 +151,40 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     Box(modifier) {
         AndroidView(
             factory = { context -> WorkspaceSurface(context).also(renderer::attach) },
-            Modifier.fillMaxSize(),
+            Modifier.fillMaxSize().onSizeChanged { renderer.size = it },
             update = { surface -> ViewDescription.describe(surface, label, described, cameras) },
         )
+        // The measured line, under every panel.
+        if (model.measuring) model.measureReadout?.annotation?.let { MeasureAnnotationOverlay(it, renderer.camera, renderer.size) }
         // Objects on every plate (the tree may show them collapsed).
         val objects = view.plateList.sumOf { it.objects }
-        Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (objects == 0) stringResource(R.string.workspace_empty) else view.name,
-                Modifier.weight(1f).padding(vertical = 16.dp),
-                color = MaterialTheme.colorScheme.onBackground,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            if (!paint.state.active) {
-                // The browser's toolbar Paint (`tool_paint`), enabled as the core enables it.
-                FilledTonalButton(
-                    onClick = { paint.start(PaintChannel.COLOR) },
-                    enabled = paint.enabled(PaintChannel.COLOR.toolAction),
-                    modifier = Modifier.focusRing(MaterialTheme.colorScheme.primary),
-                ) { Text(stringResource(R.string.workspace_paint)) }
+        Column(Modifier.align(Alignment.TopStart).fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (objects == 0) stringResource(R.string.workspace_empty) else view.name,
+                    Modifier.weight(1f).padding(vertical = 16.dp),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (!paint.state.active) {
+                    // The browser's toolbar Paint (`tool_paint`), enabled as the core enables it.
+                    FilledTonalButton(
+                        onClick = model::startPaint,
+                        enabled = paint.enabled(PaintChannel.COLOR.toolAction),
+                        modifier = Modifier.focusRing(MaterialTheme.colorScheme.primary),
+                    ) { Text(stringResource(R.string.workspace_paint)) }
+                }
+                // The browser's theme switch, which it keeps in the strip above its viewport.
+                ThemeSwitch()
             }
-            // The browser's theme switch, which it keeps in the strip above its viewport.
-            ThemeSwitch()
+            // A simplify preview's Apply and Cancel, beneath the strip: clear of the tools' panels at the foot.
+            model.simplifyPreview?.let { SimplifyCard(model, it, Modifier.align(Alignment.CenterHorizontally)) }
         }
+        // The active tool's panel takes the view's foot: one tool at a time, as the browser's `setTool`.
         if (paint.state.active) {
             PaintPanel(paint, Modifier.align(Alignment.BottomCenter).padding(8.dp))
+        } else if (model.measuring) {
+            MeasureCard(model, Modifier.align(Alignment.BottomCenter))
         } else if (model.layingFlat) {
             // The Lay flat tool's status (the browser's), and the way out of it.
             Card(Modifier.align(Alignment.BottomCenter).padding(16.dp)) {
@@ -195,8 +219,8 @@ private fun statusText(status: PaintStatus): String = when (status) {
     PaintStatus.NothingPainted -> stringResource(R.string.paint_status_nothing)
 }
 
-/** The paint panel's most height: the model on the bed stays in sight above it, and the panel scrolls. */
-private const val PANEL_SHARE = .32f
+/** A tool panel's most height (paint, Measure): the model on the bed stays in sight above it, and the panel scrolls. */
+internal const val PANEL_SHARE = .32f
 
 /** `#rrggbb` as a colour; grey for anything else. */
 private fun swatch(text: String): Color = runCatching { Color(0xff000000 or text.removePrefix("#").toLong(16)) }.getOrDefault(Color.Gray)
@@ -346,8 +370,45 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
     private var listening: AutoCloseable? = null
     private var resumed = false
     private var highlighted: Set<String> = emptySet()
-    /** The draws shown, by key: what a paint gesture's part is. */
+    /** The project's draws as last delivered, by key: what a paint gesture's part is. */
     private var draws: Map<String, ProjectScene.Draw> = emptyMap()
+    private var drawn: List<ProjectScene.Draw> = emptyList()
+    /** The camera as the scene last moved it, and the view's size: what the measured line is projected through. */
+    var camera by mutableStateOf<OrbitCamera?>(null)
+        private set
+    var size by mutableStateOf(IntSize.Zero)
+    /** A simplify preview's meshes, by volume, drawn in their volumes' place. */
+    private var previewed: Map<String, TriangleMesh> = emptyMap()
+
+    private fun previewKey(volumeId: String) = "simplify-preview:$volumeId"
+
+    /**
+     * Draws [meshes] (by volume) in place of those volumes' own meshes, until
+     * none are given. A volume shown again is uploaded afresh from its own
+     * mesh, so the paint the scene shows on it goes back on it.
+     */
+    fun preview(meshes: Map<String, TriangleMesh>) {
+        if (meshes === previewed) return
+        val before = previewed
+        previewed = meshes
+        val renderer = scene ?: return
+        before.keys.forEach { renderer.removeMesh(previewKey(it)) }
+        meshes.forEach { (volumeId, mesh) -> renderer.setMesh(previewKey(volumeId), mesh) }
+        renderer.setDraws(substituted(drawn))
+        val restored = before.keys - meshes.keys
+        if (restored.isNotEmpty()) model.sceneSnapshot { everything ->
+            if (scene === renderer) everything.paint.filter { it.volumeId in restored && it.volumeId !in previewed }.forEach(renderer::setPaint)
+        }
+    }
+
+    private fun substituted(draws: List<ProjectScene.Draw>) =
+        if (previewed.isEmpty()) draws else draws.map { draw -> if (draw.volumeId in previewed) draw.copy(assetId = previewKey(draw.volumeId)) else draw }
+
+    /** Moves the camera, and the measured line with it. */
+    private fun move(renderer: FilamentScene, next: OrbitCamera) {
+        renderer.setCamera(next)
+        camera = renderer.cameraState()
+    }
 
     /** Highlights the project's selected instances, now and in a scene made later. */
     fun highlight(instances: Set<String>) {
@@ -373,7 +434,7 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
 
     /** Puts the camera on the browser's [view] of the project's bed. */
     fun show(view: CameraView) {
-        scene?.setCamera(CameraViews.of(view, bed.first, bed.second))
+        scene?.let { move(it, CameraViews.of(view, bed.first, bed.second)) }
     }
 
     fun attach(view: WorkspaceSurface) {
@@ -395,6 +456,7 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         scene?.let { renderer ->
             renderer.setBed(next.first, next.second)
             renderer.frame(next.first, next.second)
+            camera = renderer.cameraState()
         }
     }
 
@@ -415,8 +477,10 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         theme?.let { dress(renderer, it) }
         renderer.setBed(bed.first, bed.second)
         renderer.frame(bed.first, bed.second)
+        camera = renderer.cameraState()
         renderer.setActive(true)
         renderer.select(highlighted)
+        previewed.forEach { (volumeId, mesh) -> renderer.setMesh(previewKey(volumeId), mesh) }
         // The first update is everything known; later ones are what changed.
         listening = model.listenScene { update -> if (scene === renderer) apply(renderer, update) }
     }
@@ -424,18 +488,27 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
     private fun apply(renderer: FilamentScene, update: SceneSync.Update) {
         update.removed.forEach(renderer::removeMesh)
         update.meshes.forEach { (asset, mesh) -> renderer.setMesh(asset, mesh) }
-        renderer.setDraws(update.draws)
+        drawn = update.draws
         draws = update.draws.associateBy { it.key }
-        // Paint changes colour bytes alone.
+        renderer.setDraws(substituted(update.draws))
+        // Paint changes colour bytes alone (a previewed volume's wait for its own mesh to show again).
         update.paint.forEach(renderer::setPaint)
     }
 
+    /**
+     * What a pick met, on the model as the project holds it: null without a
+     * hit, or on a part a simplify preview draws in its place, whose facets
+     * are not the project's.
+     */
+    private fun exact(pick: FilamentScene.Pick?): FilamentScene.Pick? = pick?.takeIf { it.volumeId !in previewed }
+
     /** What a pick met, as the painter takes it; null without a hit in the part's own frame. */
     private fun touch(pick: FilamentScene.Pick?): PaintModel.Touch? {
-        val local = pick?.localPoint ?: return null
-        val eye = pick.localOrigin ?: return null
-        val draw = draws[pick.key]
-        return PaintModel.Touch(pick.key, pick.volumeId, draw?.role, pick.facet, local, eye, draw?.placement)
+        val hit = exact(pick) ?: return null
+        val local = hit.localPoint ?: return null
+        val eye = hit.localOrigin ?: return null
+        val draw = draws[hit.key]
+        return PaintModel.Touch(hit.key, hit.volumeId, draw?.role, hit.facet, local, eye, draw?.placement)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -450,7 +523,7 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         val pinch = ScaleGestureDetector(view.context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(detector: ScaleGestureDetector): Boolean {
                 val renderer = scene ?: return false
-                renderer.setCamera(renderer.cameraState().let { old ->
+                move(renderer, renderer.cameraState().let { old ->
                     old.copy(distance = (old.distance / detector.scaleFactor).coerceIn(.05, 4.5))
                 })
                 return true
@@ -477,7 +550,7 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
                     paint.painting?.let { key -> touch(renderer.pick(event.x.toDouble(), event.y.toDouble(), key))?.let(paint::move) }
                 } else if (!scaling) {
                     if (abs(event.x - downX) + abs(event.y - downY) > TOUCH_SLOP) dragged = true
-                    if (dragged) renderer.setCamera(renderer.cameraState().let { old ->
+                    if (dragged) move(renderer, renderer.cameraState().let { old ->
                         old.copy(
                             yaw = old.yaw - (event.x - lastX) * ORBIT_RADIANS_PER_PIXEL,
                             pitch = (old.pitch + (event.y - lastY) * ORBIT_RADIANS_PER_PIXEL).coerceIn(.05, 1.5),
@@ -491,9 +564,14 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
                         paint.end()
                     } else if (!dragged && !scaling && !paint.state.active) {
                         val hit = renderer.pick(event.x.toDouble(), event.y.toDouble())
+                        // A tool's facet is the project's: never a simplify preview's.
+                        val exact = exact(hit)
                         if (model.layingFlat) {
                             // The Lay flat tool owns the tap, as the browser's does: it never selects.
-                            model.layFlatAt(hit?.instanceId, hit?.volumeId, hit?.facet ?: 0)
+                            model.layFlatAt(exact?.instanceId, exact?.volumeId, exact?.facet ?: 0)
+                        } else if (model.measuring) {
+                            // So does the Measure tool: the tap picks the feature it met.
+                            model.measureAt(exact?.instanceId, exact?.volumeId, exact?.facet ?: 0, exact?.localPoint?.let { listOf(it.x, it.y, it.z) })
                         } else {
                             val extend = event.metaState and (KeyEvent.META_SHIFT_ON or KeyEvent.META_CTRL_ON or KeyEvent.META_META_ON) != 0
                             model.selectInstance(hit?.instanceId, extend)

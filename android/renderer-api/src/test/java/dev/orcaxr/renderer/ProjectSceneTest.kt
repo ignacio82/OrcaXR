@@ -185,6 +185,22 @@ class ProjectSceneTest {
         }
     }
 
+    @Test fun indexedPayloadsDecodeIntoOneShadedMesh() {
+        // Two triangles of a unit square in z = 0, then one facing +x: float32 positions, then uint32 indices.
+        val positions = floatArrayOf(0f, 0f, 0f, 1f, 0f, 0f, 1f, 1f, 0f, 0f, 1f, 0f, 1f, 0f, 1f)
+        val indices = intArrayOf(0, 1, 2, 0, 2, 3, 1, 2, 4)
+        val bytes = ByteBuffer.allocate(positions.size * 4 + indices.size * 4).order(ByteOrder.LITTLE_ENDIAN)
+        positions.forEach { bytes.putFloat(it) }
+        indices.forEach { bytes.putInt(it) }
+        val mesh = PacketMeshes.indexed("preview", bytes.array(), 5, 3)
+        assertEquals(3, mesh.facetCount)
+        near(Point3(1.0, 1.0, 0.0), mesh.vertex(0, 2))
+        assertEquals(PacketMeshes.shade(Point3(0.0, 0.0, 1.0)), mesh.colors[0])
+        assertEquals(PacketMeshes.shade(Point3(1.0, 0.0, 0.0)), mesh.colors[2])
+        assertThrows(IllegalArgumentException::class.java) { PacketMeshes.indexed("short", bytes.array().copyOf(50), 5, 3) }
+        val outside = bytes.array().copyOf().also { ByteBuffer.wrap(it).order(ByteOrder.LITTLE_ENDIAN).putInt(60, 9) }
+        assertThrows(IllegalArgumentException::class.java) { PacketMeshes.indexed("outside", outside, 5, 3) }
+    }
     @Test fun malformedPacketsAreRefused() {
         fun refused(source: MeshPacketSource) = assertThrows(IllegalArgumentException::class.java) { PacketMeshes.mesh("bad", source) }
         // An index past its chunk's vertices.

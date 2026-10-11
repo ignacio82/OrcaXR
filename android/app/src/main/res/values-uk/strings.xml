@@ -46,6 +46,8 @@
     <string name="filament_bar_selected">вибрані</string>
     <string name="filament_bar_default">За замовчуванням</string>
     <string name="vf_delete">Delete</string>
+    <string name="project_measure">Виміряти</string>
+    <string name="simplify_apply">Застосувати</string>
     <string name="workspace_paint">Малювання</string>
     <string name="paint_tool_sphere">Сфера</string>
 </resources>
