@@ -107,9 +107,12 @@ top, bottom = min(y for _, y in cube), max(y for _, y in cube)
 until_enabled("Paint")
 tap("Paint")
 find("Colour painting", timeout=20)
-panel = bounds(find("Colour painting"))
-# The panel's card begins above its title; the band above it shows the Workspace.
-band = panel[1] - 40
+title = bounds(find("Colour painting"))
+# The band above the panel's card shows the Workspace. The card is the outermost node holding the
+# title below the Workspace's top strip; its contents move (a focused Done grows its row), its top does not.
+card_top = min(b[1] for b in (bounds(n) for n in screen.nodes())
+               if b[1] > 260 and b[0] <= title[0] and b[1] <= title[1] and b[2] >= title[2] and b[3] >= title[3])
+band = card_top - 10
 assert (top + bottom) // 2 < band, f"The cube ({top}-{bottom}) is hidden by the paint panel ({band})"
 # Row 2 from the keyboard, as the browser's `2` chooses it, once the palette shows it.
 find("· key 2", exact=False, timeout=20)

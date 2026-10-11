@@ -47,7 +47,6 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -137,11 +136,8 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     Box(modifier) {
         AndroidView(
             factory = { context -> WorkspaceSurface(context).also(renderer::attach) },
-            Modifier.fillMaxSize().semantics {
-                contentDescription = label
-                stateDescription = described
-                customActions = cameras
-            },
+            Modifier.fillMaxSize(),
+            update = { surface -> ViewDescription.describe(surface, label, described, cameras) },
         )
         // Objects on every plate (the tree may show them collapsed).
         val objects = view.plateList.sumOf { it.objects }

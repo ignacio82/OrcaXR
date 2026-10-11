@@ -6167,7 +6167,11 @@ Bottom View) as accessibility actions — what the drag and pinch gestures leave
 TalkBack, Switch Access and Voice Access: `CameraViews` frames the bed as
 `OrcaWorkspace.frameCameraView` does (offsets in multiples of the bed's larger
 side, its 0.03-unit focus lift and 0.0015-unit pole at the workspace's 1.75
-scale; `OrbitCamera` now takes any pitch short of straight up or down). Headings
+scale; `OrbitCamera` now takes any pitch short of straight up or down). The
+name, the state and the actions are set on the SurfaceView itself
+(`ViewDescription.describe`): semantics on an `AndroidView`'s modifier never
+reach the accessibility tree, so the first emulator run found an unnamed
+surface. Headings
 are marked (the Project's name, Plates, Plates and objects, Recent documents,
 Prepare's plate, External slicer and preflight issues, G-code preview,
 Printers); a switch and its words are one control (Use external slicer, Remember

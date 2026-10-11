@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The accessibility actions a 3D view's description added (ViewDescription.describe), to replace them. -->
+    <item name="view_description_actions" type="id" />
+</resources>

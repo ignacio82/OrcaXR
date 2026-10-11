@@ -1,9 +1,11 @@
 package dev.orcaxr.nativeapp.workspace
 
+import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.core.view.ViewCompat
 import dev.orcaxr.core.ProjectSceneSummary
 import dev.orcaxr.nativeapp.R
 import dev.orcaxr.renderer.CameraView
@@ -55,5 +57,22 @@ object ViewDescription {
         return remember(labels, onView) {
             labels.map { (view, label) -> CustomAccessibilityAction(label) { onView(view); true } }
         }
+    }
+
+    /**
+     * Says [label], [state] and the [actions] on the 3D view's own [view]. The view is an interop
+     * view (a SurfaceView inside Compose): semantics set on its `AndroidView` modifier never reach the
+     * accessibility tree, so TalkBack would find an unnamed surface.
+     */
+    fun describe(view: View, label: String, state: String, actions: List<CustomAccessibilityAction>) {
+        view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        view.contentDescription = label
+        ViewCompat.setStateDescription(view, state)
+        @Suppress("UNCHECKED_CAST")
+        (view.getTag(R.id.view_description_actions) as? List<Int>)?.forEach { ViewCompat.removeAccessibilityAction(view, it) }
+        view.setTag(
+            R.id.view_description_actions,
+            actions.map { action -> ViewCompat.addAccessibilityAction(view, action.label) { _, _ -> action.action() } },
+        )
     }
 }

@@ -85,12 +85,24 @@ def bars():
 
 
 def clear_of_bars(where):
-    """No actionable node of the app lies under a system bar."""
+    """No actionable node of the app lies under a system bar. A list clips what it scrolls past its
+    edge, but the dump reports such a node's whole bounds, so each node is clipped to the lists
+    holding it first: only what shows counts."""
     frames = bars()
-    for node in nodes():
+    current = nodes()
+    parents = {child: parent for parent in current for child in parent}
+    for node in current:
         if node.get("package") != PACKAGE or node.get("clickable") != "true":
             continue
         left, top, right, bottom = bounds(node)
+        ancestor = parents.get(node)
+        while ancestor is not None:
+            if ancestor.get("scrollable") == "true":
+                l, t, r, b = bounds(ancestor)
+                left, top, right, bottom = max(left, l), max(top, t), min(right, r), min(bottom, b)
+            ancestor = parents.get(ancestor)
+        if right <= left or bottom <= top:
+            continue
         for kind, l, t, r, b in frames:
             overlap = min(right, r) - max(left, l) > 0 and min(bottom, b) - max(top, t) > 0
             assert not overlap, f"{where}: {node.get('class')} {node.get('bounds')} lies under {kind} {(l, t, r, b)}"
@@ -157,7 +169,8 @@ def workspace_wash(wash, where):
     tap("Workspace")
     find(WORKSPACE, timeout=30)
     time.sleep(3)
-    surfaces = [bounds(node) for node in nodes() if node.get("class") == "android.view.SurfaceView"]
+    # The 3D view by its name (a SurfaceView reports itself as a plain View).
+    surfaces = [bounds(node) for node in nodes() if (node.get("content-desc") or "") == VIEW]
     assert surfaces, "The Workspace has no 3D view"
     left, top, right, bottom = surfaces[0]
     image = screen.screenshot()
@@ -185,10 +198,11 @@ def switch_state():
 
 
 def open_areas(where, keys):
-    """Every area opens and its key control is reached (scrolling for it)."""
+    """Every area opens and its key control is reached (scrolling for it: at font scale 2.0 the
+    Prepare list runs to many screens, so the search may take a while on a loaded emulator)."""
     for area in AREAS:
         tap(area)
-        find(keys[area], timeout=30)
+        find(keys[area], timeout=120)
     return where
 
 

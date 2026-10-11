@@ -49,7 +49,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -126,11 +125,8 @@ fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier, panelWidth
     val view = @Composable { place: Modifier ->
         AndroidView(
             factory = { context -> PreviewSurface(context).also(renderer::attach) },
-            place.semantics {
-                contentDescription = label
-                stateDescription = described
-                customActions = cameras
-            },
+            place,
+            update = { surface -> ViewDescription.describe(surface, label, described, cameras) },
         )
     }
     val controls = @Composable { place: Modifier ->
