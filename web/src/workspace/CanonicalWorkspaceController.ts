@@ -6,6 +6,13 @@ import {
   type CanonicalFilamentAssignmentScope,
   type CanonicalFilamentOption,
 } from './FilamentAssignment';
+import {
+  planVirtualFilamentMutation,
+  virtualFilamentLibraryCanonical,
+  type CanonicalVirtualFilamentLibrarySnapshot,
+  type VirtualFilamentMutation,
+  type VirtualFilamentMutationOutcome,
+} from './VirtualFilamentMutation';
 import { nextSlicingState, withReconciledAutoPairs, type SlicingAutoPairPolicy } from './CatalogSlicingConfiguration';
 import {
   LocalProjectSessionTransport,
@@ -88,7 +95,6 @@ import type {
   LayerRangeId,
   MixedFilamentId,
   ObjectId,
-  PhysicalFilamentId,
   PlateId,
   ProjectId,
   VolumeId,
@@ -135,20 +141,7 @@ import {
   type FullSpectrumAutoPairReconciliation,
   type FullSpectrumAutoPairReconciliationGuard,
 } from '../project/filaments/autoPairReconciliation';
-import {
-  createFullSpectrumMixedFilament,
-  fullSpectrumStableNumericId,
-  replaceFullSpectrumMixedFilament,
-  type FullSpectrumRecipeDraft,
-} from '../project/filaments/fullSpectrumRecipe';
-import {
-  AddMixedFilamentCommand,
-  EditMixedFilamentCommand,
-  findFilamentDependentPaths,
-  RemoveMixedFilamentCommand,
-  SetMixedFilamentEnabledCommand,
-  TombstoneMixedFilamentCommand,
-} from '../project/filaments/mixedCommands';
+import { fullSpectrumStableNumericId, type FullSpectrumRecipeDraft } from '../project/filaments/fullSpectrumRecipe';
 import {
   planRecreateModelColors,
   prepareRecreateModelColors,
@@ -273,7 +266,7 @@ import type {
 import { Bbs3mfProjectSerializer } from '../project/serialization/Bbs3mfProjectSerializer';
 import { SelectionStore, type SelectionRef, type SelectionSnapshot } from '../project/selection';
 import { ProjectStore } from '../project/store';
-import { mixedComponentWire, mixedDistributionWire, fullSpectrumWire, mixedFilamentWire } from '../project/intentWire';
+import { mixedFilamentWire } from '../project/intentWire';
 import type { ProjectCommand } from '../project/history/command';
 import {
   applyProjectSettingsOverrides,
@@ -581,24 +574,7 @@ export interface CanonicalFilamentAssignmentGuard {
   readonly sourceHash: string;
 }
 
-export interface CanonicalVirtualFilamentLibrarySnapshot {
-  readonly sourceRevision: number;
-  readonly sourceHash: string;
-  /** Current one-based transient engine order paired with stable physical IDs. */
-  readonly physical: readonly {
-    readonly id: PhysicalFilamentId;
-    readonly engineToolId: number;
-    readonly name: string;
-    readonly material: string;
-    readonly color: string;
-    readonly enabled: boolean;
-  }[];
-  readonly mixed: readonly {
-    readonly filament: Immutable<MixedFilament>;
-    readonly dependencyPaths: readonly string[];
-    readonly hasExactFullSpectrumState: boolean;
-  }[];
-}
+export type { CanonicalVirtualFilamentLibrarySnapshot } from './VirtualFilamentMutation';
 
 export interface CanonicalVirtualFilamentMutationGuard {
   readonly expectedRevision: number;
@@ -651,23 +627,7 @@ export class FullSpectrumAutoPairConfirmationMismatchError extends Error {
   }
 }
 
-export type CanonicalVirtualFilamentMutationRequest = CanonicalVirtualFilamentMutationGuard &
-  (
-    | { readonly operation: 'add'; readonly draft: FullSpectrumRecipeDraft; readonly requestedId?: MixedFilamentId }
-    | {
-        readonly operation: 'edit';
-        readonly filamentId: MixedFilamentId;
-        readonly draft: FullSpectrumRecipeDraft;
-      }
-    | {
-        readonly operation: 'duplicate';
-        readonly sourceFilamentId: MixedFilamentId;
-        readonly draft: FullSpectrumRecipeDraft;
-        readonly requestedDuplicateId?: MixedFilamentId;
-      }
-    | { readonly operation: 'set-enabled'; readonly filamentId: MixedFilamentId; readonly enabled: boolean }
-    | { readonly operation: 'delete'; readonly filamentId: MixedFilamentId }
-  );
+export type CanonicalVirtualFilamentMutationRequest = CanonicalVirtualFilamentMutationGuard & VirtualFilamentMutation;
 
 export interface CanonicalLayerEventRow {
   readonly id: CustomGcodeId;
@@ -1413,25 +1373,7 @@ export class CanonicalWorkspaceController {
   getVirtualFilamentLibrarySnapshot(): CanonicalVirtualFilamentLibrarySnapshot {
     this.assertActive();
     const project = this.session.project.getSnapshot();
-    return deepFreeze({
-      sourceRevision: project.revision,
-      sourceHash: project.hash,
-      physical: project.state.filaments.physical.map((filament, index) => ({
-        id: filament.id,
-        engineToolId: index + 1,
-        name: filament.name,
-        material: filament.material,
-        color: filament.color,
-        enabled: filament.enabled,
-      })),
-      mixed: project.state.filaments.mixed
-        .filter((filament) => !filament.fullSpectrum?.deleted)
-        .map((filament) => ({
-          filament: cloneJson(filament),
-          dependencyPaths: findFilamentDependentPaths(project.state, filament.id),
-          hasExactFullSpectrumState: filament.fullSpectrum !== undefined,
-        })),
-    });
+    return deepFreeze(virtualFilamentLibraryCanonical(project.state, project.revision, project.hash));
   }
 
   createMixedFilamentId(): MixedFilamentId {
@@ -1588,11 +1530,8 @@ export class CanonicalWorkspaceController {
     guard: CanonicalVirtualFilamentMutationGuard,
     requestedId?: MixedFilamentId,
   ): Promise<MixedFilamentId> {
-    const state = this.assertVirtualFilamentMutationGuard(guard);
-    const id = requestedId ?? this.options.idSource.next('mixed-filament');
-    const filament = createFullSpectrumMixedFilament(id, state.filaments.physical, draft);
-    await this.submitAddMixedFilament(filament);
-    return id;
+    const outcome = await this.runVirtualFilamentMutation({ operation: 'add', draft, requestedId }, guard);
+    return (outcome as { readonly filamentId: MixedFilamentId }).filamentId;
   }
 
   async editVirtualFilament(
@@ -1600,32 +1539,7 @@ export class CanonicalWorkspaceController {
     draft: FullSpectrumRecipeDraft,
     guard: CanonicalVirtualFilamentMutationGuard,
   ): Promise<void> {
-    const state = this.assertVirtualFilamentMutationGuard(guard);
-    const current = state.filaments.mixed.find((filament) => filament.id === filamentId);
-    if (!current) throw new Error(`Unknown mixed filament ${filamentId}`);
-    const replacement = replaceFullSpectrumMixedFilament(current, state.filaments.physical, draft);
-    const edit = new EditMixedFilamentCommand(filamentId, {
-      name: replacement.name,
-      displayColor: replacement.displayColor,
-      components: replacement.components,
-      distribution: replacement.distribution,
-      fullSpectrum: replacement.fullSpectrum,
-    });
-    await this.executeEditTransaction('Edit mixed filament', [edit], (text) => [
-      {
-        editMixedFilament: {
-          mixedFilamentId: text(filamentId),
-          name: { value: text(replacement.name) },
-          displayColor: { value: text(replacement.displayColor) },
-          components: { value: replacement.components.map((component) => mixedComponentWire(component, text)) },
-          distribution: { value: mixedDistributionWire(replacement.distribution, text) },
-          fullSpectrum: replacement.fullSpectrum
-            ? { value: fullSpectrumWire(replacement.fullSpectrum, text) }
-            : { absent: {} },
-          configJson: { absent: {} },
-        },
-      },
-    ]);
+    await this.runVirtualFilamentMutation({ operation: 'edit', filamentId, draft }, guard);
   }
 
   async duplicateVirtualFilament(
@@ -1634,19 +1548,11 @@ export class CanonicalWorkspaceController {
     guard: CanonicalVirtualFilamentMutationGuard,
     requestedDuplicateId?: MixedFilamentId,
   ): Promise<MixedFilamentId> {
-    const state = this.assertVirtualFilamentMutationGuard(guard);
-    if (!state.filaments.mixed.some((filament) => filament.id === sourceFilamentId)) {
-      throw new Error(`Unknown mixed filament ${sourceFilamentId}`);
-    }
-    const duplicateId = requestedDuplicateId ?? this.options.idSource.next('mixed-filament');
-    const duplicate = createFullSpectrumMixedFilament(duplicateId, state.filaments.physical, draft);
-    await this.submitAddMixedFilament(duplicate);
-    return duplicateId;
-  }
-
-  private async submitAddMixedFilament(filament: MixedFilament): Promise<void> {
-    new AddMixedFilamentCommand(filament);
-    await this.executeEditIntent((text) => ({ addMixedFilament: { filament: mixedFilamentWire(filament, text) } }));
+    const outcome = await this.runVirtualFilamentMutation(
+      { operation: 'duplicate', sourceFilamentId, draft, requestedDuplicateId },
+      guard,
+    );
+    return (outcome as { readonly filamentId: MixedFilamentId }).filamentId;
   }
 
   async setVirtualFilamentEnabled(
@@ -1654,42 +1560,31 @@ export class CanonicalWorkspaceController {
     enabled: boolean,
     guard: CanonicalVirtualFilamentMutationGuard,
   ): Promise<void> {
-    const state = this.assertVirtualFilamentMutationGuard(guard);
-    if (!state.filaments.mixed.some((filament) => filament.id === filamentId)) {
-      throw new Error(`Unknown mixed filament ${filamentId}`);
-    }
-    new SetMixedFilamentEnabledCommand(filamentId, enabled, 'virtual-filament-library');
-    await this.executeEditIntent((text) => ({
-      setMixedFilamentEnabled: {
-        mixedFilamentId: text(filamentId),
-        enabled,
-        reason: { value: text('virtual-filament-library') },
-      },
-    }));
+    await this.runVirtualFilamentMutation({ operation: 'set-enabled', filamentId, enabled }, guard);
   }
 
   async deleteVirtualFilament(
     filamentId: MixedFilamentId,
     guard: CanonicalVirtualFilamentMutationGuard,
   ): Promise<{ readonly outcome: 'removed' | 'tombstoned'; readonly dependencyPaths: readonly string[] }> {
+    const outcome = await this.runVirtualFilamentMutation({ operation: 'delete', filamentId }, guard);
+    const deleted = outcome as Extract<VirtualFilamentMutationOutcome, { readonly operation: 'delete' }>;
+    return { outcome: deleted.outcome, dependencyPaths: deleted.dependencyPaths };
+  }
+
+  /** Plan one library edit on the guarded state (`planVirtualFilamentMutation`) and submit its step. */
+  private async runVirtualFilamentMutation(
+    mutation: VirtualFilamentMutation,
+    guard: CanonicalVirtualFilamentMutationGuard,
+  ): Promise<VirtualFilamentMutationOutcome> {
     const state = this.assertVirtualFilamentMutationGuard(guard);
-    const filament = state.filaments.mixed.find((candidate) => candidate.id === filamentId);
-    if (!filament) throw new Error(`Unknown mixed filament ${filamentId}`);
-    const dependencyPaths = findFilamentDependentPaths(state, filamentId);
-    if (dependencyPaths.length > 0 || filament.fullSpectrum?.originAuto) {
-      const reason = dependencyPaths.length > 0 ? 'delete-with-canonical-dependencies' : 'delete-auto-pair';
-      const tombstone = new TombstoneMixedFilamentCommand(filamentId, reason);
-      await this.executeEditTransaction(
-        'Delete mixed filament',
-        [tombstone],
-        (text) => [{ tombstoneMixedFilament: { mixedFilamentId: text(filamentId), reason: { value: text(reason) } } }],
-        filament.fullSpectrum?.originAuto === true,
-      );
-      return { outcome: 'tombstoned', dependencyPaths: Object.freeze(dependencyPaths) };
+    const plan = planVirtualFilamentMutation(state, mutation, () => this.options.idSource.next('mixed-filament'));
+    if (plan.step.kind === 'intent') {
+      await this.executeEditIntent(plan.step.command);
+    } else {
+      await this.executeEditTransaction(plan.label, plan.step.commands, plan.step.wire, plan.step.reconcile);
     }
-    new RemoveMixedFilamentCommand(filamentId);
-    await this.executeEditIntent((text) => ({ removeMixedFilament: { mixedFilamentId: text(filamentId) } }));
-    return { outcome: 'removed', dependencyPaths: Object.freeze([]) };
+    return plan.outcome;
   }
 
   async addPlate(name?: string, options: { activate?: boolean } = {}): Promise<PlateId> {

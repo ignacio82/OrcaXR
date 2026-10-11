@@ -158,6 +158,9 @@ public final class ProjectJniHarness {
     public static long filamentChecks(String journey, byte[] archive, byte[] cube, byte[] catalog) {
         return ProjectFilamentChecks.run(journey, archive, cube, catalog);
     }
+    public static long virtualFilamentChecks(String journey, byte[] archive) {
+        return ProjectVirtualFilamentChecks.run(journey, archive);
+    }
     public static long transformEditChecks(byte[] cube, String script) {
         return ProjectTransformEditChecks.run(cube, script);
     }
@@ -433,6 +436,7 @@ public final class ProjectJniHarness {
             if (name.equals("stagedRecords")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("createEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("filamentChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class);
+            if (name.equals("virtualFilamentChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("projectRecoveryChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);
             if (name.equals("projectWorkspaceChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, byte[].class);
             if (name.equals("projectEditChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);

@@ -50,7 +50,6 @@ class FilamentsTest {
         assertFalse("a disabled head is shown as one", slots[1].enabled)
         // A printer without a profile's heads (an opened project) has one head, as the browser's `profileExtruderCount`.
         assertEquals(listOf("H-1:", "A-2:", "A-3:"), Filaments.slots(view, extruders = 0).map { it.label })
-        assertEquals(listOf("Blend"), Filaments.mixed(view).map { it.name })
     }
 
     @Test

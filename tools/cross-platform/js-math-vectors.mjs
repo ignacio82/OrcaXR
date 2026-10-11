@@ -1,6 +1,6 @@
 // Bit-exact references for the ECMAScript `Math` functions the native core
 // reproduces (`orcaxr_project::js_math`): sin and cos (V8's vendored glibc),
-// tan, exp, acos, asin and atan2 (fdlibm), hypot (V8's scaled, compensated
+// tan, exp, acos, asin, atan2, pow and cbrt (fdlibm), hypot (V8's scaled, compensated
 // sum) and round. Inputs cover every range-reduction branch of the trig routines, their thresholds, signed zeros,
 // non-finite values and seeded random doubles across magnitudes. Values are
 // IEEE-754 bit patterns in hex, so no decimal parsing sits between V8 and Rust.
@@ -170,6 +170,61 @@ for (let i = 0; i < 1000; i += 1) atan2Cases.push([logUniform(1e-200, 1e200), lo
 for (let i = 0; i < 500; i += 1) atan2Cases.push([uniform(-1, 1), 1]);
 for (const [y, x] of atan2Cases) atan2Rows.push([[bits(y), bits(x)], bits(Math.atan2(y, x))]);
 
+// pow and cbrt (the ΔE2000 and sRGB→Lab of the Match search), drawn after
+// the others: the exponents ΔE2000 and the sRGB gamma use (7, 2, 2.4) over
+// their ranges, y = ±1, 0.5 and ±0, x near 1 (the |y| > 2³¹ path), signed
+// zeros, infinities and NaN in either place, negative x with odd, even and
+// fractional y, overflow and underflow edges and subnormal results, and
+// seeded pairs across magnitudes; cbrt over its subnormal, zero and
+// non-finite inputs and seeded doubles of both signs.
+const powCases = [];
+const powSpecials = [0, -0, 1, -1, 0.5, -0.5, 2, -2, 3, -3, Infinity, -Infinity, NaN, Number.MIN_VALUE, Number.MAX_VALUE, 1 + Number.EPSILON, 1 - Number.EPSILON / 2];
+for (const x of powSpecials) for (const y of powSpecials) powCases.push([x, y]);
+for (let i = 0; i < 1500; i += 1) powCases.push([uniform(0, 110), 7]);
+for (let i = 0; i < 1500; i += 1) powCases.push([uniform(0.04, 1.06), 2.4]);
+for (let i = 0; i < 500; i += 1) powCases.push([uniform(-200, 200), 2]);
+for (let i = 0; i < 500; i += 1) powCases.push([logUniform(1e-300, 1e300), 0.5]);
+for (let i = 0; i < 500; i += 1) powCases.push([uniform(-5, 5), Math.floor(uniform(-40, 40))]);
+for (let i = 0; i < 300; i += 1) powCases.push([1 + uniform(-1e-7, 1e-7), logUniform(2 ** 31, 2 ** 70)]);
+for (let i = 0; i < 300; i += 1) powCases.push([uniform(0.5, 2), uniform(-1100, 1100)]);
+for (const [x, y] of [[2, 1023], [2, 1024], [2, -1074], [2, -1075], [2, -1022.5], [10, 308.25], [10, -323.5], [0.5, 1074.5], [-2, 1025], [-2, -1075]])
+  powCases.push([x, y]);
+for (let i = 0; i < 2000; i += 1) powCases.push([logUniform(1e-20, 1e20), uniform(-30, 30)]);
+for (let i = 0; i < 300; i += 1) powCases.push([fromBits((next() & 0x000fffffffffffffn).toString(16).padStart(16, "0")), uniform(-2, 2)]);
+const powRows = powCases.map(([x, y]) => [[bits(x), bits(y)], bits(Math.pow(x, y))]);
+const cbrt = new Set();
+for (const value of [0, -0, 1, -1, 8, -27, Infinity, -Infinity, NaN, Number.MIN_VALUE, -Number.MIN_VALUE, Number.MAX_VALUE, 2.2250738585072014e-308])
+  cbrt.add(bits(value));
+for (let i = 0; i < 2000; i += 1) cbrt.add(bits(uniform(-2, 2)));
+for (let i = 0; i < 1500; i += 1) cbrt.add(bits(logUniform(1e-300, 1e300)));
+for (let i = 0; i < 300; i += 1) cbrt.add(bits(logUniform(1e-320, 1e-308)));
+const cbrtRows = [...cbrt].sort().map((hex) => [hex, bits(Math.cbrt(fromBits(hex)))]);
+
+// Array.prototype.sort with the Match ranking's comparator, which a 1e-6
+// tolerance makes intransitive, so only V8's own TimSort leaves the same
+// order: lengths across the minimum-run and galloping thresholds, values
+// crowded within the tolerance, ascending and descending runs, and the
+// order each array is left in (original positions).
+const sortRows = [];
+for (let round = 0; round < 260; round += 1) {
+  const length = round < 70 ? round : Math.floor(uniform(64, 700));
+  const shape = round % 5;
+  const values = Array.from({ length }, (_, index) => {
+    if (shape === 0) return Math.floor(unit() * 20) * 5e-7 + unit() * 1e-7;
+    if (shape === 1) return index * 4e-7 + unit() * 3e-7;
+    if (shape === 2) return (length - index) * 4e-7 + unit() * 3e-7;
+    if (shape === 3) return Math.floor(index / 9) * 2e-6 * (index % 2 ? 1 : -1) + unit() * 9e-7;
+    return uniform(0, 50);
+  });
+  const entries = values.map((value, index) => ({ value, index }));
+  entries.sort((left, right) => {
+    if (left.value + 1e-6 < right.value) return -1;
+    if (right.value + 1e-6 < left.value) return 1;
+    return left.index - right.index;
+  });
+  sortRows.push([values.map(bits), entries.map((entry) => entry.index)]);
+}
+
 const source = "tools/cross-platform/js-math-vectors.mjs";
 const output =
   JSON.stringify(
@@ -185,6 +240,9 @@ const output =
       hypot: hypotRows,
       asin: asinRows,
       atan2: atan2Rows,
+      pow: powRows,
+      cbrt: cbrtRows,
+      sort: sortRows,
     },
     null,
     1,
@@ -192,4 +250,4 @@ const output =
 const path = new URL("testdata/cross-platform/js-math-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);
 else assert.equal(readFileSync(path, "utf8"), output, "JS Math reference drift");
-console.log(`JS Math references: ${trigRows.length} sin/cos, ${expRows.length} exp, ${acosRows.length} acos, ${tanRows.length} tan, ${roundRows.length} round, ${hypotRows.length} hypot, ${asinRows.length} asin, ${atan2Rows.length} atan2 (V8 ${process.versions.v8})`);
+console.log(`JS Math references: ${trigRows.length} sin/cos, ${expRows.length} exp, ${acosRows.length} acos, ${tanRows.length} tan, ${roundRows.length} round, ${hypotRows.length} hypot, ${asinRows.length} asin, ${atan2Rows.length} atan2, ${powRows.length} pow, ${cbrtRows.length} cbrt, ${sortRows.length} sorts (V8 ${process.versions.v8})`);

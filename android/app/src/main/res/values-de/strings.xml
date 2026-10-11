@@ -45,6 +45,7 @@
     <string name="filament_colour_apply">Anwenden</string>
     <string name="filament_bar_selected">Ausgewählt</string>
     <string name="filament_bar_default">Standard</string>
+    <string name="vf_delete">Löschen</string>
     <string name="workspace_paint">Malen</string>
     <string name="paint_tool_sphere">Kugel</string>
 </resources>

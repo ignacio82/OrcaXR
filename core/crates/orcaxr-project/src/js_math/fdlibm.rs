@@ -878,3 +878,374 @@ pub fn atan2(y: f64, x: f64) -> f64 {
         _ => (z - PI_LO) - PI,
     }
 }
+
+fn with_low(x: f64, low: u32) -> f64 {
+    words(high(x), low)
+}
+fn with_high(x: f64, high: i32) -> f64 {
+    words(high, low(x))
+}
+
+/// `scalbn` (fdlibm `s_scalbn.c`): `x × 2ⁿ`, one rounding for a subnormal result.
+fn scalbn(x: f64, n: i32) -> f64 {
+    const TWO54: f64 = 1.80143985094819840000e+16;
+    const TWOM54: f64 = 5.55111512312578270212e-17;
+    const HUGE: f64 = 1.0e+300;
+    const TINY: f64 = 1.0e-300;
+    let mut x = x;
+    let mut hx = high(x);
+    let lx = low(x);
+    let mut k = (hx & 0x7ff00000) >> 20;
+    if k == 0 {
+        if (lx | (hx as u32 & 0x7fffffff)) == 0 {
+            return x;
+        }
+        x *= TWO54;
+        hx = high(x);
+        k = ((hx & 0x7ff00000) >> 20) - 54;
+        if n < -50000 {
+            return TINY * x;
+        }
+    }
+    if k == 0x7ff {
+        return x + x;
+    }
+    k += n;
+    if k > 0x7fe {
+        return HUGE * HUGE.copysign(x);
+    }
+    let mantissa = (hx as u32 & 0x800fffff) as i32;
+    if k > 0 {
+        return words(mantissa | (k << 20), low(x));
+    }
+    if k <= -54 {
+        return if n > 50000 {
+            HUGE * HUGE.copysign(x)
+        } else {
+            TINY * TINY.copysign(x)
+        };
+    }
+    k += 54;
+    words(mantissa | (k << 20), low(x)) * TWOM54
+}
+
+/// `Math.pow` and `**`: V8's `ieee754::pow`, fdlibm 5.3's `e_pow.c` (not
+/// glibc's correctly rounded routine: the two differ in the last bit for
+/// about one argument in ten). Like ECMAScript, `(±1) ** ±∞` is NaN.
+pub fn pow(x: f64, y: f64) -> f64 {
+    const BP: [f64; 2] = [1.0, 1.5];
+    const DP_H: [f64; 2] = [0.0, 5.84962487220764160156e-01];
+    const DP_L: [f64; 2] = [0.0, 1.35003920212974897128e-08];
+    const ZERO: f64 = 0.0;
+    const ONE: f64 = 1.0;
+    const TWO: f64 = 2.0;
+    const TWO53: f64 = 9007199254740992.0;
+    const HUGE: f64 = 1.0e300;
+    const TINY: f64 = 1.0e-300;
+    const L1: f64 = 5.99999999999994648725e-01;
+    const L2: f64 = 4.28571428578550184252e-01;
+    const L3: f64 = 3.33333329818377432918e-01;
+    const L4: f64 = 2.72728123808534006489e-01;
+    const L5: f64 = 2.30660745775561754067e-01;
+    const L6: f64 = 2.06975017800338417784e-01;
+    const P1: f64 = 1.66666666666666019037e-01;
+    const P2: f64 = -2.77777777770155933842e-03;
+    const P3: f64 = 6.61375632143793436117e-05;
+    const P4: f64 = -1.65339022054652515390e-06;
+    const P5: f64 = 4.13813679705723846039e-08;
+    const LG2: f64 = 6.93147180559945286227e-01;
+    const LG2_H: f64 = 6.93147182464599609375e-01;
+    const LG2_L: f64 = -1.90465429995776804525e-09;
+    const OVT: f64 = 8.0085662595372944372e-17;
+    const CP: f64 = 9.61796693925975554329e-01;
+    const CP_H: f64 = 9.61796700954437255859e-01;
+    const CP_L: f64 = -7.02846165095275826516e-09;
+    const IVLN2: f64 = 1.44269504088896338700e+00;
+    const IVLN2_H: f64 = 1.44269502162933349609e+00;
+    const IVLN2_L: f64 = 1.92596299112661746887e-08;
+
+    let hx = high(x);
+    let lx = low(x);
+    let hy = high(y);
+    let ly = low(y);
+    let mut ix = hx & 0x7fffffff;
+    let iy = hy & 0x7fffffff;
+
+    // y == 0: x ** 0 is 1.
+    if (iy as u32 | ly) == 0 {
+        return ONE;
+    }
+    // NaN in either place.
+    if ix > 0x7ff00000
+        || (ix == 0x7ff00000 && lx != 0)
+        || iy > 0x7ff00000
+        || (iy == 0x7ff00000 && ly != 0)
+    {
+        return x + y;
+    }
+
+    // For x < 0: 0 when y is not an integer, 1 when odd, 2 when even.
+    let mut yisint = 0;
+    if hx < 0 {
+        if iy >= 0x43400000 {
+            yisint = 2;
+        } else if iy >= 0x3ff00000 {
+            let k = (iy >> 20) - 0x3ff;
+            if k > 20 {
+                let j = ly >> (52 - k);
+                if (j << (52 - k)) == ly {
+                    yisint = 2 - (j & 1) as i32;
+                }
+            } else if ly == 0 {
+                let j = iy >> (20 - k);
+                if (j << (20 - k)) == iy {
+                    yisint = 2 - (j & 1);
+                }
+            }
+        }
+    }
+
+    // Special values of y.
+    if ly == 0 {
+        if iy == 0x7ff00000 {
+            // y is ±∞.
+            return if ((ix - 0x3ff00000) as u32 | lx) == 0 {
+                f64::NAN // (±1) ** ±∞ is NaN (fdlibm's `y - y`).
+            } else if ix >= 0x3ff00000 {
+                if hy >= 0 { y } else { ZERO }
+            } else if hy < 0 {
+                -y
+            } else {
+                ZERO
+            };
+        }
+        if iy == 0x3ff00000 {
+            // y is ±1.
+            return if hy < 0 { ONE / x } else { x };
+        }
+        if hy == 0x40000000 {
+            return x * x; // y is 2.
+        }
+        if hy == 0x3fe00000 && hx >= 0 {
+            return x.sqrt(); // y is 0.5 and x ≥ +0.
+        }
+    }
+
+    let mut ax = x.abs();
+    // Special values of x: ±0, ±∞, ±1.
+    if lx == 0 && (ix == 0x7ff00000 || ix == 0 || ix == 0x3ff00000) {
+        let mut z = ax;
+        if hy < 0 {
+            z = ONE / z;
+        }
+        if hx < 0 {
+            if ((ix - 0x3ff00000) | yisint) == 0 {
+                z = f64::NAN; // (-1) ** non-integer.
+            } else if yisint == 1 {
+                z = -z;
+            }
+        }
+        return z;
+    }
+
+    // 0 for a negative x, else 1.
+    let n = (hx >> 31) + 1;
+    // (x < 0) ** non-integer is NaN.
+    if (n | yisint) == 0 {
+        return f64::NAN;
+    }
+    // The sign of the result: negative for (-x) ** odd.
+    let s = if (n | (yisint - 1)) == 0 { -ONE } else { ONE };
+
+    let t1;
+    let t2;
+    if iy > 0x41e00000 {
+        // |y| > 2³¹.
+        if iy > 0x43f00000 {
+            // |y| > 2⁶⁴: certain to overflow or underflow.
+            if ix <= 0x3fefffff {
+                return if hy < 0 { HUGE * HUGE } else { TINY * TINY };
+            }
+            if ix >= 0x3ff00000 {
+                return if hy > 0 { HUGE * HUGE } else { TINY * TINY };
+            }
+        }
+        // Over- or underflow unless x is close to one.
+        if ix < 0x3fefffff {
+            return if hy < 0 {
+                s * HUGE * HUGE
+            } else {
+                s * TINY * TINY
+            };
+        }
+        if ix > 0x3ff00000 {
+            return if hy > 0 {
+                s * HUGE * HUGE
+            } else {
+                s * TINY * TINY
+            };
+        }
+        // |1 - x| ≤ 2⁻²⁰: log(x) by x - x²/2 + x³/3 - x⁴/4.
+        let t = ax - ONE;
+        let w = (t * t) * (0.5 - t * (0.3333333333333333333333 - t * 0.25));
+        let u = IVLN2_H * t;
+        let v = t * IVLN2_L - w * IVLN2;
+        let first = with_low(u + v, 0);
+        t1 = first;
+        t2 = v - (first - u);
+    } else {
+        let mut n = 0;
+        // Subnormal x.
+        if ix < 0x00100000 {
+            ax *= TWO53;
+            n -= 53;
+            ix = high(ax);
+        }
+        n += (ix >> 20) - 0x3ff;
+        let j = ix & 0x000fffff;
+        // The interval of x.
+        ix = j | 0x3ff00000;
+        let k;
+        if j <= 0x3988E {
+            k = 0; // |x| < √(3/2)
+        } else if j < 0xBB67A {
+            k = 1; // |x| < √3
+        } else {
+            k = 0;
+            n += 1;
+            ix -= 0x00100000;
+        }
+        ax = with_high(ax, ix);
+
+        // ss = s_h + s_l = (x - 1)/(x + 1) or (x - 1.5)/(x + 1.5).
+        let u = ax - BP[k];
+        let v = ONE / (ax + BP[k]);
+        let ss = u * v;
+        let s_h = with_low(ss, 0);
+        // t_h = ax + bp[k], high part.
+        let t_h = words(
+            ((ix >> 1) | 0x20000000) + 0x00080000 + ((k as i32) << 18),
+            0,
+        );
+        let t_l = ax - (t_h - BP[k]);
+        let s_l = v * ((u - s_h * t_h) - s_h * t_l);
+        // log(ax).
+        let mut s2 = ss * ss;
+        let mut r = s2 * s2 * (L1 + s2 * (L2 + s2 * (L3 + s2 * (L4 + s2 * (L5 + s2 * L6)))));
+        r += s_l * (s_h + ss);
+        s2 = s_h * s_h;
+        let t_h = with_low(3.0 + s2 + r, 0);
+        let t_l = r - ((t_h - 3.0) - s2);
+        // u + v = ss × (1 + ...).
+        let u = s_h * t_h;
+        let v = s_l * t_h + t_l * ss;
+        // 2/(3 log 2) × (ss + ...).
+        let p_h = with_low(u + v, 0);
+        let p_l = v - (p_h - u);
+        let z_h = CP_H * p_h;
+        let z_l = CP_L * p_h + p_l * CP + DP_L[k];
+        // log2(ax) = (ss + ..) × 2/(3 log 2) = n + dp_h + z_h + z_l.
+        let t = n as f64;
+        let first = with_low(((z_h + z_l) + DP_H[k]) + t, 0);
+        t1 = first;
+        t2 = z_l - (((first - t) - DP_H[k]) - z_h);
+    }
+
+    // (y1 + y2) × (t1 + t2), y split in two.
+    let y1 = with_low(y, 0);
+    let p_l = (y - y1) * t1 + y * t2;
+    let mut p_h = y1 * t1;
+    let z = p_l + p_h;
+    let j = high(z);
+    let i = low(z) as i32;
+    if j >= 0x40900000 {
+        // z ≥ 1024.
+        if ((j - 0x40900000) | i) != 0 {
+            return s * HUGE * HUGE; // overflow
+        }
+        if p_l + OVT > z - p_h {
+            return s * HUGE * HUGE; // overflow
+        }
+    } else if (j & 0x7fffffff) >= 0x4090cc00 {
+        // z ≤ -1075.
+        if ((j as u32).wrapping_sub(0xc090cc00) as i32 | i) != 0 {
+            return s * TINY * TINY; // underflow
+        }
+        if p_l <= z - p_h {
+            return s * TINY * TINY; // underflow
+        }
+    }
+    // 2 ** (p_h + p_l).
+    let i = j & 0x7fffffff;
+    let mut k = (i >> 20) - 0x3ff;
+    let mut n = 0;
+    if i > 0x3fe00000 {
+        // |z| > 0.5: n = [z + 0.5].
+        n = j.wrapping_add(0x00100000 >> (k + 1));
+        k = ((n & 0x7fffffff) >> 20) - 0x3ff; // the new k for n
+        let t = words(n & !(0x000fffff >> k), 0);
+        n = ((n & 0x000fffff) | 0x00100000) >> (20 - k);
+        if j < 0 {
+            n = -n;
+        }
+        p_h -= t;
+    }
+    let t = with_low(p_l + p_h, 0);
+    let u = t * LG2_H;
+    let v = (p_l - (t - p_h)) * LG2 + t * LG2_L;
+    let mut z = u + v;
+    let w = v - (z - u);
+    let t = z * z;
+    let t1 = z - t * (P1 + t * (P2 + t * (P3 + t * (P4 + t * P5))));
+    let r = (z * t1) / ((t1 - TWO) - (w + z * w));
+    z = ONE - (r - z);
+    let j = high(z).wrapping_add(((n as u32) << 20) as i32);
+    if (j >> 20) <= 0 {
+        z = scalbn(z, n); // subnormal output
+    } else {
+        z = with_high(z, high(z).wrapping_add(((n as u32) << 20) as i32));
+    }
+    s * z
+}
+
+/// `Math.cbrt`: V8's `ieee754::cbrt`, FreeBSD's `s_cbrt.c` — a 23-bit
+/// polynomial estimate rounded to 23 bits, then one Newton step.
+pub fn cbrt(x: f64) -> f64 {
+    const B1: u32 = 715094163;
+    const B2: u32 = 696219795;
+    const P0: f64 = 1.87595182427177009643;
+    const P1: f64 = -1.88497979543377169875;
+    const P2: f64 = 1.621429720105354466140;
+    const P3: f64 = -0.758397934778766047437;
+    const P4: f64 = 0.145996192886612446982;
+    let mut hx = high(x) as u32;
+    let lx = low(x);
+    let sign = hx & 0x80000000;
+    hx ^= sign;
+    if hx >= 0x7ff00000 {
+        return x + x; // NaN and ±∞ are themselves.
+    }
+    let mut t;
+    if hx < 0x00100000 {
+        // Zero or subnormal.
+        if (hx | lx) == 0 {
+            return x;
+        }
+        t = words(0x43500000, 0) * x; // 2⁵⁴ × x
+        let high_t = high(t) as u32;
+        t = words((sign | ((high_t & 0x7fffffff) / 3 + B2)) as i32, 0);
+    } else {
+        t = words((sign | (hx / 3 + B1)) as i32, 0);
+    }
+    // cbrt to 23 bits: t × P(t³/x).
+    let r = (t * t) * (t / x);
+    t *= (P0 + r * (P1 + r * P2)) + ((r * r) * r) * (P3 + r * P4);
+    // Round t away from zero to 23 bits.
+    t = f64::from_bits((t.to_bits().wrapping_add(0x80000000)) & 0xffffffffc0000000);
+    // One Newton step to 53 bits.
+    let s = t * t;
+    let r = x / s;
+    let w = t + t;
+    let r = (r - t) / (w + r);
+    t + t * r
+}

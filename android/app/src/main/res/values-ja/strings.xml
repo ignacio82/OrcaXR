@@ -41,6 +41,7 @@
     <string name="filament_remove">Del</string>
     <string name="filament_colour_apply">適用</string>
     <string name="filament_bar_default">デフォルト</string>
+    <string name="vf_delete">削除</string>
     <string name="workspace_paint">ペイント</string>
     <string name="paint_tool_sphere">球体</string>
 </resources>

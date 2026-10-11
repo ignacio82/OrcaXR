@@ -101,6 +101,8 @@ data class ProjectView(
     val filaments: FilamentAssignment = FilamentAssignment(),
     /** The filament slots the project's own physical filaments describe: each one's preset, nozzle, colour and type. */
     val filamentSlots: SlicingSlots = SlicingSlots(emptyList(), emptyList(), emptyList()),
+    /** The virtual filament library the project shows (the browser's library), or why it shows none. */
+    val virtualFilaments: VirtualFilamentLibraryResult = VirtualFilamentLibraryResult.Shown(VirtualFilamentLibrary.EMPTY),
 )
 
 /** An operation the session refused or could not confirm, in an operator's words. */
@@ -256,6 +258,8 @@ class ProjectWorkspace(
     /** The project snapshot the view shows (owned; replaced by each project effect). */
     private var shown: ProjectSnapshot? = null
     private var shownProject: String? = null
+    /** The virtual filament library of the snapshot shown: read once per snapshot, not per selection. */
+    private var shownLibrary: Pair<ProjectSnapshot, VirtualFilamentLibraryResult>? = null
     private var chosen = ProjectSelectionView()
     /** Rows the operator (or a reveal) opened, besides plates; plates the operator closed. */
     private val opened = LinkedHashSet<String>()
@@ -354,11 +358,13 @@ class ProjectWorkspace(
         val inspector = snapshot.query().use { root -> ProjectInspection.inspector(root, selection) }
         val (filaments, filamentSlots) = filamentsOf(snapshot, selection)
         val names = if (selection.refs.isEmpty()) emptyList() else snapshot.query().use { root -> ProjectSceneSummary.names(root, selection.refs) }
+        val library = shownLibrary?.takeIf { it.first === snapshot }?.second
+            ?: snapshot.virtualFilamentLibrary().also { shownLibrary = snapshot to it }
         return { view: ProjectView ->
             view.copy(
                 name = name, plates = count, rows = page?.rows.orEmpty(), totalRows = page?.totalRows ?: 0,
                 activePlate = active, plateList = plates, selection = selection, selectionNames = names, bed = bed, inspector = inspector,
-                filaments = filaments, filamentSlots = filamentSlots,
+                filaments = filaments, filamentSlots = filamentSlots, virtualFilaments = library,
             )
         }
     }
@@ -839,6 +845,28 @@ class ProjectWorkspace(
         }
     }
 
+    /**
+     * One edit of the virtual filament library (`filament_virtual_mutate`,
+     * the browser's `VirtualFilamentLibrary` through its canonical adapter):
+     * add, edit or duplicate a recipe from a validated draft, enable or
+     * disable one, or delete one — removed when nothing references it, else
+     * a tombstone that keeps its references. Planned on the authority from
+     * the state it reads there (a new recipe's ID drawn as the browser's
+     * controller draws it) and executed under that state's guard as one
+     * undoable step with the browser's label: "Add <name>", "Edit mixed
+     * filament", "Enable/Disable mixed filament", "Remove mixed filament" or
+     * "Delete mixed filament". The core's refusal (an incompatible pair, a
+     * disabled head, a recipe no longer there) fails in the browser's words.
+     * Automatic pairs are not reconciled: the browser generates them only
+     * when its preference is on, and its default is off.
+     */
+    fun changeVirtualFilament(change: VirtualFilamentEdit): CompletableFuture<VirtualFilamentStep?> = edit { _, snapshot ->
+        when (val plan = snapshot.virtualFilamentPlan(change) { ids.next() }) {
+            is VirtualFilamentPlan.Refused -> throw ProjectFailure(plan.message)
+            is VirtualFilamentPlan.Planned -> Edit(plan.step.batch.commands, plan.step, plan.step.label, transaction = !plan.step.intent)
+        }
+    }
+
     /** The filament slots the project's own physical filaments describe, read on the authority; [palette] when it has none. */
     fun filamentSlots(palette: List<SlicingSlot>): CompletableFuture<SlicingSlots> =
         inspect { session -> session.snapshot().use { it.filamentSlots(palette) } }
@@ -1301,7 +1329,14 @@ class ProjectWorkspace(
     // ---- Edits: one guarded intent per undoable step, with the core's history label ----
 
     /** What an edit's plan chose: its commands (one step, a labelled batch, or each its own step) and what it answers. */
-    private class Edit<T>(val commands: List<ProjectIntents.Command>, val result: T, val label: String? = null, val separate: Boolean = false)
+    private class Edit<T>(
+        val commands: List<ProjectIntents.Command>,
+        val result: T,
+        val label: String? = null,
+        val separate: Boolean = false,
+        /** One command as a labelled transaction, as the browser submits some single edits. */
+        val transaction: Boolean = false,
+    )
 
     /** The guard of [snapshot] in [session]: what a query would answer for that state. */
     internal fun guardOf(session: ProjectSession, snapshot: ProjectSnapshot): ProjectIntents.SessionGuard {
@@ -1347,7 +1382,7 @@ class ProjectWorkspace(
     private fun <T> commit(guard: ProjectIntents.SessionGuard, edit: Edit<T>): CompletableFuture<T> {
         fun intent(command: ProjectIntents.Command) = ProjectIntents.Intent(ProjectIntents.VERSION, command)
         if (!edit.separate) {
-            val operation = if (edit.commands.size == 1) {
+            val operation = if (edit.commands.size == 1 && !edit.transaction) {
                 ProjectIntents.SessionOperation.Execute(ProjectIntents.GuardedIntent(guard, intent(edit.commands.single())))
             } else {
                 ProjectIntents.SessionOperation.Transaction(

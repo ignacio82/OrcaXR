@@ -66,9 +66,6 @@ object Filaments {
         }
     }
 
-    /** The project's mixed filaments, listed after its heads. */
-    fun mixed(view: ProjectView): List<FilamentOption> = view.filaments.options.filter { it.mixed }
-
     // ---- The selection filament bar ----
 
     /** Whether the bar shows: the selection has scopes that can take a filament, and nothing that cannot. */

@@ -78,25 +78,11 @@ export class CanonicalVirtualFilamentLibraryAdapter implements VirtualFilamentLi
       `${request.targetColor}\u0000${request.minComponentPercent}`;
     if (this.matchSearchCache?.key === key) return this.matchSearchCache.candidates;
 
-    const eligible = canonical.physical.filter(
-      (entry) => entry.enabled && fullSpectrumMaterialCategory(entry.material) !== undefined,
-    );
+    const eligible = matchSearchEligible(canonical.physical);
     if (eligible.length < 2) return Object.freeze([]);
-    const result = await this.source.searchMatch({
-      palette: eligible.map((entry) => ({
-        color: normalizeSixDigitColor(entry.color),
-        filamentType: entry.material,
-      })),
-      targetColor: request.targetColor,
-      minComponentPercent: request.minComponentPercent,
-    });
+    const result = await this.source.searchMatch(matchSearchInput(eligible, request));
     this.currentForGuard(request);
-    const candidates = dedupeCandidates(
-      [result.recipe, result.bestPair]
-        .filter((recipe): recipe is SuppliedPaletteMatchRecipe => recipe !== null)
-        .map((recipe) => matchSearchCandidate(recipe, eligible)),
-    );
-    const frozen = Object.freeze(candidates);
+    const frozen = Object.freeze(matchSearchCandidates(result, eligible));
     this.matchSearchCache = { key, candidates: frozen };
     return frozen;
   }
@@ -174,6 +160,40 @@ export class CanonicalVirtualFilamentLibraryAdapter implements VirtualFilamentLi
     }
     return current;
   }
+}
+
+type CanonicalPhysical = CanonicalVirtualFilamentLibrarySnapshot['physical'][number];
+
+/** The heads the pinned Match search reads: enabled and in the compatibility table, in engine order. */
+export function matchSearchEligible(physical: readonly CanonicalPhysical[]): readonly CanonicalPhysical[] {
+  return physical.filter((entry) => entry.enabled && fullSpectrumMaterialCategory(entry.material) !== undefined);
+}
+
+/** The search over `eligible` (its Nth head is the search's tool N) for the requested target and minimum. */
+export function matchSearchInput(
+  eligible: readonly CanonicalPhysical[],
+  request: { readonly targetColor: string; readonly minComponentPercent: number },
+): SuppliedPaletteMatchSearchInput {
+  return {
+    palette: eligible.map((entry) => ({
+      color: normalizeSixDigitColor(entry.color),
+      filamentType: entry.material,
+    })),
+    targetColor: request.targetColor,
+    minComponentPercent: request.minComponentPercent,
+  };
+}
+
+/** The search's recipe and best pair as library candidates (the same recipe once), on `eligible`'s stable IDs. */
+export function matchSearchCandidates(
+  result: SuppliedPaletteMatchSearchResult,
+  eligible: readonly CanonicalPhysical[],
+): VirtualFilamentMatchCandidate[] {
+  return dedupeCandidates(
+    [result.recipe, result.bestPair]
+      .filter((recipe): recipe is SuppliedPaletteMatchRecipe => recipe !== null)
+      .map((recipe) => matchSearchCandidate(recipe, eligible)),
+  );
 }
 
 function matchSearchCandidate(
@@ -299,18 +319,21 @@ function toPhysicalChoice(
   entry: CanonicalVirtualFilamentLibrarySnapshot['physical'][number],
 ): VirtualFilamentPhysicalChoice {
   const category = fullSpectrumMaterialCategory(entry.material);
+  // A blank label is no label: the library's snapshot refuses blank labels,
+  // so one imported head named or typed "  " used to hide the whole library.
+  const material = entry.material.trim() ? entry.material : '';
   return Object.freeze({
     id: entry.id,
     toolId: entry.engineToolId,
-    name: entry.name || `Head ${entry.engineToolId}`,
-    material: entry.material || 'Unknown',
+    name: entry.name.trim() ? entry.name : `Head ${entry.engineToolId}`,
+    material: material || 'Unknown',
     color: normalizeSixDigitColor(entry.color),
     enabled: entry.enabled,
     compatible: category !== undefined,
     ...(category
       ? {}
       : {
-          incompatibilityReason: `${entry.material || 'Unknown material'} is absent from the pinned compatibility table.`,
+          incompatibilityReason: `${material || 'Unknown material'} is absent from the pinned compatibility table.`,
         }),
   });
 }
@@ -602,10 +625,16 @@ function normalizeSixDigitColor(value: string): string {
   return `#${match[1].toUpperCase()}`;
 }
 
+/**
+ * A recipe's name as the dialog holds it: trimmed and cut to the dialog's
+ * limit — then trimmed again, as a cut can end on a space, which the
+ * library's snapshot refuses (one long imported name used to hide the whole
+ * library).
+ */
 function normalizeDisplayName(value: string): string {
   const normalized = value.trim();
   if (!normalized) throw new Error('Virtual filament name cannot be empty');
-  return normalized.length <= 120 ? normalized : normalized.slice(0, 120);
+  return normalized.length <= 120 ? normalized : normalized.slice(0, 120).trimEnd();
 }
 
 function dedupeCandidates(candidates: readonly VirtualFilamentMatchCandidate[]): VirtualFilamentMatchCandidate[] {

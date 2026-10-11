@@ -71,6 +71,12 @@ pub fn material_category(material: &[u16]) -> Option<Category> {
     })
 }
 
+/// Whether two categories may mix: the same, or partners in the symmetric
+/// matrix (`arePinnedFilamentCategoriesCompatible`).
+pub fn compatible(first: Category, second: Category) -> bool {
+    first == second || first.partners().contains(&second)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Decision {
     Allowed(Vec<Category>),

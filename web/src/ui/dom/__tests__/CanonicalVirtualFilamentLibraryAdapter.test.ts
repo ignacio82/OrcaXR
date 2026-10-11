@@ -12,6 +12,7 @@ import {
   projectCanonicalVirtualFilamentLibrary,
   toFullSpectrumRecipeDraft,
 } from '../CanonicalVirtualFilamentLibraryAdapter';
+import { immutableSnapshot } from '../../../project/filaments/virtualFilamentLibraryModel';
 
 const physicalA = entityId<'physical-filament'>('import:virtual-adapter:physical-a');
 const physicalB = entityId<'physical-filament'>('import:virtual-adapter:physical-b');
@@ -185,6 +186,30 @@ await test('routes guarded CRUD through one canonical mutation callback and pres
     /no longer matches the canonical project/i,
   );
   assert.equal(calls.length, 4, 'stale requests must not reach the mutation boundary');
+});
+
+await test('a blank head label or a long recipe name cut at a space keeps the library shown', () => {
+  // Each of these once made the whole library unavailable: the library's
+  // snapshot refuses blank labels and names that end in a space.
+  const current = snapshot();
+  const long = `${'n'.repeat(119)} tail`;
+  const odd: CanonicalVirtualFilamentLibrarySnapshot = {
+    ...current,
+    physical: current.physical.map((entry, index) =>
+      index === 3 ? { ...entry, name: '   ', material: ' \t' } : entry,
+    ),
+    mixed: current.mixed.map((row, index) =>
+      index === 0 ? { ...row, filament: { ...row.filament, name: long } } : row,
+    ),
+  };
+  const shown = immutableSnapshot(projectCanonicalVirtualFilamentLibrary(odd));
+  assert.equal(shown.physicalChoices[3].name, 'Head 4');
+  assert.equal(shown.physicalChoices[3].material, 'Unknown');
+  assert.equal(
+    shown.physicalChoices[3].incompatibilityReason,
+    'Unknown material is absent from the pinned compatibility table.',
+  );
+  assert.equal(shown.mixedRows[0].draft.name, 'n'.repeat(119));
 });
 
 console.log(`CanonicalVirtualFilamentLibraryAdapter: ${passed} tests passed`);

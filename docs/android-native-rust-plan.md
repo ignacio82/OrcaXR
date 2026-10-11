@@ -1953,14 +1953,21 @@ storage journeys on phone, tablet, and desktop-sized windows.
   are the browser's, through the shared core (`filaments::assignment`,
   `slicing::choices` slot edits; 36 + 18 browser cases and a 10-step
   controller journey, 96 slot edits): Prepare lists them as the browser's
-  Filament tab (H-n heads, A-n extra palette colours, mixed recipes; "+",
-  Del, colour and nozzle, each one undoable "Update slicing configuration",
-  sixteen at most, adopted from the project so undo never resurrects a
-  slot), and the Project area's selection filament bar assigns the
-  selection's objects, parts and ranges ("Assign filament", "Assign n
-  scopes") with the tree's filament badges (a 76-check JNI journey; an
-  emulator filament smoke, not yet run). The mixed (virtual) filament
-  library's editing remains.
+  Filament tab (H-n heads, A-n extra palette colours; "+", Del, colour and
+  nozzle, each one undoable "Update slicing configuration", sixteen at
+  most, adopted from the project so undo never resurrects a slot — the
+  browser's own palette now follows undo too), and the Project area's
+  selection filament bar assigns the selection's objects, parts and ranges
+  ("Assign filament", "Assign n scopes") with the tree's filament badges (a
+  76-check JNI journey). The virtual filament library is the browser's
+  through the shared core (`filaments::library`: the library, the author
+  dialog's four modes with their validation, previews, triangle picker and
+  pinned Match search, and each edit's step; 197 validations, 51 edits and a
+  14-step controller journey, V8's `pow`, `cbrt` and `sort`): Prepare lists
+  its heads and recipes and adds, edits, duplicates, enables, disables and
+  deletes recipes, each one undoable step with the browser's label (a
+  105-check JNI journey; the filament smoke drives it, not yet run on an
+  emulator).
 - [ ] Adapt inspector/object tree, toolbars, menus, command palette, dialogs,
   settings, and progress states to narrow, medium, and wide windows. Support
   keyboard traversal, shortcuts, hover, context menus, trackpad navigation,

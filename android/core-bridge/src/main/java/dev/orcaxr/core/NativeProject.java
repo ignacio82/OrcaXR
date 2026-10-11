@@ -94,6 +94,16 @@ final class NativeProject {
     static native String projectFilamentSlots(long handle, String request);
     static native String projectFilamentAssignment(long handle, String request);
     static native String projectFilamentAssignmentChanges(long handle, String request);
+    // The virtual filament library (the browser's VirtualFilamentExchange):
+    // the library a captured project shows and a library edit's step over it;
+    // the author dialog's opening fields, validations, triangle picker and
+    // pinned Match search over a library document.
+    static native String projectVirtualFilamentLibrary(long handle, String request);
+    static native String projectVirtualFilamentMutation(long handle, String request);
+    static native String virtualFilamentFormDefaults(String request);
+    static native String virtualFilamentForm(String request);
+    static native String virtualFilamentTriangle(String request);
+    static native String virtualFilamentMatchSearch(String request);
     // The workspace's bed (a configuration's, or a captured project's for one
     // plate) and the transform inspector's fields: canonical JSON requests and
     // replies (the browser's WorkspaceBedExchange and TransformFieldsExchange).

@@ -79,6 +79,18 @@ export class CapturedProject {
      */
     settings_targets(request: string): string;
     /**
+     * The virtual filament library this project shows
+     * (`virtualFilamentLibraryExchange`): `{}` in,
+     * `{"matchCandidates","mixedRows","physicalChoices","status"}` or `{"error"}` out.
+     */
+    virtual_filament_library(request: string): string;
+    /**
+     * The step one library edit submits (`virtualFilamentMutationExchange`):
+     * `{"operation",...}` in, `{"batchJson","label","operation","step",...}`
+     * or `{"error"}` out.
+     */
+    virtual_filament_mutation(request: string): string;
+    /**
      * The bed the workspace reads from this project and plate `plateId`'s
      * tower keep-out: `{"plateId": string | null}` in, the workspace bed
      * document (`orcaxr_project::placement::bed`) out.
@@ -1716,6 +1728,30 @@ export function transform_fields(request: string): string;
 export function transform_rotation(request: string): string;
 
 /**
+ * What the dialog shows for its fields (`virtualFilamentFormExchange`):
+ * `{"library","form","search"}` in, `{"issues","preview",...}` out.
+ */
+export function virtual_filament_form(request: string): string;
+
+/**
+ * The fields an author dialog opens with (`virtualFilamentFormDefaultsExchange`):
+ * `{"library","operation","filamentId"}` in, the form out.
+ */
+export function virtual_filament_form_defaults(request: string): string;
+
+/**
+ * The pinned Match search's candidates (`virtualFilamentMatchSearchExchange`):
+ * `{"library","targetColor","minComponentPercent"}` in, `{"candidates"}` out.
+ */
+export function virtual_filament_match_search(request: string): string;
+
+/**
+ * The proportions the triangle picker writes (`virtualFilamentTriangleExchange`):
+ * `{"x","y"}` in, `{"weights"}` or `{"error"}` out.
+ */
+export function virtual_filament_triangle(request: string): string;
+
+/**
  * A project configuration's bed and a plate tower's keep-out
  * (`workspaceBedExchange`): `{"config","wipeTower"}` in,
  * `{"keepOut","printableArea","printableHeightMm","sizeMm"}` out.
@@ -1805,6 +1841,8 @@ export interface InitOutput {
     readonly capturedproject_settings_explain: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_settings_snapshot: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_settings_targets: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_virtual_filament_library: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_virtual_filament_mutation: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_workspace_bed: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedselection_count: (a: number) => number;
     readonly capturedselection_id: (a: number, b: number, c: number, d: number) => [number, number, number, number];
@@ -2162,6 +2200,10 @@ export interface InitOutput {
     readonly transform_field_edit: (a: number, b: number) => [number, number, number, number];
     readonly transform_fields: (a: number, b: number) => [number, number, number, number];
     readonly transform_rotation: (a: number, b: number) => [number, number, number, number];
+    readonly virtual_filament_form: (a: number, b: number) => [number, number, number, number];
+    readonly virtual_filament_form_defaults: (a: number, b: number) => [number, number, number, number];
+    readonly virtual_filament_match_search: (a: number, b: number) => [number, number, number, number];
+    readonly virtual_filament_triangle: (a: number, b: number) => [number, number, number, number];
     readonly workspace_bed: (a: number, b: number) => [number, number, number, number];
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

@@ -14,6 +14,14 @@ filament; the slot edit is the last step again). Finally the new slot's colour
 is changed from its swatch in the Filaments list, one more "Update slicing
 configuration", and the colour editor shows the new colour when it opens again.
 
+Then the virtual filament library, which the list's "Open virtual filament
+library" brings into view: "Add virtual filament" opens the author dialog on
+the browser's defaults (a 50 % Ratio of the first two heads, its exact cadence
+previewed), a name is typed and Add makes one "Add <name>"; the row's Disable
+is one "Disable mixed filament"; its Delete reviews the dependencies (none)
+and removes the recipe, one "Remove mixed filament"; undo brings it back,
+still disabled.
+
 Lessons kept from the earlier smokes: an import selects nothing, as in the
 browser, so the cube is selected with Select All; an action acting on the
 selection waits until the core enables it; rows are found by their text,
@@ -23,6 +31,7 @@ inner node with the same bounds as the EditText.
 import argparse
 import re
 import time
+import xml.etree.ElementTree as ET
 from artifacts import ROOT
 from smoke_ui import Screen
 
@@ -94,6 +103,17 @@ def colour_field():
     return screen.field("Colour (#rrggbb)").get("text") or ""
 
 
+def row_action(name, action):
+    """Taps [action] among the buttons of the library row of recipe [name] (described "Actions for <name>"):
+    the Prepare area shows other buttons with the same words."""
+    find(f"Actions for {name}", timeout=30)
+    root = ET.fromstring(adb("shell", "cat", screen.dump))
+    group = next(n for n in root.iter("node") if (n.get("content-desc") or "") == f"Actions for {name}")
+    button = next(n for n in group.iter("node") if (n.get("text") or "") == action)
+    x, y = screen.center(button)
+    adb("shell", "input", "tap", str(x), str(y))
+
+
 assert adb("shell", "getprop", "sys.boot_completed") == "1", "Emulator is not ready"
 adb("install", "-r", str(app_apk))
 adb("shell", "pm", "clear", PACKAGE)
@@ -156,4 +176,49 @@ tap("Palette colour 5", timeout=30)
 find("Colour (#rrggbb)", timeout=20)
 assert colour_field() == "#2196f3", colour_field()
 screen.key(4)
+absent("Colour (#rrggbb)")
+
+# The virtual filament library, which the Filaments list opens as the browser's heads panel does.
+RECIPE = "Smoke recipe"
+CADENCE = "Exact cadence: A 1 layer / B 1 layer; badge #808080."
+tap("Open virtual filament library", timeout=30)
+find("Virtual library", timeout=20)
+find("No virtual filaments have been authored.")
+until_enabled("Add virtual filament")
+tap("Add virtual filament")
+# The author dialog opens on the browser's defaults: a 50 % Ratio of the first two heads, a grey badge.
+find(CADENCE, timeout=20)
+screen.type_into("Name", RECIPE)
+find(CADENCE)
+tap("Add")
+absent(CADENCE, timeout=30)
+find(f"Add request accepted for {RECIPE}.", timeout=30)
+find("Ratio · Enabled · #808080")
+tap("Project")
+find(f"Undo Add {RECIPE}", timeout=30)
+
+# Disabling it from its row is one "Disable mixed filament"; the row says so.
+tap("Prepare")
+row_action(RECIPE, "Disable")
+find(f"Disable request accepted for {RECIPE}.", timeout=30)
+find("Ratio · Disabled · #808080")
+tap("Project")
+find("Undo Disable mixed filament", timeout=30)
+
+# Nothing references it, so deleting it removes it ("Remove mixed filament") after the dialog's review.
+tap("Prepare")
+row_action(RECIPE, "Delete")
+find(f"Delete {RECIPE}?", timeout=20)
+find("No dependencies were reported in this snapshot")
+tap("Delete virtual filament")
+find(f"Delete request accepted for {RECIPE}.", timeout=30)
+find("No virtual filaments have been authored.")
+tap("Project")
+find("Undo Remove mixed filament", timeout=30)
+
+# Undo brings it back, still disabled.
+tap("Undo Remove mixed filament")
+find("Undo Disable mixed filament", timeout=30)
+tap("Prepare")
+find("Ratio · Disabled · #808080", timeout=30)
 print("Filament smoke passed")

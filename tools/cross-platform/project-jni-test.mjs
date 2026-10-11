@@ -56,6 +56,7 @@ import { replayTransformFields } from "./transform-field-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
 import { replayFilamentAssignment } from "./filament-assignment-replay.mjs";
 import { replayPaintTool } from "./paint-tool-replay.mjs";
+import { replayVirtualFilaments } from "./virtual-filament-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -523,6 +524,22 @@ try {
     await readFile(new URL("web/public/profiles/catalog.json", root)),
   );
   assert.equal(filamentChecks, 76);
+  // The virtual filament library through the JNI exports, then on a real
+  // session: the browser's library, dialog fields, Match search, draft, hash
+  // and undo label at every step of its journey, and every undo.
+  const virtualFixture = await json("testdata/cross-platform/virtual-filament-vectors.json");
+  const virtualFilaments = replayVirtualFilaments(projectJniCore(jvm.call), virtualFixture, layout, fixture.generation);
+  assert.deepEqual(virtualFilaments.virtualFilamentAnswers, [6, 27, 197, 12, 12, 51, 13, 20]);
+  const virtualFilamentChecks = jvm.call(
+    "virtualFilamentChecks",
+    JSON.stringify({
+      opened: virtualFixture.journey.opened,
+      steps: virtualFixture.journey.steps,
+      undo: virtualFixture.journey.undo,
+    }),
+    Buffer.from(virtualFixture.journey.archive, "base64"),
+  );
+  assert.equal(virtualFilamentChecks, 105);
   // The transform inspector on a real session: every field edit of the corpus
   // lands as the browser computed it (or is refused in its words), one undo
   // entry each that never coalesces; the Edit menu's placement on the selection.
@@ -1638,6 +1655,8 @@ try {
     createEditChecks,
     filamentAssignment,
     filamentChecks,
+    virtualFilaments,
+    virtualFilamentChecks,
     kotlinStagedWorks,
     stagedRecordChecks,
     projectSceneChecks,

@@ -11,8 +11,9 @@ pub mod case;
 mod case_data;
 pub mod convert;
 mod fdlibm;
+pub mod sort;
 
-pub use fdlibm::{acos, asin, atan, atan2, cos, exp, sin, tan};
+pub use fdlibm::{acos, asin, atan, atan2, cbrt, cos, exp, pow, sin, tan};
 
 /// `Math.min(a, b)`: NaN wins, and -0 is below +0.
 pub fn min(a: f64, b: f64) -> f64 {

@@ -86,6 +86,7 @@ export function startProjectJni(profile = "debug") {
   signatures.stagedRecords = ["String"];
   signatures.createEditChecks = ["String", "byte[]"];
   signatures.filamentChecks = ["String", "byte[]", "byte[]", "byte[]"];
+  signatures.virtualFilamentChecks = ["String", "byte[]"];
   signatures.projectSceneChecks = ["byte[]"];
   signatures.accessibilityChecks = [];
   signatures.printerDiscoveryChecks = ["String", "String"];
@@ -818,6 +819,12 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     filament_assignment_changes(request) {
       return call("projectFilamentAssignmentChanges", this.handle, request);
     }
+    virtual_filament_library(request) {
+      return call("projectVirtualFilamentLibrary", this.handle, request);
+    }
+    virtual_filament_mutation(request) {
+      return call("projectVirtualFilamentMutation", this.handle, request);
+    }
     id_length() {
       return call("projectIdLength", this.handle);
     }
@@ -1420,6 +1427,10 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     plate_print_overrides: (state, plateId) => call("platePrintOverridesJson", state, plateId),
     slicing_match: (request) => call("slicingMatch", request),
     workspace_bed: (request) => call("workspaceBed", request),
+    virtual_filament_form_defaults: (request) => call("virtualFilamentFormDefaults", request),
+    virtual_filament_form: (request) => call("virtualFilamentForm", request),
+    virtual_filament_triangle: (request) => call("virtualFilamentTriangle", request),
+    virtual_filament_match_search: (request) => call("virtualFilamentMatchSearch", request),
     transform_fields: (request) => call("transformFields", request),
     transform_field_edit: (request) => call("transformFieldEdit", request),
     transform_rotation: (request) => call("transformRotation", request),

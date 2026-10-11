@@ -47,6 +47,7 @@ import { replayTransformFields } from "./transform-field-replay.mjs";
 import { replayPaintTool } from "./paint-tool-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
 import { replayFilamentAssignment } from "./filament-assignment-replay.mjs";
+import { replayVirtualFilaments } from "./virtual-filament-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -319,6 +320,10 @@ if (isMainThread) {
     // Filament assignment: selections resolved, assignments planned, those
     // refused in the browser's words, and malformed requests.
     assert.deepEqual(result.filamentAssignmentAnswers, [36, 18, 15, 16]);
+    // The virtual filament library: libraries shown, dialogs opened, their
+    // validations, triangle points and Match searches, library edits planned,
+    // those refused in the browser's words, and malformed requests.
+    assert.deepEqual(result.virtualFilamentAnswers, [6, 27, 197, 12, 12, 51, 13, 20]);
     // The workspace bed: configurations, refusals and opened projects' plates.
     assert.deepEqual([result.beds, result.bedRefusals, result.projectBeds], [74, 14, 12]);
     // The transform inspector's fields: reads, rotations, edits and refusals.
@@ -866,6 +871,12 @@ if (isMainThread) {
     layout,
     fixture.generation,
   );
+  const virtualFilaments = replayVirtualFilaments(
+    core,
+    JSON.parse(await readFile(new URL("testdata/cross-platform/virtual-filament-vectors.json", root))),
+    layout,
+    fixture.generation,
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -924,6 +935,7 @@ if (isMainThread) {
       ...paintTool,
       ...primitives,
       ...filamentAssignment,
+      ...virtualFilaments,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

@@ -47,7 +47,7 @@ import dev.orcaxr.nativeapp.R
 
 /** A colour's swatch: filled with [color] when it is one the swatch can draw, the browser's grey otherwise. */
 @Composable
-fun FilamentSwatch(color: String, size: Dp = 20.dp, modifier: Modifier = Modifier) {
+fun FilamentSwatch(color: String, modifier: Modifier = Modifier, size: Dp = 20.dp) {
     val argb = Filaments.argb(color) ?: 0xff808080
     Box(
         modifier.size(size)
@@ -61,8 +61,9 @@ fun FilamentSwatch(color: String, size: Dp = 20.dp, modifier: Modifier = Modifie
  * palette colours): one row per filament slot of the project — the slot's
  * colour (tapped to edit it), `H-n` for a printer head or `A-n` for an extra
  * palette colour, the filament's name and type, a head's nozzle and an extra
- * colour's Del — then "+", which adds a slot (refused past sixteen), and the
- * project's mixed filaments. Each edit is one undoable "Update slicing
+ * colour's Del — then "+", which adds a slot (refused past sixteen), and
+ * "Open virtual filament library", where the project's mixed recipes are
+ * authored. Each edit is one undoable "Update slicing
  * configuration". Edits wait for a chosen profile: an opened project slices
  * with its own filaments until one is chosen, as the browser's do.
  */
@@ -75,6 +76,7 @@ fun FilamentList(
     onRemove: (Int) -> Unit,
     onColor: (Int, String) -> Unit,
     onNozzle: (Int, String) -> Unit,
+    onOpenLibrary: () -> Unit,
 ) {
     if (!profiles.ready) return
     val editable = enabled && profiles.machine != null && !profiles.authored
@@ -114,24 +116,8 @@ fun FilamentList(
                 }
             }
         }
-        val mixed = Filaments.mixed(view)
-        if (mixed.isNotEmpty()) {
-            Text(stringResource(R.string.filament_mixed_title), style = MaterialTheme.typography.titleSmall)
-            for (option in mixed) {
-                Row(
-                    Modifier.fillMaxWidth().alpha(if (option.enabled) 1f else 0.6f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    FilamentSwatch(option.color, size = 28.dp)
-                    Text(Filaments.chipIndex(option), style = MaterialTheme.typography.labelMedium)
-                    Column(Modifier.weight(1f)) {
-                        Text(option.name, style = MaterialTheme.typography.bodyMedium)
-                        option.distributionMode?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                    }
-                }
-            }
-        }
+        // The heads panel's last control: the virtual filament library, where mixed recipes are authored.
+        OutlinedButton(onClick = onOpenLibrary) { Text(stringResource(R.string.vf_open_library)) }
     }
     editing?.let { slot -> ColourDialog(slot, onClose = { editing = null }) { onColor(slot.index, it) } }
 }

@@ -1513,6 +1513,20 @@ impl CapturedProject {
         orcaxr_project::filaments::assignment::changes_json(self.inner.state(), request)
             .map_err(error)
     }
+    /// The virtual filament library this project shows
+    /// (`virtualFilamentLibraryExchange`): `{}` in,
+    /// `{"matchCandidates","mixedRows","physicalChoices","status"}` or `{"error"}` out.
+    pub fn virtual_filament_library(&self, request: &str) -> Result<String, JsValue> {
+        orcaxr_project::filaments::library::exchange::library_json(self.inner.state(), request)
+            .map_err(error)
+    }
+    /// The step one library edit submits (`virtualFilamentMutationExchange`):
+    /// `{"operation",...}` in, `{"batchJson","label","operation","step",...}`
+    /// or `{"error"}` out.
+    pub fn virtual_filament_mutation(&self, request: &str) -> Result<String, JsValue> {
+        orcaxr_project::filaments::library::exchange::mutation_json(self.inner.state(), request)
+            .map_err(error)
+    }
     /// The filament slots this project's physical filaments describe
     /// (`projectFilamentSlotsExchange`): `{"palette"}` in,
     /// `{"heads","nozzles","palette"}` out.

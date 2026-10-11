@@ -399,6 +399,38 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_projectVirtualFilamentLibrary, project_virtual_filament_library, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectVirtualFilamentMutation, project_virtual_filament_mutation, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_virtualFilamentFormDefaults, virtual_filament_form_defaults, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_virtualFilamentForm, virtual_filament_form, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_virtualFilamentTriangle, virtual_filament_triangle, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_virtualFilamentMatchSearch, virtual_filament_match_search, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_workspaceBed, workspace_bed, jstring,
     request: JString<'local>,
 }

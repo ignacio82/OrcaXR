@@ -640,6 +640,12 @@ impl RemoveMixed {
     }
 }
 
+/// `findFilamentDependentPaths` for the filament library: every canonical
+/// reference to filament `id`, sorted by UTF-16, or why paint could not be scanned.
+pub fn filament_dependent_paths(state: &ProjectState, id: &[u16]) -> Result<Vec<Vec<u16>>, Text> {
+    dependent_paths::<std::convert::Infallible>(state, id).map_err(|error| error.user_message())
+}
+
 /// `findFilamentDependentPaths`: every canonical reference, sorted by UTF-16.
 fn dependent_paths<E>(state: &ProjectState, id: &[u16]) -> Result<Vec<Vec<u16>>, CommandError<E>> {
     let mut paths: Vec<Vec<u16>> = Vec::new();

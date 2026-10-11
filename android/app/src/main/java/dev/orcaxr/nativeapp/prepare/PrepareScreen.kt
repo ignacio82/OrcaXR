@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
@@ -33,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,6 +51,10 @@ import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.pluralMessage
 import dev.orcaxr.nativeapp.project.FilamentList
 import dev.orcaxr.nativeapp.project.ProjectModel
+import dev.orcaxr.nativeapp.project.VirtualFilamentAuthorDialog
+import dev.orcaxr.nativeapp.project.VirtualFilamentDeleteDialog
+import dev.orcaxr.nativeapp.project.VirtualFilamentLibraryPanel
+import kotlinx.coroutines.launch
 import dev.orcaxr.nativeapp.device.DeviceModel
 import dev.orcaxr.nativeapp.send.SendGuard
 import dev.orcaxr.nativeapp.send.SendWords
@@ -110,8 +116,11 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
     val route = sliceRoute(connection, state.local)
     val canSlice = route != SliceRouteKind.None && plate != null && plate.objects > 0 && job == null && !blocked
 
+    val list = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     LazyColumn(
         modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        state = list,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
@@ -139,6 +148,18 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                 onRemove = project::removeFilament,
                 onColor = project::recolorFilament,
                 onNozzle = project::setFilamentNozzle,
+                onOpenLibrary = { scope.launch { list.animateScrollToItem(LIBRARY_ITEM) } },
+            )
+        }
+        item(key = "virtual-filaments") {
+            VirtualFilamentLibraryPanel(
+                view.virtualFilaments,
+                project.virtualStatus,
+                project.virtualFailure,
+                busy = project.busy || project.virtualBusy,
+                onOpen = project::openVirtualFilament,
+                onToggle = project::toggleVirtualFilament,
+                onDelete = project::askDeleteVirtualFilament,
             )
         }
         item {
@@ -296,6 +317,20 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
         }
     }
 
+    project.virtualAuthor?.let { dialog ->
+        VirtualFilamentAuthorDialog(
+            dialog,
+            view.revision,
+            onType = project::typeVirtualFilament,
+            onTriangle = project::pickTriangle,
+            onSubmit = project::submitVirtualFilament,
+            onClose = project::closeVirtualFilament,
+        )
+    }
+    project.virtualDelete?.let { dialog ->
+        VirtualFilamentDeleteDialog(dialog, view.revision, onConfirm = project::deleteVirtualFilament, onClose = project::closeDeleteVirtualFilament)
+    }
+
     state.consentFor?.let { endpoint ->
         AlertDialog(
             onDismissRequest = { model.answerConsent(false) },
@@ -332,6 +367,8 @@ private fun IssueCard(card: PreflightCard, onHide: () -> Unit) {
     }
 }
 
+/** The virtual filament library's place in the list: after the plate, the pickers and the filaments. */
+private const val LIBRARY_ITEM = 3
 private const val ANDROID_17 = 37
 private const val ANDROID_13 = 33
 private const val NOTIFICATIONS = Manifest.permission.POST_NOTIFICATIONS

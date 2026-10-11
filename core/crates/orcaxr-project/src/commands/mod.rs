@@ -30,6 +30,7 @@ use duplicate::*;
 pub use duplicate::{DuplicatePlateShape, duplicate_plate_shape};
 pub use facet_stroke::FacetRefinement;
 pub use lifecycle::IndependentObjectIds;
+pub use mixed::filament_dependent_paths;
 use orcaxr_contracts::{canonical::Value, project_intent_types as wire};
 pub use split_objects::SeparatedObject;
 pub use split_parts::{SplitPart, VolumeSplitGuard};

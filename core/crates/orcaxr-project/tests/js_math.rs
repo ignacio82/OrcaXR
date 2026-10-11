@@ -126,3 +126,70 @@ fn atan2_matches_v8_bit_for_bit() {
         );
     }
 }
+
+#[test]
+fn pow_matches_v8_bit_for_bit() {
+    let rows = corpus()["pow"].as_array().unwrap().clone();
+    assert!(rows.len() > 7_000);
+    let mut wrong = Vec::new();
+    for row in rows {
+        let (x, y) = (f(&row[0][0]), f(&row[0][1]));
+        let actual = js_math::pow(x, y);
+        if !same(actual, f(&row[1])) {
+            wrong.push(format!(
+                "pow({x:e}, {y:e}) = {actual:e}, V8 {:e}",
+                f(&row[1])
+            ));
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "{} differ: {:?}",
+        wrong.len(),
+        &wrong[..wrong.len().min(5)]
+    );
+}
+
+#[test]
+fn sort_leaves_the_order_v8_leaves_with_an_intransitive_comparator() {
+    let rows = corpus()["sort"].as_array().unwrap().clone();
+    assert_eq!(rows.len(), 260);
+    let compare = |left: &(f64, usize), right: &(f64, usize)| {
+        if left.0 + 1e-6 < right.0 {
+            -1.0
+        } else if right.0 + 1e-6 < left.0 {
+            1.0
+        } else {
+            left.1 as f64 - right.1 as f64
+        }
+    };
+    // (Rust's own sort refuses such a comparator outright.)
+    for row in rows {
+        let mut entries: Vec<(f64, usize)> = row[0]
+            .as_array()
+            .unwrap()
+            .iter()
+            .enumerate()
+            .map(|(index, value)| (f(value), index))
+            .collect();
+        js_math::sort::sort_by(&mut entries, compare);
+        let order: Vec<u64> = entries.iter().map(|entry| entry.1 as u64).collect();
+        let expected: Vec<u64> = row[1]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_u64().unwrap())
+            .collect();
+        assert_eq!(order, expected, "length {}", order.len());
+    }
+}
+
+#[test]
+fn cbrt_matches_v8_bit_for_bit() {
+    let rows = corpus()["cbrt"].as_array().unwrap().clone();
+    assert!(rows.len() > 3_000);
+    for row in rows {
+        let x = f(&row[0]);
+        assert!(same(js_math::cbrt(x), f(&row[1])), "cbrt({x:e})");
+    }
+}

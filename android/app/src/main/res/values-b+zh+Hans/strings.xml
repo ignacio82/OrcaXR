@@ -45,6 +45,7 @@
     <string name="filament_colour_apply">应用</string>
     <string name="filament_bar_selected">已选中</string>
     <string name="filament_bar_default">缺省</string>
+    <string name="vf_delete">删除</string>
     <string name="workspace_paint">绘制</string>
     <string name="paint_tool_sphere">球</string>
 </resources>

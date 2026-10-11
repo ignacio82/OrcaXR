@@ -180,6 +180,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/placement-edit-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/primitive-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/filament-assignment-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/virtual-filament-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-summary-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slice-status-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/action-capability-vectors.mjs

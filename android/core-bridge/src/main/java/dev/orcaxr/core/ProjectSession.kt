@@ -711,6 +711,16 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
     fun filamentAssignmentChanges(entities: List<FilamentRef>, filamentId: String?): FilamentAssignmentChanges = read {
         FilamentAssignments.changes(NativeProject.projectFilamentAssignmentChanges(it, FilamentAssignments.changesRequest(entities, filamentId)))
     }
+    /** The virtual filament library this project shows (the browser's library
+     * over its adapter's projection), or why it can show none, in its words. */
+    fun virtualFilamentLibrary(): VirtualFilamentLibraryResult = read {
+        VirtualFilaments.library(NativeProject.projectVirtualFilamentLibrary(it, "{}"))
+    }
+    /** The step [edit] submits on this project — a new recipe named by
+     * [newId] — or the refusal in the browser's words. */
+    fun virtualFilamentPlan(edit: VirtualFilamentEdit, newId: () -> String): VirtualFilamentPlan = read {
+        VirtualFilaments.plan(NativeProject.projectVirtualFilamentMutation(it, VirtualFilaments.mutationRequest(edit, newId)))
+    }
     /** The filament slots this project's own physical filaments describe, as
      * the browser adopts an opened project's; one without keeps [palette]. */
     fun filamentSlots(palette: List<SlicingSlot>): SlicingSlots = read {

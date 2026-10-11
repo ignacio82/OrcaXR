@@ -292,7 +292,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   (host-folded search). Read names/IDs in bounded UTF-16 chunks. Query addresses never
   become command IDs. Plate/range sorting has an explicit entry budget and belongs on an owned projection executor. Authored
   mesh declarations are not validated GPU buffers. Production subscriptions,
-  worker/JNI integration, other command families and Android editing beyond selection/object/plate/transform edits and creation (primitives, helper volumes, clipboard, bed fill through a typed staged-record writer: [native-core](docs/engineering/native-core.md#android-creation)) and filaments (list, slot edits, assignment: [§](docs/engineering/native-core.md#android-filaments)) remain open.
+  worker/JNI integration, other command families and Android editing beyond selection/object/plate/transform edits and creation (primitives, helper volumes, clipboard, bed fill through a typed staged-record writer: [native-core](docs/engineering/native-core.md#android-creation)) and filaments (list, slot edits, assignment, virtual library: [§](docs/engineering/native-core.md#android-filaments)) remain open.
 - SHA-256 identifies artifacts/project/config outputs. Canonical FNV-1a64
   identifies source assets and semantic snapshots where explicitly defined.
   Never substitute one for the other or infer engine statistics from observations.

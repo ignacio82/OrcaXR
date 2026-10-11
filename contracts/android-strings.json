@@ -161,7 +161,66 @@
     "view_camera_rear": { "key": "action.view_camera_rear.label" },
     "view_camera_bottom": { "key": "action.view_camera_bottom.label" },
     "theme_switch_dark": { "key": "app.main.switchToDarkMode" },
-    "theme_switch_light": { "key": "app.main.switchToLightMode" }
+    "theme_switch_light": { "key": "app.main.switchToLightMode" },
+    "vf_open_library": { "key": "app.main.openVirtualFilamentLibrary" },
+    "vf_add": { "key": "ui.virtualFilamentLibrary.addVirtualFilament" },
+    "vf_physical_title": {
+      "key": "ui.virtualFilamentLibrary.physicalComponents"
+    },
+    "vf_physical_help": {
+      "key": "ui.virtualFilamentLibrary.recipesReferenceTheseStablePhysical"
+    },
+    "vf_library_title": { "key": "ui.virtualFilamentLibrary.virtualLibrary" },
+    "vf_delete": { "key": "action.delete_models.label" },
+    "vf_dialog_description": {
+      "key": "ui.virtualFilamentLibrary.choosePhysicalHeadsAndAuthor"
+    },
+    "vf_badge_color": { "key": "ui.virtualFilamentLibrary.displayBadgeColor" },
+    "vf_choose_badge": {
+      "key": "ui.virtualFilamentLibrary.chooseDisplayBadgeColor"
+    },
+    "vf_hex_placeholder": { "key": "ui.virtualFilamentLibrary.rRGGBB" },
+    "vf_authoring_mode": { "key": "ui.virtualFilamentLibrary.authoringMode" },
+    "vf_choose_head": { "key": "ui.virtualFilamentLibrary.chooseAPhysicalHead" },
+    "vf_component_b_percent": {
+      "key": "ui.virtualFilamentLibrary.componentBPercent"
+    },
+    "vf_exact_percent": { "key": "ui.virtualFilamentLibrary.exactPercent" },
+    "vf_triangle_proportions": {
+      "key": "ui.virtualFilamentLibrary.triangleProportions"
+    },
+    "vf_triangle_label": {
+      "key": "ui.virtualFilamentLibrary.threeFilamentRatioTriangleUse"
+    },
+    "vf_triangle_note": {
+      "key": "ui.virtualFilamentLibrary.theseAreTriangleCoordinatesThe"
+    },
+    "vf_ratio_incomplete": {
+      "key": "ui.virtualFilamentLibrary.completeTheRatioRecipeTo"
+    },
+    "vf_cycle_pattern": {
+      "key": "ui.virtualFilamentLibrary.manualCyclePattern"
+    },
+    "vf_cycle_help": { "key": "ui.virtualFilamentLibrary.useCompact19IDs" },
+    "vf_insert_token_group": {
+      "key": "ui.virtualFilamentLibrary.insertPhysicalFilamentToken"
+    },
+    "vf_new_group": { "key": "ui.virtualFilamentLibrary.newPerimeterGroup" },
+    "vf_target": { "key": "ui.virtualFilamentLibrary.targetHexColor" },
+    "vf_minimum": { "key": "ui.virtualFilamentLibrary.minimumComponent" },
+    "vf_ranked": { "key": "ui.virtualFilamentLibrary.rankedSuppliedCandidates" },
+    "vf_searching": {
+      "key": "ui.virtualFilamentLibrary.searchingTheCompatiblePhysicalPalette"
+    },
+    "vf_sublayers": {
+      "key": "ui.virtualFilamentLibrary.localZSublayersPerNominal"
+    },
+    "vf_gradient_incomplete": {
+      "key": "ui.virtualFilamentLibrary.chooseTwoPhysicalHeadsFor"
+    },
+    "vf_delete_description": {
+      "key": "ui.virtualFilamentLibrary.deletionIsSentAsOne"
+    }
   },
   "english": [
     "app_name",
@@ -313,7 +372,6 @@
     "device_tab_history",
     "device_tab_console",
     "filament_title",
-    "filament_mixed_title",
     "filament_colour_hex",
     "tree_not_printable",
     "tree_filament_mixed",
@@ -321,7 +379,73 @@
     "tree_color_facets",
     "tree_support_facets",
     "tree_settings",
-    "workspace_view"
+    "workspace_view",
+    "vf_heading",
+    "vf_add_needs_two",
+    "vf_no_snapshot",
+    "vf_unavailable",
+    "vf_no_physical",
+    "vf_physical_name",
+    "vf_physical_details",
+    "vf_physical_details_reason",
+    "vf_physical_swatch",
+    "vf_state_available",
+    "vf_state_incompatible",
+    "vf_state_disabled",
+    "vf_no_rows",
+    "vf_row_badge",
+    "vf_row_details",
+    "vf_enabled",
+    "vf_actions_for",
+    "vf_mode_ratio",
+    "vf_mode_cycle",
+    "vf_mode_match",
+    "vf_mode_gradient",
+    "vf_edit",
+    "vf_duplicate",
+    "vf_enable",
+    "vf_disable",
+    "vf_add_accepted",
+    "vf_edit_accepted",
+    "vf_duplicate_accepted",
+    "vf_enabling",
+    "vf_disabling",
+    "vf_enable_accepted",
+    "vf_disable_accepted",
+    "vf_delete_accepted",
+    "vf_recipe_not_changed",
+    "vf_not_changed",
+    "vf_not_deleted",
+    "vf_title_edit",
+    "vf_title_duplicate",
+    "vf_name",
+    "vf_offset_a",
+    "vf_offset_b",
+    "vf_stale",
+    "vf_issue_location",
+    "vf_submit_add",
+    "vf_submit_edit",
+    "vf_submit_duplicate",
+    "vf_choice_label",
+    "vf_choice_suffix",
+    "vf_choice_incompatible",
+    "vf_choice_disabled",
+    "vf_components",
+    "vf_heads_count",
+    "vf_component",
+    "vf_weight",
+    "vf_insert",
+    "vf_coverage",
+    "vf_match_empty",
+    "vf_match_failed",
+    "vf_candidate_swatch",
+    "vf_direction",
+    "vf_direction_a_to_b",
+    "vf_direction_b_to_a",
+    "vf_delete_title",
+    "vf_dependency_review",
+    "vf_no_dependencies",
+    "vf_delete_confirm"
   ],
   "kotlin": [
     {

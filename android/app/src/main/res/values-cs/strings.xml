@@ -43,6 +43,7 @@
     <string name="filament_colour_apply">Použít</string>
     <string name="filament_bar_selected">vybráno</string>
     <string name="filament_bar_default">Výchozí</string>
+    <string name="vf_delete">Smazat</string>
     <string name="workspace_paint">Malovat</string>
     <string name="paint_tool_sphere">Koule</string>
 </resources>

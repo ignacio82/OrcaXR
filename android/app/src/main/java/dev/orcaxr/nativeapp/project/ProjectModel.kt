@@ -33,6 +33,14 @@ import dev.orcaxr.core.SlicingSlots
 import dev.orcaxr.core.SlotEdit
 import dev.orcaxr.core.TransformReset
 import dev.orcaxr.core.TransformTool
+import dev.orcaxr.core.VirtualFilamentEdit
+import dev.orcaxr.core.VirtualFilamentForm
+import dev.orcaxr.core.VirtualFilamentLibrary
+import dev.orcaxr.core.VirtualFilamentLibraryResult
+import dev.orcaxr.core.VirtualFilamentOperation
+import dev.orcaxr.core.VirtualFilamentRow
+import dev.orcaxr.core.VirtualFilamentSearch
+import dev.orcaxr.core.VirtualFilaments
 import dev.orcaxr.nativeapp.device.PreferencesTextStore
 import dev.orcaxr.nativeapp.prepare.PlateSource
 import dev.orcaxr.nativeapp.workspace.PaintModel
@@ -582,6 +590,160 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         }
     }
 
+    // ---- The virtual filament library ----
+
+    /** The shared core's dialog exchanges. */
+    private val dialogs = object : VirtualFilamentDialogs.Exchange {
+        override fun opening(library: VirtualFilamentLibrary, operation: VirtualFilamentOperation, filamentId: String?) =
+            VirtualFilaments.opening(library, operation, filamentId)
+        override fun validate(library: VirtualFilamentLibrary, form: VirtualFilamentForm, search: VirtualFilamentSearch?) =
+            VirtualFilaments.validate(library, form, search)
+    }
+    /** The pinned Match search's thread (the browser's search worker). */
+    private val searches = Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "virtual-filament-search") }
+    private var searchToken = 0L
+
+    /** The open author dialog, if any (main thread). */
+    var virtualAuthor by mutableStateOf<VirtualFilamentDialogs.Author?>(null)
+        private set
+    /** The open delete dialog, if any. */
+    var virtualDelete by mutableStateOf<VirtualFilamentDialogs.Delete?>(null)
+        private set
+    /** What the library's last operation reported, instead of its own status. */
+    var virtualStatus by mutableStateOf<VirtualFilamentDialogs.Status?>(null)
+        private set
+    /** Why the library's last enable or disable changed nothing. */
+    var virtualFailure by mutableStateOf<VirtualFilamentDialogs.Failure?>(null)
+        private set
+    /** An enable or disable in flight. */
+    var virtualBusy by mutableStateOf(false)
+        private set
+
+    private fun shownLibrary(): VirtualFilamentLibrary? = (view.virtualFilaments as? VirtualFilamentLibraryResult.Shown)?.library
+
+    /** Opens the author dialog for [operation] on [row] (none when adding), its fields as the browser opens them. */
+    fun openVirtualFilament(operation: VirtualFilamentOperation, row: VirtualFilamentRow?) {
+        if (virtualAuthor != null || virtualDelete != null) return
+        val library = shownLibrary() ?: return
+        virtualAuthor = runCatching { VirtualFilamentDialogs.open(dialogs, library, view.revision, operation, row) }
+            .onFailure { message = it.message }.getOrNull()
+        startSearch()
+    }
+
+    /** The author dialog's fields as typed: validated by the core again, its Match search kept, cancelled or started. */
+    fun typeVirtualFilament(form: VirtualFilamentForm) {
+        val dialog = virtualAuthor ?: return
+        if (dialog.busy) return
+        virtualAuthor = VirtualFilamentDialogs.typed(dialogs, dialog, form)
+        startSearch()
+    }
+
+    /** The triangle picker touched at view-box point ([x], [y]): its proportions written into the fields. */
+    fun pickTriangle(x: Double, y: Double) {
+        val dialog = virtualAuthor ?: return
+        val weights = VirtualFilaments.triangleWeights(x, y) ?: return
+        typeVirtualFilament(dialog.form.copy(ratioTriangle = weights))
+    }
+
+    /** Closes the author dialog; its search, if running, is dropped. */
+    fun closeVirtualFilament() {
+        if (virtualAuthor?.busy == true) return
+        virtualAuthor = null
+        searchToken++
+    }
+
+    /** Starts the search the dialog's fields ask for, after the browser's debounce; the newest wins. */
+    private fun startSearch() {
+        val dialog = virtualAuthor ?: return
+        val request = VirtualFilamentDialogs.searchToStart(dialog) ?: return
+        if (VirtualFilamentDialogs.stale(dialog.revision, view.revision)) return
+        val token = ++searchToken
+        virtualAuthor = VirtualFilamentDialogs.searching(dialogs, dialog, request, token)
+        val library = dialog.library
+        main.postDelayed({
+            if (virtualAuthor?.search?.token != token) return@postDelayed
+            searches.execute {
+                val outcome = runCatching { VirtualFilaments.search(library, request) }
+                main.post { virtualAuthor = virtualAuthor?.let { VirtualFilamentDialogs.searched(dialogs, it, token, outcome) } }
+            }
+        }, VirtualFilamentDialogs.SEARCH_DEBOUNCE_MS)
+    }
+
+    /** Submits the author dialog's draft as one undoable step; a refusal stays in the dialog, in the browser's words. */
+    fun submitVirtualFilament() {
+        val dialog = virtualAuthor ?: return
+        if (!VirtualFilamentDialogs.canSubmit(dialog, view.revision)) return
+        val edit = VirtualFilamentDialogs.edit(dialog) ?: return
+        val name = VirtualFilamentDialogs.draftName(dialog)
+        virtualAuthor = dialog.copy(busy = true, error = null)
+        work {
+            val failure = runCatching { workspace.changeVirtualFilament(edit).await() }.exceptionOrNull()?.let(::cause)
+            main.post {
+                if (failure == null) {
+                    virtualAuthor = null
+                    virtualFailure = null
+                    virtualStatus = VirtualFilamentDialogs.Status.Accepted(dialog.operation, name)
+                } else {
+                    virtualAuthor = virtualAuthor?.copy(busy = false, error = failure.message ?: failure.javaClass.simpleName)
+                }
+            }
+        }
+    }
+
+    /** Enables or disables [row] as one undoable step, the library saying so (or why not). */
+    fun toggleVirtualFilament(row: VirtualFilamentRow) {
+        if (virtualBusy) return
+        val enabling = !row.enabled
+        virtualFailure = null
+        virtualBusy = true
+        virtualStatus = VirtualFilamentDialogs.Status.Toggling(enabling, row.name)
+        work {
+            val failure = runCatching { workspace.changeVirtualFilament(VirtualFilamentEdit.SetEnabled(row.id, enabling)).await() }
+                .exceptionOrNull()?.let(::cause)
+            main.post {
+                virtualBusy = false
+                if (failure == null) {
+                    virtualStatus = VirtualFilamentDialogs.Status.Toggled(enabling, row.name)
+                } else {
+                    virtualStatus = null
+                    virtualFailure = VirtualFilamentDialogs.Failure.Toggle(row.name, failure.message ?: failure.javaClass.simpleName)
+                }
+            }
+        }
+    }
+
+    /** Opens the delete dialog for [row]. */
+    fun askDeleteVirtualFilament(row: VirtualFilamentRow) {
+        if (virtualAuthor != null || virtualDelete != null) return
+        virtualDelete = VirtualFilamentDialogs.Delete(row, view.revision)
+    }
+
+    /** Closes the delete dialog. */
+    fun closeDeleteVirtualFilament() {
+        if (virtualDelete?.busy == true) return
+        virtualDelete = null
+    }
+
+    /** Deletes the dialog's row as one undoable step: removed when unreferenced, else a tombstone keeping its references. */
+    fun deleteVirtualFilament() {
+        val dialog = virtualDelete ?: return
+        if (dialog.busy || VirtualFilamentDialogs.stale(dialog.revision, view.revision)) return
+        virtualDelete = dialog.copy(busy = true, error = null)
+        work {
+            val failure = runCatching { workspace.changeVirtualFilament(VirtualFilamentEdit.Delete(dialog.row.id)).await() }
+                .exceptionOrNull()?.let(::cause)
+            main.post {
+                if (failure == null) {
+                    virtualDelete = null
+                    virtualFailure = null
+                    virtualStatus = VirtualFilamentDialogs.Status.Deleted(dialog.row.name)
+                } else {
+                    virtualDelete = virtualDelete?.copy(busy = false, error = failure.message ?: failure.javaClass.simpleName)
+                }
+            }
+        }
+    }
+
     /** The plate's one-plate slice archive ([ProjectWorkspace.projectPlate]); the project's saved state is untouched. */
     override fun projectPlate(plateId: String, output: ProjectDocumentOutput): CompletableFuture<ProjectPlateArchive> =
         started.thenCompose { it.projectPlate(plateId, output) }
@@ -778,6 +940,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             profiles.close()
         }
         worker.shutdown()
+        searches.shutdownNow()
     }
 }
 

@@ -99,6 +99,37 @@ pub fn blend_pair(left: &[u16], right: &[u16], mix_right: f64) -> String {
     to_hex(mix(parse_color(left), parse_color(right), mix_right))
 }
 
+/// `ORCA_INVALID_COLOR_FALLBACK`: what a blend of nothing shows.
+pub const FALLBACK: &str = "#26A69A";
+
+/// `blendMultiFilamentPigment`: each positive weight mixed into the colours
+/// before it at `fround(weight / total so far)`, in the given order (the
+/// polynomial is not associative). Weights must be finite.
+pub fn blend_multi(colors: &[(&[u16], f64)]) -> String {
+    let mut output: Option<Rgb> = None;
+    let mut accumulated = 0.0;
+    for &(color, raw) in colors {
+        debug_assert!(raw.is_finite(), "pigment component weights must be finite");
+        let weight = crate::js_math::max(0.0, raw);
+        if weight <= 0.0 {
+            continue;
+        }
+        let next = parse_color(color);
+        let Some(current) = output else {
+            output = Some(next);
+            accumulated = weight;
+            continue;
+        };
+        let total = accumulated + weight;
+        if total <= 0.0 {
+            continue;
+        }
+        output = Some(mix(current, next, f64::from((weight / total) as f32)));
+        accumulated = total;
+    }
+    output.map_or_else(|| FALLBACK.to_owned(), to_hex)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

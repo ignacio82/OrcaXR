@@ -6,6 +6,8 @@ mod catalog;
 #[cfg(feature = "project")]
 mod editor;
 #[cfg(feature = "project")]
+mod filaments;
+#[cfg(feature = "project")]
 mod library;
 #[cfg(feature = "project")]
 mod model;
