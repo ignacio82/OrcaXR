@@ -111,9 +111,17 @@ const bytes = Object.fromEntries(
 // (8,672,103) and an ASCII-only one still exceeded the old bound (8,412,458).
 // The printer core measured 1,619,901 bytes when it was split out
 // (2026-10-09); its bound keeps the project core's growth out of it.
+// 2026-10-11: the project core's bound raised from 10 MiB. It measured
+// 10,407,445 bytes with painting, mixed filaments and the model tools, and
+// 10,688,693 once the settings panels and height-range editor, the command
+// palette's search and the slice outputs (thumbnails, slice plans, the
+// repeatable download) moved into it — growth spread over the shared
+// modules the browser now runs (settings 367 KB, slicing 247 KB of code),
+// not one dependency. Full LTO saved under 1 KB; a size-optimized build
+// would slow the archive, mesh and paint paths, so the bound moves instead.
 assert.ok(
   bytes["orcaxr_core_bg.wasm"].length <
-    (kind === "printer" ? 3 : 10) * 1024 * 1024,
+    (kind === "printer" ? 3 : kind === "project" ? 12 : 10) * 1024 * 1024,
   "Core executable exceeds its package bound",
 );
 const asset = {

@@ -7411,7 +7411,10 @@ the existing semantic snapshot checks. It does not relax per-column backing
 limits for reference output. This is bounded ownership, not zero-copy transport.
 
 `node tools/cross-platform/package-browser-core.mjs --write` packages the output
-of `build-wasm.py`. Normal `web` dev/build commands verify current source hashes,
+of `build-wasm.py`, refusing a core executable past its set's bound (10 MiB for
+the computation core, 12 MiB for the project core since 2026-10-11, 3 MiB for the
+printer core; the measurements behind each rise are beside the check). Normal
+`web` dev/build commands verify current source hashes,
 exact glue/declaration hashes, manifest and WASM without requiring Rust. The
 tracked `core/browser` glue and `web/public/core/<manifest-sha256>` asset pair
 are one set. The loader bounds decoded response bytes, verifies both SHA-256
