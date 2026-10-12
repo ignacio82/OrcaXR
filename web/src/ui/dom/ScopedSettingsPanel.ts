@@ -18,7 +18,6 @@
  */
 
 import type { ScopedOverrideTargetOption } from '../../project/scopedOverrides';
-import type { SettingScope } from '../../settings/generated/settingScopes';
 import {
   GeneratedSettingsPanel,
   type GeneratedSettingsPanelAdapter,
@@ -29,17 +28,14 @@ import {
 // same function, so a plate cannot read its controls from one tab here and
 // another there.
 import { guiSurfaceForScope } from '../../settings/editor/scopedStepper';
+import {
+  scopedSettingsHeading,
+  scopedSettingsOptionText,
+  scopedSettingsSummary,
+} from '../../settings/editor/settingsPanel';
 import { t } from '../../l10n/t';
 
 export { guiSurfaceForScope };
-
-const SCOPE_LABEL: Readonly<Record<SettingScope, string>> = {
-  project: 'Project',
-  plate: 'Plate',
-  object: 'Object',
-  part: 'Part',
-  layerRange: 'Height range',
-};
 
 export interface ScopedSettingsPanelPort {
   /** Every addressable node, in containment order, from the current state. */
@@ -157,9 +153,7 @@ export class ScopedSettingsPanel {
       // sidebar's Global / Objects switch chooses "the project" or "an object"
       // without having to parse the label it renders.
       element.dataset.scope = option.scope;
-      const overrides =
-        option.overrideCount === 0 ? '' : ` — ${option.overrideCount} override${option.overrideCount === 1 ? '' : 's'}`;
-      element.textContent = `${SCOPE_LABEL[option.scope]}: ${option.path}${overrides}`;
+      element.textContent = scopedSettingsOptionText(option.scope, option.path, option.overrideCount);
       this.select.appendChild(element);
     }
     const stillPresent = listed.some((option) => option.id === this.selectedId);
@@ -177,13 +171,7 @@ export class ScopedSettingsPanel {
   private renderSummary(): void {
     const option = this.current();
     if (!this.summary || !option) return;
-    this.summary.textContent =
-      option.scope === 'project'
-        ? 'Applies to every plate unless a narrower scope overrides it.'
-        : `Overrides the ${SCOPE_LABEL[option.scope].toLowerCase()}'s inherited values. ` +
-          (option.scope === 'part'
-            ? 'A height range crossing this part wins over it, as it does in the engine.'
-            : 'Only settings the engine reads at this scope are listed.');
+    this.summary.textContent = scopedSettingsSummary(option.scope);
   }
 
   private current(): ScopedOverrideTargetOption | undefined {
@@ -201,7 +189,7 @@ export class ScopedSettingsPanel {
     this.panelHost.dataset.scopedSettingsScope = option.scope;
     const panel = new GeneratedSettingsPanel(this.panelHost, this.port.adapterFor(option), {
       ...this.options.panel,
-      heading: `${SCOPE_LABEL[option.scope]} settings — ${option.label}`,
+      heading: scopedSettingsHeading(option.scope, option.label),
       guiSurface: guiSurfaceForScope(option.scope),
       // The project's own overrides go through the project settings command,
       // which accepts reviewed keys that carry no literal placement; narrowing

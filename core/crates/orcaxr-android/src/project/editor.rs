@@ -3,7 +3,9 @@
 //! and rows are read one at a time after a query.
 use super::*;
 use jni::{JavaVM, objects::GlobalRef};
-use orcaxr_contracts::{project_intent_types as wire, project_intents::InvalidIntent};
+use orcaxr_contracts::{
+    generated::MAX_INPUT_BYTES, project_intent_types as wire, project_intents::InvalidIntent,
+};
 use orcaxr_project::settings::{
     editor::{
         AsciiFolding, SearchFolding,
@@ -966,6 +968,70 @@ pub(super) fn editor_commit(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstri
             wire::encode_editor_commit_result,
         )
     })?;
+    string(env, json)
+}
+/// The generated settings panel (`settings::editor::panel_exchange`): what it
+/// shows for `{"mode","search"}`.
+pub(super) fn editor_panel_view(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let json = with_editor(env, handle, |e, order, fold| {
+        e.panel_view(&request, order, fold).map_err(refused)
+    })?;
+    string(env, json)
+}
+/// One field's row for `{"fieldId"}`, or the editor's refusal.
+pub(super) fn editor_panel_row(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let json = with_editor(env, handle, |e, _, _| {
+        e.panel_row::<&'static str>(&request).map_err(refused)
+    })?;
+    string(env, json)
+}
+/// A draft set, inherited or reset to the default.
+pub(super) fn editor_panel_edit(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let json = with_editor(env, handle, |e, _, _| {
+        e.panel_edit::<&'static str>(&request).map_err(refused)
+    })?;
+    string(env, json)
+}
+/// Whether Apply has something valid to apply.
+pub(super) fn editor_panel_state(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_editor(env, handle, |e, _, _| {
+        e.panel_state::<&'static str>().map_err(refused)
+    })?;
+    string(env, json)
+}
+/// Apply: the drafts' one commit, which becomes the editor's intent.
+pub(super) fn editor_panel_apply(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_editor(env, handle, |e, order, _| {
+        e.panel_apply(order).map_err(refused)
+    })?;
+    string(env, json)
+}
+/// Cancel: every draft dropped.
+pub(super) fn editor_panel_cancel(env: &mut JNIEnv<'_>, handle: jlong) -> Result<()> {
+    with_editor(env, handle, |e, _, _| {
+        e.panel_cancel();
+        Ok(())
+    })
+}
+/// The scoped settings panel's words for a target.
+pub(super) fn settings_target_text(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let json = orcaxr_project::settings::editor::panel_exchange::target_text_json(&request)?;
     string(env, json)
 }
 pub(super) fn editor_revision(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jlong> {

@@ -46,6 +46,43 @@ pub(super) fn project_split_source(
     })?;
     string(env, json)
 }
+/// `{"objectId","selectedLayerRangeId"}` → one object's height ranges as the
+/// semantic editor shows them (`orcaxr_project::layer_range_editor`).
+pub(super) fn project_layer_range_editor(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let json = with_project(handle, |p| {
+        orcaxr_project::layer_range_editor::projection_json(p.state(), &request)
+    })?;
+    string(env, json)
+}
+/// Typed height-range bounds, checked as the semantic editor checks them.
+pub(super) fn layer_range_bounds(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        &request,
+        orcaxr_project::layer_range_editor::bounds_json,
+    )
+}
+/// A typed split height, checked as the semantic editor checks it.
+pub(super) fn layer_range_split(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        &request,
+        orcaxr_project::layer_range_editor::split_json,
+    )
+}
+/// What a height-range operation says while it runs and once it is done.
+pub(super) fn layer_range_messages(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        &request,
+        orcaxr_project::layer_range_editor::messages_json,
+    )
+}
 /// `{"tool","transform"}` → what the tool's three fields show.
 pub(super) fn transform_fields(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
     exchange(env, &request, fields::fields_json)

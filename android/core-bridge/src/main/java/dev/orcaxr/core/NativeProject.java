@@ -161,6 +161,22 @@ final class NativeProject {
     static native String projectSettingsExplain(long handle, String request);
     static native long projectSettingsEditor(long handle, String request, PresetCollator collator, SearchFolding folder);
     static native String editorIntent(long handle);
+    // The generated settings panel over an editor (settings::editor::panel_exchange,
+    // the browser's settingsPanelExchange) and the scoped panel's words for a
+    // target: canonical JSON requests and replies.
+    static native String editorPanelView(long handle, String request);
+    static native String editorPanelRow(long handle, String request);
+    static native String editorPanelEdit(long handle, String request);
+    static native String editorPanelState(long handle);
+    static native String editorPanelApply(long handle);
+    static native void editorPanelCancel(long handle);
+    static native String settingsTargetText(String request);
+    // The semantic editor's height ranges (orcaxr_project::layer_range_editor,
+    // the browser's layerRangeEditorExchange): canonical JSON requests and replies.
+    static native String projectLayerRangeEditor(long handle, String request);
+    static native String layerRangeBounds(String request);
+    static native String layerRangeSplit(String request);
+    static native String layerRangeMessages(String request);
     static native String projectPaintPalette(long handle, String request);
     static native String projectObjectTree(long handle, String request, SearchFolding folder);
     static native long printJobStatusNew();

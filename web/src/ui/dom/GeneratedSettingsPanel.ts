@@ -4,26 +4,20 @@ import type { EngineGuiSurface, EngineOptionValue } from '../../settings/generat
 import { t } from '../../l10n/t';
 import {
   SettingsDraftCommitError,
-  SettingsDraftEditor,
   type SettingsDraftCommit,
   type SettingsEditorMode,
-  type SettingsFieldProjection,
-  type SettingsFieldState,
   type SettingsTechnology,
   type SettingsValueMap,
 } from '../../settings/editor';
+import { FULL_SPECTRUM_KEYS } from '../../settings/editor/fullSpectrumSemantics';
 import {
-  expandFullSpectrumSettingsTransaction,
-  FULL_SPECTRUM_KEYS,
-  getFullSpectrumDependencyState,
-  getFullSpectrumSpecialEditorRequirement,
-  validateFullSpectrumCrossFields,
-  type FullSpectrumDependencyState,
-  type FullSpectrumSpecialEditorRequirement,
-} from '../../settings/editor/fullSpectrumSemantics';
+  SettingsPanelModel,
+  type SettingsPanelIssue,
+  type SettingsPanelRow,
+  type SettingsPanelSection,
+} from '../../settings/editor/settingsPanel';
 
 type MaybePromise<T> = T | Promise<T>;
-type DraftOperation = { readonly kind: 'set'; readonly raw: string } | { readonly kind: 'remove' };
 type GeneratedSettingsControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLOutputElement;
 
 export interface GeneratedSettingsPanelSnapshot {
@@ -126,8 +120,8 @@ export class GeneratedSettingsPanel {
   private readonly modeInputs = new Map<SettingsEditorMode, HTMLInputElement>();
   private catalog?: EngineOptionCatalog;
   private snapshot?: GeneratedSettingsPanelSnapshot;
-  private editor?: SettingsDraftEditor;
-  private readonly drafts = new Map<string, DraftOperation>();
+  /** The panel's fields, controls and drafts (`settingsPanel.ts`, shared with native hosts). */
+  private model?: SettingsPanelModel;
   private loadPromise?: Promise<void>;
   private lifecycle = 0;
   private loading = false;
@@ -158,7 +152,7 @@ export class GeneratedSettingsPanel {
         this.showError(error, 'Watching project settings failed');
       }
     }
-    if (this.editor) return Promise.resolve();
+    if (this.model) return Promise.resolve();
     if (!this.loadPromise) this.loadPromise = this.load();
     return this.loadPromise;
   }
@@ -169,7 +163,7 @@ export class GeneratedSettingsPanel {
     this.unsubscribe = undefined;
     this.loadPromise = undefined;
     this.modeInputs.clear();
-    this.drafts.clear();
+    this.model = undefined;
     this.root?.remove();
     this.root = undefined;
     this.schemaStatus = undefined;
@@ -185,7 +179,6 @@ export class GeneratedSettingsPanel {
     this.retryButton = undefined;
     this.catalog = undefined;
     this.snapshot = undefined;
-    this.editor = undefined;
     this.authorityConflict = false;
     this.authorityRefreshQueued = false;
   }
@@ -404,11 +397,10 @@ export class GeneratedSettingsPanel {
       const [catalog, rawSnapshot] = await Promise.all([loadCatalog(), this.adapter.load()]);
       if (lifecycle !== this.lifecycle || !this.root) return;
       const snapshot = validateSnapshot(rawSnapshot);
-      const editor = this.createEditor(catalog, snapshot);
+      const model = this.createModel(catalog, snapshot);
       this.catalog = catalog;
       this.snapshot = snapshot;
-      this.editor = editor;
-      this.drafts.clear();
+      this.model = model;
       this.setAuthorityConflict(false);
       const coverage = catalog.schema.coverage;
       const guiCoverage = catalog.schema.guiLayout.coverage;
@@ -448,7 +440,7 @@ export class GeneratedSettingsPanel {
       this.authorityRefreshQueued = true;
       return;
     }
-    if (this.drafts.size > 0) {
+    if (this.model?.hasDrafts) {
       this.setAuthorityConflict(true);
       this.setOperationMessage(
         'The project changed while this draft was open. Review the preserved draft, then discard and reload before editing the current revision.',
@@ -463,7 +455,7 @@ export class GeneratedSettingsPanel {
 
   private async discardConflictAndReload(): Promise<void> {
     if (!this.authorityConflict || this.loading || this.busy || !this.root) return;
-    this.drafts.clear();
+    this.model?.discard();
     this.setAuthorityConflict(false);
     this.loadPromise = this.load('Discarded the stale draft and reloaded current project settings.');
     await this.loadPromise;
@@ -475,9 +467,8 @@ export class GeneratedSettingsPanel {
     if (this.conflictReloadButton) this.conflictReloadButton.disabled = !conflict || this.loading || this.busy;
   }
 
-  private createEditor(catalog: EngineOptionCatalog, snapshot: GeneratedSettingsPanelSnapshot): SettingsDraftEditor {
-    return new SettingsDraftEditor(catalog, {
-      mode: this.mode,
+  private createModel(catalog: EngineOptionCatalog, snapshot: GeneratedSettingsPanelSnapshot): SettingsPanelModel {
+    return new SettingsPanelModel(catalog, {
       technology: this.technology,
       // Which upstream tab supplies the fields, and — when the adapter writes a
       // plate or model node — which keys the engine will actually read there.
@@ -489,26 +480,14 @@ export class GeneratedSettingsPanel {
   }
 
   private renderFields(): void {
-    const editor = this.editor;
+    const model = this.model;
     const container = this.fieldsContainer;
     const resultStatus = this.resultStatus;
-    if (!editor || !container || !resultStatus) return;
-    const fields = editor.query({
-      mode: this.mode,
-      technology: this.technology,
-      guiSurface: this.guiSurface,
-      ...(this.scope ? { scope: this.scope } : {}),
-      search: this.search,
-      includeUnavailable: true,
-      includeUnknownApplicability: true,
-    });
-    const unavailable = fields.filter(
-      (field) =>
-        field.support.status === 'unavailable' || getFullSpectrumSpecialEditorRequirement(field.key) !== undefined,
-    ).length;
-    resultStatus.textContent = `${fields.length} setting${fields.length === 1 ? '' : 's'} shown; ${unavailable} unavailable.`;
+    if (!model || !container || !resultStatus) return;
+    const view = model.view(this.mode, this.search);
+    resultStatus.textContent = view.summary;
 
-    if (fields.length === 0) {
+    if (view.shown === 0) {
       const empty = container.ownerDocument.createElement('p');
       empty.textContent = t(
         'ui.generatedSettingsPanel.noSettingsMatchThisSearch',
@@ -520,78 +499,43 @@ export class GeneratedSettingsPanel {
       return;
     }
 
-    const categories = new Map<string, { label: string; fields: SettingsFieldProjection[] }>();
-    for (const field of fields) {
-      const location = field.primaryGuiLocation;
-      const key = location?.group.id ?? `metadata:${field.category}`;
-      const label = location
-        ? [guiSurfaceLabel(location.placement.surface), location.tab.label, location.group.label]
-            .filter((part) => part.length > 0)
-            .join(' · ')
-        : field.category;
-      const category = categories.get(key) ?? { label, fields: [] };
-      category.fields.push(field);
-      categories.set(key, category);
-    }
-    const fullSpectrumValues = this.fullSpectrumEffectiveValues(editor);
-    const sections = [...categories.values()].map((category, categoryIndex) =>
-      this.buildCategory(category.label, category.fields, categoryIndex, fullSpectrumValues),
-    );
-    container.replaceChildren(...sections);
+    container.replaceChildren(...view.sections.map((section, index) => this.buildCategory(section, index)));
     this.syncControlState();
   }
 
-  private buildCategory(
-    category: string,
-    fields: readonly SettingsFieldProjection[],
-    categoryIndex: number,
-    fullSpectrumValues: SettingsValueMap,
-  ): HTMLElement {
+  private buildCategory(category: SettingsPanelSection, categoryIndex: number): HTMLElement {
     const document = this.container.ownerDocument;
     const section = document.createElement('section');
     const headingId = `orcaxr-settings-category-${this.instanceId}-${categoryIndex}`;
     section.setAttribute('aria-labelledby', headingId);
-    section.dataset.settingsCategory = category;
-    const location = fields[0]?.primaryGuiLocation;
-    if (location) {
-      section.dataset.settingsSurface = location.placement.surface;
-      section.dataset.settingsPage = location.tab.label;
-      section.dataset.settingsGroup = location.group.label;
-    }
+    section.dataset.settingsCategory = category.label;
+    if (category.surface !== undefined) section.dataset.settingsSurface = category.surface;
+    if (category.page !== undefined) section.dataset.settingsPage = category.page;
+    if (category.group !== undefined) section.dataset.settingsGroup = category.group;
     section.style.cssText = 'display:flex;flex-direction:column;gap:2px;';
     const heading = document.createElement('h3');
     heading.id = headingId;
-    heading.textContent = category;
+    heading.textContent = category.label;
     // A settings group header, the way the desktop panel writes one: small,
     // bold, and separated from the rows by a hairline rather than a gap.
     heading.style.cssText =
       'margin:0 0 4px;padding-bottom:4px;border-bottom:1px solid var(--oxr-color-stroke);' +
       'font-size:12px;font-weight:700;';
     section.appendChild(heading);
-    fields.forEach((field, fieldIndex) =>
-      section.appendChild(this.buildField(field, `${categoryIndex}-${fieldIndex}`, fullSpectrumValues)),
+    category.rows.forEach((row, fieldIndex) =>
+      section.appendChild(this.buildField(row, `${categoryIndex}-${fieldIndex}`)),
     );
     return section;
   }
 
-  private buildField(field: SettingsFieldProjection, index: string, fullSpectrumValues: SettingsValueMap): HTMLElement {
-    const editor = this.editor!;
-    const state = editor.getFieldState(field.id);
-    const specialEditor = getFullSpectrumSpecialEditorRequirement(field.key);
-    const dependency = getFullSpectrumDependencyState(field.key, fullSpectrumValues);
-    const genericEditable = field.support.status === 'implemented' && specialEditor === undefined;
-    const dependencyEnabled = dependency?.enabled !== false;
-    const fieldIssues = this.fieldIssues(state, fullSpectrumValues);
+  private buildField(field: SettingsPanelRow, index: string): HTMLElement {
+    const model = this.model!;
     const document = this.container.ownerDocument;
     const row = document.createElement('div');
-    row.dataset.settingsFieldId = field.id;
+    row.dataset.settingsFieldId = field.fieldId;
     row.dataset.settingsKey = field.key;
-    row.dataset.settingsSupport = specialEditor?.kind ?? field.support.status;
-    row.dataset.settingsApplicability = dependency
-      ? dependency.applicable
-        ? 'applicable'
-        : 'not-applicable'
-      : field.applicability;
+    row.dataset.settingsSupport = field.support;
+    row.dataset.settingsApplicability = field.applicability;
     // One line per setting: name at the inline start, control after it. The
     // boxed card this replaced turned a page of thirty settings into a page of
     // thirty cards, which is not how a slicer's parameter panel reads.
@@ -614,15 +558,7 @@ export class GeneratedSettingsPanel {
 
     const controlBlock = document.createElement('div');
     controlBlock.style.cssText = 'display:flex;align-items:center;gap:7px;min-width:0;';
-    const control = this.buildControl(
-      field,
-      state,
-      controlId,
-      genericEditable,
-      dependencyEnabled,
-      specialEditor,
-      fieldIssues.length > 0,
-    );
+    const control = this.buildControl(field, controlId);
     controlBlock.appendChild(control);
     if (field.unit) {
       const unit = document.createElement('span');
@@ -636,50 +572,42 @@ export class GeneratedSettingsPanel {
     const indicators = document.createElement('div');
     indicators.dataset.settingsIndicators = 'true';
     indicators.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:5px;';
-    this.renderIndicators(indicators, state, specialEditor, dependency);
+    this.renderIndicators(indicators, field);
     row.appendChild(indicators);
 
     const commands = document.createElement('div');
     commands.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;';
-    if (genericEditable) {
+    if (field.inherit) {
       const inherit = document.createElement('button');
       inherit.type = 'button';
-      inherit.dataset.settingsResetInherited = field.id;
+      inherit.dataset.settingsResetInherited = field.fieldId;
       inherit.dataset.settingsEditable = 'true';
-      inherit.dataset.settingsDependencyEnabled = String(dependencyEnabled);
+      inherit.dataset.settingsDependencyEnabled = String(field.dependencyEnabled);
       inherit.textContent = t('ui.generatedSettingsPanel.useInherited', 'Use inherited');
       inherit.style.cssText = COMMAND_BUTTON_STYLE;
       inherit.addEventListener('click', () => {
-        editor.resetToInherited(field.id);
-        this.drafts.set(field.id, { kind: 'remove' });
-        this.expandFullSpectrumDrafts(editor, [field.key], true);
+        model.inherit(field.fieldId);
         this.renderFields();
       });
       commands.appendChild(inherit);
-      if (field.definition.default.provided) {
-        const resetDefault = document.createElement('button');
-        resetDefault.type = 'button';
-        resetDefault.dataset.settingsResetDefault = field.id;
-        resetDefault.dataset.settingsEditable = 'true';
-        resetDefault.dataset.settingsDependencyEnabled = String(dependencyEnabled);
-        resetDefault.textContent = t('ui.generatedSettingsPanel.useDefault', 'Use default');
-        resetDefault.style.cssText = COMMAND_BUTTON_STYLE;
-        resetDefault.addEventListener('click', () => {
-          editor.resetToDefault(field.id);
-          const nextState = editor.getFieldState(field.id);
-          if (nextState.draftSerialized === undefined) {
-            this.showError(
-              new Error(`Generated default for ${field.key} could not be serialized`),
-              'Default reset failed',
-            );
-            return;
-          }
-          this.drafts.set(field.id, { kind: 'set', raw: nextState.draftSerialized });
-          this.expandFullSpectrumDrafts(editor, [field.key], true);
-          this.renderFields();
-        });
-        commands.appendChild(resetDefault);
-      }
+    }
+    if (field.useDefault) {
+      const resetDefault = document.createElement('button');
+      resetDefault.type = 'button';
+      resetDefault.dataset.settingsResetDefault = field.fieldId;
+      resetDefault.dataset.settingsEditable = 'true';
+      resetDefault.dataset.settingsDependencyEnabled = String(field.dependencyEnabled);
+      resetDefault.textContent = t('ui.generatedSettingsPanel.useDefault', 'Use default');
+      resetDefault.style.cssText = COMMAND_BUTTON_STYLE;
+      resetDefault.addEventListener('click', () => {
+        const reset = model.useDefault(field.fieldId);
+        if (!reset.ok) {
+          this.showError(reset.error, 'Default reset failed');
+          return;
+        }
+        this.renderFields();
+      });
+      commands.appendChild(resetDefault);
     }
     row.appendChild(commands);
 
@@ -698,19 +626,19 @@ export class GeneratedSettingsPanel {
       row.title = field.tooltip;
       describedBy.push(help.id);
     }
-    if (field.support.status === 'unavailable') {
+    if (field.unavailable) {
       const unavailable = document.createElement('p');
       unavailable.id = `${controlId}-unavailable`;
-      unavailable.dataset.settingsUnavailableReason = field.support.reason ?? 'unspecified';
-      unavailable.textContent = `Unavailable: ${formatUnavailableReason(field.support.reason)}`;
+      unavailable.dataset.settingsUnavailableReason = field.unavailable.reason;
+      unavailable.textContent = field.unavailable.message;
       unavailable.style.cssText = 'grid-column:1/-1;margin:0;color:var(--oxr-warn);font-size:12px;';
       row.appendChild(unavailable);
       describedBy.push(unavailable.id);
     }
-    if (specialEditor) {
+    if (field.structuredEditor) {
       const special = document.createElement('p');
       special.id = `${controlId}-structured-editor`;
-      special.dataset.settingsStructuredEditor = specialEditor.editorId;
+      special.dataset.settingsStructuredEditor = field.structuredEditor;
       special.textContent = t(
         'ui.generatedSettingsPanel.managedByTheStructuredFullSpectrum',
         'Managed by the structured FullSpectrum recipe editor. Raw serialized definition editing is disabled here.',
@@ -719,11 +647,11 @@ export class GeneratedSettingsPanel {
       row.appendChild(special);
       describedBy.push(special.id);
     }
-    if (dependency && !dependency.enabled) {
+    if (field.dependencyController) {
       const dependencyMessage = document.createElement('p');
       dependencyMessage.id = `${controlId}-dependency`;
       dependencyMessage.dataset.settingsDependencyState = 'disabled';
-      dependencyMessage.dataset.settingsDependencyController = dependency.controllerKey;
+      dependencyMessage.dataset.settingsDependencyController = field.dependencyController;
       dependencyMessage.textContent = t(
         'ui.generatedSettingsPanel.notApplicableWhileSubdivideMix',
         'Not applicable while Subdivide Mix Layer is off. Enable it to edit this Local-Z option.',
@@ -734,26 +662,22 @@ export class GeneratedSettingsPanel {
     }
     const issues = document.createElement('ul');
     issues.id = `${controlId}-issues`;
-    issues.dataset.settingsIssues = field.id;
+    issues.dataset.settingsIssues = field.fieldId;
     issues.setAttribute('role', 'alert');
     issues.style.cssText =
       'grid-column:1/-1;margin:0;padding-inline-start:20px;color:var(--oxr-danger);font-size:12px;';
-    this.renderIssues(issues, fieldIssues);
+    this.renderIssues(issues, field.issues);
     row.appendChild(issues);
     describedBy.push(issues.id);
     control.setAttribute('aria-describedby', describedBy.join(' '));
 
-    if (genericEditable && dependencyEnabled && isDraftControl(control)) {
+    if (field.editable && field.dependencyEnabled && isDraftControl(control)) {
       const updateDraftFeedback = (raw: string) => {
-        editor.setDraft(field.id, raw);
-        this.drafts.set(field.id, { kind: 'set', raw });
-        this.expandFullSpectrumDrafts(editor, [field.key], true);
-        const nextState = editor.getFieldState(field.id);
-        this.renderIndicators(indicators, nextState, specialEditor, dependency);
-        const nextFullSpectrumValues = this.fullSpectrumEffectiveValues(editor);
-        const nextIssues = this.fieldIssues(nextState, nextFullSpectrumValues);
-        this.renderIssues(issues, nextIssues);
-        control.setAttribute('aria-invalid', String(nextIssues.length > 0));
+        model.set(field.fieldId, raw);
+        const next = model.row(field.fieldId);
+        this.renderIndicators(indicators, next);
+        this.renderIssues(issues, next.issues);
+        control.setAttribute('aria-invalid', String(next.issues.length > 0));
         this.clearError();
         this.setOperationMessage('Draft changes are not applied yet.');
         if (field.key === FULL_SPECTRUM_KEYS.localZMode) {
@@ -761,7 +685,7 @@ export class GeneratedSettingsPanel {
           return;
         }
         if (field.key === FULL_SPECTRUM_KEYS.heightLowerBound || field.key === FULL_SPECTRUM_KEYS.heightUpperBound) {
-          this.refreshFullSpectrumCrossFieldIssues(nextFullSpectrumValues);
+          this.refreshFullSpectrumCrossFieldIssues();
         }
         this.syncControlState();
       };
@@ -776,81 +700,67 @@ export class GeneratedSettingsPanel {
     return row;
   }
 
-  private buildControl(
-    field: SettingsFieldProjection,
-    state: SettingsFieldState,
-    controlId: string,
-    editable: boolean,
-    dependencyEnabled: boolean,
-    specialEditor: FullSpectrumSpecialEditorRequirement | undefined,
-    invalid: boolean,
-  ): GeneratedSettingsControl {
+  private buildControl(field: SettingsPanelRow, controlId: string): GeneratedSettingsControl {
     const document = this.container.ownerDocument;
-    const definition = field.definition;
-    const rawValue = fieldRawValue(state);
+    const shown = field.control;
     let control: GeneratedSettingsControl;
 
-    if (specialEditor) {
+    if (shown.kind === 'structured') {
       const output = document.createElement('output');
-      output.value = 'Use the structured FullSpectrum recipe editor';
-      output.dataset.settingsStructuredEditorTarget = specialEditor.editorId;
+      output.value = shown.value;
+      output.dataset.settingsStructuredEditorTarget = shown.editorId;
       control = output;
-    } else if (!editable) {
+    } else if (shown.kind === 'locked') {
       const input = document.createElement('input');
       input.type = 'text';
-      input.value = rawValue;
+      input.value = shown.value;
       control = input;
-    } else if (
-      definition.storage.shape === 'scalar' &&
-      definition.storage.valueType === 'bool' &&
-      !definition.storage.nullable
-    ) {
+    } else if (shown.kind === 'checkbox') {
       const input = document.createElement('input');
       input.type = 'checkbox';
-      input.checked = state.draftValue === true || (state.draftValue === undefined && state.value === true);
+      input.checked = shown.checked;
       control = input;
-    } else if (definition.storage.shape === 'scalar' && definition.storage.valueType === 'enum') {
+    } else if (shown.kind === 'select') {
       const select = document.createElement('select');
-      if (definition.storage.nullable) {
+      if (shown.nil !== undefined) {
         const nil = document.createElement('option');
-        nil.value = definition.storage.serialization.nilToken ?? 'nil';
+        nil.value = shown.nil;
         nil.textContent = t('ui.generatedSettingsPanel.notSet', 'Not set');
         select.appendChild(nil);
       }
-      for (const choice of field.enumChoices) {
+      for (const choice of shown.choices) {
         const option = document.createElement('option');
-        option.value = choice.serialized;
+        option.value = choice.value;
         option.textContent = choice.label;
         select.appendChild(option);
       }
-      select.value = rawValue;
+      select.value = shown.value;
       control = select;
-    } else if (definition.storage.valueType === 'string' && definition.presentation.multiline.value) {
+    } else if (shown.kind === 'textarea') {
       const textarea = document.createElement('textarea');
-      textarea.value = rawValue;
-      textarea.rows = multilineRows(definition.presentation.height.value);
+      textarea.value = shown.value;
+      textarea.rows = shown.rows;
       textarea.spellcheck = false;
       textarea.style.fontFamily = 'ui-monospace,SFMono-Regular,monospace';
       control = textarea;
     } else {
       const input = document.createElement('input');
       input.type = 'text';
-      input.value = rawValue;
+      input.value = shown.value;
       input.autocomplete = 'off';
-      input.spellcheck = definition.storage.valueType === 'string';
-      if (definition.storage.valueType === 'int') input.inputMode = 'numeric';
-      if (definition.storage.valueType === 'float' || definition.storage.valueType === 'float-or-percent') {
-        input.inputMode = 'decimal';
-      }
+      input.spellcheck = shown.spellcheck;
+      if (shown.inputMode) input.inputMode = shown.inputMode;
       control = input;
     }
 
     control.id = controlId;
-    control.dataset.settingsControl = field.id;
-    control.dataset.settingsEditable = String(editable);
-    control.dataset.settingsDependencyEnabled = String(dependencyEnabled);
-    if ('disabled' in control) control.disabled = !editable || !dependencyEnabled || this.busy || this.loading;
-    control.setAttribute('aria-invalid', String(invalid));
+    control.dataset.settingsControl = field.fieldId;
+    control.dataset.settingsEditable = String(field.editable);
+    control.dataset.settingsDependencyEnabled = String(field.dependencyEnabled);
+    if ('disabled' in control) {
+      control.disabled = !field.editable || !field.dependencyEnabled || this.busy || this.loading;
+    }
+    control.setAttribute('aria-invalid', String(field.issues.length > 0));
     control.style.cssText +=
       'box-sizing:border-box;min-width:0;width:100%;border:1px solid var(--oxr-color-stroke);' +
       'border-radius:6px;background:var(--oxr-color-bg-sunken,#0006);color:inherit;padding:7px 8px;';
@@ -862,36 +772,31 @@ export class GeneratedSettingsPanel {
     return control;
   }
 
-  private renderIndicators(
-    container: HTMLElement,
-    state: SettingsFieldState,
-    specialEditor?: FullSpectrumSpecialEditorRequirement,
-    dependency?: FullSpectrumDependencyState,
-  ): void {
+  private renderIndicators(container: HTMLElement, field: SettingsPanelRow): void {
     const document = container.ownerDocument;
     const badges: HTMLElement[] = [];
     const origin = document.createElement('span');
-    origin.dataset.settingsOrigin = state.origin;
-    origin.textContent = originLabel(state.origin);
+    origin.dataset.settingsOrigin = field.origin;
+    origin.textContent = field.originLabel;
     badges.push(origin);
-    if (state.draftChanged) {
+    if (field.draftChanged) {
       const draft = document.createElement('span');
       draft.dataset.settingsDraft = 'changed';
       draft.textContent = t('ui.generatedSettingsPanel.draftChanged', 'Draft changed');
       badges.push(draft);
     }
-    if (specialEditor) {
+    if (field.availability === 'structured-editor') {
       const structured = document.createElement('span');
       structured.dataset.settingsAvailability = 'structured-editor';
       structured.textContent = t('ui.generatedSettingsPanel.structuredEditor', 'Structured editor');
       badges.push(structured);
-    } else if (state.field.support.status === 'unavailable') {
+    } else if (field.availability === 'unavailable') {
       const unavailable = document.createElement('span');
       unavailable.dataset.settingsAvailability = 'unavailable';
       unavailable.textContent = 'Unavailable';
       badges.push(unavailable);
     }
-    if (dependency && !dependency.enabled) {
+    if (field.dependencyController) {
       const notApplicable = document.createElement('span');
       notApplicable.dataset.settingsApplicability = 'not-applicable';
       notApplicable.textContent = t('ui.generatedSettingsPanel.notApplicable', 'Not applicable');
@@ -905,10 +810,7 @@ export class GeneratedSettingsPanel {
     container.replaceChildren(...badges);
   }
 
-  private renderIssues(
-    container: HTMLElement,
-    issues: readonly { readonly code: string; readonly message: string }[],
-  ): void {
+  private renderIssues(container: HTMLElement, issues: readonly SettingsPanelIssue[]): void {
     const document = container.ownerDocument;
     const entries = issues.map((issue) => {
       const item = document.createElement('li');
@@ -920,61 +822,16 @@ export class GeneratedSettingsPanel {
     container.hidden = entries.length === 0;
   }
 
-  private fullSpectrumEffectiveValues(editor: SettingsDraftEditor): SettingsValueMap {
-    const catalog = this.catalog;
-    if (!catalog) return {};
-    const values: Record<string, EngineOptionValue> = {};
-    for (const key of Object.values(FULL_SPECTRUM_KEYS)) {
-      if (!catalog.has(key) || catalog.all(key).length !== 1) continue;
-      const state = editor.getFieldState(catalog.get(key).id);
-      const value = state.draftRaw !== undefined ? state.draftValue : (state.draftValue ?? state.value);
-      if (value !== undefined) values[key] = value;
-    }
-    return values;
-  }
-
-  private expandFullSpectrumDrafts(
-    editor: SettingsDraftEditor,
-    changedKeys: readonly string[],
-    recordDrafts: boolean,
-  ): void {
-    const catalog = this.catalog;
-    if (!catalog) return;
-    const expansion = expandFullSpectrumSettingsTransaction({
-      changedKeys,
-      effectiveValues: this.fullSpectrumEffectiveValues(editor),
-    });
-    for (const key of expansion.implicitKeys) {
-      const value = expansion.implicitValues[key];
-      if (value === undefined || !catalog.has(key) || catalog.all(key).length !== 1) continue;
-      const fieldId = catalog.get(key).id;
-      const raw = value ? '1' : '0';
-      editor.setDraft(fieldId, raw);
-      if (recordDrafts) this.drafts.set(fieldId, { kind: 'set', raw });
-    }
-  }
-
-  private fieldIssues(
-    state: SettingsFieldState,
-    fullSpectrumValues: SettingsValueMap,
-  ): readonly { readonly code: string; readonly message: string }[] {
-    const crossFieldIssues = validateFullSpectrumCrossFields(fullSpectrumValues).filter((issue) =>
-      issue.relatedKeys.includes(state.field.key as (typeof issue.relatedKeys)[number]),
-    );
-    return [...state.issues, ...crossFieldIssues];
-  }
-
-  private refreshFullSpectrumCrossFieldIssues(fullSpectrumValues: SettingsValueMap): void {
-    const editor = this.editor;
+  private refreshFullSpectrumCrossFieldIssues(): void {
+    const model = this.model;
     const catalog = this.catalog;
     const root = this.root;
-    if (!editor || !catalog || !root) return;
+    if (!model || !catalog || !root) return;
     for (const key of [FULL_SPECTRUM_KEYS.heightLowerBound, FULL_SPECTRUM_KEYS.heightUpperBound]) {
       if (!catalog.has(key) || catalog.all(key).length !== 1) continue;
       const row = root.querySelector<HTMLElement>(`[data-settings-key="${key}"]`);
       if (!row) continue;
-      const state = editor.getFieldState(catalog.get(key).id);
-      const issues = this.fieldIssues(state, fullSpectrumValues);
+      const issues = model.row(catalog.get(key).id).issues;
       const issuesContainer = row.querySelector<HTMLElement>('[data-settings-issues]');
       if (issuesContainer) this.renderIssues(issuesContainer, issues);
       row
@@ -983,26 +840,14 @@ export class GeneratedSettingsPanel {
     }
   }
 
-  private replayDrafts(editor: SettingsDraftEditor): void {
-    for (const [fieldId, operation] of this.drafts) {
-      if (operation.kind === 'set') editor.setDraft(fieldId, operation.raw);
-      else editor.resetToInherited(fieldId);
-    }
-  }
-
   private async applyDrafts(): Promise<void> {
     const catalog = this.catalog;
     const snapshot = this.snapshot;
-    if (!catalog || !snapshot || this.busy || this.loading || this.authorityConflict) return;
-    const staging = this.createEditor(catalog, snapshot);
-    this.replayDrafts(staging);
+    const model = this.model;
+    if (!catalog || !snapshot || !model || this.busy || this.loading || this.authorityConflict) return;
     let commit: SettingsDraftCommit;
     try {
-      const changedKeys = [...this.drafts.keys()].map((fieldId) => staging.getFieldState(fieldId).field.key);
-      this.expandFullSpectrumDrafts(staging, changedKeys, false);
-      const crossFieldIssues = validateFullSpectrumCrossFields(this.fullSpectrumEffectiveValues(staging));
-      if (crossFieldIssues.length > 0) throw new SettingsDraftCommitError(crossFieldIssues);
-      commit = staging.commit();
+      commit = model.prepare();
     } catch (error) {
       if (error instanceof SettingsDraftCommitError) {
         this.showError(error, 'Fix the highlighted validation errors before applying');
@@ -1012,8 +857,7 @@ export class GeneratedSettingsPanel {
       return;
     }
     if (commit.changes.length === 0) {
-      this.editor = this.createEditor(catalog, snapshot);
-      this.drafts.clear();
+      model.discard();
       this.renderFields();
       this.setOperationMessage('No effective settings changes to apply.');
       return;
@@ -1037,8 +881,7 @@ export class GeneratedSettingsPanel {
       const nextSnapshot = validateSnapshot(rawNextSnapshot);
       if (!this.root) return;
       this.snapshot = nextSnapshot;
-      this.editor = this.createEditor(catalog, nextSnapshot);
-      this.drafts.clear();
+      this.model = this.createModel(catalog, nextSnapshot);
       this.authorityRefreshQueued = false;
       this.setAuthorityConflict(false);
       this.renderFields();
@@ -1049,8 +892,7 @@ export class GeneratedSettingsPanel {
       if (!this.root) return;
       if (adapterApplied) {
         this.snapshot = undefined;
-        this.editor = undefined;
-        this.drafts.clear();
+        this.model = undefined;
         this.loadFailed = true;
         if (this.schemaStatus) {
           this.schemaStatus.textContent = t(
@@ -1077,9 +919,9 @@ export class GeneratedSettingsPanel {
   }
 
   private async cancelDrafts(): Promise<void> {
-    const catalog = this.catalog;
     const snapshot = this.snapshot;
-    if (!catalog || !snapshot || this.busy || this.loading) return;
+    const model = this.model;
+    if (!snapshot || !model || this.busy || this.loading) return;
     if (this.authorityConflict) {
       await this.discardConflictAndReload();
       return;
@@ -1092,11 +934,10 @@ export class GeneratedSettingsPanel {
         sourceHash: snapshot.sourceHash,
         mode: this.mode,
         technology: this.technology,
-        draftFieldIds: [...this.drafts.keys()].sort((left, right) => left.localeCompare(right, 'en')),
+        draftFieldIds: [...model.draftFieldIds].sort((left, right) => left.localeCompare(right, 'en')),
       });
       if (!this.root) return;
-      this.editor = this.createEditor(catalog, snapshot);
-      this.drafts.clear();
+      model.discard();
       this.renderFields();
       this.setOperationMessage('Draft settings changes cancelled.');
     } catch (error) {
@@ -1106,20 +947,6 @@ export class GeneratedSettingsPanel {
     } finally {
       if (this.root) this.setBusy(false);
     }
-  }
-
-  private draftState(): { readonly changed: boolean; readonly invalid: boolean } {
-    const editor = this.editor;
-    if (!editor) return { changed: false, invalid: false };
-    let changed = false;
-    let invalid = false;
-    for (const fieldId of this.drafts.keys()) {
-      const state = editor.getFieldState(fieldId);
-      changed ||= state.draftChanged;
-      invalid ||= state.issues.length > 0;
-    }
-    invalid ||= validateFullSpectrumCrossFields(this.fullSpectrumEffectiveValues(editor)).length > 0;
-    return { changed, invalid };
   }
 
   private setBusy(busy: boolean): void {
@@ -1133,7 +960,7 @@ export class GeneratedSettingsPanel {
   }
 
   private syncControlState(): void {
-    const ready = Boolean(this.editor) && !this.loading;
+    const ready = Boolean(this.model) && !this.loading;
     const interactive = ready && !this.busy;
     this.root?.setAttribute('aria-busy', String(this.loading || this.busy));
     if (this.searchInput) this.searchInput.disabled = !interactive;
@@ -1149,7 +976,7 @@ export class GeneratedSettingsPanel {
     this.root?.querySelectorAll<HTMLButtonElement>('[data-settings-editable="true"]').forEach((button) => {
       button.disabled = !interactive || button.dataset.settingsDependencyEnabled === 'false';
     });
-    const draft = this.draftState();
+    const draft = this.model?.state() ?? { changed: false, invalid: false };
     if (this.applyButton) {
       this.applyButton.disabled = !interactive || !draft.changed || draft.invalid || this.authorityConflict;
     }
@@ -1213,66 +1040,6 @@ function isDraftControl(
       control instanceof view.HTMLSelectElement ||
       control instanceof view.HTMLTextAreaElement),
   );
-}
-
-function fieldRawValue(state: SettingsFieldState): string {
-  if (state.draftRaw !== undefined) return state.draftRaw;
-  if (state.draftSerialized !== undefined) return state.draftSerialized;
-  if (state.serializedValue !== undefined) return state.serializedValue;
-  const value = state.draftValue ?? state.value;
-  if (value === undefined) return '';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  return JSON.stringify(value);
-}
-
-function multilineRows(heightHint: number | null): number {
-  const rows = heightHint === null ? 4 : heightHint > 30 ? Math.round(heightHint / 20) : Math.round(heightHint);
-  return Math.min(12, Math.max(3, rows));
-}
-
-function originLabel(origin: SettingsFieldState['origin']): string {
-  switch (origin) {
-    case 'changed':
-      return 'Changed';
-    case 'inherited':
-      return 'Inherited';
-    case 'default':
-      return 'Default';
-    case 'unset':
-      return 'Unset';
-  }
-}
-
-function guiSurfaceLabel(surface: string): string {
-  const labels: Readonly<Record<string, string>> = {
-    filament: 'Filament',
-    object: 'Object',
-    plate: 'Plate',
-    printer: 'Printer',
-    process: 'Process',
-  };
-  return labels[surface] ?? surface;
-}
-
-function formatUnavailableReason(reason: string | undefined): string {
-  if (!reason) return 'the generated schema does not provide a safe editable contract';
-  if (reason.startsWith('special-widget:')) {
-    return `requires the unimplemented ${reason.slice('special-widget:'.length)} generated widget`;
-  }
-  if (reason.startsWith('gui-surface-unavailable:')) {
-    const surface = reason.slice('gui-surface-unavailable:'.length);
-    return `belongs to another settings scope; this panel may edit only the ${guiSurfaceLabel(surface)} surface`;
-  }
-  const descriptions: Readonly<Record<string, string>> = {
-    'ambiguous-key-owners': 'the engine key has multiple owners and cannot be selected safely',
-    'conditional-enum-domain': 'the enum domain depends on runtime state that is not generated yet',
-    'custom-tab-widget': 'the pinned Tab.cpp uses a custom widget whose behavior is not generated yet',
-    'no-literal-gui-placement': 'the pinned GUI inventory has no unambiguous literal placement for this field',
-    readonly: 'the engine marks this field read-only',
-    'unknown-technology-applicability': 'the generated schema cannot prove this field applies to this technology',
-  };
-  return descriptions[reason] ?? reason.replaceAll('-', ' ');
 }
 
 function errorMessage(error: unknown): string {

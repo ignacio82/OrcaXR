@@ -3331,6 +3331,64 @@ out-of-scope keys with its own errors before submission.
 the synchronous command does, waits for acknowledgement, keeps undo/redo,
 and rejects a competing queued edit instead of rebasing.
 
+### The settings panel model and the height-range editor
+
+The browser's generated settings panel kept its model inside its DOM class;
+it is now production code of its own (`settingsPanel.ts`), which
+`GeneratedSettingsPanel` draws and the shared core ports
+(`settings::editor::panel`): the query a detail level and a search show
+(unavailable fields included and counted with the Full Spectrum recipes,
+"n settings shown; m unavailable."), sections by GUI group ("Process ·
+Strength · Walls") or category, and per row the control (structured
+editor, locked text, check box for a non-nullable boolean, choice list with
+"Not set" for a nullable enum, text area sized from the GUI height, text
+field with the numeric or decimal keyboard), the value it holds (typed
+draft, else the codec's text), the origin badge in the browser's English,
+"Use inherited", "Use default" (a generated default), unavailable reasons
+in the browser's sentences, the Full Spectrum dependency and cross-field
+issues. The drafts are the panel's own (`SettingsPanelModel`): set,
+inherit and default, each widened by the reviewed Full Spectrum rules
+(implicit drafts recorded), the Apply state (changed, invalid), and Apply's
+one commit — the drafts replayed on a fresh editor, the Full Spectrum
+expansion, the cross-field check (`SettingsDraftCommitError`), then the
+editor's commit; none changing anything drops the drafts. The presentation
+table now carries each definition's `multiline` and GUI `height`
+(`generate-engine-options.mjs`). The scoped panel's words for a target
+(picker text with override count, summary, heading) are shared too.
+
+The semantic object editor's height ranges likewise
+(`layerRangeEditor.ts`, `orcaxr_project::layer_range_editor`): an object's
+ranges by height (UTF-16 ID ties, as the commands order them; the
+controller's snapshot used `localeCompare`, which no valid project can
+reach) with the merge command's decision for the selected range's
+neighbours (`inspectLayerRangeMerge`, now `commands::inspect_layer_range_merge`),
+typed bounds and split heights checked before anything is sent
+(ECMAScript `trim`/`Number`), each operation's pending and success words,
+and heights formatted as `Intl.NumberFormat('en-US', {maximumFractionDigits:
+4, useGrouping: false})` formats them — which rounds the number's shortest
+decimal spelling half away from zero, not its binary value
+(123456789.12345 is "123456789.1235", where `toFixed(4)` writes …1234),
+keeps the sign of -0 and writes every digit from 10²¹.
+
+Hosts reach both through canonical JSON exchanges
+(`settingsPanelExchange.ts`, `layerRangeEditorExchange.ts`): on a host
+editor `panel_view`, `panel_row`, `panel_edit`, `panel_state`,
+`panel_apply` (whose commit becomes the editor's guarded intent) and
+`panel_cancel`; `settings_target_text`; on a captured project
+`layer_range_editor`; and `layer_range_bounds`, `layer_range_split` and
+`layer_range_messages`. WASM exports them; JNI adds eleven exports, read by
+Kotlin `SettingsEditor.panel*`, `SettingsPanels` and `LayerRangeEditors`.
+`settings-panel-vectors.mjs` records, from the production modules over
+three states derived from the browser fixture (overrides at every scope,
+Full Spectrum project keys, foreign keys, an out-of-bounds part value,
+mergeable and unmergeable ranges, non-ASCII names), 18 panel sessions of
+669 steps (103 views, 154 rows, 230 drafts, 72 states, 90 applies with 31
+intents, 20 cancels), 22 target texts, 15 projections, 384 bounds checks,
+84 splits, 42 operation messages and 20 refusals. Rust replays all of them
+on editors opened from real store snapshots; WASM in Node and JNI open each
+state as a session and match every reply. Chrome's worker replay does not
+run this corpus yet.
+
 ### Facet region selection
 
 `facets::region` ports the browser's region selection (`FacetRegionSelection.ts`,
@@ -7661,6 +7719,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settin
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-codec-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-editor-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-projection-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-panel-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/paint-palette-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/action-capability-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/capability-exchange-vectors.mjs

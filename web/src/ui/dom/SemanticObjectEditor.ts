@@ -5,6 +5,14 @@ import {
   ORCA_VOLUME_ROLE_ORDER,
   type VolumeRoleConversionDecision,
 } from '../../project/objects/semanticVolumeCommands';
+import {
+  formatLayerRangeBounds as formatBounds,
+  inspectAllowedLayerRangeMerge as inspectAllowedMerge,
+  layerRangeOperationMessages,
+  orderLayerRanges as orderRanges,
+  validateLayerRangeBounds as validateBounds,
+  validateLayerRangeSplit,
+} from '../../project/objects/layerRangeEditor';
 
 type MaybePromise = void | Promise<void>;
 type OperationStatusKind = 'idle' | 'pending' | 'success' | 'error';
@@ -115,13 +123,6 @@ export interface SemanticObjectEditorAdapter {
 
 export interface SemanticObjectEditorOptions {
   readonly heading?: string;
-}
-
-interface BoundsValidation {
-  readonly valid: boolean;
-  readonly message: string;
-  readonly minZMm?: number;
-  readonly maxZMm?: number;
 }
 
 interface OperationStatus {
@@ -440,7 +441,7 @@ export class SemanticObjectEditor {
     form.appendChild(submit);
 
     let touched = false;
-    const update = (): BoundsValidation => {
+    const update = () => {
       const result = validateBounds(
         minInput.value,
         maxInput.value,
@@ -481,11 +482,8 @@ export class SemanticObjectEditor {
           minZMm: result.minZMm,
           maxZMm: result.maxZMm,
         });
-        void this.runOperation(
-          `Adding ${formatBounds(result.minZMm, result.maxZMm)}…`,
-          `Added ${formatBounds(result.minZMm, result.maxZMm)}.`,
-          () => this.adapter.onAddLayerRange(request),
-        );
+        const messages = layerRangeOperationMessages({ kind: 'add', minZMm: result.minZMm, maxZMm: result.maxZMm });
+        void this.runOperation(messages.pending, messages.success, () => this.adapter.onAddLayerRange(request));
         return;
       }
       if (!selected) return;
@@ -495,11 +493,14 @@ export class SemanticObjectEditor {
         minZMm: result.minZMm,
         maxZMm: result.maxZMm,
       });
-      void this.runOperation(
-        `Editing ${formatBounds(selected.minZMm, selected.maxZMm)}…`,
-        `Updated range boundaries to ${formatBounds(result.minZMm, result.maxZMm)}.`,
-        () => this.adapter.onEditLayerRange(request),
-      );
+      const messages = layerRangeOperationMessages({
+        kind: 'edit',
+        fromMinZMm: selected.minZMm,
+        fromMaxZMm: selected.maxZMm,
+        minZMm: result.minZMm,
+        maxZMm: result.maxZMm,
+      });
+      void this.runOperation(messages.pending, messages.success, () => this.adapter.onEditLayerRange(request));
     });
     update();
     return form;
@@ -537,15 +538,11 @@ export class SemanticObjectEditor {
 
     let touched = false;
     const update = (): number | undefined => {
-      const splitZMm = parseFiniteInput(splitInput.value);
-      const valid = splitZMm !== undefined && splitZMm > selected.minZMm && splitZMm < selected.maxZMm;
-      submit.disabled = snapshotBlocked || !valid;
-      splitInput.setAttribute('aria-invalid', String(touched && !valid));
-      error.textContent =
-        touched && !valid
-          ? `Split height must be strictly inside ${formatBounds(selected.minZMm, selected.maxZMm)}.`
-          : '';
-      return valid ? splitZMm : undefined;
+      const split = validateLayerRangeSplit(splitInput.value, selected);
+      submit.disabled = snapshotBlocked || !split.valid;
+      splitInput.setAttribute('aria-invalid', String(touched && !split.valid));
+      error.textContent = touched && !split.valid ? split.message : '';
+      return split.valid ? split.splitZMm : undefined;
     };
     splitInput.disabled = snapshotBlocked;
     splitInput.addEventListener('input', () => {
@@ -571,9 +568,8 @@ export class SemanticObjectEditor {
         splitZMm,
         upperRangeId,
       });
-      void this.runOperation(`Splitting range at ${formatMm(splitZMm)}…`, `Split range at ${formatMm(splitZMm)}.`, () =>
-        this.adapter.onSplitLayerRange(request),
-      );
+      const messages = layerRangeOperationMessages({ kind: 'split', splitZMm });
+      void this.runOperation(messages.pending, messages.success, () => this.adapter.onSplitLayerRange(request));
     });
     update();
     return form;
@@ -638,9 +634,8 @@ export class SemanticObjectEditor {
         firstRangeId: selected.id,
         secondRangeId: decision.otherRangeId,
       });
-      void this.runOperation(`Merging with the ${direction} range…`, `Merged with the ${direction} range.`, () =>
-        this.adapter.onMergeLayerRanges(request),
-      );
+      const messages = layerRangeOperationMessages({ kind: 'merge', direction });
+      void this.runOperation(messages.pending, messages.success, () => this.adapter.onMergeLayerRanges(request));
     });
     wrapper.appendChild(button);
     return wrapper;
@@ -665,9 +660,8 @@ export class SemanticObjectEditor {
         ...requestGuard(snapshot),
         layerRangeId: selected.id,
       });
-      void this.runOperation('Deleting selected range…', 'Deleted selected range.', () =>
-        this.adapter.onDeleteLayerRange(request),
-      );
+      const messages = layerRangeOperationMessages({ kind: 'delete' });
+      void this.runOperation(messages.pending, messages.success, () => this.adapter.onDeleteLayerRange(request));
     });
     wrapper.appendChild(button);
     return wrapper;
@@ -802,36 +796,6 @@ function roleBlockReason(
   return decision.allowed ? undefined : decision.reason;
 }
 
-function validateBounds(
-  rawMin: string,
-  rawMax: string,
-  ranges: readonly SemanticLayerRangeSnapshot[],
-  excludedId?: LayerRangeId,
-): BoundsValidation {
-  const minZMm = parseFiniteInput(rawMin);
-  const maxZMm = parseFiniteInput(rawMax);
-  if (minZMm === undefined || maxZMm === undefined) {
-    return { valid: false, message: 'Enter finite minimum and maximum Z values.' };
-  }
-  if (minZMm < 0 || maxZMm <= minZMm) {
-    return { valid: false, message: 'Bounds must satisfy 0 ≤ minimum Z < maximum Z.' };
-  }
-  const overlap = ranges.find((range) => range.id !== excludedId && minZMm < range.maxZMm && range.minZMm < maxZMm);
-  if (overlap) {
-    return {
-      valid: false,
-      message: `${formatBounds(minZMm, maxZMm)} overlaps existing ${formatBounds(overlap.minZMm, overlap.maxZMm)}.`,
-    };
-  }
-  return { valid: true, message: '', minZMm, maxZMm };
-}
-
-function parseFiniteInput(value: string): number | undefined {
-  if (value.trim() === '') return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
 function inspectSnapshot(snapshot: SemanticObjectEditorSnapshot): string | undefined {
   if (!Number.isSafeInteger(snapshot.sourceRevision) || snapshot.sourceRevision < 0) {
     return 'sourceRevision must be a non-negative safe integer.';
@@ -861,40 +825,6 @@ function inspectSnapshot(snapshot: SemanticObjectEditorSnapshot): string | undef
     return `selected layer range ${snapshot.selectedLayerRange.id} is not owned by this object.`;
   }
   return undefined;
-}
-
-function inspectAllowedMerge(
-  selectedId: LayerRangeId,
-  otherId: LayerRangeId,
-  ordered: readonly SemanticLayerRangeSnapshot[],
-  direction: 'previous' | 'next',
-): string | undefined {
-  const selectedIndex = ordered.findIndex((range) => range.id === selectedId);
-  const expectedIndex = direction === 'previous' ? selectedIndex - 1 : selectedIndex + 1;
-  const otherIndex = ordered.findIndex((range) => range.id === otherId);
-  if (selectedIndex < 0 || otherIndex !== expectedIndex) {
-    return `The declared ${direction} merge target is not the adjacent canonical range.`;
-  }
-  const lower = ordered[Math.min(selectedIndex, otherIndex)];
-  const upper = ordered[Math.max(selectedIndex, otherIndex)];
-  if (!lower || !upper || lower.maxZMm !== upper.minZMm) {
-    return `The ${direction} range does not touch the selected range.`;
-  }
-  return undefined;
-}
-
-function orderRanges(ranges: readonly SemanticLayerRangeSnapshot[]): readonly SemanticLayerRangeSnapshot[] {
-  return [...ranges].sort(
-    (left, right) => left.minZMm - right.minZMm || left.maxZMm - right.maxZMm || left.id.localeCompare(right.id),
-  );
-}
-
-function formatBounds(minZMm: number, maxZMm: number): string {
-  return `${formatMm(minZMm)}–${formatMm(maxZMm)}`;
-}
-
-function formatMm(value: number): string {
-  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 4, useGrouping: false }).format(value)} mm`;
 }
 
 function roleLabel(role: VolumeRole): string {

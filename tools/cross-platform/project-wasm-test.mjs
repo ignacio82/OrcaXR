@@ -9,6 +9,7 @@ import { replayCatalogs } from "./catalog-replay.mjs";
 import { replayLibrary } from "./library-replay.mjs";
 import { replayEditor } from "./editor-replay.mjs";
 import { replayProjection } from "./projection-replay.mjs";
+import { replaySettingsPanel } from "./settings-panel-replay.mjs";
 import { replayCapabilities } from "./capability-replay.mjs";
 import { replayRender } from "./render-replay.mjs";
 import { replayFacetRegions } from "./facet-region-replay.mjs";
@@ -112,6 +113,23 @@ if (isMainThread) {
     assert.deepEqual(
       [result.projectionReplies, result.projectionRefusals],
       [281, 36],
+    );
+    // The generated settings panel over captured projects' editors, the
+    // scoped panel's target texts and the height-range editor.
+    assert.deepEqual(
+      [
+        result.panelViews,
+        result.panelRows,
+        result.panelEdits,
+        result.panelStates,
+        result.panelApplies,
+        result.panelIntents,
+        result.targetTexts,
+        result.rangeProjections,
+        result.rangeChecks,
+        result.panelRefusals,
+      ],
+      [103, 154, 230, 72, 90, 31, 22, 15, 510, 20],
     );
     // Capability pages over live sessions, selected and edited.
     assert.deepEqual(
@@ -591,6 +609,22 @@ if (isMainThread) {
       },
     }],
   );
+  const settingsPanel = replaySettingsPanel(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/settings-panel-vectors.json", root)),
+    ),
+    layout,
+    fixture.generation,
+    [collator, {
+      fold: (units) => {
+        const s = String.fromCharCode(...units)
+          .normalize("NFKD")
+          .toLocaleLowerCase("en-US");
+        return Uint16Array.from({ length: s.length }, (_, i) => s.charCodeAt(i));
+      },
+    }],
+  );
   const capabilities = replayCapabilities(
     core,
     JSON.parse(
@@ -953,6 +987,7 @@ if (isMainThread) {
       ...workspaceBeds,
       ...transformFields,
       ...actionPresentation,
+      ...settingsPanel,
       ...paintTool,
       ...primitives,
       ...splitSources,

@@ -13,6 +13,8 @@ pub mod exchange;
 mod fields;
 mod full_spectrum;
 mod generated;
+mod panel;
+pub mod panel_exchange;
 mod stepper;
 
 pub use draft::*;
@@ -21,6 +23,7 @@ pub use full_spectrum::*;
 pub use generated::{
     GROUPS, PLACEMENTS, PRESENTATION, PROJECT_CONFIG_WRITE_KEYS, SPECIAL_WIDGET_KEYS, TABS,
 };
+pub use panel::*;
 pub use stepper::*;
 
 use std::fmt;
@@ -99,6 +102,10 @@ pub struct Presentation {
     pub technology: Technology,
     pub readonly: bool,
     pub gui_type: &'static str,
+    /// A multiline text, drawn as a text area.
+    pub multiline: bool,
+    /// The GUI's height hint: rows, or pixels above 30.
+    pub height: Option<f64>,
     pub aliases: &'static [&'static str],
     /// Extended or U1 enum domains, which the generic editor cannot offer.
     pub conditional_enum: bool,

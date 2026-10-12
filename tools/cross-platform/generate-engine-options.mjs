@@ -107,6 +107,7 @@ for (const d of schema.definitions) {
   editor += `category: ${optional(p.category.value)}, tooltip: ${optional(p.tooltip.value)}, unit: ${optional(p.unit.value)}, `;
   editor += `mode: Mode::${pascal(d.applicability.mode.value)}, technology: Technology::${pascal(d.applicability.technology.value)}, `;
   editor += `readonly: ${p.readonly.value}, gui_type: ${str(p.guiType.value)}, `;
+  editor += `multiline: ${p.multiline.value}, height: ${float(p.height.value)}, `;
   editor += `aliases: &[${d.behavior.aliases.value.map(str).join(", ")}], `;
   editor += `conditional_enum: ${d.enum.valuesExtended.length > 0 || d.enum.valuesU1.length > 0}, `;
   editor += `default: ${d.default.provided ? `Some(${str(canonicalStringify(d.default.value))})` : "None"}, `;

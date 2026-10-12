@@ -696,6 +696,65 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_editorPanelView, editor_panel_view, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorPanelRow, editor_panel_row, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorPanelEdit, editor_panel_edit, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorPanelState, editor_panel_state, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorPanelApply, editor_panel_apply, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorPanelCancel, editor_panel_cancel, (),
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_settingsTargetText, settings_target_text, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectLayerRangeEditor, project_layer_range_editor, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_layerRangeBounds, layer_range_bounds, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_layerRangeSplit, layer_range_split, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_layerRangeMessages, layer_range_messages, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_projectPaintPalette, project_paint_palette, jstring,
     handle: jlong,
     request: JString<'local>,

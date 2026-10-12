@@ -175,12 +175,82 @@ impl SettingsEditor {
             .ok_or_else(|| error("invalid_range"))?;
         encode(&row, wire::encode_editor_row)
     }
+    /// The generated settings panel (`settingsPanelExchange.ts`): what it
+    /// shows for `{"mode","search"}`.
+    pub fn panel_view(&self, request: &str) -> Result<String, JsValue> {
+        bounded(request)?;
+        self.inner
+            .panel_view(
+                request,
+                &mut Order(self.collator.as_ref()),
+                &mut Fold(self.folder.as_ref()),
+            )
+            .map_err(refused)
+    }
+    /// One field's row for `{"fieldId"}`, or the editor's refusal.
+    pub fn panel_row(&self, request: &str) -> Result<String, JsValue> {
+        bounded(request)?;
+        self.inner
+            .panel_row::<&'static str>(request)
+            .map_err(refused)
+    }
+    /// A draft set, inherited or reset to the default; returns its outcome.
+    pub fn panel_edit(&mut self, request: &str) -> Result<String, JsValue> {
+        bounded(request)?;
+        self.inner
+            .panel_edit::<&'static str>(request)
+            .map_err(refused)
+    }
+    /// Whether Apply has something valid to apply.
+    pub fn panel_state(&self) -> Result<String, JsValue> {
+        self.inner.panel_state::<&'static str>().map_err(refused)
+    }
+    /// Apply: the drafts' one commit, which becomes [`Self::intent`].
+    pub fn panel_apply(&mut self) -> Result<String, JsValue> {
+        self.inner
+            .panel_apply(&mut Order(self.collator.as_ref()))
+            .map_err(refused)
+    }
+    /// Cancel: every draft dropped.
+    pub fn panel_cancel(&mut self) {
+        self.inner.panel_cancel();
+    }
     /// For an editor opened on a project node: the project `Intent` that
     /// applies its latest commit, guarded by the captured snapshot.
     pub fn intent(&self) -> Result<String, JsValue> {
         let intent = self.inner.intent().ok_or_else(|| error("no_commit"))?;
         encode(intent, wire::encode_intent)
     }
+}
+
+fn bounded(request: &str) -> Result<(), JsValue> {
+    if request.len() > orcaxr_contracts::generated::MAX_INPUT_BYTES {
+        return Err(error("input_limit"));
+    }
+    Ok(())
+}
+
+/// The scoped settings panel's words for a target
+/// (`settingsTargetTextExchange`): `{"label","overrideCount","path","scope"}`
+/// in, `{"heading","summary","text"}` out.
+#[wasm_bindgen]
+pub fn settings_target_text(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::settings::editor::panel_exchange::target_text_json(request).map_err(error)
+}
+/// Typed height-range bounds (`layerRangeBoundsExchange`).
+#[wasm_bindgen]
+pub fn layer_range_bounds(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::layer_range_editor::bounds_json(request).map_err(error)
+}
+/// A typed split height (`layerRangeSplitExchange`).
+#[wasm_bindgen]
+pub fn layer_range_split(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::layer_range_editor::split_json(request).map_err(error)
+}
+/// What a height-range operation says (`layerRangeMessagesExchange`).
+#[wasm_bindgen]
+pub fn layer_range_messages(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::layer_range_editor::messages_json(request).map_err(error)
 }
 
 /// `CapturedProject.settings_editor`: the editor a settings panel opens for

@@ -34,6 +34,7 @@ pub mod import;
 pub mod ingress;
 pub mod js_math;
 pub mod layer_heights;
+pub mod layer_range_editor;
 pub mod measure;
 pub mod mesh;
 pub mod mesh_packet;

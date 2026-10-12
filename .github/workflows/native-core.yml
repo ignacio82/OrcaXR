@@ -139,6 +139,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-codec-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-editor-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-projection-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-panel-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/paint-palette-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/facet-region-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/facet-region-exchange-vectors.mjs

@@ -143,6 +143,33 @@ fn merge_refusal(
     }
     None
 }
+/// `inspectLayerRangeMerge` on one object: two distinct ranges it owns,
+/// then the merge command's own rule, or the browser's reason why not.
+pub(crate) fn inspect_merge(object: &ProjectObject, first: &[u16], second: &[u16]) -> Option<Text> {
+    if first == second {
+        return Some(Text::from_utf8(
+            "Merging layer ranges requires two distinct ranges",
+        ));
+    }
+    let find = |id: &[u16]| object.layer_ranges.iter().find(|r| r.id.as_utf16() == id);
+    let not_owned = |id: &[u16]| {
+        Some(message(&[
+            &u("Layer range "),
+            id,
+            &u(" is not owned by object "),
+            object.id.as_utf16(),
+        ]))
+    };
+    let Some(a) = find(first) else {
+        return not_owned(first);
+    };
+    let Some(b) = find(second) else {
+        return not_owned(second);
+    };
+    let ranges: Vec<Arc<LayerRange>> = object.layer_ranges.iter().cloned().collect();
+    let (lower, upper) = ordered_pair(a, b);
+    merge_refusal(&ranges, lower, upper).map(Text::from_utf8)
+}
 fn ordered_pair<'a>(
     a: &'a Arc<LayerRange>,
     b: &'a Arc<LayerRange>,

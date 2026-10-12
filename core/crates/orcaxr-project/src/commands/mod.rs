@@ -29,6 +29,7 @@ pub use drawn_parts::{PartPlacement, Recipe};
 use duplicate::*;
 pub use duplicate::{DuplicatePlateShape, duplicate_plate_shape};
 pub use facet_stroke::FacetRefinement;
+pub(crate) use layer_ranges::inspect_merge as inspect_layer_range_merge;
 pub use lifecycle::IndependentObjectIds;
 pub use mixed::filament_dependent_paths;
 use orcaxr_contracts::{canonical::Value, project_intent_types as wire};

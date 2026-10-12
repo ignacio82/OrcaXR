@@ -44,6 +44,12 @@ export class CapturedProject {
     id(start: number, count: number): Uint16Array;
     id_length(): number;
     /**
+     * One object's height ranges as the semantic editor shows them
+     * (`layerRangeEditorExchange`): `{"objectId","selectedLayerRangeId"}` in,
+     * `{"projection"}` out.
+     */
+    layer_range_editor(request: string): string;
+    /**
      * An `ObjectTreeRequest`; returns an `ObjectTreeReply`: one page of the
      * Objects tree's visible rows, or the selection activating a row commits.
      * The folder folds non-ASCII search text as the settings search does.
@@ -1173,6 +1179,31 @@ export class SettingsEditor {
      */
     overrides(): string;
     /**
+     * Apply: the drafts' one commit, which becomes [`Self::intent`].
+     */
+    panel_apply(): string;
+    /**
+     * Cancel: every draft dropped.
+     */
+    panel_cancel(): void;
+    /**
+     * A draft set, inherited or reset to the default; returns its outcome.
+     */
+    panel_edit(request: string): string;
+    /**
+     * One field's row for `{"fieldId"}`, or the editor's refusal.
+     */
+    panel_row(request: string): string;
+    /**
+     * Whether Apply has something valid to apply.
+     */
+    panel_state(): string;
+    /**
+     * The generated settings panel (`settingsPanelExchange.ts`): what it
+     * shows for `{"mode","search"}`.
+     */
+    panel_view(request: string): string;
+    /**
      * An `EditorQuery`; returns the number of fields.
      */
     query(query: string): number;
@@ -1428,6 +1459,21 @@ export function gcode_commands(text: string): string;
  * A `GuardedPrinterActionsRequest`; the `GuardedPrinterActions` to offer.
  */
 export function guarded_printer_actions(request: string): string;
+
+/**
+ * Typed height-range bounds (`layerRangeBoundsExchange`).
+ */
+export function layer_range_bounds(request: string): string;
+
+/**
+ * What a height-range operation says (`layerRangeMessagesExchange`).
+ */
+export function layer_range_messages(request: string): string;
+
+/**
+ * A typed split height (`layerRangeSplitExchange`).
+ */
+export function layer_range_split(request: string): string;
 
 /**
  * The workspace's measurement of two features: a `MeasureRequest`; returns
@@ -1707,6 +1753,13 @@ export function settings_rules(rules: string): string;
 export function settings_step(step: string): string;
 
 /**
+ * The scoped settings panel's words for a target
+ * (`settingsTargetTextExchange`): `{"label","overrideCount","path","scope"}`
+ * in, `{"heading","summary","text"}` out.
+ */
+export function settings_target_text(request: string): string;
+
+/**
  * The one option a typed name means among `options` (`presetMatchExchange`):
  * `{"options","query"}` in, `{"option": option | null}` out.
  */
@@ -1851,6 +1904,7 @@ export interface InitOutput {
     readonly capturedproject_hash: (a: number) => [number, number];
     readonly capturedproject_id: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_id_length: (a: number) => number;
+    readonly capturedproject_layer_range_editor: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_object_tree: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly capturedproject_paint_palette: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_plate_print_overrides: (a: number, b: number, c: number) => [number, number, number, number];
@@ -1903,6 +1957,9 @@ export interface InitOutput {
     readonly holdtoconfirm_poll: (a: number, b: number) => [number, number, number, number];
     readonly holdtoconfirm_press: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly holdtoconfirm_release: (a: number, b: number) => [number, number, number, number];
+    readonly layer_range_bounds: (a: number, b: number) => [number, number, number, number];
+    readonly layer_range_messages: (a: number, b: number) => [number, number, number, number];
+    readonly layer_range_split: (a: number, b: number) => [number, number, number, number];
     readonly measure_features: (a: number, b: number) => [number, number, number, number];
     readonly moonraker_credentials: (a: number, b: number) => [number, number, number, number];
     readonly moonraker_endpoint: (a: number, b: number) => [number, number, number, number];
@@ -2199,6 +2256,7 @@ export interface InitOutput {
     readonly server_components: (a: number, b: number) => [number, number, number, number];
     readonly settings_rules: (a: number, b: number) => [number, number, number, number];
     readonly settings_step: (a: number, b: number) => [number, number, number, number];
+    readonly settings_target_text: (a: number, b: number) => [number, number, number, number];
     readonly settingseditor_commit: (a: number) => [number, number, number, number];
     readonly settingseditor_compare: (a: number, b: number, c: number) => [number, number, number, number];
     readonly settingseditor_edit: (a: number, b: number, c: number) => [number, number, number, number];
@@ -2206,6 +2264,12 @@ export interface InitOutput {
     readonly settingseditor_intent: (a: number) => [number, number, number, number];
     readonly settingseditor_new: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly settingseditor_overrides: (a: number) => [number, number];
+    readonly settingseditor_panel_apply: (a: number) => [number, number, number, number];
+    readonly settingseditor_panel_cancel: (a: number) => void;
+    readonly settingseditor_panel_edit: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly settingseditor_panel_row: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly settingseditor_panel_state: (a: number) => [number, number, number, number];
+    readonly settingseditor_panel_view: (a: number, b: number, c: number) => [number, number, number, number];
     readonly settingseditor_query: (a: number, b: number, c: number) => [number, number, number];
     readonly settingseditor_revision: (a: number) => number;
     readonly settingseditor_row: (a: number, b: number) => [number, number, number, number];

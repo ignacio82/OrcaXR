@@ -230,10 +230,10 @@ import {
   AddLayerRangeCommand,
   DeleteLayerRangeCommand,
   EditLayerRangeBoundsCommand,
-  inspectLayerRangeMerge,
   MergeLayerRangesCommand,
   SplitLayerRangeCommand,
 } from '../project/objects/layerRangeCommands';
+import { layerRangeEditorProjection } from '../project/objects/layerRangeEditor';
 import { AdaptiveLayerHeightProfileCommand } from '../project/objects/layerHeightCommands';
 import { projectObjectsTree } from '../project/objects/projection';
 import {
@@ -1063,24 +1063,9 @@ export class CanonicalWorkspaceController {
     const selectedVolume = selectedVolumeId
       ? object.volumes.find((volume) => volume.id === selectedVolumeId)
       : undefined;
-    const layerRanges = [...object.layerRanges]
-      .sort(
-        (left, right) => left.minZMm - right.minZMm || left.maxZMm - right.maxZMm || left.id.localeCompare(right.id),
-      )
-      .map((range) => ({ id: range.id, minZMm: range.minZMm, maxZMm: range.maxZMm }));
-    const selectedIndex = selectedLayerRangeId
-      ? layerRanges.findIndex((range) => range.id === selectedLayerRangeId)
-      : -1;
-    const mergeDecision = (otherIndex: number, direction: 'previous' | 'next') => {
-      const other = layerRanges[otherIndex];
-      if (!selectedLayerRangeId || !other) {
-        return { allowed: false as const, reason: `There is no ${direction} height range.` };
-      }
-      const inspection = inspectLayerRangeMerge(project.state, object.id, selectedLayerRangeId, other.id);
-      return inspection.allowed
-        ? { allowed: true as const, otherRangeId: other.id }
-        : { allowed: false as const, reason: inspection.reason, otherRangeId: other.id };
-    };
+    // The ranges and merge decisions are the shared height-range editor's.
+    const ranges = layerRangeEditorProjection(project.state, object.id, selectedLayerRangeId);
+    if (!ranges) return undefined;
     return deepFreeze({
       sourceRevision: project.revision,
       sourceHash: project.hash,
@@ -1099,16 +1084,8 @@ export class CanonicalWorkspaceController {
             },
           }
         : {}),
-      layerRanges,
-      ...(selectedIndex >= 0 && selectedLayerRangeId
-        ? {
-            selectedLayerRange: {
-              id: selectedLayerRangeId,
-              mergePrevious: mergeDecision(selectedIndex - 1, 'previous'),
-              mergeNext: mergeDecision(selectedIndex + 1, 'next'),
-            },
-          }
-        : {}),
+      layerRanges: ranges.layerRanges,
+      ...(ranges.selectedLayerRange ? { selectedLayerRange: ranges.selectedLayerRange } : {}),
     });
   }
 

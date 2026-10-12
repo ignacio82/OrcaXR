@@ -3,8 +3,8 @@
 //! steps and stepper rows back one contract value at a time. Collation and
 //! search folding are the host's on every call that sorts or searches.
 use super::{
-    Field, GROUPS, Mode, PLACEMENTS, Requested, RowKind, Rows, SearchFolding, Step, StepRefusal,
-    Surface, TABS, Technology,
+    Field, GROUPS, Mode, PLACEMENTS, PanelModel, Requested, RowKind, Rows, SearchFolding, Step,
+    StepRefusal, Surface, TABS, Technology,
     draft::{Change, DraftEditor, EditorError, Origin, ValueMap},
     fields::{Applicability, MatchField, Query, Support, field_index, query_fields},
     full_spectrum, step_value, stepper_rows,
@@ -253,7 +253,8 @@ pub fn field(f: &Field) -> wire::EditorField {
 
 /// A draft editor a host owns, with its latest query and rows.
 pub struct HostEditor {
-    editor: DraftEditor,
+    /// The editor and the generated settings panel's drafts over it.
+    panel: PanelModel,
     fields: Vec<Field>,
     rows: Rows,
     binding: Option<Binding>,
@@ -277,7 +278,7 @@ impl HostEditor {
     }
     fn with(editor: DraftEditor, binding: Option<Binding>) -> Self {
         Self {
-            editor,
+            panel: PanelModel::new(editor),
             fields: Vec::new(),
             rows: Rows {
                 rows: Vec::new(),
@@ -313,14 +314,14 @@ impl HostEditor {
         self.intent.as_ref()
     }
     pub fn editor(&self) -> &DraftEditor {
-        &self.editor
+        self.panel.editor()
     }
     pub fn revision(&self) -> u64 {
-        self.editor.revision()
+        self.panel.editor().revision()
     }
     /// The overrides as canonical JSON.
     pub fn overrides_json(&self) -> Vec<u16> {
-        map_json(self.editor.overrides())
+        map_json(self.panel.editor().overrides())
     }
 
     /// `projectSettingsFields`; the fields are then read one at a time.
@@ -358,7 +359,8 @@ impl HostEditor {
     ) -> Result<wire::EditorFieldState, Refusal<E>> {
         let id = String::from_utf16(&request.field_id).map_err(|_| Refusal::UnknownField)?;
         let s = self
-            .editor
+            .panel
+            .editor()
             .field_state::<E>(&id)
             .map_err(|_| Refusal::UnknownField)?;
         Ok(wire::EditorFieldState {
@@ -387,7 +389,8 @@ impl HostEditor {
     ) -> Result<wire::EditorComparison, Refusal<E>> {
         let id = String::from_utf16(&request.field_id).map_err(|_| Refusal::UnknownField)?;
         let c = self
-            .editor
+            .panel
+            .editor()
             .compare::<E>(&id)
             .map_err(|_| Refusal::UnknownField)?;
         Ok(wire::EditorComparison {
@@ -406,11 +409,12 @@ impl HostEditor {
     /// browser's thrown errors are refusals with their messages.
     pub fn edit<E>(&mut self, edit: &wire::EditorEdit) -> wire::EditorEditResult {
         let id = |units: &[u16]| String::from_utf16_lossy(units);
+        let editor = self.panel.editor_mut();
         let result = match edit {
-            wire::EditorEdit::Set(e) => self.editor.set_draft::<E>(&id(&e.field_id), &e.raw),
-            wire::EditorEdit::Clear(e) => self.editor.clear_draft::<E>(&id(&e.field_id)),
-            wire::EditorEdit::Inherit(e) => self.editor.reset_to_inherited::<E>(&id(&e.field_id)),
-            wire::EditorEdit::Reset(e) => self.editor.reset_to_default::<E>(&id(&e.field_id)),
+            wire::EditorEdit::Set(e) => editor.set_draft::<E>(&id(&e.field_id), &e.raw),
+            wire::EditorEdit::Clear(e) => editor.clear_draft::<E>(&id(&e.field_id)),
+            wire::EditorEdit::Inherit(e) => editor.reset_to_inherited::<E>(&id(&e.field_id)),
+            wire::EditorEdit::Reset(e) => editor.reset_to_default::<E>(&id(&e.field_id)),
         };
         match result {
             Ok(()) => wire::EditorEditResult::Applied(wire::Empty {}),
@@ -422,7 +426,7 @@ impl HostEditor {
         &mut self,
         collation: &mut C,
     ) -> Result<wire::EditorCommitResult, Refusal<C::Error>> {
-        match self.editor.commit(collation) {
+        match self.panel.editor_mut().commit(collation) {
             Err(EditorError::Collation(e)) => Err(Refusal::Host(e)),
             Err(e) => Ok(wire::EditorCommitResult::Refused(refusal(&e))),
             Ok(c) => {
@@ -433,6 +437,52 @@ impl HostEditor {
                 Ok(committed(c))
             }
         }
+    }
+}
+
+/// The generated settings panel over this editor (`panel_exchange`).
+impl HostEditor {
+    /// What the panel shows for `{"mode","search"}`.
+    pub fn panel_view<E, C, F>(
+        &self,
+        request: &str,
+        collation: &mut C,
+        folding: &mut F,
+    ) -> Result<String, Refusal<E>>
+    where
+        C: Collation<Error = E>,
+        F: SearchFolding<Error = E>,
+    {
+        super::panel_exchange::view_json(&self.panel, request, collation, folding)
+    }
+    /// One field's row for `{"fieldId"}`.
+    pub fn panel_row<E>(&self, request: &str) -> Result<String, Refusal<E>> {
+        super::panel_exchange::row_json(&self.panel, request)
+    }
+    /// A draft: set, inherited or reset to the default.
+    pub fn panel_edit<E>(&mut self, request: &str) -> Result<String, Refusal<E>> {
+        super::panel_exchange::edit_json(&mut self.panel, request)
+    }
+    /// Whether Apply has something valid to apply.
+    pub fn panel_state<E>(&self) -> Result<String, Refusal<E>> {
+        super::panel_exchange::state_json(&self.panel)
+    }
+    /// Apply: the drafts' one commit. For an editor opened on a project node,
+    /// a commit that changes something becomes [Self::intent].
+    pub fn panel_apply<C: Collation>(
+        &mut self,
+        collation: &mut C,
+    ) -> Result<String, Refusal<C::Error>> {
+        let (reply, commit) = super::panel_exchange::apply(&mut self.panel, collation)?;
+        if let (Some(commit), Some(binding)) = (commit, &self.binding) {
+            // Panel commits change each key once with its wire text.
+            self.intent = Some(binding.intent(&commit).expect("panel commits apply"));
+        }
+        Ok(reply)
+    }
+    /// Cancel: every draft dropped.
+    pub fn panel_cancel(&mut self) {
+        self.panel.discard();
     }
 }
 
@@ -493,13 +543,16 @@ impl HostEditor {
         C: Collation<Error = E>,
         F: SearchFolding<Error = E>,
     {
-        self.rows =
-            stepper_rows(&self.editor, scope(&request.scope), collation, folding).map_err(|e| {
-                match e {
-                    EditorError::Collation(e) => Refusal::Host(e),
-                    other => Refusal::InvalidEditor(other.message()),
-                }
-            })?;
+        self.rows = stepper_rows(
+            self.panel.editor(),
+            scope(&request.scope),
+            collation,
+            folding,
+        )
+        .map_err(|e| match e {
+            EditorError::Collation(e) => Refusal::Host(e),
+            other => Refusal::InvalidEditor(other.message()),
+        })?;
         Ok(self.rows.rows.len())
     }
     /// Fields the schema cannot support, counted rather than listed.
