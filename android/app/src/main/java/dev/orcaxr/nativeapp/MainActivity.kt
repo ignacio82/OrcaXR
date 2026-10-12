@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.DragEvent
 import android.view.KeyEvent
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -54,6 +55,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -134,6 +136,8 @@ class MainActivity : ComponentActivity() {
     private var themeChoice by mutableStateOf<String?>(null)
     /** Whether the command palette is open (Ctrl/⌘ K, or a search button). */
     private var palette by mutableStateOf(false)
+    /** Whether the keyboard opened it: someone typing on keys needs no on-screen keyboard over it. */
+    private var paletteFromKeys = false
     /** Whether the window's arrangement shows the Workspace's 3D view now. */
     private var workspaceShown = true
 
@@ -231,26 +235,22 @@ class MainActivity : ComponentActivity() {
      * Ctrl/Meta+Shift+Z and Ctrl+Y redo, Delete deletes the selected model and Escape
      * deselects all; Ctrl/Meta+C, +X and +V copy, cut and paste a model (the platform's
      * keys; the browser's catalogue leaves them to page text) — only when nothing focused
-     * took the key, as the browser leaves a text field its own editing keys.
+     * took the key, as the browser leaves a text field its own editing keys. Ctrl/⌘ K and the
+     * paint palette's digits are taken before any control ([windowKey]).
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         // Reached only by keys no focused view consumed.
         val command = event.isCtrlPressed || event.isMetaPressed
         val plain = !command && !event.isShiftPressed && !event.isAltPressed
         val handled = event.repeatCount == 0 && when {
-            // The browser's Ctrl/⌘ K: the command palette, from anywhere (while it is open, its own keys close it).
-            command && !event.isShiftPressed && !event.isAltPressed && keyCode == KeyEvent.KEYCODE_K -> {
-                palette = !palette
-                true
-            }
+            // With nothing focused, the window's own keys arrive here rather than through the content's preview.
+            windowKey(event) -> true
             command && keyCode == KeyEvent.KEYCODE_Z && !event.isShiftPressed -> project.undoShortcut()
             command && keyCode == KeyEvent.KEYCODE_Z && event.isShiftPressed -> project.redoShortcut()
             event.isCtrlPressed && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_Y -> project.redoShortcut()
             plain && keyCode == KeyEvent.KEYCODE_FORWARD_DEL -> project.deleteShortcut()
             // Escape ends a paint stroke in flight before it deselects, as the browser's painter takes it first.
             plain && keyCode == KeyEvent.KEYCODE_ESCAPE -> project.paint.escape() || project.escapeShortcut()
-            // The browser's `1`–`9`: the paint palette's numbered rows.
-            plain && keyCode in KeyEvent.KEYCODE_1..KeyEvent.KEYCODE_9 -> project.paint.chooseNumber(keyCode - KeyEvent.KEYCODE_0)
             // The platform's clipboard keys for the browser's Copy, Cut and Paste of a model.
             command && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_C -> project.clipboardShortcut("edit_copy")
             command && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_X -> project.clipboardShortcut("edit_cut")
@@ -259,6 +259,33 @@ class MainActivity : ComponentActivity() {
         }
         return handled || super.onKeyDown(keyCode, event)
     }
+
+    /**
+     * The keys the browser takes on its window before any control, answering
+     * whether [event] was one: Ctrl/⌘ K opens or closes the command palette
+     * from anywhere, a text field too (the browser's `keydown` listener on
+     * `window`); and `1`–`9` choose the paint palette's numbered rows whenever
+     * the paint tool is on, unless a text field takes the typing — whatever
+     * control the keyboard focused (a toolbar button, a chip), which used to
+     * swallow the digit. The content's root previews every key before the
+     * focused control ([onPreviewKeyEvent]); [onKeyDown] takes them when
+     * nothing is focused.
+     */
+    private fun windowKey(event: KeyEvent): Boolean {
+        if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount != 0) return false
+        val command = event.isCtrlPressed || event.isMetaPressed
+        if (command && !event.isShiftPressed && !event.isAltPressed && event.keyCode == KeyEvent.KEYCODE_K) {
+            paletteFromKeys = !palette
+            palette = !palette
+            return true
+        }
+        val plain = !command && !event.isShiftPressed && !event.isAltPressed
+        return plain && event.keyCode in KeyEvent.KEYCODE_1..KeyEvent.KEYCODE_9 && project.paint.state.active && !typing() &&
+            project.paint.chooseNumber(event.keyCode - KeyEvent.KEYCODE_0)
+    }
+
+    /** Whether a text field has the typing now (the input method serves one). */
+    private fun typing(): Boolean = getSystemService(InputMethodManager::class.java)?.isAcceptingText == true
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
@@ -322,7 +349,10 @@ class MainActivity : ComponentActivity() {
             }
             OrcaTheme(dark) { CompositionLocalProvider(
                 LocalThemeSwitch provides switch,
-                LocalCommandPalette provides { palette = true },
+                LocalCommandPalette provides {
+                    paletteFromKeys = false
+                    palette = true
+                },
                 LocalActionRunner provides ::runAction,
             ) { FocusVisibleTheme {
                 val ready = state == R.string.workspace_development
@@ -356,7 +386,12 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                Box(Modifier.fillMaxSize().dragAndDropTarget(shouldStartDragAndDrop = { ready }, target = target)) {
+                Box(
+                    Modifier.fillMaxSize()
+                        // Before whichever control has the focus: the window's own keys (Ctrl/⌘ K, the paint palette's digits).
+                        .onPreviewKeyEvent { event -> windowKey(event.nativeKeyEvent) }
+                        .dragAndDropTarget(shouldStartDragAndDrop = { ready }, target = target),
+                ) {
                     Scaffold(
                         bottomBar = {
                             // Every area's whole name: a second row when they do not fit one (enlarged text, a long language).
@@ -391,7 +426,7 @@ class MainActivity : ComponentActivity() {
                 // A send's confirmation waits above whichever area is shown: the operator may have moved on.
                 device.sendConfirmation?.let { pending -> SendDialog(pending.view, device::answerSend) }
                 // The command palette, over whichever area is shown, once the app is ready.
-                if (palette && ready) CommandPalette(project, onDismiss = { palette = false }, run = ::runAction)
+                if (palette && ready) CommandPalette(project, paletteFromKeys, onDismiss = { palette = false }, run = ::runAction)
             } } }
         }
     }

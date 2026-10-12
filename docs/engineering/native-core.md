@@ -6632,9 +6632,10 @@ symbols the browser's Material symbols and their menu shortcuts its menus'
 `shortcutHint` — Ctrl+Z, Ctrl+⇧+Z, Delete, Escape — for the actions the app
 shows; `AppActionsTest` holds the app's list to the generated one).
 
-The palette is `CommandPalette.ts`: Ctrl/⌘ K from anywhere (unless a
-focused view takes the key; the open palette's own field passes it back to
-close it), the Workspace's search button (the browser's `#cmd-search-btn`:
+The palette is `CommandPalette.ts`: Ctrl/⌘ K from anywhere, a text field
+too, as the browser's `window` listener takes it (`MainActivity.windowKey`:
+the content's root previews every key before the focused control, and
+`onKeyDown` takes it when nothing is focused), the Workspace's search button (the browser's `#cmd-search-btn`:
 the search symbol, "Search actions & settings" on windows wider than its
 1180 px, ⌘K, its title as the tooltip) and the Project area's. It lists the
 core's `command-palette` surface in catalogue order with its enablement
@@ -6648,9 +6649,12 @@ reason when it is disabled, dimmed. ArrowDown/ArrowUp move the highlight, a
 new search starts at the first row, the mouse highlights the row it rests
 on; Enter or a click runs it and closes the palette, while one the core does
 not enable leaves it open with the browser's status ("label: reason");
-Escape, Ctrl/⌘ K, Back or a press outside close it; "No matching actions"
-when nothing matches. The placeholder is the XR palette's message ("Search
-every action"). The Prepare area's Slice and Send stay out: the Android
+Escape, Ctrl/⌘ K, Back or a press outside close it — Escape and Ctrl/⌘ K
+before an on-screen keyboard sees them (`onPreInterceptKeyBeforeSoftKeyboard`:
+the keyboard took Escape to hide itself and the palette stayed open), and
+opened from the keys the palette brings up no on-screen keyboard
+(`showKeyboardOnFocus`); "No matching actions" when nothing matches. The
+placeholder is the XR palette's message ("Search every action"). The Prepare area's Slice and Send stay out: the Android
 shell's capability host facts carry no slicing, G-code or preflight state
 yet, so the core could not gate them as the browser does.
 
@@ -6691,6 +6695,13 @@ secondary click, the keyboard's menu key or Shift+F10, as the browser's
 Objects panel. The Edit and Add menus show the actions' symbols and
 shortcuts, and are named as the browser's menu bar names those sections
 (`menuSection.edit.label`, `menuSection.add.label`).
+
+The paint palette's `1`–`9` choose its numbered rows whenever the paint tool
+is on, unless a text field takes the typing (the browser's
+`isShortcutEditingTarget`): the content's root takes them before any control
+(`windowKey`, from its `onPreviewKeyEvent`), so a focused toolbar button or
+chip no longer swallows the digit (it reached `onKeyDown` only when nothing
+focused had taken it, which still takes it when nothing is focused).
 
 Pointer and hover: buttons, menu entries and palette rows show the hand
 pointer where the browser's `cursor: pointer` does, and tooltips appear on

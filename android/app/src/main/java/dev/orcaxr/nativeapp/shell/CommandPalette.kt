@@ -47,6 +47,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreInterceptKeyBeforeSoftKeyboard
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -95,10 +96,12 @@ private class PaletteRow(val action: ProjectActionState, val label: String, val 
  * highlights the row it rests on), Enter or a click runs the highlighted
  * action through [run] — the same call the menus make — and closes the
  * palette; one the core does not enable leaves it open with the browser's
- * status ("label: reason"). Escape, Ctrl/⌘ K, Back or a press outside close it.
+ * status ("label: reason"). Escape, Ctrl/⌘ K, Back or a press outside close it
+ * — Escape and Ctrl/⌘ K before an on-screen keyboard can take them. Opened
+ * with Ctrl/⌘ K ([fromKeys]) it brings up no on-screen keyboard.
  */
 @Composable
-fun CommandPalette(model: ProjectModel, onDismiss: () -> Unit, run: (String) -> Unit) {
+fun CommandPalette(model: ProjectModel, fromKeys: Boolean, onDismiss: () -> Unit, run: (String) -> Unit) {
     var actions by remember { mutableStateOf<List<ProjectActionState>>(emptyList()) }
     val view = model.view
     // The core's list, read again whenever the project, its selection or its enablement changes.
@@ -138,12 +141,13 @@ fun CommandPalette(model: ProjectModel, onDismiss: () -> Unit, run: (String) -> 
             Modifier.fillMaxSize()
                 // The dimmed backdrop: a press outside the box closes, as the browser's overlay does.
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
-                .onPreviewKeyEvent { event ->
-                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                // Before the on-screen keyboard sees them (it would take Escape to hide itself and leave the palette open).
+                .onPreInterceptKeyBeforeSoftKeyboard { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreInterceptKeyBeforeSoftKeyboard false
                     when {
                         (event.isCtrlPressed || event.isMetaPressed) && event.key == Key.K -> onDismiss()
                         event.key == Key.Escape -> onDismiss()
-                        else -> return@onPreviewKeyEvent false
+                        else -> return@onPreInterceptKeyBeforeSoftKeyboard false
                     }
                     true
                 },
@@ -168,7 +172,9 @@ fun CommandPalette(model: ProjectModel, onDismiss: () -> Unit, run: (String) -> 
                         },
                         placeholder = { Text(search) },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                        // Opened from the keyboard, the typing is the keyboard's: no on-screen keyboard over the list; opened by a
+                        // touch, the on-screen keyboard comes up.
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go, showKeyboardOnFocus = !fromKeys),
                         keyboardActions = KeyboardActions(onGo = { runRow(matches.getOrNull(selected)) }),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
