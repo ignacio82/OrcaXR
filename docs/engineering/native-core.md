@@ -3385,9 +3385,10 @@ mergeable and unmergeable ranges, non-ASCII names), 18 panel sessions of
 669 steps (103 views, 154 rows, 230 drafts, 72 states, 90 applies with 31
 intents, 20 cancels), 22 target texts, 15 projections, 384 bounds checks,
 84 splits, 42 operation messages and 20 refusals. Rust replays all of them
-on editors opened from real store snapshots; WASM in Node and JNI open each
-state as a session and match every reply. Chrome's worker replay does not
-run this corpus yet.
+on editors opened from real store snapshots; WASM in Node, in Chrome's
+module worker (`project-wasm-browser.mjs`, with the browser's own
+`Intl.Collator` and NFKD folding) and JNI open each state as a session and
+match every reply.
 
 ### Facet region selection
 
