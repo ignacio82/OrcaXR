@@ -18,6 +18,9 @@
     <string name="project_edit_delete_all">Alles verwijderen</string>
     <string name="project_toggle_printable">Afdrukbaar</string>
     <string name="project_instance_to_object">Instellen als individueel object</string>
+    <string name="workspace_tool_move">Verplaats</string>
+    <string name="workspace_tool_rotate">Draai</string>
+    <string name="workspace_tool_scale">Schalen</string>
     <string name="project_reset_rotation">Rotatie herstellen</string>
     <string name="project_scale_to_fit_volume">Schalen naar bruikbaar volume</string>
     <string name="workspace_selection">Selectie</string>

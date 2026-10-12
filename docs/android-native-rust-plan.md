@@ -77,9 +77,10 @@ physical-device gate below is still open.
   filament library, painting, split, simplify and measure, settings panels and
   height ranges, the command palette, toolbar and context menus, generated
   localization (19 languages) and design tokens, accessibility, adaptive
-  layouts, file drop, recovery and multi-window document ownership (the
-  settings panels and the palette came with round 2, pending its suites).
-  Remains: *Resume here* items 1 to 4, and physical devices for the exit gate.
+  layouts, file drop, recovery and multi-window document ownership, and the
+  Workspace's transform gizmo with its keys G, R and S (its emulator suites
+  pending). Remains: *Resume here* items 1 to 4, and physical devices for the
+  exit gate.
 - **Phase 8, Android XR: not started.** Only Phase 2's SceneCore candidate
   (`android/renderer-scenecore`, `android/xr-experiment`) exists. Verification
   needs the user's Galaxy XR.
@@ -122,28 +123,14 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
 
 ### Resume here
 
-1. Phase 7, input: the Workspace's move, rotate and scale gizmos and their
-   keys. The browser's 3D view takes no keys of its own (its OrbitControls
-   listen to none); its keyboard reaches the scene through the catalogue's
-   shortcuts, and of those Android already takes undo, redo, Delete, Escape,
-   the clipboard keys and the paint digits (`MainActivity.onKeyDown`,
-   `windowKey`), leaving G, R and S (`tool_move`, `tool_rotate`, `tool_scale`).
-   Those choose the browser's TransformControls gizmo, which Android lacks: the
-   transform tools exist only as the Project inspector's fields. Port the
-   gizmo's drag (axis, plane and ring math, snapping) to the core with a
-   browser corpus, draw and pick its handles in the Filament scene, commit
-   through the inspector's transform path, then bind the keys. Also the
-   semantic editor's volume roles (`objects_convert_volume_role`,
-   `set_negative_part`).
-   In flight: local branch `gizmo` (worktree `~/.cache/orcaxr-gizmo`, based
-   on round 2 before its rebuild) holds the gizmo — the core port of
-   TransformControls, bit-exact over 14,161 browser pointer events, where it
-   stands for a selection, and the Android Workspace's drawing, touch, hover,
-   coalescing drag gesture, toolbar tools and G/R/S keys — verified on the
-   host (a 38-check JNI journey, unit tests, lint) and on an emulator
-   (`android-gizmo-smoke.py`, against the branch's own APK). Its WASM repack,
-   its integration onto `main` and the suites on the integrated tree remain;
-   the volume roles are not started.
+1. Phase 7, input: the semantic editor's volume roles
+   (`objects_convert_volume_role`, `set_negative_part`): the role decisions
+   the browser's `inspectVolumeRoleConversion` makes, shared through the core
+   with a browser corpus, and the editor's Volume role section in the Project
+   inspector. In flight: local branch `roles` (worktree `~/.cache/orcaxr-roles`,
+   from `main` at round 2's end), a sub-agent's. The Workspace's transform
+   gizmos and their keys G, R and S are done (the Phase 7 input item's
+   status); both emulator suites have yet to run with them.
 2. Phase 7, model tools whose shared-core ports exist but have no Android UI:
    emboss text (`orcaxr_project::emboss`, `add_emboss`), SVG parts (`svg`,
    `tool_svg`), brim ears (`brim_ears`, `tool_brim_ears`), assembly (`assembly`,
@@ -2397,11 +2384,10 @@ storage journeys on phone, tablet, and desktop-sized windows.
   wheel, trackpad and touchpad gestures follow OrbitControls; a stylus is a
   finger whose button is a secondary click (a 1,949-check JNI journey, JVM
   tests, and `android-palette-smoke.py`, part of the round-2 suites). The
-  semantic editor's volume roles and the Workspace's transform gizmos, with
-  their keys G, R and S, remain.
-  Status (2026-10-12): remains: the Workspace's transform gizmos with their
-  keys G, R and S, and the semantic editor's volume roles (*Resume here* item
-  1); the palette and the settings panels pass both emulator suites (round 2).
+  semantic editor's volume roles remain.
+  Status (2026-10-12): remains: the semantic editor's volume roles (*Resume
+  here* item 1); the palette and the settings panels pass both emulator suites
+  (round 2).
   Status (transform gizmos): the browser's gizmo — three's
   `TransformControls`, its handle geometry, picking and translate, rotate
   and scale drags in world and local space, and the changes a drag submits —
@@ -2410,9 +2396,13 @@ storage journeys on phone, tablet, and desktop-sized windows.
   [§](engineering/native-core.md#transform-gizmo)), with a Kotlin wrapper
   (`TransformGizmo`); so is where it stands for a selection and the origins a
   drag carries (`syncTransformProxy`, a session query: 19 browser
-  selections). Drawing the handles in the Workspace, routing touch, mouse and
-  stylus events to it, submitting its changes as one coalescing gesture,
-  re-attaching after each drag and the G/R/S keys remain.
+  selections). The Android Workspace draws and drives it
+  ([§](engineering/native-core.md#android-transform-gizmo)): its handles over
+  the 3D view, a press on one taking touch, mouse or stylus, each drag one
+  coalescing "Transform instance" step, the gizmo put back after each, Move,
+  Rotate and Scale on the toolbar and in the palette, and G, R and S (a
+  38-check JNI journey, JVM tests and `android-gizmo-smoke.py`, which passes
+  on a suite-sized emulator; both suites have yet to run it).
 - [ ] Integrate the flat renderer with panel resizing, visibility, lifecycle,
   selection, painting, model tools, and preview controls. Keep CPU work and
   loading off the UI thread; avoid per-frame Compose recomposition for meshes.

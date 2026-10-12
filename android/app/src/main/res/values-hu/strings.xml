@@ -19,6 +19,9 @@
     <string name="project_edit_delete_all">Összes törlése</string>
     <string name="project_toggle_printable">Nyomtatható</string>
     <string name="project_instance_to_object">Beállítás különálló objektumként</string>
+    <string name="workspace_tool_move">Mozgatás</string>
+    <string name="workspace_tool_rotate">Forgatás</string>
+    <string name="workspace_tool_scale">Átméretezés</string>
     <string name="project_reset_rotation">Forgatás visszaállítása</string>
     <string name="project_scale_to_fit_volume">Átméretezés a nyomtatótérhez</string>
     <string name="view_camera_default">Alapértelmezett nézet</string>

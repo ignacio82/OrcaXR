@@ -5,7 +5,7 @@
     "project"
   ],
   "inputs": {
-    "contracts/android-strings.json": "31acaedcb34085466134ba42e358bb77794a534c3cc41147e9141776c4e1a724",
+    "contracts/android-strings.json": "ed04b0b0cdfaf9d097144eac9b15feaf8d6bb69a6d85095ddd0207c9bf12e09d",
     "contracts/core-protocol.json": "63e7ed821d0da12f863004109a41f5dbfd00b73a2c29584ae2b3a3a6b1320f7a",
     "contracts/gcode-buffer.json": "237797f7310f4eb9cd1fe14bedc5c1bce31e2b2fb7b6995056c98da975c7f716",
     "contracts/gcode-metadata.json": "9839972a577bf7fb31f3fbbbffca1ec3003c4dbbd86ec165b9fbf8263b7d23df",
@@ -491,6 +491,7 @@
     "tools/cross-platform/android-device-smoke.py": "18e8964be26bcbf138cf50655b1d44585b888ccd14c0e77d43c7ef860e3c4f42",
     "tools/cross-platform/android-edit-smoke.py": "e14f206e7407bca002994ec9ae0418f6a139e2952fb2682d45a14966bfe41a2a",
     "tools/cross-platform/android-filament-smoke.py": "34fe41e8e97d520cea1284316ee0675128df2f7fae33da319b43189bc6f43f02",
+    "tools/cross-platform/android-gizmo-smoke.py": "cc0f488a811b0e45db0d42765acb84fb475fcceb7f9a338737e4c542719f7a66",
     "tools/cross-platform/android-inspector-smoke.py": "06c815c6e7868128cde5b0d6151c38f272db123dcec2ac4a762278660e8df59c",
     "tools/cross-platform/android-local-network-smoke.py": "28a69831ae655ffcc28e0197595b517848349c01f8b6471517760b3b5327871c",
     "tools/cross-platform/android-local-slice-smoke.py": "6321dfc8bea0d487ba940c7abf7ce3e2f4ae14131b1615a6734676892916b901",
@@ -509,7 +510,7 @@
     "tools/cross-platform/build-android.py": "28f80643b01f0ef59c6e1cd645d80eb67742417d3ab218a0d6b5ad6cd0d1891e",
     "tools/cross-platform/build-project-jvm.py": "a2f74bb17f1ff830674689292b7bf489bc42fa4a7d065fa708fbdb4903e7f339",
     "tools/cross-platform/build-wasm.py": "6311757d4e2261a1121247fabf0b6eaa0b8840ef371e161d407c4a1c0d75b53c",
-    "tools/cross-platform/emulator-smoke.py": "f5f0a5b57e7f0d4ff0c7b0cd7b2cc87102159647bf40779485998b9fa8e8c6d4",
+    "tools/cross-platform/emulator-smoke.py": "2f90bc74771be2e47e4e90638e8c5664623a3d0e6ecd9bf4952aa1788e9f9b8a",
     "tools/cross-platform/smoke_ui.py": "05f07dfeb6e4304a98e26a363bae1cde331d137895e8dc191866e3f73d2cd4e9",
     "tools/cross-platform/test-zip-write.py": "af58df31f97dc99c8c644c4e820878265d9ebf5a0d2a0d622b00b63b11b5a2a0",
     "tools/cross-platform/verify-artifacts.py": "b36cc1f552ffa7cda6b08df1b03d930ec6ced25307a3b7717b1001f7f1260cc2"

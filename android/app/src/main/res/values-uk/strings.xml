@@ -20,6 +20,9 @@
     <string name="project_toggle_printable">Доступно для друку</string>
     <string name="project_instance_to_object">Встановити як окремий об\'єкт</string>
     <string name="project_duplicate_plate">Дублювати поточну пластину</string>
+    <string name="workspace_tool_move">Перемістити</string>
+    <string name="workspace_tool_rotate">Повернути</string>
+    <string name="workspace_tool_scale">Масштаб</string>
     <string name="project_reset_rotation">Скинути орієнтацію</string>
     <string name="project_scale_to_fit_volume">Масштабування для збільшення обсягу</string>
     <string name="workspace_selection">Вибір</string>

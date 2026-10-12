@@ -26,8 +26,11 @@ object AppActions {
     /** The model toolbar's tools: each takes the Workspace's touch until it is chosen again or ended. */
     val TOOLS = listOf("tool_lay_on_face", "tool_paint", "tool_support_paint", "tool_seam_paint", "tool_fuzzy_skin", "tool_measure")
 
+    /** The gizmo's Move, Rotate and Scale (G, R and S): each chooses what a drag of the gizmo's handles does. */
+    val GIZMO = ProjectEditing.GIZMO_TOOLS
+
     /** The model toolbar's actions the app performs (`dom-toolbar`); the core's catalogue order decides where each goes. */
-    val TOOLBAR = TOOLS + listOf("drop_to_bed", "delete_models")
+    val TOOLBAR = GIZMO + TOOLS + listOf("drop_to_bed", "delete_models")
 
     /** The browser's menu strip quick actions (DomShell's `QUICK_ACTIONS`), in its order: bare symbols beside the menus. */
     val QUICK = listOf("file_save_project", "edit_undo", "edit_redo")
@@ -38,8 +41,11 @@ object AppActions {
     /** Every catalogue action the app performs. */
     val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PREPARE).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
 
-    /** Whether running [id] needs the Workspace's 3D view on screen: a camera view, or a tool that takes its touch. */
-    fun needsWorkspace(id: String): Boolean = id in CAMERA || id in TOOLS
+    /** Whether running [id] needs the Workspace's 3D view on screen: a camera view, a tool that takes its touch, or the gizmo's. */
+    fun needsWorkspace(id: String): Boolean = id in CAMERA || isTool(id)
+
+    /** Whether [id] is one of the toolbar's tools, shown as the Workspace's tool while it is ([ProjectModel.toolActive]). */
+    fun isTool(id: String): Boolean = id in TOOLS || id in GIZMO
 
     /** Whether running [id] needs the Project area, whose pickers and dialogs carry it out. */
     fun needsProject(id: String): Boolean = id in DOCUMENT

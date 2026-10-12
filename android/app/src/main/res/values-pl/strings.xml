@@ -20,6 +20,9 @@
     <string name="project_toggle_printable">Do druku</string>
     <string name="project_instance_to_object">Ustaw jako osobny obiekt</string>
     <string name="project_duplicate_plate">Powiel bieżącą płytę</string>
+    <string name="workspace_tool_move">Przesuń</string>
+    <string name="workspace_tool_rotate">Obróć</string>
+    <string name="workspace_tool_scale">Skaluj</string>
     <string name="project_reset_rotation">Zresetuj obrót</string>
     <string name="project_scale_to_fit_volume">Skaluj do obszaru roboczego</string>
     <string name="workspace_selection">Wybór</string>

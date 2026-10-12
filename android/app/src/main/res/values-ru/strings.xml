@@ -20,6 +20,9 @@
     <string name="project_toggle_printable">Для печати</string>
     <string name="project_instance_to_object">Задать как отдельную модель</string>
     <string name="project_duplicate_plate">Дублировать печатную пластину</string>
+    <string name="workspace_tool_move">Перемещение</string>
+    <string name="workspace_tool_rotate">Вращение</string>
+    <string name="workspace_tool_scale">Масштаб</string>
     <string name="project_reset_rotation">Сброс вращения</string>
     <string name="project_scale_to_fit_volume">Отмасштабировать под область печати</string>
     <string name="workspace_selection">Выделение</string>

@@ -185,6 +185,9 @@ public final class ProjectJniHarness {
     public static long transformEditChecks(byte[] cube, String script) {
         return ProjectTransformEditChecks.run(cube, script);
     }
+    public static long transformGestureChecks(byte[] cube) {
+        return ProjectTransformGestureChecks.run(cube);
+    }
     public static long splitSourceChecks(String state, byte[] cube, byte[] pair, byte[] quad, byte[] big, String script) {
         return ProjectModelToolChecks.splitSources(state, java.util.List.of(cube, pair, quad, big), script);
     }
@@ -464,6 +467,7 @@ public final class ProjectJniHarness {
             if (name.equals("placementEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("buildVolumeChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class);
             if (name.equals("transformEditChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, String.class);
+            if (name.equals("transformGestureChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);
             if (name.equals("splitSourceChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class, byte[].class, String.class);
             if (name.equals("modelToolChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("settingsChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);

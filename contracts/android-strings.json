@@ -25,6 +25,10 @@
       "key": "app.main.transformFailed",
       "arguments": ["reason"]
     },
+    "workspace_transform_stopped": {
+      "key": "workspace.orcaWorkspace.transformStopped",
+      "arguments": ["reason"]
+    },
     "prepare_no_presets": { "key": "app.main.noCompatiblePresets" },
     "prepare_own_settings": { "key": "app.main.usingTheProjectSOwn" },
     "prepare_remove": { "key": "action.delete_models.label" },
@@ -83,6 +87,9 @@
     "project_rename_plate": { "key": "action.rename_plate.label" },
     "project_activate_plate": { "key": "action.activate_plate.label" },
     "project_set_plate_printable": { "key": "action.set_plate_printable.label" },
+    "workspace_tool_move": { "key": "action.tool_move.label" },
+    "workspace_tool_rotate": { "key": "action.tool_rotate.label" },
+    "workspace_tool_scale": { "key": "action.tool_scale.label" },
     "project_lay_flat": { "key": "action.tool_lay_on_face.label" },
     "project_mirror_x": { "key": "action.mirror_x.label" },
     "project_mirror_y": { "key": "action.mirror_y.label" },
@@ -301,6 +308,9 @@
     "action_hint_view_camera_right": { "key": "action.view_camera_right.hint" },
     "action_hint_view_camera_rear": { "key": "action.view_camera_rear.hint" },
     "action_hint_view_camera_bottom": { "key": "action.view_camera_bottom.hint" },
+    "action_hint_tool_move": { "key": "action.tool_move.hint" },
+    "action_hint_tool_rotate": { "key": "action.tool_rotate.hint" },
+    "action_hint_tool_scale": { "key": "action.tool_scale.hint" },
     "action_hint_tool_lay_on_face": { "key": "action.tool_lay_on_face.hint" },
     "action_hint_tool_paint": { "key": "action.tool_paint.hint" },
     "action_hint_add_instance": { "key": "action.add_instance.hint" },

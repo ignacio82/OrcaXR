@@ -12,6 +12,7 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.neverEqualPolicy
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import dev.orcaxr.core.ActionArrangement
@@ -19,6 +20,8 @@ import dev.orcaxr.core.ActionPresentation
 import dev.orcaxr.core.ContentProjectDocument
 import dev.orcaxr.core.DigestingDocument
 import dev.orcaxr.core.DocumentOwners
+import dev.orcaxr.core.GizmoMode
+import dev.orcaxr.core.GizmoPose
 import dev.orcaxr.core.HelperVolumeRole
 import dev.orcaxr.core.MeasurePick
 import dev.orcaxr.core.MeasurePickResult
@@ -48,6 +51,9 @@ import dev.orcaxr.core.SliceScope
 import dev.orcaxr.core.SlicingSlots
 import dev.orcaxr.core.SlotEdit
 import dev.orcaxr.core.SplitConfirmation
+import dev.orcaxr.core.TransformFieldEdit
+import dev.orcaxr.core.TransformGizmo
+import dev.orcaxr.core.TransformProxy
 import dev.orcaxr.core.TransformReset
 import dev.orcaxr.core.TransformTool
 import dev.orcaxr.core.VirtualFilamentEdit
@@ -852,6 +858,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "duplicate_plate" -> view.activePlate?.let { plate -> duplicatePlate(plate.id) }
             "delete_plate" -> view.activePlate?.let { plate -> deletePlate(plate.id) }
             "tool_lay_on_face" -> layFlat(!layingFlat)
+            "tool_move" -> gizmoTool(GizmoMode.TRANSLATE)
+            "tool_rotate" -> gizmoTool(GizmoMode.ROTATE)
+            "tool_scale" -> gizmoTool(GizmoMode.SCALE)
             "mirror_x" -> work { workspace.mirrorSelected(ProjectIntents.PlacementAxis.X).await() }
             "mirror_y" -> work { workspace.mirrorSelected(ProjectIntents.PlacementAxis.Y).await() }
             "mirror_z" -> work { workspace.mirrorSelected(ProjectIntents.PlacementAxis.Z).await() }
@@ -897,10 +906,16 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         }
     }
 
-    /** Whether toolbar tool [id] is the Workspace's tool now: Lay flat, Measure, or the paint channel being painted. */
+    /**
+     * Whether toolbar tool [id] is the Workspace's tool now: Lay flat, Measure,
+     * the paint channel being painted, or — while none of those is — the
+     * gizmo's Move, Rotate or Scale.
+     */
     fun toolActive(id: String): Boolean = when (id) {
         "tool_lay_on_face" -> layingFlat
         "tool_measure" -> measuring
+        "tool_move", "tool_rotate", "tool_scale" ->
+            !layingFlat && !measuring && !paint.state.active && ProjectEditing.gizmoAction(gizmoMode) == id
         else -> paint.state.active && PaintChannel.entries.any { it.toolAction == id && it == paint.state.channel }
     }
 
@@ -983,6 +998,87 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             main.post { inspectorEdits++ }
         }
     }
+
+    // ---- The Workspace's transform gizmo ----
+
+    /**
+     * What the Workspace's gizmo does to the selection (the browser's
+     * `TransformControls` mode): Move until Rotate or Scale is chosen — from
+     * the toolbar, the palette, or G, R and S.
+     */
+    var gizmoMode by mutableStateOf(GizmoMode.TRANSLATE)
+        private set
+
+    /**
+     * Where the gizmo stands for the selection and what a drag carries, as
+     * last read ([refreshGizmo]): every read is news, an unchanged one too,
+     * since a drag that changed nothing still has to put the gizmo back.
+     */
+    var gizmoProxy by mutableStateOf<TransformProxy>(TransformProxy.None, neverEqualPolicy())
+        private set
+
+    /**
+     * Move, Rotate or Scale (`tool_move`, `tool_rotate`, `tool_scale`): the
+     * Workspace's one tool, as the browser's `setTool` — Lay flat, Measure and
+     * painting end — and the gizmo's handles for it.
+     */
+    private fun gizmoTool(mode: GizmoMode) {
+        layFlat(false)
+        if (measuring) measure(false)
+        if (paint.state.active) paint.stop()
+        gizmoMode = mode
+    }
+
+    /** Reads where the gizmo stands for the selection again, as the browser's `syncTransformProxy` after every change. */
+    fun refreshGizmo() = quietly {
+        val proxy = workspace.transformProxy().await()
+        main.post {
+            gizmoProxy = proxy
+            if (proxy is TransformProxy.Refused) message = proxy.message
+        }
+    }
+
+    /** A drag of the gizmo's handles: its gesture, the proxy as the drag began, the origins it carries and its tool. */
+    class GizmoDrag internal constructor(
+        internal val gesture: ProjectWorkspace.TransformGesture,
+        internal val initial: GizmoPose,
+        internal val origins: List<ProjectIntents.InstanceTransform>,
+        internal val tool: TransformTool,
+    )
+
+    /** A press took a handle of the gizmo standing at [proxy]: the drag starts from [initial], the proxy's pose then. */
+    fun beginGizmoDrag(proxy: TransformProxy.Placed, initial: GizmoPose): GizmoDrag =
+        GizmoDrag(workspace.transformGesture(), initial, proxy.origins, ProjectEditing.transformTool(gizmoMode))
+
+    /**
+     * The proxy of [drag] moved to [pose]: what that changes (the one
+     * instance, or the selection carried around the proxy) goes to the
+     * drag's gesture. A change the workspace refuses stops the drag, as the
+     * browser's "Transform stopped"; answers whether the drag goes on.
+     */
+    fun dragGizmo(drag: GizmoDrag, pose: GizmoPose): Boolean =
+        when (val edit = TransformGizmo.changes(drag.initial, pose, drag.tool, drag.origins)) {
+            is TransformFieldEdit.Refused -> {
+                drag.gesture.cancel()
+                message = words(R.string.workspace_transform_stopped, edit.message)
+                false
+            }
+            is TransformFieldEdit.Changes -> {
+                drag.gesture.update(edit.changes)
+                true
+            }
+        }
+
+    /** The drag ended: its last pose lands, then the gizmo is placed again where the selection now is. */
+    fun endGizmoDrag(drag: GizmoDrag) {
+        drag.gesture.finish().whenComplete { _, failure ->
+            failure?.let { main.post { message = words(R.string.workspace_transform_stopped, cause(it).message.orEmpty()) } }
+            refreshGizmo()
+        }
+    }
+
+    /** Whether G, R or S may choose gizmo tool [id] now (`tool_move`'s, `tool_rotate`'s and `tool_scale`'s shortcuts), as the core enables it. */
+    fun gizmoShortcut(id: String): Boolean = !busy && ProjectEditing.enabled(view, id)
 
     /** The Lay flat tool (`tool_lay_on_face`): while on, a tap in the Workspace lays the tapped facet on the bed instead of selecting. */
     var layingFlat by mutableStateOf(false)

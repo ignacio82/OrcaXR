@@ -18,6 +18,9 @@
     <string name="project_edit_delete_all">全てを削除</string>
     <string name="project_toggle_printable">造形可能</string>
     <string name="project_instance_to_object">個別オブジェクトとして設定</string>
+    <string name="workspace_tool_move">移動</string>
+    <string name="workspace_tool_rotate">回転</string>
+    <string name="workspace_tool_scale">スケール</string>
     <string name="project_reset_rotation">回転をリセット</string>
     <string name="project_scale_to_fit_volume">ビルド容積に合わせる</string>
     <string name="view_camera_default">デフォルトビュー</string>

@@ -18,7 +18,7 @@ class AppActionsTest {
         assertTrue(ProjectEditing.CREATED.all { it in AppActions.PERFORMED })
         assertTrue(AppActions.TOOLBAR.all { it in AppActions.PERFORMED })
         assertTrue(AppActions.QUICK.all { it in AppActions.PERFORMED })
-        assertEquals(61, AppActions.PERFORMED.size)
+        assertEquals(64, AppActions.PERFORMED.size)
     }
 
     @Test fun everyCatalogueGroupHeadsItsSectionsInTheAppsLanguage() {
@@ -37,7 +37,9 @@ class AppActionsTest {
         assertEquals("Ctrl+⇧+Z", OrcaActionGlyphs.actions.getValue("edit_redo").shortcut)
         assertEquals("Delete", OrcaActionGlyphs.actions.getValue("edit_delete_selected").shortcut)
         assertEquals("Escape", OrcaActionGlyphs.actions.getValue("edit_deselect_all").shortcut)
-        assertEquals(4, OrcaActionGlyphs.actions.values.count { it.shortcut != null })
+        // The gizmo's tools, each its letter.
+        assertEquals(listOf("G", "R", "S"), AppActions.GIZMO.map { OrcaActionGlyphs.actions.getValue(it).shortcut })
+        assertEquals(7, OrcaActionGlyphs.actions.values.count { it.shortcut != null })
     }
 
     @Test fun anActionRunsWhereItCan() {
@@ -46,7 +48,10 @@ class AppActionsTest {
             listOf("view_camera_default", "view_camera_top", "view_camera_front", "view_camera_left", "view_camera_right", "view_camera_rear", "view_camera_bottom"),
             AppActions.CAMERA,
         )
-        (AppActions.CAMERA + AppActions.TOOLS).forEach { assertTrue(it, AppActions.needsWorkspace(it)) }
+        (AppActions.CAMERA + AppActions.TOOLS + AppActions.GIZMO).forEach { assertTrue(it, AppActions.needsWorkspace(it)) }
+        assertEquals(listOf("tool_move", "tool_rotate", "tool_scale"), AppActions.GIZMO)
+        (AppActions.TOOLS + AppActions.GIZMO).forEach { assertTrue(it, AppActions.isTool(it)) }
+        assertFalse(AppActions.isTool("drop_to_bed"))
         listOf("edit_undo", "add_primitive_cube", "delete_models", "drop_to_bed", "mirror_x").forEach {
             assertFalse(it, AppActions.needsWorkspace(it) || AppActions.needsProject(it))
         }
@@ -55,13 +60,14 @@ class AppActionsTest {
     @Test fun onlyPerformedActionsAreListedInTheCoresOrder() {
         val listed = listOf(
             ProjectActionState("tool_move", "Move", false, "Select a model instance for this action."),
+            ProjectActionState("tool_boolean", "Boolean", false, "Select a model instance for this action."),
             ProjectActionState("tool_lay_on_face", "Lay flat", true),
             ProjectActionState("tool_paint", "Paint", true),
             ProjectActionState("drop_to_bed", "Drop to bed", true),
             ProjectActionState("tool_cut", "Cut (Plane)", false, "Plane cutting is disabled"),
             ProjectActionState("help_about", "About OrcaXR", true),
         )
-        assertEquals(listOf("tool_lay_on_face", "tool_paint", "drop_to_bed"), AppActions.performed(listed).map { it.id })
+        assertEquals(listOf("tool_move", "tool_lay_on_face", "tool_paint", "drop_to_bed"), AppActions.performed(listed).map { it.id })
     }
 
     @Test fun aPickTheCoreRefusesSaysWhyAsTheBrowsersStatus() {

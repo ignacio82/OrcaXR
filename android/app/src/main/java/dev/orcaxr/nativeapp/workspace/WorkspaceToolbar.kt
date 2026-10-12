@@ -130,7 +130,7 @@ internal fun ModelToolbar(model: ProjectModel, modifier: Modifier = Modifier) {
             runs.forEachIndexed { index, tools ->
                 if (index > 0) Box(Modifier.padding(horizontal = 3.dp).width(1.dp).height(20.dp).background(Color(tokens.stroke)))
                 for (action in tools) {
-                    val tool = action.id in AppActions.TOOLS
+                    val tool = AppActions.isTool(action.id)
                     val active = tool && model.toolActive(action.id)
                     ActionIconButton(action, tool = tool, active = active, enabled = action.enabled && !model.busy) { run(action.id) }
                 }

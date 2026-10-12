@@ -265,7 +265,8 @@ class MainActivity : ComponentActivity() {
      * The browser's edit shortcuts (web/src/actions/groups/edit.ts): Ctrl/Meta+Z undoes,
      * Ctrl/Meta+Shift+Z and Ctrl+Y redo, Delete deletes the selected model and Escape
      * deselects all; Ctrl/Meta+C, +X and +V copy, cut and paste a model (the platform's
-     * keys; the browser's catalogue leaves them to page text) — only when nothing focused
+     * keys; the browser's catalogue leaves them to page text); G, R and S choose the
+     * gizmo's Move, Rotate and Scale (`groups/scene.ts`) — only when nothing focused
      * took the key, as the browser leaves a text field its own editing keys. Ctrl/⌘ K and the
      * paint palette's digits are taken before any control ([windowKey]).
      */
@@ -286,10 +287,17 @@ class MainActivity : ComponentActivity() {
             command && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_C -> project.clipboardShortcut("edit_copy")
             command && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_X -> project.clipboardShortcut("edit_cut")
             command && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_V -> project.clipboardShortcut("edit_paste")
+            // G, R and S choose the gizmo's Move, Rotate and Scale, on the Workspace (the catalogue's shortcuts).
+            plain && keyCode == KeyEvent.KEYCODE_G -> gizmoKey("tool_move")
+            plain && keyCode == KeyEvent.KEYCODE_R -> gizmoKey("tool_rotate")
+            plain && keyCode == KeyEvent.KEYCODE_S -> gizmoKey("tool_scale")
             else -> false
         }
         return handled || super.onKeyDown(keyCode, event)
     }
+
+    /** A gizmo tool's key: the tool, shown on the Workspace, when the core enables it; answers whether it applied. */
+    private fun gizmoKey(id: String): Boolean = project.gizmoShortcut(id).also { if (it) runAction(id) }
 
     /**
      * The keys the browser takes on its window before any control, answering

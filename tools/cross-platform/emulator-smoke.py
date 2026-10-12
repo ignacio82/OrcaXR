@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Own a temporary AVD/process for the JNI, app-startup, Device, Project, edit, inspector, creation, filament, local-slicing, paint, model-tool, settings, Preview, Prepare, Send, language, command-palette, accessibility and adaptive-shell smoke tests.
+"""Own a temporary AVD/process for the JNI, app-startup, Device, Project, edit, inspector, creation, filament, local-slicing, paint, model-tool, settings, Preview, Prepare, Send, language, command-palette, transform-gizmo, accessibility and adaptive-shell smoke tests.
 
 API 34 by default; `--api 37` runs them on Android 17, where every printer
 exchange needs the local-network permission, and adds that permission's own
@@ -26,6 +26,8 @@ SMOKES = ["android-smoke", "android-local-network-smoke", "android-device-smoke"
           "android-settings-smoke",
           # The command palette, the Workspace toolbar, the scene's context menus and a mouse's hover.
           "android-palette-smoke",
+          # The Workspace's transform gizmo: a drag of its arrow, its rings, and G, R and S.
+          "android-gizmo-smoke",
           # Night mode, font scale 2.0, rotation and animation scales, each restored as it ends.
           "android-accessibility-smoke",
           # Last: it resizes the display (restoring it as it ends) for the window-size layouts.

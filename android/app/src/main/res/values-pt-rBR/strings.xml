@@ -20,6 +20,9 @@
     <string name="project_toggle_printable">Imprimível</string>
     <string name="project_instance_to_object">Definir como objeto individual</string>
     <string name="project_duplicate_plate">Duplicar Placa Atual</string>
+    <string name="workspace_tool_move">Mover</string>
+    <string name="workspace_tool_rotate">Rotacionar</string>
+    <string name="workspace_tool_scale">Escala</string>
     <string name="project_reset_rotation">Redefinir Rotação</string>
     <string name="project_scale_to_fit_volume">Dimensionar para o volume de impressão</string>
     <string name="workspace_selection">Seleção</string>

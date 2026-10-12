@@ -138,6 +138,9 @@
     <string name="project_row_collapse">Collapse %1$s</string>
     <!-- Placement: the browser's catalogue actions (web/src/actions/groups/scene.ts, gizmos.ts), its Lay flat tool's
          statuses, and its transform inspector (the Tool Settings panel, web/src/workspace/TransformFields.ts). -->
+    <string name="workspace_tool_move">Move</string>
+    <string name="workspace_tool_rotate">Rotate</string>
+    <string name="workspace_tool_scale">Scale</string>
     <string name="project_lay_flat">Lay flat</string>
     <string name="project_mirror_x">Mirror on X</string>
     <string name="project_mirror_y">Mirror on Y</string>
@@ -158,6 +161,7 @@
     <string name="workspace_lay_flat_hint">Lay flat: click the facet that should rest on the bed.</string>
     <string name="workspace_lay_flat_missed">Click a model facet to lay it flat.</string>
     <string name="workspace_lay_flat_done">Done</string>
+    <string name="workspace_transform_stopped">Transform stopped: %1$s</string>
     <!-- What the 3D views say to accessibility services: the browser's viewport label (web/index.html #viewport),
          its XR objects panel's selection words, and its View menu camera views (web/src/actions/groups/view.ts). -->
     <string name="workspace_view">Build plate</string>
@@ -479,6 +483,9 @@
     <string name="action_hint_view_camera_right">Snap the camera to the right view</string>
     <string name="action_hint_view_camera_rear">Snap the camera to the rear view</string>
     <string name="action_hint_view_camera_bottom">Snap the camera to the bottom view</string>
+    <string name="action_hint_tool_move">Move the selected model on the bed</string>
+    <string name="action_hint_tool_rotate">Rotate the selected model</string>
+    <string name="action_hint_tool_scale">Scale the selected model</string>
     <string name="action_hint_tool_lay_on_face">Click a face to lay it flat on the bed</string>
     <string name="action_hint_tool_paint">Brush filament colours onto the model</string>
     <string name="action_hint_add_instance">Add another instance that shares the selected object’s parts and paint</string>

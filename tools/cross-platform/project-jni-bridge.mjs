@@ -84,6 +84,7 @@ export function startProjectJni(profile = "debug") {
   signatures.placementEditChecks = ["String", "byte[]"];
   signatures.buildVolumeChecks = ["String", "byte[]", "byte[]"];
   signatures.transformEditChecks = ["byte[]", "String"];
+  signatures.transformGestureChecks = ["byte[]"];
   signatures.splitSourceChecks = ["String", "byte[]", "byte[]", "byte[]", "byte[]", "String"];
   signatures.modelToolChecks = ["String", "byte[]"];
   signatures.settingsChecks = ["String", "byte[]"];

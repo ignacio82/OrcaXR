@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -60,9 +61,14 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.orcaxr.core.GizmoEventKind
+import dev.orcaxr.core.GizmoMode
+import dev.orcaxr.core.GizmoState
 import dev.orcaxr.core.PaintChannel
 import dev.orcaxr.core.PaintToolKind
 import dev.orcaxr.core.ProjectSceneSummary
+import dev.orcaxr.core.TransformGizmo
+import dev.orcaxr.core.TransformProxy
 import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.project.ProjectModel
 import dev.orcaxr.nativeapp.shell.ShellLayout
@@ -147,6 +153,12 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     // The canonical selection, wherever it was made (here, the Project area's tree, an edit).
     val selected = view.selection.instances
     SideEffect { renderer.highlight(selected) }
+    // The gizmo stands over the selection, read again whenever the project or the selection changes (the browser's
+    // syncTransformProxy) — not while its own drag edits the project, which reads it once as the drag ends.
+    LaunchedEffect(view.revision, view.selection) { if (!renderer.gizmoPressed) model.refreshGizmo() }
+    val proxy = model.gizmoProxy
+    val gizmoMode = model.gizmoMode
+    SideEffect { renderer.gizmo(proxy, gizmoMode) }
     LaunchedEffect(view.bed.widthMm, view.bed.depthMm) { renderer.bed(view.bed.widthMm, view.bed.depthMm) }
     // A simplify preview's meshes drawn in place of the previewed volumes' own.
     val previewed = model.simplifyMeshes
@@ -189,7 +201,8 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
             Modifier.fillMaxSize().onSizeChanged { renderer.size = it },
             update = { surface -> ViewDescription.describe(surface, label, described, cameras) },
         )
-        // The measured line, under every panel.
+        // The gizmo's handles, then the measured line, under every panel.
+        renderer.gizmoView?.let { TransformGizmoOverlay(it, gizmoMode, renderer.camera, renderer.size) }
         if (model.measuring) model.measureReadout?.annotation?.let { MeasureAnnotationOverlay(it, renderer.camera, renderer.size) }
         // Objects on every plate (the tree may show them collapsed).
         val objects = view.plateList.sumOf { it.objects }
@@ -413,6 +426,91 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
     var camera by mutableStateOf<OrbitCamera?>(null)
         private set
     var size by mutableStateOf(IntSize.Zero)
+
+    // ---- The transform gizmo: three.js's TransformControls, in the shared core ----
+
+    /** Where the gizmo stands and what a drag carries, as last attached ([ProjectModel.gizmoProxy]). */
+    private var placed: TransformProxy = TransformProxy.None
+    /** Whether the gizmo has to stand again where the selection is: a drag of it ended. */
+    private var replace = false
+    /** The gizmo's state as the core last answered, while it stands over a selection. */
+    private var gizmo by mutableStateOf<GizmoState?>(null)
+    private var gizmoMode by mutableStateOf(GizmoMode.TRANSLATE)
+    /** The drag of its handles in flight; null too once refused, while the finger that pressed is still down. */
+    private var gizmoDrag: ProjectModel.GizmoDrag? = null
+    /** Whether the press now down took a handle of the gizmo: the touch is the gizmo's until it lifts. */
+    var gizmoPressed = false
+        private set
+
+    /** What the gizmo shows through the camera now, or null when it stands over nothing. */
+    val gizmoView by derivedStateOf {
+        val state = gizmo
+        val scene = camera?.let { WorkspaceGizmo.scene(it, size, gizmoMode) }
+        if (state == null || scene == null) null else TransformGizmo.present(scene, state)
+    }
+
+    /**
+     * Stands the gizmo where [proxy] says (again on every read, as the
+     * browser's `syncTransformProxy` after every change), with [mode]'s
+     * handles — never under a drag in flight, which puts it back as it ends.
+     * A new mode first ends a press on the gizmo, as the browser's `setTool`
+     * cancels its gesture.
+     */
+    fun gizmo(proxy: TransformProxy, mode: GizmoMode) {
+        if (mode != gizmoMode) {
+            if (gizmoPressed) liftGizmo(0f, 0f)
+            gizmoMode = mode
+        }
+        if (gizmoPressed || (proxy == placed && !replace)) return
+        placed = proxy
+        replace = false
+        gizmo = (proxy as? TransformProxy.Placed)?.let { TransformGizmo.attach(it.pose) }
+    }
+
+    /** The gizmo's state after a pointer event of [kind] at ([x], [y]) in the view; null without a gizmo. */
+    private fun stepGizmo(kind: GizmoEventKind, x: Float, y: Float): GizmoState? {
+        val state = gizmo ?: return null
+        val scene = camera?.let { WorkspaceGizmo.scene(it, size, gizmoMode) } ?: return null
+        val (ndcX, ndcY) = WorkspaceGizmo.ndc(x, y, size)
+        return TransformGizmo.step(scene, state, kind, ndcX, ndcY).also { gizmo = it }
+    }
+
+    /**
+     * A press at ([x], [y]): whether it took a handle of the gizmo, which then
+     * drags as the finger moves (TransformControls' `pointerdown`, a hover
+     * first so the handle under it is the one).
+     */
+    private fun pressGizmo(x: Float, y: Float): Boolean {
+        val state = stepGizmo(GizmoEventKind.PRESS, x, y) ?: return false
+        val proxy = placed as? TransformProxy.Placed
+        if (!state.dragging || proxy == null) return false
+        gizmoPressed = true
+        gizmoDrag = model.beginGizmoDrag(proxy, state.proxy)
+        return true
+    }
+
+    /** The pressed finger moved to ([x], [y]): the handle drags, and what that changes goes to the drag's gesture. */
+    private fun dragGizmo(x: Float, y: Float) {
+        val drag = gizmoDrag ?: return
+        val state = stepGizmo(GizmoEventKind.MOVE, x, y) ?: return
+        if (state.changed && !model.dragGizmo(drag, state.proxy)) gizmoDrag = null
+    }
+
+    /** The press on the gizmo ends: the drag's last change lands, then the gizmo stands where the selection now is. */
+    private fun liftGizmo(x: Float, y: Float) {
+        gizmoPressed = false
+        stepGizmo(GizmoEventKind.RELEASE, x, y)
+        replace = true
+        val drag = gizmoDrag
+        gizmoDrag = null
+        if (drag != null) model.endGizmoDrag(drag) else model.refreshGizmo()
+    }
+
+    /** A mouse or pen over the view without a button: the handle under it shows it would be taken. */
+    private fun hoverGizmo(x: Float, y: Float) {
+        if (!gizmoPressed) stepGizmo(GizmoEventKind.HOVER, x, y)
+    }
+
     /** A simplify preview's meshes, by volume, drawn in their volumes' place. */
     private var previewed: Map<String, TriangleMesh> = emptyMap()
 
@@ -558,6 +656,31 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         onMenu(SceneMenuRequest(x, y, hit?.instanceId))
     }
 
+    /**
+     * A tap at the event's point with no drag: Lay flat lays the facet it met
+     * on the bed and Measure picks the feature, each owning the tap as the
+     * browser's tools do; otherwise it selects the model it met, or nothing
+     * (Shift, Ctrl or Meta extending the selection).
+     */
+    private fun tapTool(renderer: FilamentScene, event: MotionEvent) {
+        val hit = renderer.pick(event.x.toDouble(), event.y.toDouble())
+        // A tool's facet is the project's: a tap on a simplify preview's is refused.
+        val met = met(hit)
+        val exact = (met as? ToolPick.Part)?.pick
+        if ((model.layingFlat || model.measuring) && met == ToolPick.Previewed) {
+            model.refusePreviewedPick()
+        } else if (model.layingFlat) {
+            // The Lay flat tool owns the tap, as the browser's does: it never selects.
+            model.layFlatAt(exact?.instanceId, exact?.volumeId, exact?.facet ?: 0)
+        } else if (model.measuring) {
+            // So does the Measure tool: the tap picks the feature it met.
+            model.measureAt(exact?.instanceId, exact?.volumeId, exact?.facet ?: 0, exact?.localPoint?.let { listOf(it.x, it.y, it.z) })
+        } else {
+            val extend = event.metaState and (KeyEvent.META_SHIFT_ON or KeyEvent.META_CTRL_ON or KeyEvent.META_META_ON) != 0
+            model.selectInstance(hit?.instanceId, extend)
+        }
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     private fun installTouch(view: WorkspaceSurface) {
         var downX = 0f
@@ -586,8 +709,11 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
                 return true
             }
         })
-        // A wheel or a trackpad's scroll zooms, as the browser's wheel does.
-        view.setOnGenericMotionListener { _, event -> scene != null && navigation.scroll(event) }
+        // A wheel or a trackpad's scroll zooms, as the browser's wheel does; a hover shows the gizmo's handle under it.
+        view.setOnGenericMotionListener { _, event ->
+            if (event.actionMasked == MotionEvent.ACTION_HOVER_MOVE) hoverGizmo(event.x, event.y)
+            scene != null && navigation.scroll(event)
+        }
         view.setOnTouchListener { _, event ->
             val renderer = scene ?: return@setOnTouchListener false
             val paint = model.paint
@@ -597,8 +723,10 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
             if (event.pointerCount > 1) {
                 scaling = true
                 view.removeCallbacks(longPress)
-                // A second finger zooms: the stroke in flight is dropped, as a cancelled pointer drops the browser's.
+                // A second finger zooms: the stroke in flight is dropped, as a cancelled pointer drops the browser's,
+                // and a drag of the gizmo ends where it is.
                 if (stroking) { paint.cancel(); stroking = false }
+                if (gizmoPressed) liftGizmo(event.x, event.y)
             }
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -613,15 +741,21 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
                         if (met(pick) == ToolPick.Previewed) model.refusePreviewedPick()
                         else touch(pick)?.let { stroking = paint.begin(it) }
                     }
+                    // Otherwise a press (a finger, a pen, the left button) on one of the gizmo's handles drags it, whatever
+                    // the tool, as the browser's TransformControls takes its own presses.
+                    if (!paint.state.active && !context && drag == ViewNavigation.Drag.ROTATE) pressGizmo(event.x, event.y)
                     // A finger or pen held still opens the scene's menu, as a long press does the tree's;
                     // a mouse has its right button for that.
-                    if (!stroking && !context && !ViewNavigation.isMouse(event)) {
+                    if (!stroking && !gizmoPressed && !context && !ViewNavigation.isMouse(event)) {
                         view.postDelayed(longPress, ViewConfiguration.getLongPressTimeout().toLong())
                     }
                 }
                 MotionEvent.ACTION_MOVE -> if (stroking) {
                     // The stroke samples its own part alone, as the browser's painter intersects its display.
                     paint.painting?.let { key -> touch(renderer.pick(event.x.toDouble(), event.y.toDouble(), key))?.let(paint::move) }
+                } else if (gizmoPressed) {
+                    if (abs(event.x - downX) + abs(event.y - downY) > TOUCH_SLOP) dragged = true
+                    dragGizmo(event.x, event.y)
                 } else if (!scaling && !menuShown) {
                     if (abs(event.x - downX) + abs(event.y - downY) > TOUCH_SLOP) {
                         dragged = true
@@ -635,28 +769,19 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
                     if (stroking) {
                         stroking = false
                         paint.end()
+                    } else if (gizmoPressed) {
+                        liftGizmo(event.x, event.y)
+                        // A tap on a handle still reaches Lay flat and Measure, as the browser's click handler takes it
+                        // before it looks at the gizmo; otherwise it leaves the selection be ("Don't unselect if they
+                        // clicked the transform gizmo directly").
+                        if (!dragged && !scaling && (model.layingFlat || model.measuring)) tapTool(renderer, event)
                     } else if (menuShown) {
                         // The long press opened the menu: lifting the finger chooses nothing.
                     } else if (context) {
                         // A secondary click opens the scene's menu where it was; a drag with it panned instead.
                         if (!dragged && !scaling) menuAt(renderer, event.x, event.y)
                     } else if (!dragged && !scaling && !paint.state.active) {
-                        val hit = renderer.pick(event.x.toDouble(), event.y.toDouble())
-                        // A tool's facet is the project's: a tap on a simplify preview's is refused.
-                        val met = met(hit)
-                        val exact = (met as? ToolPick.Part)?.pick
-                        if ((model.layingFlat || model.measuring) && met == ToolPick.Previewed) {
-                            model.refusePreviewedPick()
-                        } else if (model.layingFlat) {
-                            // The Lay flat tool owns the tap, as the browser's does: it never selects.
-                            model.layFlatAt(exact?.instanceId, exact?.volumeId, exact?.facet ?: 0)
-                        } else if (model.measuring) {
-                            // So does the Measure tool: the tap picks the feature it met.
-                            model.measureAt(exact?.instanceId, exact?.volumeId, exact?.facet ?: 0, exact?.localPoint?.let { listOf(it.x, it.y, it.z) })
-                        } else {
-                            val extend = event.metaState and (KeyEvent.META_SHIFT_ON or KeyEvent.META_CTRL_ON or KeyEvent.META_META_ON) != 0
-                            model.selectInstance(hit?.instanceId, extend)
-                        }
+                        tapTool(renderer, event)
                     }
                     view.performClick()
                 }
@@ -666,6 +791,7 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
                         stroking = false
                         paint.cancel()
                     }
+                    if (gizmoPressed) liftGizmo(event.x, event.y)
                 }
             }
             true

@@ -19,6 +19,9 @@
     <string name="project_edit_delete_all">Radera Allt</string>
     <string name="project_toggle_printable">Utskriftsbar</string>
     <string name="project_instance_to_object">Ställ in som ett enskilt objekt</string>
+    <string name="workspace_tool_move">Flytta</string>
+    <string name="workspace_tool_rotate">Rotera</string>
+    <string name="workspace_tool_scale">Skala</string>
     <string name="project_reset_rotation">Återställ Rotation</string>
     <string name="project_scale_to_fit_volume">Skala till bygg volymen</string>
     <string name="view_camera_default">Standard Vy</string>

@@ -335,7 +335,7 @@ private fun EditMenu(view: ProjectView, model: ProjectModel) {
 @Composable
 private fun ToolMenuItem(action: ProjectActionState, model: ProjectModel, onClick: () -> Unit) {
     val on = model.toolActive(action.id)
-    Box(if (action.id in AppActions.TOOLS) Modifier.semantics { selected = on } else Modifier) {
+    Box(if (AppActions.isTool(action.id)) Modifier.semantics { selected = on } else Modifier) {
         ActionMenuItem(action, enabled = action.enabled || on, trailing = if (on) "✓" else null, onClick = onClick)
     }
 }

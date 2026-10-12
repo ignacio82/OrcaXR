@@ -1,5 +1,6 @@
 package dev.orcaxr.nativeapp.project
 
+import dev.orcaxr.core.GizmoMode
 import dev.orcaxr.core.HelperVolumeRole
 import dev.orcaxr.core.PrimitiveShape
 import dev.orcaxr.core.ProjectActionState
@@ -148,6 +149,23 @@ object ProjectEditing {
     }
 
     fun layFlatFailed(reason: String?): String = "Lay flat failed: ${reason.orEmpty()}"
+
+    /** The gizmo's Move, Rotate and Scale, the toolbar's tools that choose its mode (the browser's `setTool`). */
+    val GIZMO_TOOLS = listOf("tool_move", "tool_rotate", "tool_scale")
+
+    /** The tool that chooses gizmo [mode]: Move translates, Rotate rotates, Scale scales. */
+    fun gizmoAction(mode: GizmoMode): String = when (mode) {
+        GizmoMode.TRANSLATE -> "tool_move"
+        GizmoMode.ROTATE -> "tool_rotate"
+        GizmoMode.SCALE -> "tool_scale"
+    }
+
+    /** How a drag in [mode] carries a selection round its proxy (the browser's `transformMode`). */
+    fun transformTool(mode: GizmoMode): TransformTool = when (mode) {
+        GizmoMode.TRANSLATE -> TransformTool.MOVE
+        GizmoMode.ROTATE -> TransformTool.ROTATE
+        GizmoMode.SCALE -> TransformTool.SCALE
+    }
 }
 
 /**

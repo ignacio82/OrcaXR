@@ -1278,6 +1278,111 @@ class ProjectWorkspace(
         }
     }
 
+    // ---- The Workspace's transform gizmo ----
+
+    /**
+     * Where the transform gizmo stands for the selection now (the browser's
+     * `syncTransformProxy`), read on the authority: the primary instance's own
+     * pose, or the centre of the selection's bounds, with the origins a drag
+     * carries — [TransformProxy.None] without a primary instance.
+     */
+    fun transformProxy(): CompletableFuture<TransformProxy> = outcome(
+        actor.inspect { session ->
+            val selection = whole(session)
+            val primary = (selection.primary as? ProjectIntents.SelectionEntity.Instance)?.value?.let(::text)
+            TransformGizmo.proxy(session, primary, selection.instances.toList())
+        },
+    ).thenApply { result ->
+        ((result as? ProjectOutcome.Inspected) ?: throw failure(result, null)).result.getOrThrow() as TransformProxy
+    }
+
+    /**
+     * A new drag of the gizmo's handles: its edits share the gesture
+     * `transform-controls:<n>`, drawn from the workspace's transform sequence
+     * as the browser draws it when a drag begins, so the history keeps the
+     * whole drag as one step.
+     */
+    fun transformGesture(): TransformGesture = TransformGesture("transform-controls:${transformSequence.incrementAndGet()}")
+
+    /**
+     * One drag's transform edits (the browser's `AsyncTransformGesture`): at
+     * most one edit in flight and the latest pose waiting behind it, each
+     * `setInstanceTransform` (one instance) or `setInstanceTransforms` under
+     * [id], so consecutive steps coalesce into one "Transform instance" (or
+     * "Transform n instances") step. A failed edit stops the gesture and is
+     * not retried; [cancel] drops the waiting pose without undoing the steps
+     * already made. Each step is planned against the state it applies to,
+     * where the browser carries one guard from step to step: the app's
+     * project has no other editor while a finger drags.
+     */
+    inner class TransformGesture internal constructor(val id: String) {
+        private val lock = Any()
+        private var latest: List<ProjectIntents.InstanceTransform>? = null
+        private var running = false
+        private var accepting = true
+        private var failure: Throwable? = null
+        private val settled = CompletableFuture<Unit>()
+
+        /** Submits [changes] now, or after the edit in flight in place of any pose still waiting. */
+        fun update(changes: List<ProjectIntents.InstanceTransform>) {
+            synchronized(lock) {
+                if (!accepting) return
+                latest = changes
+                if (!running) drain()
+            }
+        }
+
+        /** No more poses: completes once the last one is applied, or fails with the edit that failed. */
+        fun finish(): CompletableFuture<Unit> {
+            synchronized(lock) {
+                accepting = false
+                if (!running) settle()
+            }
+            return settled
+        }
+
+        /** Stops the gesture: the waiting pose is dropped; the steps already made stay. */
+        fun cancel() {
+            synchronized(lock) {
+                accepting = false
+                latest = null
+                if (!running) settle()
+            }
+        }
+
+        private fun drain() {
+            val next = latest
+            if (next == null) {
+                running = false
+                if (!accepting) settle()
+                return
+            }
+            latest = null
+            running = true
+            submit(next).whenComplete { _, error ->
+                synchronized(lock) {
+                    if (error != null) {
+                        failure = error
+                        accepting = false
+                        latest = null
+                    }
+                    drain()
+                }
+            }
+        }
+
+        private fun settle() {
+            failure?.let(settled::completeExceptionally) ?: settled.complete(Unit)
+        }
+
+        private fun submit(changes: List<ProjectIntents.InstanceTransform>): CompletableFuture<Int?> = edit { _, _ ->
+            val command = changes.singleOrNull()?.let { change ->
+                ProjectIntents.Command.SetInstanceTransform(ProjectIntents.SetInstanceTransform(change.instanceId, change.transform, units(id)))
+            } ?: ProjectIntents.Command.SetInstanceTransforms(ProjectIntents.SetInstanceTransforms(changes, units(id)))
+            Edit(listOf(command), changes.size)
+        }
+    }
+
     private fun step(undo: Boolean): CompletableFuture<Unit> = query().thenCompose { (state, _) ->
         val operation = if (undo) ProjectIntents.SessionOperation.Undo(state.guard) else ProjectIntents.SessionOperation.Redo(state.guard)
         outcome(actor.submit(operation))

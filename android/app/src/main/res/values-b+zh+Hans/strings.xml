@@ -20,6 +20,9 @@
     <string name="project_toggle_printable">可打印的</string>
     <string name="project_instance_to_object">设置为独立对象</string>
     <string name="project_duplicate_plate">复制当前打印板</string>
+    <string name="workspace_tool_move">移动</string>
+    <string name="workspace_tool_rotate">旋转</string>
+    <string name="workspace_tool_scale">缩放</string>
     <string name="project_reset_rotation">重置旋转</string>
     <string name="project_scale_to_fit_volume">缩放到构建空间大小</string>
     <string name="workspace_selection">选中</string>

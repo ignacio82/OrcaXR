@@ -4008,9 +4008,8 @@ JNI answer all of it bit for bit; 29,197 Kotlin checks cover the wrapper.
 Bindings: WASM and JNI `transform_gizmo_attach`, `_step`, `_present`,
 `_geometry` and `_changes` (`transformGizmo…` on `NativeProject`), and Kotlin
 `TransformGizmo.attach`, `step`, `present`, `geometry` and `changes` over
-`GizmoScene`, `GizmoCamera`, `GizmoState` and `GizmoView`. Drawing the
-handles, touch and mouse input and the G/R/S keys in the Android Workspace
-remain.
+`GizmoScene`, `GizmoCamera`, `GizmoState` and `GizmoView`. The Android
+Workspace draws and drives it ([Android transform gizmo](#android-transform-gizmo)).
 
 ### Primitives and helper volumes
 
@@ -5594,6 +5593,61 @@ field holds, and then presses Tab to leave the field, which shows the applied va
 finds a field by the scrolling container's own bounds, since the area bar's height varies
 with the window and the text size. It passes on both emulators.
 
+### Android transform gizmo
+
+The Workspace draws and drives the shared core's gizmo
+([`placement::gizmo`](#transform-gizmo)) as the browser's 2D shell does.
+`ProjectWorkspace.transformProxy` reads where it stands for the selection
+whenever the project or the selection changes, and once each drag ends
+(`syncTransformProxy`): nowhere with nothing selected, at one instance's own
+pose, at the centre of a selection's bounds unrotated. Its root puts the
+printer's millimetres into render-space metres as `RenderSpace` does (−90°
+about X, then a thousandth), and its camera is the Filament scene's (45°
+vertical, 1 mm to 10 m).
+
+A Compose canvas over the 3D view draws each visible handle of the mode —
+the gizmo group, then its helpers — from the core's geometry, in its
+colour (three's linear colour encoded to sRGB) and opacity, with no depth
+test, as the browser draws its handles. Only the triangles facing the camera
+are drawn, as three's front-side materials draw them (a closed handle's back
+faces, wound the other way, cancelled its fill), each whole or not at all;
+a line is clipped to the near and far planes.
+
+A press — a finger, a pen, the left button — that the core picks on a
+handle takes the touch: no orbit, no long-press menu. Each move steps the
+gizmo, and when a step moves the proxy, `TransformGizmo.changes` (the one
+instance, or the selection carried round the pivot) goes to one
+`ProjectWorkspace.TransformGesture` under `transform-controls:<n>`, which,
+as the browser's `AsyncTransformGesture`, keeps at most one edit in flight
+and the latest pose waiting: the drag lands as one "Transform instance" (or
+"Transform n instances") step. A refused change stops the drag with the
+browser's "Transform stopped: …"; a second finger ends it where it is. A
+mouse or pen hovering highlights the handle under it.
+
+Move, Rotate and Scale (`tool_move`, `tool_rotate`, `tool_scale`, enabled
+with an instance selected) join the model toolbar and the command palette,
+and G, R and S choose them when no text field has the typing, showing the
+Workspace. Each is the Workspace's one tool, as the browser's `setTool`:
+choosing one ends Lay flat, Measure or painting. The gizmo stays drawn under
+those tools as the browser's does: while painting the stroke owns the
+press; under Lay flat and Measure a press on a handle drags the gizmo and a
+tap without a drag still reaches the tool (the browser's click handler takes
+it first); otherwise a tap on a handle leaves the selection alone, as the
+browser's handler does when the gizmo's axis is set.
+
+Two choices differ from the browser on purpose: each gesture step is planned
+against the state it applies to, where the browser carries one guard from
+step to step (the app's project has no other editor while a finger drags);
+and a touch press meets the current drag plane, since the core renders
+before every event, where the browser's would meet the previous frame's.
+`ProjectTransformGestureChecks` drives this over JNI on the host (38
+checks): the proxy for none, one and two instances; a drag of the X arrow in
+four moves lands as its last move, along the printer's X alone, one undo
+entry that one undo takes back whole; a turn of the green ring carries two
+instances round their pivot as "Transform 2 instances"; a finished gesture
+takes nothing. `android-gizmo-smoke.py` drags the drawn arrow and ring on an
+emulator and chooses the tools with G, R and S.
+
 ### Android creation
 
 The Project area creates as the browser's workspace does, through the
@@ -6850,8 +6904,8 @@ both emulators. The command palette, the toolbar, the context menus, hover,
 trackpad and stylus input follow ([below](#android-command-palette-toolbar-and-context-menus)).
 The browser's 3D view takes no keys of its own (its OrbitControls listen to
 none): its keyboard reaches the scene through the catalogue's shortcuts, which
-the app takes too, except G, R and S, whose move, rotate and scale gizmos the
-Workspace does not have yet.
+the app takes too, G, R and S choosing the gizmo's Move, Rotate and Scale
+([Android transform gizmo](#android-transform-gizmo)).
 
 ### Android command palette, toolbar and context menus
 

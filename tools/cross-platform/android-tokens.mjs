@@ -67,7 +67,7 @@ const APP_ACTIONS = [
   "edit_delete_all", "edit_select_all", "edit_deselect_all",
   "view_camera_default", "view_camera_top", "view_camera_front", "view_camera_left", "view_camera_right",
   "view_camera_rear", "view_camera_bottom",
-  "tool_lay_on_face", "tool_paint", "add_instance", "instance_to_object", "fill_bed_with_instances",
+  "tool_move", "tool_rotate", "tool_scale", "tool_lay_on_face", "tool_paint", "add_instance", "instance_to_object", "fill_bed_with_instances",
   "mirror_x", "mirror_y", "mirror_z", "reset_rotation", "reset_scale", "center_on_plate", "toggle_printable",
   "scale_to_fit_volume", "drop_to_bed", "delete_models",
   "add_primitive_cube", "add_primitive_cylinder", "add_primitive_sphere", "add_primitive_cone",

@@ -689,6 +689,11 @@ try {
     fieldFixture.edits.map((c) => `E\t${c.request}\t${c.reply}`).join("\n"),
   );
   assert.equal(transformEditChecks, 509);
+  // A drag of the Workspace's gizmo as the Android Workspace drives it: the proxy for
+  // the selection, TransformControls through the core, the changes under one gesture —
+  // one undo entry per drag, for one instance and for a selection carried round its pivot.
+  const transformGestureChecks = jvm.call("transformGestureChecks", decodeBytes("stl-binary/cube"));
+  assert.equal(transformGestureChecks, 38);
   // The model tools: what a split would split through the JNI exports and the
   // Kotlin wrapper, then the browser's journey of splits, simplifications and
   // measurements through ProjectWorkspace on a real session.
@@ -1863,6 +1868,7 @@ try {
     placementEditChecks,
     buildVolumeChecks,
     transformEditChecks,
+    transformGestureChecks,
     ...splitSources,
     splitSourceChecks,
     modelToolChecks,
