@@ -156,6 +156,8 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/brim-ear-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/emboss-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/svg-part-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/emboss-font-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/drawn-part-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/mesh-packet-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/assembly-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/object-tree-vectors.mjs

@@ -13,7 +13,9 @@
 //   truncated features and messages, every refusal) cut and recorded with the
 //   SHA-256 of their mesh bytes, then staged into a live session as new parts
 //   and re-cuts (applied, refused when run, refused when unnamed), with undo
-//   and redo. Replayed by Rust, by WASM in Node and Chrome, and over JNI.
+//   and redo. Each drawing is also read on its own, as the SVG part tool reads
+//   a picked file (`SvgDrawingReply`: its size and notes, or its refusal).
+//   Replayed by Rust, by WASM in Node and Chrome, and over JNI.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -35,10 +37,14 @@ import {
   readSvgShapes,
   SvgError,
 } from "../../web/src/project/objects/svgShapes.ts";
-import { prepareSvgPartWire } from "../../web/src/project/objects/svgPartExchange.ts";
+import {
+  prepareSvgPartWire,
+  readSvgDrawingWire,
+} from "../../web/src/project/objects/svgPartExchange.ts";
 import {
   decodeProjectSvgPartRequest,
   decodeProjectSvgPartStage,
+  encodeProjectSvgDrawingReply,
   encodeProjectSvgPartReply,
   encodeProjectSvgPartRequest,
   encodeProjectSvgPartStage,
@@ -368,6 +374,7 @@ function prepare(name, drawing, recipe = {}) {
     prepare: request,
     drawing: Buffer.from(bytes).toString("base64"),
     reply: encodeProjectSvgPartReply(reply),
+    read: encodeProjectSvgDrawingReply(readSvgDrawingWire(bytes)),
   };
   cuts.set(name, cut);
   if (cut) {

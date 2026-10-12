@@ -90,6 +90,19 @@ export const DEFAULT_EMBOSS_FONT_PROPERTY: EmbossFontProperty = Object.freeze({
 
 export const DEFAULT_EMBOSS_PROJECTION: EmbossProjection = Object.freeze({ depthMm: 1, useSurface: false });
 
+/**
+ * The recipe an Emboss tool starts with, before any font is chosen: the word
+ * "Text", 10 mm high, 1 mm deep, centred. Loading a font names it.
+ */
+export const DEFAULT_EMBOSS_TEXT_CONFIGURATION: EmbossTextConfiguration = Object.freeze({
+  text: 'Text',
+  styleName: '',
+  fontDescriptor: '',
+  fontDescriptorType: 'file_name',
+  font: DEFAULT_EMBOSS_FONT_PROPERTY,
+  projection: DEFAULT_EMBOSS_PROJECTION,
+});
+
 export class EmbossError extends Error {
   constructor(
     message: string,

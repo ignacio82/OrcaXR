@@ -20,8 +20,7 @@ import * as THREE from 'three';
 import { printOverwriteLabel } from '../ui/PrintSubmissionLabels';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import {
-  DEFAULT_EMBOSS_FONT_PROPERTY,
-  DEFAULT_EMBOSS_PROJECTION,
+  DEFAULT_EMBOSS_TEXT_CONFIGURATION,
   type EmbossFontProperty,
   type EmbossProjection,
   type EmbossTextConfiguration,
@@ -29,7 +28,7 @@ import {
   type GlyphOutlineSource,
 } from '../project/objects/emboss';
 import { readTrueTypeOutlines } from '../project/objects/truetypeOutlines';
-import { readSvgShapes } from '../project/objects/svgShapes';
+import { DEFAULT_SVG_PART_DEPTH_MM, readSvgDrawing } from '../project/objects/svgCommands';
 import type { MagnetSpec } from '../features/MagnetOp';
 import { describeDiscovery, type DiscoveryOutcome } from '../printer/PrinterDirectory';
 import type { ProjectSummaryInput } from '../diagnostics/DiagnosticsBundle';
@@ -2820,14 +2819,7 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   private embossFont?: { name: string; source: GlyphOutlineSource };
-  private embossRecipe: EmbossTextConfiguration = {
-    text: 'Text',
-    styleName: '',
-    fontDescriptor: '',
-    fontDescriptorType: 'file_name',
-    font: DEFAULT_EMBOSS_FONT_PROPERTY,
-    projection: DEFAULT_EMBOSS_PROJECTION,
-  };
+  private embossRecipe: EmbossTextConfiguration = DEFAULT_EMBOSS_TEXT_CONFIGURATION;
   public onEmbossStateChanged: (() => void) | null = null;
 
   public embossTool(): void {
@@ -2948,11 +2940,11 @@ export class OrcaWorkspace extends xb.Script {
   private embossTargetVolume(): VolumeId | undefined {
     const volumes = this.paintableSelectedVolumes();
     if (volumes.length !== 1) return undefined;
-    return this.canonicalProject.getEmbossText(volumes[0]) ? volumes[0] : undefined;
+    return this.canonicalProject.getDrawnPart(volumes[0])?.text ? volumes[0] : undefined;
   }
 
   private svgDrawing?: { name: string; source: string };
-  private svgDepthMm = 2;
+  private svgDepthMm = DEFAULT_SVG_PART_DEPTH_MM;
   private svgWidthMm?: number;
   public onSvgStateChanged: (() => void) | null = null;
 
@@ -2998,7 +2990,7 @@ export class OrcaWorkspace extends xb.Script {
   /** Load a drawing the operator picked. Nothing is fetched. */
   public loadSvgDrawing(name: string, source: string): boolean {
     try {
-      const shapes = readSvgShapes(source);
+      const shapes = readSvgDrawing(source);
       this.svgDrawing = { name, source };
       const notes = shapes.unsupported.length > 0 ? ` ${shapes.unsupported.length} part(s) of it cannot be cut.` : '';
       this.setStatus(`Loaded ${name} at ${shapes.sizeMm[0].toFixed(1)} x ${shapes.sizeMm[1].toFixed(1)} mm.${notes}`);
@@ -3024,7 +3016,7 @@ export class OrcaWorkspace extends xb.Script {
     let unsupported: readonly { element: string; detail: string }[] = [];
     if (this.svgDrawing) {
       try {
-        unsupported = readSvgShapes(this.svgDrawing.source).unsupported.map((entry) => ({
+        unsupported = readSvgDrawing(this.svgDrawing.source).unsupported.map((entry) => ({
           element: entry.element,
           detail: entry.detail,
         }));
@@ -3095,7 +3087,7 @@ export class OrcaWorkspace extends xb.Script {
   private svgTargetVolume(): VolumeId | undefined {
     const volumes = this.paintableSelectedVolumes();
     if (volumes.length !== 1) return undefined;
-    return this.canonicalProject.getSvgPart(volumes[0]) ? volumes[0] : undefined;
+    return this.canonicalProject.getDrawnPart(volumes[0])?.svg ? volumes[0] : undefined;
   }
 
   /**

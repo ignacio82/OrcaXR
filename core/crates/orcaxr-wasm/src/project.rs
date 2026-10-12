@@ -651,6 +651,21 @@ impl ProjectSession {
             .map_err(|_| error("disposed"))?;
         wire::encode_brim_ear_view_reply(&reply).map_err(|_| error("output_limit"))
     }
+    /// Whether a part is embossed text or an SVG part: a `DrawnPartRequest`;
+    /// returns a `DrawnPartReply`.
+    pub fn drawn_part(&self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_drawn_part_request(request).map_err(|_| error("invalid_request"))?;
+        let reply = self
+            .inner
+            .drawn_part(&request)
+            .map_err(|_| error("disposed"))?;
+        wire::encode_drawn_part_reply(&reply).map_err(|_| error("output_limit"))
+    }
     /// Stage a prepared emboss cut (an `EmbossStage`) for `executeStaged`: a
     /// new text part under the host's IDs, or a re-cut of a text part.
     pub fn stage_emboss(&mut self, emboss: &ProjectEmboss, request: &str) -> Result<f64, JsValue> {
@@ -1126,6 +1141,72 @@ pub fn prepare_emboss(request: &str) -> Result<ProjectEmboss, JsValue> {
     Ok(ProjectEmboss {
         inner: orcaxr_project::emboss::prepare(&request),
     })
+}
+/// A font file the operator picked, read as the browser's Emboss tool reads
+/// it: its summary or refusal, a text's outlines, and recipes cut with it.
+#[wasm_bindgen]
+pub struct ProjectEmbossFont {
+    inner: orcaxr_project::emboss::font::ReadFont,
+}
+#[wasm_bindgen]
+impl ProjectEmbossFont {
+    /// The `EmbossFontReply`: the font's summary, or the refusal.
+    pub fn reply(&self) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        wire::encode_emboss_font_reply(&self.inner.reply()).map_err(|_| error("output_limit"))
+    }
+    /// A text's outlines: an `EmbossGlyphsRequest`; returns an
+    /// `EmbossGlyphsReply`. A refused font has none.
+    pub fn glyphs(&self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_emboss_glyphs_request(request).map_err(|_| error("invalid_request"))?;
+        let font = self.inner.font().ok_or_else(|| error("invalid_request"))?;
+        wire::encode_emboss_glyphs_reply(&font.glyphs(&request.text))
+            .map_err(|_| error("output_limit"))
+    }
+    /// Cut a recipe with this font: an `EmbossTextRequest`. A refused font
+    /// cuts nothing.
+    pub fn prepare(&self, request: &str) -> Result<ProjectEmboss, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_emboss_text_request(request).map_err(|_| error("invalid_request"))?;
+        let font = self.inner.font().ok_or_else(|| error("invalid_request"))?;
+        Ok(ProjectEmboss {
+            inner: orcaxr_project::emboss::prepare_text(font, &request),
+        })
+    }
+}
+/// Read a font file's bytes: an `EmbossFontRequest` (its collection index).
+#[wasm_bindgen]
+pub fn read_emboss_font(request: &str, bytes: &[u8]) -> Result<ProjectEmbossFont, JsValue> {
+    use orcaxr_contracts::project_intent_types as wire;
+    use orcaxr_project::emboss::font;
+    if request.len() > wire::MAX_BYTES || bytes.len() > font::MAX_FONT_BYTES {
+        return Err(error("input_limit"));
+    }
+    let request =
+        wire::decode_emboss_font_request(request).map_err(|_| error("invalid_request"))?;
+    Ok(ProjectEmbossFont {
+        inner: font::read(&request, bytes.to_vec()),
+    })
+}
+/// Read a drawing's file bytes as the SVG part tool reads a picked file;
+/// returns an `SvgDrawingReply`.
+#[wasm_bindgen]
+pub fn read_svg_drawing(drawing: &[u8]) -> Result<String, JsValue> {
+    use orcaxr_contracts::project_intent_types as wire;
+    if drawing.len() > orcaxr_project::svg::MAX_DRAWING_BYTES {
+        return Err(error("input_limit"));
+    }
+    wire::encode_svg_drawing_reply(&orcaxr_project::svg::read_drawing(drawing))
+        .map_err(|_| error("output_limit"))
 }
 /// One SVG cut, prepared from a drawing's file bytes and a recipe.
 #[wasm_bindgen]

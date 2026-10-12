@@ -3231,6 +3231,87 @@ Reverts publish the browser's `<type>:undo` reasons rather than
 browser's own "Canonical JSON cannot contain undefined". None of the four has
 a history estimate, so each charges one.
 
+### Emboss fonts, drawings and drawn parts
+
+What the browser's Emboss and SVG part tools compute before they submit a
+cut is shared too, so a host needs no font stack or SVG reader of its own:
+
+- **Fonts.** `emboss::font` ports the browser's TrueType reader
+  (`truetypeOutlines.ts`, over `embossFontExchange.ts`) outline for outline:
+  `glyf` outlines alone or in a collection (`ttcf`, at the request's index),
+  simple and composite glyphs (byte, word and point-matched arguments, every
+  scale form, five levels of nesting), quadratics flattened to eight segments
+  in the browser's operation order, `hmtx` advances (the last repeated, half
+  an em without metrics), and cmap formats 4 and 12 under the browser's
+  scoring of encoding records; CFF fonts, other cmap formats and missing
+  tables are refused in its words. A font is read when it loads
+  (`EmbossFontRequest` → `EmbossFontReply`: its units per em and glyph
+  count); a glyph when a text needs it, so one that cannot be read refuses
+  the cut. `EmbossGlyphsRequest` answers a text's outlines — each character
+  the cut looks up, once, in the order it first does, those the font lacks
+  left out — which are exactly the `GlyphFont` an `EmbossRequest` carries.
+  `emboss::prepare_text` (`EmbossTextRequest`, the browser's
+  `prepareEmbossTextWire`) cuts a recipe with a font directly: the recipe is
+  checked first, then each glyph read in the cut's order, then the browser's
+  layout, extrusion and refusals, its reply and mesh the ones the same
+  outlines sent through `prepare` give. Fonts are at most 64 MiB.
+- **Reading defects fixed in the browser**, each with a regression in
+  `truetypeOutlines.test.ts`, so both readers refuse instead of failing
+  differently. A file cut short threw V8's "Offset is outside the bounds of
+  the DataView" (now "This font file is cut short: its tables point past its
+  end"); a character map of overlapping ranges was expanded entry by entry
+  (a 3.3-billion-entry map from a 600 KB file) and is now searched where it
+  is stored, the last segment or group mapping a code point winning, as the
+  expansion's last write did; contour end points out of order read points
+  the glyph lacks into NaN coordinates (now refused); and a composite
+  referring to composites could multiply without bound (now at most
+  2¹⁸ flattened points and component references per character, "This font
+  has a glyph too complex to emboss"). No well-formed outline changed.
+- **Drawings.** `svg::read_drawing` (`SvgDrawingReply`, the browser's
+  `readSvgDrawingWire` over `readSvgDrawing`) reads a picked drawing as the
+  SVG part tool does at load: its own size and the first 64 features it
+  cannot cut with their total, or its refusal. A size past float64 range is
+  refused at load with the cut's words; the browser listed it as
+  "Infinity" and refused only the cut, and now refuses at load too
+  (`OrcaWorkspace.loadSvgDrawing` reads through `readSvgDrawing`).
+- **Drawn parts.** `ProjectSession::drawn_part` (`DrawnPartRequest` →
+  `DrawnPartReply`, the browser's `drawnPartWire`) answers whether a part is
+  embossed text, an SVG part, either or neither — what decides a re-cut; an
+  unknown part is refused in the commands' words. The workspace's
+  `embossTargetVolume` and `svgTargetVolume` read it through
+  `CanonicalWorkspaceController.getDrawnPart`. The tools' starting recipe
+  and depth are the browser's `DEFAULT_EMBOSS_TEXT_CONFIGURATION` and
+  `DEFAULT_SVG_PART_DEPTH_MM`.
+
+Bindings: WASM `read_emboss_font` (a `ProjectEmbossFont` with `reply`,
+`glyphs` and `prepare`), `read_svg_drawing` and `ProjectSession.drawn_part`;
+the JNI exports `readEmbossFont`, `embossFontReply`, `embossFontGlyphs`,
+`prepareEmbossText`, `readSvgDrawing` and `sessionDrawnPart`; Kotlin
+`ProjectEmbossFont`, `ProjectSvgPart.readDrawing` and
+`ProjectSession.drawnPart`. The browser's project set grows by about 50 KB
+(10,982,108 bytes).
+
+Evidence. Fonts are built from glyph descriptions
+(`web/src/project/objects/__tests__/syntheticFonts.ts`), so no third-party
+font is copied into the repository. `emboss-font-vectors.mjs` records 39
+synthetic fonts covering every path above and every refusal (cut short
+anywhere, not TrueType, CFF, each required table, units per em, cmap
+formats, collection indices from −0 to 10²¹, nesting, contours out of order,
+the expansion budget): 46 reads (25 refused), 29 outline requests (5
+refused; 90 outlines, 6,446 points) and 20 cuts (9 meshes); each cut is also
+checked there to equal the same recipe cut from its recorded outlines.
+`svg-part-vectors.mjs` reads each of its 22 drawings on its own.
+`drawn-part-vectors.mjs` asks every part of the project the browser's tools
+made for its kind (11 replies, 2 refused) and records the tools' journey for
+the Android Workspace's tools. Rust, WASM in Node
+and Chrome and JNI answer every reply byte for byte, and the Kotlin wrapper
+(`ProjectDrawnPartChecks`) matches every value. On real fonts,
+`emboss-font-differential.mjs` reads every TrueType font installed on a host
+(never copied) with both readers — the project WASM build against the
+browser's TypeScript — and compares every Basic Multilingual Plane code
+point's outlines and sample cuts: on this host 34 fonts (DejaVu, FreeFont,
+LyX), 136,158 outlines (18,884,581 points) and 136 cuts identical.
+
 ### Whole-project replacement
 
 `ReplaceProjectCommand` is `PreparedCommand::replace_project(next, label)`,

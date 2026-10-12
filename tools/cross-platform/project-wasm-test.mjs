@@ -25,6 +25,8 @@ import { replayMeasure } from "./measure-replay.mjs";
 import { replayBrimEars } from "./brim-ear-replay.mjs";
 import { replayEmboss } from "./emboss-replay.mjs";
 import { replaySvgParts } from "./svg-part-replay.mjs";
+import { replayEmbossFonts } from "./emboss-font-replay.mjs";
+import { replayDrawnParts } from "./drawn-part-replay.mjs";
 import { replayMeshPackets } from "./mesh-packet-replay.mjs";
 import { replayObjectTree } from "./object-tree-replay.mjs";
 import { replayPrintJobStatus } from "./print-job-status-replay.mjs";
@@ -226,6 +228,23 @@ if (isMainThread) {
       ],
       [21, 8, 21, 8, 3, 3],
     );
+    // Emboss fonts: synthetic fonts read (and refused), texts' outlines, and
+    // recipes cut with them.
+    assert.deepEqual(
+      [
+        result.embossFontReads,
+        result.embossFontRefused,
+        result.embossFontGlyphs,
+        result.embossFontCuts,
+        result.embossFontMeshes,
+      ],
+      [21, 25, 29, 20, 9],
+    );
+    // Drawn parts: text, SVG and plain parts of the tools' project, and unknown ones.
+    assert.deepEqual(
+      [result.drawnText, result.drawnSvg, result.drawnPlain, result.drawnRefused],
+      [3, 3, 3, 2],
+    );
     // SVG parts: drawings cut from their file bytes, their meshes, and
     // stages over a live session.
     assert.deepEqual(
@@ -239,6 +258,8 @@ if (isMainThread) {
       ],
       [11, 11, 11, 15, 7, 4],
     );
+    // Every SVG drawing read on its own, as the tool reads a picked file.
+    assert.equal(result.svgReads, 22);
     // Mesh renderer packets: replies and paged bytes off a live session.
     assert.deepEqual(
       [
@@ -778,6 +799,22 @@ if (isMainThread) {
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
     (text) => Uint8Array.from(Buffer.from(text, "base64")),
   );
+  const embossFonts = await replayEmbossFonts(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/emboss-font-vectors.json", root)),
+    ),
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    (text) => Uint8Array.from(Buffer.from(text, "base64")),
+  );
+  const drawnParts = replayDrawnParts(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/drawn-part-vectors.json", root)),
+    ),
+    layout,
+    (text) => Uint8Array.from(Buffer.from(text, "base64")),
+  );
   const packets = await replayMeshPackets(
     core,
     JSON.parse(
@@ -1011,6 +1048,8 @@ if (isMainThread) {
       ...brimEars,
       ...embossed,
       ...svgParts,
+      ...embossFonts,
+      ...drawnParts,
       ...packets,
       ...assembled,
       ...trees,

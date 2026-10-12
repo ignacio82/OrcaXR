@@ -42,6 +42,7 @@ export function startProjectJni(profile = "debug") {
   signatures.brimEarChecks = ["String", ...Array(9).fill("byte[]"), "String"];
   signatures.embossChecks = ["String", "byte[]", "String"];
   signatures.svgPartChecks = ["String", "byte[]", "String"];
+  signatures.drawnPartChecks = ["String", "String", "String", "String", "String"];
   signatures.meshPacketChecks = ["String", "byte[]", "String", "String"];
   signatures.assemblyChecks = ["String"];
   signatures.objectTreeChecks = ["String", "byte[]", "String"];
@@ -430,6 +431,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     brim_ear_view(request) {
       return call("sessionBrimEarView", this.handle, request);
+    }
+    drawn_part(request) {
+      return call("sessionDrawnPart", this.handle, request);
     }
     plan_wipe_tower(request) {
       return call("sessionWipeTower", this.handle, request);
@@ -972,6 +976,17 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     mesh(start, count) {
       return call("embossMesh", this.handle, start, count);
+    }
+  }
+  class ProjectEmbossFont extends Handle {
+    reply() {
+      return call("embossFontReply", this.handle);
+    }
+    glyphs(request) {
+      return call("embossFontGlyphs", this.handle, request);
+    }
+    prepare(request) {
+      return wrap(ProjectEmboss, call("prepareEmbossText", this.handle, request));
     }
   }
   class ProjectMeshPacket extends Handle {
@@ -1582,6 +1597,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     prepare_emboss: (request) => wrap(ProjectEmboss, call("prepareEmboss", request)),
     prepare_svg_part: (request, drawing) =>
       wrap(ProjectSvgPart, call("prepareSvgPart", request, drawing)),
+    read_emboss_font: (request, bytes) =>
+      wrap(ProjectEmbossFont, call("readEmbossFont", request, bytes)),
+    read_svg_drawing: (drawing) => call("readSvgDrawing", drawing),
     assembly_availability: (request) => call("assemblyAvailability", request),
     assembly_alignment: (request) => call("assemblyAlignment", request),
     assembly_explosion: (request) => call("assemblyExplosion", request),

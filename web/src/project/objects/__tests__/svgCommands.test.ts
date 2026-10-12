@@ -10,7 +10,13 @@ import {
   seededRandom,
 } from '../..';
 import { createProjectFixture } from '../../__tests__/fixtures';
-import { AddSvgPartCommand, EditSvgPartCommand, prepareSvgPart, svgVolumeIdentity } from '../svgCommands';
+import {
+  AddSvgPartCommand,
+  EditSvgPartCommand,
+  prepareSvgPart,
+  readSvgDrawing,
+  svgVolumeIdentity,
+} from '../svgCommands';
 import { SvgError } from '../svgShapes';
 
 let passed = 0;
@@ -218,6 +224,20 @@ test('a drawing whose extent overflows is refused before it becomes a part', () 
     () => prepareSvgPart(drawing, { ...svgVolumeIdentity(ids), fileName: 'x.svg', depthMm: 1 }),
     (error: unknown) => error instanceof SvgError && error.code === 'invalid-svg' && /too large/.test(error.message),
   );
+});
+
+test('a drawing too large to record is refused when it is loaded, not only when it is cut', () => {
+  // The SVG part tool read it with `readSvgShapes` and said "Loaded x.svg at
+  // Infinity x 10.0 mm.", then refused the cut; it now refuses at once.
+  const drawing =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100">' +
+    '<path d="M-1e308 0 L0 0 L1e308 0 Z"/><rect width="10" height="10"/></svg>';
+  assert.throws(
+    () => readSvgDrawing(drawing),
+    (error: unknown) => error instanceof SvgError && error.code === 'invalid-svg' && /too large/.test(error.message),
+  );
+  const read = readSvgDrawing(DRAWING);
+  assert.ok(read.sizeMm.every(Number.isFinite));
 });
 
 test('a drawing with nothing solid in it is refused before any state changes', () => {

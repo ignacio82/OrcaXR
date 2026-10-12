@@ -24,6 +24,8 @@ import { replayMeasure } from "./measure-replay.mjs";
 import { replayBrimEars } from "./brim-ear-replay.mjs";
 import { replayEmboss } from "./emboss-replay.mjs";
 import { replaySvgParts } from "./svg-part-replay.mjs";
+import { replayEmbossFonts } from "./emboss-font-replay.mjs";
+import { replayDrawnParts } from "./drawn-part-replay.mjs";
 import { replayMeshPackets } from "./mesh-packet-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
@@ -1371,6 +1373,56 @@ try {
       .join("\n"),
   );
   assert.equal(svgPartChecks, 111);
+  assert.equal(svgParts.svgReads, 22);
+  // Emboss fonts: synthetic fonts read, texts' outlines and recipes cut with
+  // them; drawn parts of the tools' project; then the Kotlin wrapper.
+  const fontFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/emboss-font-vectors.json", root)),
+  );
+  const fonts = await replayEmbossFonts(
+    projectJniCore(jvm.call),
+    fontFixture,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    (text) => Uint8Array.from(Buffer.from(text, "base64")),
+  );
+  assert.deepEqual(
+    [fonts.embossFontReads, fonts.embossFontRefused, fonts.embossFontGlyphs, fonts.embossFontCuts, fonts.embossFontMeshes],
+    [21, 25, 29, 20, 9],
+  );
+  const drawnFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/drawn-part-vectors.json", root)),
+  );
+  const drawn = replayDrawnParts(
+    projectJniCore(jvm.call),
+    drawnFixture,
+    layout,
+    (text) => Uint8Array.from(Buffer.from(text, "base64")),
+  );
+  assert.deepEqual(
+    [drawn.drawnText, drawn.drawnSvg, drawn.drawnPlain, drawn.drawnRefused],
+    [3, 3, 3, 2],
+  );
+  const drawnPartChecks = jvm.call(
+    "drawnPartChecks",
+    [
+      ...fontFixture.fonts.map((f) => `F\t${f.name}\t${f.bytes}`),
+      ...fontFixture.steps.map((s) =>
+        "read" in s
+          ? `R\t${s.handle}\t${s.file}\t${s.read}\t${s.reply}`
+          : "glyphs" in s
+            ? `G\t${s.handle}\t${s.glyphs}\t${s.reply}`
+            : `C\t${s.handle}\t${s.prepare}\t${s.reply}\t${s.mesh ?? ""}\t${s.window ?? ""}`,
+      ),
+    ].join("\n"),
+    svgFixture.steps
+      .filter((s) => "read" in s)
+      .map((s) => `${s.drawing}\t${s.read}`)
+      .join("\n"),
+    drawnFixture.parts.projectJson,
+    drawnFixture.parts.assets.map((a) => `${a.descriptorJson}\t${a.bytes}`).join("\n"),
+    drawnFixture.parts.steps.map((s) => `${s.request}\t${s.reply}`).join("\n"),
+  );
+  assert.equal(drawnPartChecks, 163);
   // Mesh renderer packets: replies and paged bytes, then the Kotlin wrapper.
   const packetFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/mesh-packet-vectors.json", root)),

@@ -1,10 +1,11 @@
 //! What text embossing (`emboss`) and SVG parts (`svg`) share once a cut is
 //! made: its mesh encoded under a placeholder until staging names it, paged
-//! out to the host, and the host's placement read from the wire.
+//! out to the host, and the host's placement read from the wire; and whether
+//! a part is drawn at all (`drawnPartWire`), which decides a re-cut.
 use crate::assets::AssetPayload;
 use crate::ids::{AssetId, EntityId};
 use crate::mesh::{Coordinates, EncodeOptions, Limits, encode};
-use crate::model::{Number, Text, Transform};
+use crate::model::{Number, ProjectState, Text, Transform};
 use orcaxr_contracts::canonical::Value;
 use orcaxr_contracts::project_intent_types as wire;
 
@@ -118,4 +119,28 @@ pub(crate) fn transform(t: &wire::Transform) -> Result<Transform, Error> {
         ],
         extra: Default::default(),
     })
+}
+
+/// `drawnPartWire`: whether a part is embossed text, an SVG part, either or
+/// neither; an unknown part is refused with the commands' words.
+pub fn part_wire(state: &ProjectState, request: &wire::DrawnPartRequest) -> wire::DrawnPartReply {
+    let found = state
+        .plates
+        .iter()
+        .flat_map(|plate| plate.objects.iter())
+        .flat_map(|object| object.volumes.iter())
+        .find(|volume| volume.id.as_utf16() == request.volume_id.as_slice());
+    match found {
+        Some(volume) => wire::DrawnPartReply::Part(wire::DrawnPart {
+            text: volume.emboss_text.is_some(),
+            svg: volume.emboss_svg.is_some(),
+        }),
+        None => wire::DrawnPartReply::Refused(wire::DrawnPartRefusal {
+            message: units("Volume ")
+                .into_iter()
+                .chain(request.volume_id.iter().copied())
+                .chain(units(" is not in this project"))
+                .collect(),
+        }),
+    }
 }

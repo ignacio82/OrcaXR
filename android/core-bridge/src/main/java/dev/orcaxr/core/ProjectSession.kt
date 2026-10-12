@@ -253,6 +253,12 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun brimEarView(request: ProjectIntents.BrimEarViewRequest): ProjectIntents.BrimEarViewReply = read {
         ProjectIntents.decodeBrimEarViewReply(NativeProject.sessionBrimEarView(it, ProjectIntents.encodeBrimEarViewRequest(request)))
     }
+    /** Whether a part is embossed text, an SVG part, either or neither: what
+     * the Emboss and SVG part tools ask of the selected part before re-cutting
+     * it. An unknown part is refused. */
+    fun drawnPart(request: ProjectIntents.DrawnPartRequest): ProjectIntents.DrawnPartReply = read {
+        ProjectIntents.decodeDrawnPartReply(NativeProject.sessionDrawnPart(it, ProjectIntents.encodeDrawnPartRequest(request)))
+    }
     /** A prepared emboss cut as one staged edit for `executeStaged`: a new
      * text part under the host's IDs, or a re-cut of an existing one. A
      * refused cut or an unstable ID refuses `invalid_request`. */
@@ -393,6 +399,36 @@ class ProjectEmboss private constructor(handle: Long) : ProjectHandle(handle) {
         const val MAX_PAGE = 16L * 1024 * 1024
         fun prepare(request: ProjectIntents.EmbossRequest): ProjectEmboss =
             ProjectEmboss(NativeProject.prepareEmboss(ProjectIntents.encodeEmbossRequest(request)))
+        /** A recipe cut with [font] ([ProjectEmbossFont.prepare]). */
+        internal fun own(handle: Long): ProjectEmboss = ProjectEmboss(handle)
+    }
+}
+/** A font file the operator picked, read as the browser's Emboss tool reads
+ * it (`readTrueTypeOutlines`, `embossFontExchange.ts`): its summary or
+ * refusal, a text's outlines, and recipes cut with it. Session-free; one
+ * font serves any number of cuts until closed. */
+class ProjectEmbossFont private constructor(handle: Long) : ProjectHandle(handle) {
+    fun reply(): ProjectIntents.EmbossFontReply = read {
+        ProjectIntents.decodeEmbossFontReply(NativeProject.embossFontReply(it))
+    }
+    /** The outlines a cut of the request's text reads, the characters the
+     * font lacks left out, or the first glyph that cannot be read. A refused
+     * font has none ([IllegalStateException]). */
+    fun glyphs(request: ProjectIntents.EmbossGlyphsRequest): ProjectIntents.EmbossGlyphsReply = read {
+        ProjectIntents.decodeEmbossGlyphsReply(NativeProject.embossFontGlyphs(it, ProjectIntents.encodeEmbossGlyphsRequest(request)))
+    }
+    /** The request's recipe cut with this font: its summary and mesh, the
+     * payload [ProjectSession.stageEmboss] installs. A refused font cuts
+     * nothing ([IllegalStateException]). */
+    fun prepare(request: ProjectIntents.EmbossTextRequest): ProjectEmboss = read {
+        ProjectEmboss.own(NativeProject.prepareEmbossText(it, ProjectIntents.encodeEmbossTextRequest(request)))
+    }
+    companion object {
+        /** The largest font file [read] accepts, in bytes. */
+        const val MAX_FONT_BYTES = 64 * 1024 * 1024
+        /** A font file's bytes, read at the request's collection index (ignored unless the file is a collection). */
+        fun read(request: ProjectIntents.EmbossFontRequest, bytes: ByteArray): ProjectEmbossFont =
+            ProjectEmbossFont(NativeProject.readEmbossFont(ProjectIntents.encodeEmbossFontRequest(request), bytes))
     }
 }
 /** One SVG cut from a drawing's file bytes and a recipe: its summary and
@@ -411,6 +447,10 @@ class ProjectSvgPart private constructor(handle: Long) : ProjectHandle(handle) {
         const val MAX_DRAWING_BYTES = 16 * 1024 * 1024
         fun prepare(request: ProjectIntents.SvgPartRequest, drawing: ByteArray): ProjectSvgPart =
             ProjectSvgPart(NativeProject.prepareSvgPart(ProjectIntents.encodeSvgPartRequest(request), drawing))
+        /** A drawing's file bytes read as the SVG part tool reads a picked
+         * file (`readSvgDrawing`): its size and notes, or its refusal. */
+        fun readDrawing(drawing: ByteArray): ProjectIntents.SvgDrawingReply =
+            ProjectIntents.decodeSvgDrawingReply(NativeProject.readSvgDrawing(drawing))
     }
 }
 /** One volume's features, captured by [ProjectSession.measureVolume]. */

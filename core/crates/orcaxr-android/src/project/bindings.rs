@@ -1967,6 +1967,29 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_readEmbossFont, read_emboss_font, jlong,
+    request: JString<'local>,
+    bytes: JByteArray<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_embossFontReply, emboss_font_reply, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_embossFontGlyphs, emboss_font_glyphs, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_prepareEmbossText, prepare_emboss_text, jlong,
+    font: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_prepareSvgPart, prepare_svg_part, jlong,
     request: JString<'local>,
     drawing: JByteArray<'local>,
@@ -1988,6 +2011,17 @@ export! {
     Java_dev_orcaxr_core_NativeProject_stageSvgPart, stage_svg_part, jlong,
     handle: jlong,
     svg: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_readSvgDrawing, read_svg_drawing, jstring,
+    drawing: JByteArray<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_sessionDrawnPart, session_drawn_part, jstring,
+    handle: jlong,
     request: JString<'local>,
 }
 

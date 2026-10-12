@@ -592,6 +592,92 @@ pub(super) fn stage_emboss(
         })
     })
 }
+/// A font file's bytes, read with an `EmbossFontRequest`.
+pub(super) fn read_emboss_font(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+    bytes: JByteArray<'_>,
+) -> Result<jlong> {
+    use orcaxr_project::emboss::font;
+    let request = decoded(env, &request, wire::decode_emboss_font_request)?;
+    let length = env.get_array_length(&bytes).map_err(|_| "invalid_input")?;
+    if length < 0 || length as usize > font::MAX_FONT_BYTES {
+        return Err("input_limit");
+    }
+    let bytes = env
+        .convert_byte_array(&bytes)
+        .map_err(|_| "invalid_input")?;
+    capture(|| Ok(Record::EmbossFont(Box::new(font::read(&request, bytes)))))
+}
+/// The font's summary, or its refusal.
+pub(super) fn emboss_font_reply(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_emboss_font(handle, |font| {
+        encoded(&font.reply(), wire::encode_emboss_font_reply)
+    })?;
+    string(env, json)
+}
+/// A text's outlines from the font; a refused font has none.
+pub(super) fn emboss_font_glyphs(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_emboss_glyphs_request)?;
+    let json = with_emboss_font(handle, |font| {
+        let font = font.font().ok_or("invalid_request")?;
+        encoded(
+            &font.glyphs(&request.text),
+            wire::encode_emboss_glyphs_reply,
+        )
+    })?;
+    string(env, json)
+}
+/// A recipe cut with the font; a refused font cuts nothing.
+pub(super) fn prepare_emboss_text(
+    env: &mut JNIEnv<'_>,
+    font: jlong,
+    request: JString<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_emboss_text_request)?;
+    capture(|| {
+        with_emboss_font(font, |font| {
+            let font = font.font().ok_or("invalid_request")?;
+            Ok(Record::Emboss(Box::new(
+                orcaxr_project::emboss::prepare_text(font, &request),
+            )))
+        })
+    })
+}
+/// A drawing's file bytes read as the SVG part tool reads a picked file.
+pub(super) fn read_svg_drawing(env: &mut JNIEnv<'_>, drawing: JByteArray<'_>) -> Result<jstring> {
+    let length = env
+        .get_array_length(&drawing)
+        .map_err(|_| "invalid_input")?;
+    if length < 0 || length as usize > orcaxr_project::svg::MAX_DRAWING_BYTES {
+        return Err("input_limit");
+    }
+    let drawing = env
+        .convert_byte_array(&drawing)
+        .map_err(|_| "invalid_input")?;
+    let json = encoded(
+        &orcaxr_project::svg::read_drawing(&drawing),
+        wire::encode_svg_drawing_reply,
+    )?;
+    string(env, json)
+}
+/// Whether a part is embossed text or an SVG part.
+pub(super) fn session_drawn_part(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_drawn_part_request)?;
+    let json = with_session(handle, |s| {
+        let reply = s.drawn_part(&request).map_err(|_| "disposed")?;
+        encoded(&reply, wire::encode_drawn_part_reply)
+    })?;
+    string(env, json)
+}
 /// Cut a drawing's file bytes with a recipe.
 pub(super) fn prepare_svg_part(
     env: &mut JNIEnv<'_>,

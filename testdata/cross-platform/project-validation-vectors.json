@@ -28,7 +28,7 @@
     },
     {
       "path": "testdata/cross-platform/project-model-vectors.json",
-      "sha256": "d53cb7e5f88efd73d594af87e6b4abbb848696297acd0d124eb450663c060c63"
+      "sha256": "8586dc3ef4444a041d1c428850a08107b98547b52499995f4b5bbcedbf288ac3"
     },
     {
       "path": "testdata/cross-platform/facet-refinement-vectors.json",

@@ -8,7 +8,7 @@
     "testdata/cross-platform/bbs-model-vectors.json": "f548e91f502de522c0321fac6951c34c73d11817197c7517976a0822104545d9",
     "web/src/project/serialization/bbsCore.ts": "c51122f801dcb71fa079c033d9400293774420ef6e24592f54c0931228a115dd",
     "web/src/project/serialization/embossTextConfig.ts": "daadc9748cc9dc7e852af3f1d6079ae9fa5b110173398ceb18dedc538833df71",
-    "web/src/project/objects/emboss.ts": "a8dc5a5f9eee2596bc29a0b81855980cd0eec906578b9f6d067a27da4a9a3dcb",
+    "web/src/project/objects/emboss.ts": "7ab6adcc2b72ba701aa71348ed9b29a94ab4f6cefc65dcbfbb57a8d6d7b25386",
     "web/src/project/serialization/brimEarPoints.ts": "9642500b47bb54546161e41d6eb7d6f245384ba795fc29d1995b4c7cda6a88d3",
     "web/src/project/serialization/layerHeightsProfile.ts": "284e2add9b8f91f7bf57e7aa3507e27468909a505d509c16fc0c6ec3c54fd8de",
     "web/src/project/serialization/bbsXml.ts": "783335f452cc1336444fef7545aa7564bd1ec0679ccbf91d251e6a64b628aac4",

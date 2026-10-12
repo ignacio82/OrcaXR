@@ -60,7 +60,8 @@ physical-device gate below is still open.
 - **Phase 5, archives and editing computation: core done.** Canonical and
   foreign 3MF Open, complete package Save, STL/OBJ/AMF/ZIP import, edited round
   trips, and the geometry ports (picking, regions, paint, placement, arrange,
-  split, simplify, measure, brim ears, emboss, SVG, assembly, mesh packets).
+  split, simplify, measure, brim ears, emboss and its fonts, SVG, assembly,
+  mesh packets).
   Remains: geometry-only 3MF import into an open project in the app, device
   round trips, mesh packets in a spatial renderer, retained C++ geometry
   kernels (Repair, mesh Booleans) through the engine's job service, and
@@ -2036,6 +2037,22 @@ painting, and FullSpectrum operations that can support real native projects.
     cannot be stored. The Rust reader also avoids two browser scans that are
     quadratic on hostile stylesheets (`@a;` repeated, and every rule tested
     against every element), with identical results.
+  - [x] Port what the Emboss and SVG part tools compute before a cut
+    ([§](engineering/native-core.md#emboss-fonts-drawings-and-drawn-parts)):
+    the browser's TrueType reader (`emboss::font`; a font read with its
+    collection index, a text's outlines, a recipe cut with it), a drawing
+    read on its own (`svg::read_drawing`) and whether a part is drawn
+    (`ProjectSession::drawn_part`). 39 synthetic fonts (built from glyph
+    descriptions, no third-party font copied): 46 reads, 29 outline requests
+    and 20 cuts, 22 drawing reads and 11 drawn-part replies exact in every
+    binding; on the 34 TrueType fonts of this host, 136,158 outlines and 136
+    cuts identical between the WASM build and the browser
+    (`emboss-font-differential.mjs`). Browser fixes, each with a regression:
+    a damaged font failed with V8's range error, a character map of
+    overlapping ranges was expanded entry by entry (now searched where it is
+    stored), contours out of order read NaN points, and composites could
+    multiply without bound (now 2¹⁸ points and references per character); a
+    drawing too large to record now refuses when loaded, not only when cut.
   - [x] Port mesh renderer packets (`mesh_packet`): the geometry the
     workspace draws (`displayGeometry`, now shared with `ThreeProjectSurface`)
     — decoded float32 positions, three.js's smooth vertex normals (each

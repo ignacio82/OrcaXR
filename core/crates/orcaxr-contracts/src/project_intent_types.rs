@@ -8710,6 +8710,82 @@ fn read_emboss_stage(v: &Value) -> Result<EmbossStage, InvalidIntent> {
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct EmbossFontRequest {
+    pub collection: Finite,
+}
+fn read_emboss_font_request(v: &Value) -> Result<EmbossFontRequest, InvalidIntent> {
+    let object = fields(v, &["collection"], false)?;
+    Ok(EmbossFontRequest {
+        collection: read_finite(&object["collection"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbossFontSummary {
+    pub units_per_em: Counter,
+    pub glyph_count: Counter,
+}
+fn read_emboss_font_summary(v: &Value) -> Result<EmbossFontSummary, InvalidIntent> {
+    let object = fields(v, &["unitsPerEm", "glyphCount"], false)?;
+    Ok(EmbossFontSummary {
+        units_per_em: read_counter(&object["unitsPerEm"])?,
+        glyph_count: read_counter(&object["glyphCount"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EmbossFontReply {
+    Read(EmbossFontSummary),
+    Refused(EmbossRefusal),
+}
+fn read_emboss_font_reply(v: &Value) -> Result<EmbossFontReply, InvalidIntent> {
+    let object = fields(v, &["read", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "read" => Ok(EmbossFontReply::Read(read_emboss_font_summary(value)?)),
+        "refused" => Ok(EmbossFontReply::Refused(read_emboss_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbossGlyphsRequest {
+    pub text: EditText,
+}
+fn read_emboss_glyphs_request(v: &Value) -> Result<EmbossGlyphsRequest, InvalidIntent> {
+    let object = fields(v, &["text"], false)?;
+    Ok(EmbossGlyphsRequest {
+        text: read_edit_text(&object["text"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EmbossGlyphsReply {
+    Glyphs(GlyphFont),
+    Refused(EmbossRefusal),
+}
+fn read_emboss_glyphs_reply(v: &Value) -> Result<EmbossGlyphsReply, InvalidIntent> {
+    let object = fields(v, &["glyphs", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "glyphs" => Ok(EmbossGlyphsReply::Glyphs(read_glyph_font(value)?)),
+        "refused" => Ok(EmbossGlyphsReply::Refused(read_emboss_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbossTextRequest {
+    pub configuration: EmbossConfiguration,
+}
+fn read_emboss_text_request(v: &Value) -> Result<EmbossTextRequest, InvalidIntent> {
+    let object = fields(v, &["configuration"], false)?;
+    Ok(EmbossTextRequest {
+        configuration: read_emboss_configuration(&object["configuration"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SvgPartRequest {
     pub file_name: EditText,
     pub depth_mm: Finite,
@@ -8926,6 +9002,86 @@ fn read_svg_part_stage(v: &Value) -> Result<SvgPartStage, InvalidIntent> {
     match key.as_str() {
         "add" => Ok(SvgPartStage::Add(read_svg_part_add(value)?)),
         "edit" => Ok(SvgPartStage::Edit(read_svg_part_edit(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SvgDrawingSummary {
+    pub size_mm: PlanarPosition,
+    pub unsupported: SvgUnsupportedFeatures,
+    pub unsupported_count: Counter,
+}
+fn read_svg_drawing_summary(v: &Value) -> Result<SvgDrawingSummary, InvalidIntent> {
+    let object = fields(v, &["sizeMm", "unsupported", "unsupportedCount"], false)?;
+    Ok(SvgDrawingSummary {
+        size_mm: read_planar_position(&object["sizeMm"])?,
+        unsupported: read_svg_unsupported_features(&object["unsupported"])?,
+        unsupported_count: read_counter(&object["unsupportedCount"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SvgDrawingReply {
+    Read(SvgDrawingSummary),
+    Refused(SvgPartRefusal),
+}
+fn read_svg_drawing_reply(v: &Value) -> Result<SvgDrawingReply, InvalidIntent> {
+    let object = fields(v, &["read", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "read" => Ok(SvgDrawingReply::Read(read_svg_drawing_summary(value)?)),
+        "refused" => Ok(SvgDrawingReply::Refused(read_svg_part_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DrawnPartRequest {
+    pub volume_id: Id,
+}
+fn read_drawn_part_request(v: &Value) -> Result<DrawnPartRequest, InvalidIntent> {
+    let object = fields(v, &["volumeId"], false)?;
+    Ok(DrawnPartRequest {
+        volume_id: read_id(&object["volumeId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DrawnPart {
+    pub text: Flag,
+    pub svg: Flag,
+}
+fn read_drawn_part(v: &Value) -> Result<DrawnPart, InvalidIntent> {
+    let object = fields(v, &["text", "svg"], false)?;
+    Ok(DrawnPart {
+        text: read_flag(&object["text"])?,
+        svg: read_flag(&object["svg"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DrawnPartRefusal {
+    pub message: EditText,
+}
+fn read_drawn_part_refusal(v: &Value) -> Result<DrawnPartRefusal, InvalidIntent> {
+    let object = fields(v, &["message"], false)?;
+    Ok(DrawnPartRefusal {
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DrawnPartReply {
+    Part(DrawnPart),
+    Refused(DrawnPartRefusal),
+}
+fn read_drawn_part_reply(v: &Value) -> Result<DrawnPartReply, InvalidIntent> {
+    let object = fields(v, &["part", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "part" => Ok(DrawnPartReply::Part(read_drawn_part(value)?)),
+        "refused" => Ok(DrawnPartReply::Refused(read_drawn_part_refusal(value)?)),
         _ => Err(InvalidIntent),
     }
 }
@@ -16358,6 +16514,46 @@ pub fn encode_emboss_stage(value: &EmbossStage) -> Result<String, InvalidIntent>
     decode_emboss_stage(&text)?;
     Ok(text)
 }
+pub fn decode_emboss_font_request(text: &str) -> Result<EmbossFontRequest, InvalidIntent> {
+    read_emboss_font_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_emboss_font_request(value: &EmbossFontRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_emboss_font_request(&text)?;
+    Ok(text)
+}
+pub fn decode_emboss_font_reply(text: &str) -> Result<EmbossFontReply, InvalidIntent> {
+    read_emboss_font_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_emboss_font_reply(value: &EmbossFontReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_emboss_font_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_emboss_glyphs_request(text: &str) -> Result<EmbossGlyphsRequest, InvalidIntent> {
+    read_emboss_glyphs_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_emboss_glyphs_request(value: &EmbossGlyphsRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_emboss_glyphs_request(&text)?;
+    Ok(text)
+}
+pub fn decode_emboss_glyphs_reply(text: &str) -> Result<EmbossGlyphsReply, InvalidIntent> {
+    read_emboss_glyphs_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_emboss_glyphs_reply(value: &EmbossGlyphsReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_emboss_glyphs_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_emboss_text_request(text: &str) -> Result<EmbossTextRequest, InvalidIntent> {
+    read_emboss_text_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_emboss_text_request(value: &EmbossTextRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_emboss_text_request(&text)?;
+    Ok(text)
+}
 pub fn decode_svg_part_request(text: &str) -> Result<SvgPartRequest, InvalidIntent> {
     read_svg_part_request(&super::project_intents::parse(text)?)
 }
@@ -16380,6 +16576,30 @@ pub fn decode_svg_part_stage(text: &str) -> Result<SvgPartStage, InvalidIntent> 
 pub fn encode_svg_part_stage(value: &SvgPartStage) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_svg_part_stage(&text)?;
+    Ok(text)
+}
+pub fn decode_svg_drawing_reply(text: &str) -> Result<SvgDrawingReply, InvalidIntent> {
+    read_svg_drawing_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_svg_drawing_reply(value: &SvgDrawingReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_svg_drawing_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_drawn_part_request(text: &str) -> Result<DrawnPartRequest, InvalidIntent> {
+    read_drawn_part_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_drawn_part_request(value: &DrawnPartRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_drawn_part_request(&text)?;
+    Ok(text)
+}
+pub fn decode_drawn_part_reply(text: &str) -> Result<DrawnPartReply, InvalidIntent> {
+    read_drawn_part_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_drawn_part_reply(value: &DrawnPartReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_drawn_part_reply(&text)?;
     Ok(text)
 }
 pub fn decode_mesh_packet_request(text: &str) -> Result<MeshPacketRequest, InvalidIntent> {

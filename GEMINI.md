@@ -315,7 +315,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   parser limits are not persisted project limits. Graph validation now checks annotation/source
   topology consistency; revision plate requests have native session guards; native paint strokes
   stage one guarded commit each; splits/simplifications prepare on a guard and stage under host IDs.
-  Emboss takes glyph contours, SVG the file's bytes (as `File.text()`); a part stores the drawing it names.
+  Emboss takes glyph contours or a font file (the core's port of the browser's TrueType reader), SVG the file's bytes (as `File.text()`); a part stores the drawing it names.
   Assembly plans are session-free: two picked features in, one instance transform out, committed as a drag.
 - Smart Paint is a validated, bounded proposal plus operator correction and one
   canonical transaction. Check per-provider/payload consent before sending data.

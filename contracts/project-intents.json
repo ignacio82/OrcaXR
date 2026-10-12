@@ -4198,6 +4198,45 @@
         "edit": "EmbossEdit"
       }
     },
+    "EmbossFontRequest": {
+      "kind": "object",
+      "fields": {
+        "collection": "Finite"
+      }
+    },
+    "EmbossFontSummary": {
+      "kind": "object",
+      "fields": {
+        "unitsPerEm": "Counter",
+        "glyphCount": "Counter"
+      }
+    },
+    "EmbossFontReply": {
+      "kind": "union",
+      "variants": {
+        "read": "EmbossFontSummary",
+        "refused": "EmbossRefusal"
+      }
+    },
+    "EmbossGlyphsRequest": {
+      "kind": "object",
+      "fields": {
+        "text": "EditText"
+      }
+    },
+    "EmbossGlyphsReply": {
+      "kind": "union",
+      "variants": {
+        "glyphs": "GlyphFont",
+        "refused": "EmbossRefusal"
+      }
+    },
+    "EmbossTextRequest": {
+      "kind": "object",
+      "fields": {
+        "configuration": "EmbossConfiguration"
+      }
+    },
     "SvgPartRequest": {
       "kind": "object",
       "fields": {
@@ -4297,6 +4336,47 @@
       "variants": {
         "add": "SvgPartAdd",
         "edit": "SvgPartEdit"
+      }
+    },
+    "SvgDrawingSummary": {
+      "kind": "object",
+      "fields": {
+        "sizeMm": "PlanarPosition",
+        "unsupported": "SvgUnsupportedFeatures",
+        "unsupportedCount": "Counter"
+      }
+    },
+    "SvgDrawingReply": {
+      "kind": "union",
+      "variants": {
+        "read": "SvgDrawingSummary",
+        "refused": "SvgPartRefusal"
+      }
+    },
+    "DrawnPartRequest": {
+      "kind": "object",
+      "fields": {
+        "volumeId": "Id"
+      }
+    },
+    "DrawnPart": {
+      "kind": "object",
+      "fields": {
+        "text": "Flag",
+        "svg": "Flag"
+      }
+    },
+    "DrawnPartRefusal": {
+      "kind": "object",
+      "fields": {
+        "message": "EditText"
+      }
+    },
+    "DrawnPartReply": {
+      "kind": "union",
+      "variants": {
+        "part": "DrawnPart",
+        "refused": "DrawnPartRefusal"
       }
     },
     "MeshChunkVertices": {
@@ -7370,9 +7450,17 @@
     "EmbossRequest",
     "EmbossReply",
     "EmbossStage",
+    "EmbossFontRequest",
+    "EmbossFontReply",
+    "EmbossGlyphsRequest",
+    "EmbossGlyphsReply",
+    "EmbossTextRequest",
     "SvgPartRequest",
     "SvgPartReply",
     "SvgPartStage",
+    "SvgDrawingReply",
+    "DrawnPartRequest",
+    "DrawnPartReply",
     "MeshPacketRequest",
     "MeshPacketReply",
     "AssemblyPair",

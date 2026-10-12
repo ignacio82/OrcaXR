@@ -77,6 +77,21 @@ export function svgPartName(fileName: string): string {
 /** The asset ID a cut is encoded under until it is packaged. */
 const PREVIEW_ASSET_ID = 'import:svg:preview' as AssetId;
 
+/** The depth an SVG part tool starts with, in millimetres. */
+export const DEFAULT_SVG_PART_DEPTH_MM = 2;
+
+/**
+ * Read a drawing the operator picked, at its own size, refusing what cannot
+ * be cut: what the SVG part tool checks when a drawing is loaded, before any
+ * depth or width is chosen. Throws `SvgError`.
+ */
+export function readSvgDrawing(source: string): SvgShapes {
+  const shapes = readSvgShapes(source);
+  // A size past float64 range cannot be recorded as the part's width.
+  if (!shapes.sizeMm.every(Number.isFinite)) throw new SvgError('That drawing is too large to cut', 'invalid-svg');
+  return shapes;
+}
+
 /** A drawing cut into a mesh, before anything names it. */
 export interface SvgCut {
   readonly shapes: SvgShapes;

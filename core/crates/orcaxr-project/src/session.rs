@@ -465,6 +465,21 @@ impl<P: TimestampPolicy> ProjectSession<P> {
             request,
         ))
     }
+    /// Whether a part is embossed text, an SVG part, either or neither: what
+    /// the Emboss and SVG part tools ask of the selected part before re-cutting
+    /// it (`DrawnPartRequest` → `DrawnPartReply`). An unknown part is refused.
+    pub fn drawn_part(
+        &self,
+        request: &wire::DrawnPartRequest,
+    ) -> Result<wire::DrawnPartReply, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        Ok(crate::drawn::part_wire(
+            self.bus.snapshot().state(),
+            request,
+        ))
+    }
     /// Stage a prepared emboss cut ([`crate::emboss::prepare`]) as one edit
     /// on the current state: a new text part of an object under the host's
     /// IDs, or a re-cut of an existing text part (`EmbossStage`). A refused

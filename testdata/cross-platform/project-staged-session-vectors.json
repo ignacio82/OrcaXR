@@ -24,7 +24,7 @@
     },
     {
       "path": "testdata/cross-platform/project-asset-command-vectors.json",
-      "sha256": "7aea4db7c49de62686916745e87b0560e0ee0c220f2c5f17b3e6205735085533"
+      "sha256": "e250749b9fdf8332d68fb79c00a680ceb5353da47be8e8f80e7cdefeeb17053b"
     },
     {
       "path": "testdata/cross-platform/project-clipboard-vectors.json",
@@ -88,11 +88,11 @@
     },
     {
       "path": "contracts/project-intents.json",
-      "sha256": "90a69756b6e3ede5a7b04a719e2286b7e5985678707e1f84765c4c5854f9822a"
+      "sha256": "136c3d4225031181adc4b9b251e282e302dcec63286c1bb46f41d3af0a943acd"
     },
     {
       "path": "contracts/generated/project-intents.ts",
-      "sha256": "396f93c3ddfa71f0da3b17f7aedac5e9a2050de6c6233b7a5a0d688c27d4ddb5"
+      "sha256": "435a6f031a6e28cd294653f0b2c4cc24d9366becd8d0cc97ad0a2451a8b8e4dd"
     },
     {
       "path": "contracts/runtime/project-intents.ts",

@@ -6357,6 +6357,83 @@ object ProjectIntents {
             is EmbossStage.Edit -> w.field("edit") { writeEmbossEdit(w, v.value) }
         } }
     }
+    data class EmbossFontRequest(val collection: Double)
+    private fun readEmbossFontRequest(v: Any): EmbossFontRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("collection"), false)
+        return EmbossFontRequest(readFinite(obj.get("collection")))
+    }
+    private fun writeEmbossFontRequest(w: ProjectIntentWriter, v: EmbossFontRequest) {
+        w.obj {
+            w.field("collection") { writeFinite(w, v.collection) }
+        }
+    }
+    data class EmbossFontSummary(val unitsPerEm: Long, val glyphCount: Long)
+    private fun readEmbossFontSummary(v: Any): EmbossFontSummary {
+        val obj = ProjectIntentJson.fields(v, setOf("unitsPerEm", "glyphCount"), false)
+        return EmbossFontSummary(readCounter(obj.get("unitsPerEm")), readCounter(obj.get("glyphCount")))
+    }
+    private fun writeEmbossFontSummary(w: ProjectIntentWriter, v: EmbossFontSummary) {
+        w.obj {
+            w.field("unitsPerEm") { writeCounter(w, v.unitsPerEm) }
+            w.field("glyphCount") { writeCounter(w, v.glyphCount) }
+        }
+    }
+    sealed interface EmbossFontReply {
+        data class Read(val value: ProjectIntents.EmbossFontSummary) : EmbossFontReply
+        data class Refused(val value: ProjectIntents.EmbossRefusal) : EmbossFontReply
+    }
+    private fun readEmbossFontReply(v: Any): EmbossFontReply {
+        val obj = ProjectIntentJson.fields(v, setOf("read", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "read" -> EmbossFontReply.Read(readEmbossFontSummary(obj.get(key)))
+            "refused" -> EmbossFontReply.Refused(readEmbossRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeEmbossFontReply(w: ProjectIntentWriter, v: EmbossFontReply) {
+        w.obj { when(v) {
+            is EmbossFontReply.Read -> w.field("read") { writeEmbossFontSummary(w, v.value) }
+            is EmbossFontReply.Refused -> w.field("refused") { writeEmbossRefusal(w, v.value) }
+        } }
+    }
+    data class EmbossGlyphsRequest(val text: List<Int>)
+    private fun readEmbossGlyphsRequest(v: Any): EmbossGlyphsRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("text"), false)
+        return EmbossGlyphsRequest(readEditText(obj.get("text")))
+    }
+    private fun writeEmbossGlyphsRequest(w: ProjectIntentWriter, v: EmbossGlyphsRequest) {
+        w.obj {
+            w.field("text") { writeEditText(w, v.text) }
+        }
+    }
+    sealed interface EmbossGlyphsReply {
+        data class Glyphs(val value: ProjectIntents.GlyphFont) : EmbossGlyphsReply
+        data class Refused(val value: ProjectIntents.EmbossRefusal) : EmbossGlyphsReply
+    }
+    private fun readEmbossGlyphsReply(v: Any): EmbossGlyphsReply {
+        val obj = ProjectIntentJson.fields(v, setOf("glyphs", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "glyphs" -> EmbossGlyphsReply.Glyphs(readGlyphFont(obj.get(key)))
+            "refused" -> EmbossGlyphsReply.Refused(readEmbossRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeEmbossGlyphsReply(w: ProjectIntentWriter, v: EmbossGlyphsReply) {
+        w.obj { when(v) {
+            is EmbossGlyphsReply.Glyphs -> w.field("glyphs") { writeGlyphFont(w, v.value) }
+            is EmbossGlyphsReply.Refused -> w.field("refused") { writeEmbossRefusal(w, v.value) }
+        } }
+    }
+    data class EmbossTextRequest(val configuration: EmbossConfiguration)
+    private fun readEmbossTextRequest(v: Any): EmbossTextRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("configuration"), false)
+        return EmbossTextRequest(readEmbossConfiguration(obj.get("configuration")))
+    }
+    private fun writeEmbossTextRequest(w: ProjectIntentWriter, v: EmbossTextRequest) {
+        w.obj {
+            w.field("configuration") { writeEmbossConfiguration(w, v.configuration) }
+        }
+    }
     data class SvgPartRequest(val fileName: List<Int>, val depthMm: Double, val widthMm: OptionalFinite, val useSurface: Boolean, val sourcePath: OptionalText)
     private fun readSvgPartRequest(v: Any): SvgPartRequest {
         val obj = ProjectIntentJson.fields(v, setOf("fileName", "depthMm", "widthMm", "useSurface", "sourcePath"), false)
@@ -6495,6 +6572,85 @@ object ProjectIntents {
         w.obj { when(v) {
             is SvgPartStage.Add -> w.field("add") { writeSvgPartAdd(w, v.value) }
             is SvgPartStage.Edit -> w.field("edit") { writeSvgPartEdit(w, v.value) }
+        } }
+    }
+    data class SvgDrawingSummary(val sizeMm: List<Double>, val unsupported: List<SvgUnsupportedFeature>, val unsupportedCount: Long)
+    private fun readSvgDrawingSummary(v: Any): SvgDrawingSummary {
+        val obj = ProjectIntentJson.fields(v, setOf("sizeMm", "unsupported", "unsupportedCount"), false)
+        return SvgDrawingSummary(readPlanarPosition(obj.get("sizeMm")), readSvgUnsupportedFeatures(obj.get("unsupported")), readCounter(obj.get("unsupportedCount")))
+    }
+    private fun writeSvgDrawingSummary(w: ProjectIntentWriter, v: SvgDrawingSummary) {
+        w.obj {
+            w.field("sizeMm") { writePlanarPosition(w, v.sizeMm) }
+            w.field("unsupported") { writeSvgUnsupportedFeatures(w, v.unsupported) }
+            w.field("unsupportedCount") { writeCounter(w, v.unsupportedCount) }
+        }
+    }
+    sealed interface SvgDrawingReply {
+        data class Read(val value: ProjectIntents.SvgDrawingSummary) : SvgDrawingReply
+        data class Refused(val value: ProjectIntents.SvgPartRefusal) : SvgDrawingReply
+    }
+    private fun readSvgDrawingReply(v: Any): SvgDrawingReply {
+        val obj = ProjectIntentJson.fields(v, setOf("read", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "read" -> SvgDrawingReply.Read(readSvgDrawingSummary(obj.get(key)))
+            "refused" -> SvgDrawingReply.Refused(readSvgPartRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeSvgDrawingReply(w: ProjectIntentWriter, v: SvgDrawingReply) {
+        w.obj { when(v) {
+            is SvgDrawingReply.Read -> w.field("read") { writeSvgDrawingSummary(w, v.value) }
+            is SvgDrawingReply.Refused -> w.field("refused") { writeSvgPartRefusal(w, v.value) }
+        } }
+    }
+    data class DrawnPartRequest(val volumeId: List<Int>)
+    private fun readDrawnPartRequest(v: Any): DrawnPartRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("volumeId"), false)
+        return DrawnPartRequest(readId(obj.get("volumeId")))
+    }
+    private fun writeDrawnPartRequest(w: ProjectIntentWriter, v: DrawnPartRequest) {
+        w.obj {
+            w.field("volumeId") { writeId(w, v.volumeId) }
+        }
+    }
+    data class DrawnPart(val text: Boolean, val svg: Boolean)
+    private fun readDrawnPart(v: Any): DrawnPart {
+        val obj = ProjectIntentJson.fields(v, setOf("text", "svg"), false)
+        return DrawnPart(readFlag(obj.get("text")), readFlag(obj.get("svg")))
+    }
+    private fun writeDrawnPart(w: ProjectIntentWriter, v: DrawnPart) {
+        w.obj {
+            w.field("text") { writeFlag(w, v.text) }
+            w.field("svg") { writeFlag(w, v.svg) }
+        }
+    }
+    data class DrawnPartRefusal(val message: List<Int>)
+    private fun readDrawnPartRefusal(v: Any): DrawnPartRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("message"), false)
+        return DrawnPartRefusal(readEditText(obj.get("message")))
+    }
+    private fun writeDrawnPartRefusal(w: ProjectIntentWriter, v: DrawnPartRefusal) {
+        w.obj {
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface DrawnPartReply {
+        data class Part(val value: ProjectIntents.DrawnPart) : DrawnPartReply
+        data class Refused(val value: ProjectIntents.DrawnPartRefusal) : DrawnPartReply
+    }
+    private fun readDrawnPartReply(v: Any): DrawnPartReply {
+        val obj = ProjectIntentJson.fields(v, setOf("part", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "part" -> DrawnPartReply.Part(readDrawnPart(obj.get(key)))
+            "refused" -> DrawnPartReply.Refused(readDrawnPartRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeDrawnPartReply(w: ProjectIntentWriter, v: DrawnPartReply) {
+        w.obj { when(v) {
+            is DrawnPartReply.Part -> w.field("part") { writeDrawnPart(w, v.value) }
+            is DrawnPartReply.Refused -> w.field("refused") { writeDrawnPartRefusal(w, v.value) }
         } }
     }
     private fun readMeshChunkVertices(v: Any): Long {
@@ -11540,12 +11696,28 @@ object ProjectIntents {
     fun encodeEmbossReply(value: EmbossReply): String = ProjectIntentWriter().also { writeEmbossReply(it, value) }.finish()
     fun decodeEmbossStage(text: String): EmbossStage = readEmbossStage(ProjectIntentJson.parse(text))
     fun encodeEmbossStage(value: EmbossStage): String = ProjectIntentWriter().also { writeEmbossStage(it, value) }.finish()
+    fun decodeEmbossFontRequest(text: String): EmbossFontRequest = readEmbossFontRequest(ProjectIntentJson.parse(text))
+    fun encodeEmbossFontRequest(value: EmbossFontRequest): String = ProjectIntentWriter().also { writeEmbossFontRequest(it, value) }.finish()
+    fun decodeEmbossFontReply(text: String): EmbossFontReply = readEmbossFontReply(ProjectIntentJson.parse(text))
+    fun encodeEmbossFontReply(value: EmbossFontReply): String = ProjectIntentWriter().also { writeEmbossFontReply(it, value) }.finish()
+    fun decodeEmbossGlyphsRequest(text: String): EmbossGlyphsRequest = readEmbossGlyphsRequest(ProjectIntentJson.parse(text))
+    fun encodeEmbossGlyphsRequest(value: EmbossGlyphsRequest): String = ProjectIntentWriter().also { writeEmbossGlyphsRequest(it, value) }.finish()
+    fun decodeEmbossGlyphsReply(text: String): EmbossGlyphsReply = readEmbossGlyphsReply(ProjectIntentJson.parse(text))
+    fun encodeEmbossGlyphsReply(value: EmbossGlyphsReply): String = ProjectIntentWriter().also { writeEmbossGlyphsReply(it, value) }.finish()
+    fun decodeEmbossTextRequest(text: String): EmbossTextRequest = readEmbossTextRequest(ProjectIntentJson.parse(text))
+    fun encodeEmbossTextRequest(value: EmbossTextRequest): String = ProjectIntentWriter().also { writeEmbossTextRequest(it, value) }.finish()
     fun decodeSvgPartRequest(text: String): SvgPartRequest = readSvgPartRequest(ProjectIntentJson.parse(text))
     fun encodeSvgPartRequest(value: SvgPartRequest): String = ProjectIntentWriter().also { writeSvgPartRequest(it, value) }.finish()
     fun decodeSvgPartReply(text: String): SvgPartReply = readSvgPartReply(ProjectIntentJson.parse(text))
     fun encodeSvgPartReply(value: SvgPartReply): String = ProjectIntentWriter().also { writeSvgPartReply(it, value) }.finish()
     fun decodeSvgPartStage(text: String): SvgPartStage = readSvgPartStage(ProjectIntentJson.parse(text))
     fun encodeSvgPartStage(value: SvgPartStage): String = ProjectIntentWriter().also { writeSvgPartStage(it, value) }.finish()
+    fun decodeSvgDrawingReply(text: String): SvgDrawingReply = readSvgDrawingReply(ProjectIntentJson.parse(text))
+    fun encodeSvgDrawingReply(value: SvgDrawingReply): String = ProjectIntentWriter().also { writeSvgDrawingReply(it, value) }.finish()
+    fun decodeDrawnPartRequest(text: String): DrawnPartRequest = readDrawnPartRequest(ProjectIntentJson.parse(text))
+    fun encodeDrawnPartRequest(value: DrawnPartRequest): String = ProjectIntentWriter().also { writeDrawnPartRequest(it, value) }.finish()
+    fun decodeDrawnPartReply(text: String): DrawnPartReply = readDrawnPartReply(ProjectIntentJson.parse(text))
+    fun encodeDrawnPartReply(value: DrawnPartReply): String = ProjectIntentWriter().also { writeDrawnPartReply(it, value) }.finish()
     fun decodeMeshPacketRequest(text: String): MeshPacketRequest = readMeshPacketRequest(ProjectIntentJson.parse(text))
     fun encodeMeshPacketRequest(value: MeshPacketRequest): String = ProjectIntentWriter().also { writeMeshPacketRequest(it, value) }.finish()
     fun decodeMeshPacketReply(text: String): MeshPacketReply = readMeshPacketReply(ProjectIntentJson.parse(text))

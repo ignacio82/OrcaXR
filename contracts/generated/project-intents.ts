@@ -4194,6 +4194,45 @@ const shapes = {
       "edit": "EmbossEdit"
     }
   },
+  "EmbossFontRequest": {
+    "kind": "object",
+    "fields": {
+      "collection": "Finite"
+    }
+  },
+  "EmbossFontSummary": {
+    "kind": "object",
+    "fields": {
+      "unitsPerEm": "Counter",
+      "glyphCount": "Counter"
+    }
+  },
+  "EmbossFontReply": {
+    "kind": "union",
+    "variants": {
+      "read": "EmbossFontSummary",
+      "refused": "EmbossRefusal"
+    }
+  },
+  "EmbossGlyphsRequest": {
+    "kind": "object",
+    "fields": {
+      "text": "EditText"
+    }
+  },
+  "EmbossGlyphsReply": {
+    "kind": "union",
+    "variants": {
+      "glyphs": "GlyphFont",
+      "refused": "EmbossRefusal"
+    }
+  },
+  "EmbossTextRequest": {
+    "kind": "object",
+    "fields": {
+      "configuration": "EmbossConfiguration"
+    }
+  },
   "SvgPartRequest": {
     "kind": "object",
     "fields": {
@@ -4293,6 +4332,47 @@ const shapes = {
     "variants": {
       "add": "SvgPartAdd",
       "edit": "SvgPartEdit"
+    }
+  },
+  "SvgDrawingSummary": {
+    "kind": "object",
+    "fields": {
+      "sizeMm": "PlanarPosition",
+      "unsupported": "SvgUnsupportedFeatures",
+      "unsupportedCount": "Counter"
+    }
+  },
+  "SvgDrawingReply": {
+    "kind": "union",
+    "variants": {
+      "read": "SvgDrawingSummary",
+      "refused": "SvgPartRefusal"
+    }
+  },
+  "DrawnPartRequest": {
+    "kind": "object",
+    "fields": {
+      "volumeId": "Id"
+    }
+  },
+  "DrawnPart": {
+    "kind": "object",
+    "fields": {
+      "text": "Flag",
+      "svg": "Flag"
+    }
+  },
+  "DrawnPartRefusal": {
+    "kind": "object",
+    "fields": {
+      "message": "EditText"
+    }
+  },
+  "DrawnPartReply": {
+    "kind": "union",
+    "variants": {
+      "part": "DrawnPart",
+      "refused": "DrawnPartRefusal"
     }
   },
   "MeshChunkVertices": {
@@ -7827,6 +7907,12 @@ export type ProjectEmbossReplyWire = {readonly prepared:ProjectEmbossPreviewWire
 export interface ProjectEmbossAddWire {readonly objectId: ProjectIdWire;readonly volumeId: ProjectIdWire;readonly assetId: ProjectIdWire;readonly transform: ProjectTransformWire;}
 export interface ProjectEmbossEditWire {readonly volumeId: ProjectIdWire;readonly assetId: ProjectIdWire;}
 export type ProjectEmbossStageWire = {readonly add:ProjectEmbossAddWire} | {readonly edit:ProjectEmbossEditWire};
+export interface ProjectEmbossFontRequestWire {readonly collection: ProjectFiniteWire;}
+export interface ProjectEmbossFontSummaryWire {readonly unitsPerEm: ProjectCounterWire;readonly glyphCount: ProjectCounterWire;}
+export type ProjectEmbossFontReplyWire = {readonly read:ProjectEmbossFontSummaryWire} | {readonly refused:ProjectEmbossRefusalWire};
+export interface ProjectEmbossGlyphsRequestWire {readonly text: ProjectEditTextWire;}
+export type ProjectEmbossGlyphsReplyWire = {readonly glyphs:ProjectGlyphFontWire} | {readonly refused:ProjectEmbossRefusalWire};
+export interface ProjectEmbossTextRequestWire {readonly configuration: ProjectEmbossConfigurationWire;}
 export interface ProjectSvgPartRequestWire {readonly fileName: ProjectEditTextWire;readonly depthMm: ProjectFiniteWire;readonly widthMm: ProjectOptionalFiniteWire;readonly useSurface: ProjectFlagWire;readonly sourcePath: ProjectOptionalTextWire;}
 export type ProjectSvgUnsupportedReasonWire = "needsFont" | "rasterImage" | "externalReference" | "paintEffect" | "strokeOnly" | "unsupportedUnit" | "unsupportedCommand" | "emptyShape" | "cssSelector";
 export interface ProjectSvgUnsupportedFeatureWire {readonly element: ProjectEditTextWire;readonly reason: ProjectSvgUnsupportedReasonWire;readonly detail: ProjectEditTextWire;}
@@ -7838,6 +7924,12 @@ export type ProjectSvgPartReplyWire = {readonly prepared:ProjectSvgPartPreviewWi
 export interface ProjectSvgPartAddWire {readonly objectId: ProjectIdWire;readonly volumeId: ProjectIdWire;readonly assetId: ProjectIdWire;readonly drawingAssetId: ProjectIdWire;readonly transform: ProjectTransformWire;}
 export interface ProjectSvgPartEditWire {readonly volumeId: ProjectIdWire;readonly assetId: ProjectIdWire;readonly drawingAssetId: ProjectIdWire;}
 export type ProjectSvgPartStageWire = {readonly add:ProjectSvgPartAddWire} | {readonly edit:ProjectSvgPartEditWire};
+export interface ProjectSvgDrawingSummaryWire {readonly sizeMm: ProjectPlanarPositionWire;readonly unsupported: ProjectSvgUnsupportedFeaturesWire;readonly unsupportedCount: ProjectCounterWire;}
+export type ProjectSvgDrawingReplyWire = {readonly read:ProjectSvgDrawingSummaryWire} | {readonly refused:ProjectSvgPartRefusalWire};
+export interface ProjectDrawnPartRequestWire {readonly volumeId: ProjectIdWire;}
+export interface ProjectDrawnPartWire {readonly text: ProjectFlagWire;readonly svg: ProjectFlagWire;}
+export interface ProjectDrawnPartRefusalWire {readonly message: ProjectEditTextWire;}
+export type ProjectDrawnPartReplyWire = {readonly part:ProjectDrawnPartWire} | {readonly refused:ProjectDrawnPartRefusalWire};
 export type ProjectMeshChunkVerticesWire = number;
 export interface ProjectMeshPacketRequestWire {readonly assetId: ProjectIdWire;readonly maxChunkVertices: ProjectMeshChunkVerticesWire;}
 export interface ProjectMeshPacketBoundsWire {readonly boxMin: ProjectVectorWire;readonly boxMax: ProjectVectorWire;readonly sphereCenter: ProjectVectorWire;readonly sphereRadius: ProjectFiniteWire;}
@@ -8502,6 +8594,21 @@ export function encodeProjectEmbossReply(value:ProjectEmbossReplyWire):string { 
 export function captureProjectEmbossStage(value:unknown):ProjectEmbossStageWire { return captureIntent("EmbossStage",value,shapes,limits) as ProjectEmbossStageWire; }
 export function decodeProjectEmbossStage(text:string):ProjectEmbossStageWire { return captureProjectEmbossStage(parseIntentJson(text,limits)); }
 export function encodeProjectEmbossStage(value:ProjectEmbossStageWire):string { return JSON.stringify(captureProjectEmbossStage(value)); }
+export function captureProjectEmbossFontRequest(value:unknown):ProjectEmbossFontRequestWire { return captureIntent("EmbossFontRequest",value,shapes,limits) as ProjectEmbossFontRequestWire; }
+export function decodeProjectEmbossFontRequest(text:string):ProjectEmbossFontRequestWire { return captureProjectEmbossFontRequest(parseIntentJson(text,limits)); }
+export function encodeProjectEmbossFontRequest(value:ProjectEmbossFontRequestWire):string { return JSON.stringify(captureProjectEmbossFontRequest(value)); }
+export function captureProjectEmbossFontReply(value:unknown):ProjectEmbossFontReplyWire { return captureIntent("EmbossFontReply",value,shapes,limits) as ProjectEmbossFontReplyWire; }
+export function decodeProjectEmbossFontReply(text:string):ProjectEmbossFontReplyWire { return captureProjectEmbossFontReply(parseIntentJson(text,limits)); }
+export function encodeProjectEmbossFontReply(value:ProjectEmbossFontReplyWire):string { return JSON.stringify(captureProjectEmbossFontReply(value)); }
+export function captureProjectEmbossGlyphsRequest(value:unknown):ProjectEmbossGlyphsRequestWire { return captureIntent("EmbossGlyphsRequest",value,shapes,limits) as ProjectEmbossGlyphsRequestWire; }
+export function decodeProjectEmbossGlyphsRequest(text:string):ProjectEmbossGlyphsRequestWire { return captureProjectEmbossGlyphsRequest(parseIntentJson(text,limits)); }
+export function encodeProjectEmbossGlyphsRequest(value:ProjectEmbossGlyphsRequestWire):string { return JSON.stringify(captureProjectEmbossGlyphsRequest(value)); }
+export function captureProjectEmbossGlyphsReply(value:unknown):ProjectEmbossGlyphsReplyWire { return captureIntent("EmbossGlyphsReply",value,shapes,limits) as ProjectEmbossGlyphsReplyWire; }
+export function decodeProjectEmbossGlyphsReply(text:string):ProjectEmbossGlyphsReplyWire { return captureProjectEmbossGlyphsReply(parseIntentJson(text,limits)); }
+export function encodeProjectEmbossGlyphsReply(value:ProjectEmbossGlyphsReplyWire):string { return JSON.stringify(captureProjectEmbossGlyphsReply(value)); }
+export function captureProjectEmbossTextRequest(value:unknown):ProjectEmbossTextRequestWire { return captureIntent("EmbossTextRequest",value,shapes,limits) as ProjectEmbossTextRequestWire; }
+export function decodeProjectEmbossTextRequest(text:string):ProjectEmbossTextRequestWire { return captureProjectEmbossTextRequest(parseIntentJson(text,limits)); }
+export function encodeProjectEmbossTextRequest(value:ProjectEmbossTextRequestWire):string { return JSON.stringify(captureProjectEmbossTextRequest(value)); }
 export function captureProjectSvgPartRequest(value:unknown):ProjectSvgPartRequestWire { return captureIntent("SvgPartRequest",value,shapes,limits) as ProjectSvgPartRequestWire; }
 export function decodeProjectSvgPartRequest(text:string):ProjectSvgPartRequestWire { return captureProjectSvgPartRequest(parseIntentJson(text,limits)); }
 export function encodeProjectSvgPartRequest(value:ProjectSvgPartRequestWire):string { return JSON.stringify(captureProjectSvgPartRequest(value)); }
@@ -8511,6 +8618,15 @@ export function encodeProjectSvgPartReply(value:ProjectSvgPartReplyWire):string 
 export function captureProjectSvgPartStage(value:unknown):ProjectSvgPartStageWire { return captureIntent("SvgPartStage",value,shapes,limits) as ProjectSvgPartStageWire; }
 export function decodeProjectSvgPartStage(text:string):ProjectSvgPartStageWire { return captureProjectSvgPartStage(parseIntentJson(text,limits)); }
 export function encodeProjectSvgPartStage(value:ProjectSvgPartStageWire):string { return JSON.stringify(captureProjectSvgPartStage(value)); }
+export function captureProjectSvgDrawingReply(value:unknown):ProjectSvgDrawingReplyWire { return captureIntent("SvgDrawingReply",value,shapes,limits) as ProjectSvgDrawingReplyWire; }
+export function decodeProjectSvgDrawingReply(text:string):ProjectSvgDrawingReplyWire { return captureProjectSvgDrawingReply(parseIntentJson(text,limits)); }
+export function encodeProjectSvgDrawingReply(value:ProjectSvgDrawingReplyWire):string { return JSON.stringify(captureProjectSvgDrawingReply(value)); }
+export function captureProjectDrawnPartRequest(value:unknown):ProjectDrawnPartRequestWire { return captureIntent("DrawnPartRequest",value,shapes,limits) as ProjectDrawnPartRequestWire; }
+export function decodeProjectDrawnPartRequest(text:string):ProjectDrawnPartRequestWire { return captureProjectDrawnPartRequest(parseIntentJson(text,limits)); }
+export function encodeProjectDrawnPartRequest(value:ProjectDrawnPartRequestWire):string { return JSON.stringify(captureProjectDrawnPartRequest(value)); }
+export function captureProjectDrawnPartReply(value:unknown):ProjectDrawnPartReplyWire { return captureIntent("DrawnPartReply",value,shapes,limits) as ProjectDrawnPartReplyWire; }
+export function decodeProjectDrawnPartReply(text:string):ProjectDrawnPartReplyWire { return captureProjectDrawnPartReply(parseIntentJson(text,limits)); }
+export function encodeProjectDrawnPartReply(value:ProjectDrawnPartReplyWire):string { return JSON.stringify(captureProjectDrawnPartReply(value)); }
 export function captureProjectMeshPacketRequest(value:unknown):ProjectMeshPacketRequestWire { return captureIntent("MeshPacketRequest",value,shapes,limits) as ProjectMeshPacketRequestWire; }
 export function decodeProjectMeshPacketRequest(text:string):ProjectMeshPacketRequestWire { return captureProjectMeshPacketRequest(parseIntentJson(text,limits)); }
 export function encodeProjectMeshPacketRequest(value:ProjectMeshPacketRequestWire):string { return JSON.stringify(captureProjectMeshPacketRequest(value)); }

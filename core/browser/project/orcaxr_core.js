@@ -3511,6 +3511,93 @@ export class ProjectEmboss {
 }
 if (Symbol.dispose) ProjectEmboss.prototype[Symbol.dispose] = ProjectEmboss.prototype.free;
 
+/**
+ * A font file the operator picked, read as the browser's Emboss tool reads
+ * it: its summary or refusal, a text's outlines, and recipes cut with it.
+ */
+export class ProjectEmbossFont {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectEmbossFont.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectEmbossFontFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectEmbossFontFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectembossfont_free(ptr, 0);
+    }
+    /**
+     * A text's outlines: an `EmbossGlyphsRequest`; returns an
+     * `EmbossGlyphsReply`. A refused font has none.
+     * @param {string} request
+     * @returns {string}
+     */
+    glyphs(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.projectembossfont_glyphs(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * Cut a recipe with this font: an `EmbossTextRequest`. A refused font
+     * cuts nothing.
+     * @param {string} request
+     * @returns {ProjectEmboss}
+     */
+    prepare(request) {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectembossfont_prepare(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectEmboss.__wrap(ret[0]);
+    }
+    /**
+     * The `EmbossFontReply`: the font's summary, or the refusal.
+     * @returns {string}
+     */
+    reply() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.projectembossfont_reply(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ProjectEmbossFont.prototype[Symbol.dispose] = ProjectEmbossFont.prototype.free;
+
 export class ProjectExport {
     static __wrap(ptr) {
         const obj = Object.create(ProjectExport.prototype);
@@ -4855,6 +4942,32 @@ export class ProjectSession {
     }
     dispose() {
         wasm.projectsession_dispose(this.__wbg_ptr);
+    }
+    /**
+     * Whether a part is embossed text or an SVG part: a `DrawnPartRequest`;
+     * returns a `DrawnPartReply`.
+     * @param {string} request
+     * @returns {string}
+     */
+    drawn_part(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.projectsession_drawn_part(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
     }
     /**
      * A `FacetRegionRequest` over the session's acknowledged state; returns a
@@ -8718,6 +8831,51 @@ export function printer_storage_size(bytes) {
 }
 
 /**
+ * Read a font file's bytes: an `EmbossFontRequest` (its collection index).
+ * @param {string} request
+ * @param {Uint8Array} bytes
+ * @returns {ProjectEmbossFont}
+ */
+export function read_emboss_font(request, bytes) {
+    const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.read_emboss_font(ptr0, len0, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ProjectEmbossFont.__wrap(ret[0]);
+}
+
+/**
+ * Read a drawing's file bytes as the SVG part tool reads a picked file;
+ * returns an `SvgDrawingReply`.
+ * @param {Uint8Array} drawing
+ * @returns {string}
+ */
+export function read_svg_drawing(drawing) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passArray8ToWasm0(drawing, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.read_svg_drawing(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * A `PrinterText` filename; the sanitized upload name.
  * @param {string} request
  * @returns {string}
@@ -9678,6 +9836,9 @@ const ProjectEffectsFinalization = (typeof FinalizationRegistry === 'undefined')
 const ProjectEmbossFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectemboss_free(ptr, 1));
+const ProjectEmbossFontFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectembossfont_free(ptr, 1));
 const ProjectExportFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectexport_free(ptr, 1));

@@ -662,6 +662,30 @@ export class ProjectEmboss {
     reply(): string;
 }
 
+/**
+ * A font file the operator picked, read as the browser's Emboss tool reads
+ * it: its summary or refusal, a text's outlines, and recipes cut with it.
+ */
+export class ProjectEmbossFont {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * A text's outlines: an `EmbossGlyphsRequest`; returns an
+     * `EmbossGlyphsReply`. A refused font has none.
+     */
+    glyphs(request: string): string;
+    /**
+     * Cut a recipe with this font: an `EmbossTextRequest`. A refused font
+     * cuts nothing.
+     */
+    prepare(request: string): ProjectEmboss;
+    /**
+     * The `EmbossFontReply`: the font's summary, or the refusal.
+     */
+    reply(): string;
+}
+
 export class ProjectExport {
     private constructor();
     free(): void;
@@ -954,6 +978,11 @@ export class ProjectSession {
      */
     detect_brim_ears(request: string): string;
     dispose(): void;
+    /**
+     * Whether a part is embossed text or an SVG part: a `DrawnPartRequest`;
+     * returns a `DrawnPartReply`.
+     */
+    drawn_part(request: string): string;
     /**
      * A `FacetRegionRequest` over the session's acknowledged state; returns a
      * `FacetRegionReply`.
@@ -1788,6 +1817,17 @@ export function printer_storage_read(operation: string, reply: string): string;
 export function printer_storage_size(bytes: number): string;
 
 /**
+ * Read a font file's bytes: an `EmbossFontRequest` (its collection index).
+ */
+export function read_emboss_font(request: string, bytes: Uint8Array): ProjectEmbossFont;
+
+/**
+ * Read a drawing's file bytes as the SVG part tool reads a picked file;
+ * returns an `SvgDrawingReply`.
+ */
+export function read_svg_drawing(drawing: Uint8Array): string;
+
+/**
  * A `PrinterText` filename; the sanitized upload name.
  */
 export function sanitize_gcode_filename(request: string): string;
@@ -2002,6 +2042,7 @@ export interface InitOutput {
     readonly __wbg_projectdocument_free: (a: number, b: number) => void;
     readonly __wbg_projecteffects_free: (a: number, b: number) => void;
     readonly __wbg_projectemboss_free: (a: number, b: number) => void;
+    readonly __wbg_projectembossfont_free: (a: number, b: number) => void;
     readonly __wbg_projectexport_free: (a: number, b: number) => void;
     readonly __wbg_projectguard_free: (a: number, b: number) => void;
     readonly __wbg_projectimportbase_free: (a: number, b: number) => void;
@@ -2291,6 +2332,9 @@ export interface InitOutput {
     readonly projecteffects_selection: (a: number, b: number, c: number) => [number, number, number];
     readonly projectemboss_mesh: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectemboss_reply: (a: number) => [number, number, number, number];
+    readonly projectembossfont_glyphs: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectembossfont_prepare: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectembossfont_reply: (a: number) => [number, number, number, number];
     readonly projectexport_plate: (a: number, b: number, c: number) => [number, number, number];
     readonly projectexport_preflight: (a: number, b: number, c: number) => [number, number, number];
     readonly projectexport_project: (a: number) => number;
@@ -2352,6 +2396,7 @@ export interface InitOutput {
     readonly projectsession_configure_staging: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectsession_detect_brim_ears: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_dispose: (a: number) => void;
+    readonly projectsession_drawn_part: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_facet_region: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_finish_open: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_history: (a: number) => number;
@@ -2409,6 +2454,8 @@ export interface InitOutput {
     readonly projectvolumesimplify_mesh: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectvolumesimplify_reply: (a: number) => [number, number, number, number];
     readonly projectvolumesplit_reply: (a: number) => [number, number, number, number];
+    readonly read_emboss_font: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly read_svg_drawing: (a: number, b: number) => [number, number, number, number];
     readonly sanitize_gcode_filename: (a: number, b: number) => [number, number, number, number];
     readonly server_components: (a: number, b: number) => [number, number, number, number];
     readonly settings_rules: (a: number, b: number) => [number, number, number, number];

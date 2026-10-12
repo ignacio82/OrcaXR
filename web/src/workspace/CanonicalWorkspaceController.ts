@@ -86,6 +86,7 @@ import type { EmbossTextConfiguration, EmbossedMesh, GlyphOutlineSource } from '
 import type { EmbossSvgPart } from '../project/domain/model';
 import { prepareSvgPart, svgPartName, svgVolumeIdentity, type PreparedSvgPart } from '../project/objects/svgCommands';
 import { embossVolumeIdentity, prepareEmbossedVolume } from '../project/objects/embossCommands';
+import { drawnPart, type DrawnPart } from '../project/objects/drawnPartExchange';
 import type {
   AssetId,
   CustomGcodeId,
@@ -4119,6 +4120,16 @@ export class CanonicalWorkspaceController {
     this.assertActive();
     const found = findVolume(this.session.project.getSnapshot().state, volumeId);
     return found?.volume.embossSvg ? cloneJson(found.volume.embossSvg) : undefined;
+  }
+
+  /**
+   * Whether one volume is drawn — embossed text, an SVG part — or undefined
+   * when the project has no such volume: what the Emboss and SVG part tools
+   * ask before re-cutting the selected part (`drawnPartWire`).
+   */
+  getDrawnPart(volumeId: VolumeId): DrawnPart | undefined {
+    this.assertActive();
+    return drawnPart(this.session.project.getSnapshot().state, volumeId);
   }
 
   /** The recipe on one volume, when it is embossed text. */

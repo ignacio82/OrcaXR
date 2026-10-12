@@ -4,8 +4,9 @@
 // re-cuts, with undo and redo — comparing every reply with the TypeScript
 // authority's own encoding, every mesh by SHA-256 (`sha256` resolves a hex
 // digest; `bytes` decodes base64), and each step's outcome, revision, hash
-// and undo label. Runs unchanged over WASM in Node and a browser worker, and
-// over the JNI bridge.
+// and undo label. Each drawing is also read on its own, as the SVG part tool
+// reads a picked file. Runs unchanged over WASM in Node and a browser worker,
+// and over the JNI bridge.
 export async function replaySvgParts(
   core,
   fixture,
@@ -79,6 +80,7 @@ export async function replaySvgParts(
   const counts = {
     prepared: 0,
     refused: 0,
+    reads: 0,
     meshes: 0,
     stages: 0,
     applied: 0,
@@ -103,6 +105,8 @@ export async function replaySvgParts(
     for (const [i, step] of fixture.steps.entries()) {
       const label = `step ${i}`;
       if ("prepare" in step) {
+        eq(core.read_svg_drawing(bytes(step.drawing)), step.read, `${label} read`);
+        counts.reads++;
         const cut = core.prepare_svg_part(step.prepare, bytes(step.drawing));
         const reply = cut.reply();
         eq(reply, step.reply, label);
@@ -175,6 +179,7 @@ export async function replaySvgParts(
   return {
     svgPrepared: counts.prepared,
     svgRefused: counts.refused,
+    svgReads: counts.reads,
     svgMeshes: counts.meshes,
     svgStages: counts.stages,
     svgApplied: counts.applied,

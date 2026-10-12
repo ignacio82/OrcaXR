@@ -35,7 +35,7 @@
     },
     {
       "path": "web/src/project/objects/svgCommands.ts",
-      "sha256": "0d5633803bd8175a2384db279adadd51dbf3a5c2dbbe01bdf104a69af2088b01"
+      "sha256": "eb1a34ac708a39c30f3cc610f8a6643d7138694e9a4ed803b1b06abf6953fb70"
     },
     {
       "path": "web/src/project/objects/embossCommands.ts",
@@ -43,7 +43,7 @@
     },
     {
       "path": "web/src/project/objects/emboss.ts",
-      "sha256": "a8dc5a5f9eee2596bc29a0b81855980cd0eec906578b9f6d067a27da4a9a3dcb"
+      "sha256": "7ab6adcc2b72ba701aa71348ed9b29a94ab4f6cefc65dcbfbb57a8d6d7b25386"
     },
     {
       "path": "web/src/project/annotations/FacetAnnotationStrokeCommand.ts",

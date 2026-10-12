@@ -81,6 +81,10 @@ const [
   embossFixtureText,
   svgReplay,
   svgFixtureText,
+  embossFontReplay,
+  embossFontFixtureText,
+  drawnPartReplay,
+  drawnPartFixtureText,
   packetReplay,
   packetFixtureText,
   assemblyReplay,
@@ -212,6 +216,10 @@ const [
   read("testdata/cross-platform/emboss-vectors.json"),
   read("tools/cross-platform/svg-part-replay.mjs"),
   read("testdata/cross-platform/svg-part-vectors.json"),
+  read("tools/cross-platform/emboss-font-replay.mjs"),
+  read("testdata/cross-platform/emboss-font-vectors.json"),
+  read("tools/cross-platform/drawn-part-replay.mjs"),
+  read("testdata/cross-platform/drawn-part-vectors.json"),
   read("tools/cross-platform/mesh-packet-replay.mjs"),
   read("testdata/cross-platform/mesh-packet-vectors.json"),
   read("tools/cross-platform/assembly-replay.mjs"),
@@ -427,6 +435,10 @@ try {
       embossFixture,
       svgReplay,
       svgFixture,
+      embossFontReplay,
+      embossFontFixture,
+      drawnPartReplay,
+      drawnPartFixture,
       packetReplay,
       packetFixture,
       assemblyReplay,
@@ -479,7 +491,7 @@ try {
       const workerUrl = URL.createObjectURL(
         new Blob(
           [
-            `import * as core from '${coreUrl}';\n${replay}\n${boundaries}\n${queryReplay}\n${stagedReplay}\n${stagedBoundaries}\n${clipboardBoundaries}\n${documentReplay}\n${archiveReplay}\n${modelReplay}\n${preflightReplay}\n${catalogReplay}\n${libraryReplay}\n${editorReplay}\n${projectionReplay}\n${capabilityReplay}\n${renderReplay}\n${regionReplay}\n${strokeReplay}\n${pickReplay}\n${placementReplay}\n${proxyReplay}\n${arrangeReplay}\n${towerReplay}\n${splitReplay}\n${simplifyReplay}\n${measureReplay}\n${brimEarReplay}\n${embossReplay}\n${svgReplay}\n${packetReplay}\n${assemblyReplay}\n${treeReplay}\n${printJobReplay}\n${controlReplay}\n${toolsReplay}\n${preparationReplay}\n${workflowReplay}\n${sessionReplay}\n${moonrakerPolicyReplay}\n${transportReplay}\n${storageReplay}\n${historyReplay}\n${consoleReplay}\n${cameraReplay}\n${directoryReplay}\n${credentialsReplay}\n${slicerReplay}\n${plateReplay}\n${slicingReplay}\n${bedReplay}\n${fieldReplay}\n${gizmoReplay}\n${primitiveReplay}\n${filamentReplay}\n${virtualReplay}\n${paintToolReplay}\n${sliceOutputReplay}\n${panelReplay}\n${volumeRoleReplay}\nconst b64=(t)=>Uint8Array.from(atob(t),(c)=>c.charCodeAt(0));const sha256=async(b)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",b)),(x)=>x.toString(16).padStart(2,"0")).join("");self.onmessage=async({data})=>{try{await core.default({module_or_path:data.wasm});const result=await replayProject(core,data.fixture,data.layout);result.archives=await replayArchives(core,data.layout,data.archiveLayout,archiveCases(JSON.parse(data.canonicalArchives),JSON.parse(data.foreignArchives),(p)=>b64(data.archiveFiles[p]),b64),sha256);result.hostile=await replayHostileArchives(core,data.layout,data.archiveLayout,JSON.parse(data.hostileArchives),sha256,b64);result.models=await replayModelImports(core,data.layout,data.modelLayout,JSON.parse(data.modelTransactions),JSON.parse(data.modelStaging),JSON.parse(data.modelDecoding),sha256,(p)=>b64(data.archiveFiles[p]),b64);Object.assign(result,await replaySliceOutputs(core,data.sliceOutputFixture,data.sliceSidecarFixture,data.placementFixture,data.layout,sha256,b64));Object.assign(result,await replayTransformGizmo(core,data.gizmoFixture,sha256));Object.assign(result,replayProjectDocuments(core,data.documentFixture,data.layout),await replayStagedProject(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectStagedBoundaries(core,data.stagedFixture.traces[0],data.layout,data.stagingLayout),projectClipboardBoundaries(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectBoundaries(core,data.base,data.layout,data.timestamps),replayProjectQueries(core,data.queryFixture,data.queryLayout),replayPreflights(core,data.preflightFixture,data.layout,data.fixture.generation),replayCatalogs(core,data.catalogFixture,b64(data.catalogBytes),{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))}),replayLibrary(core,data.libraryFixture,b64(data.catalogBytes),[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))}]),replayProjection(core,data.projectionFixture,data.layout,data.fixture.generation,[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))},{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}]),replayCapabilities(core,data.capabilityFixture,data.layout),replayRender(core,data.renderFixture,data.layout),replayFacetRegions(core,data.regionFixture,data.layout),await replayPaintStrokes(core,data.strokeFixture,data.layout,data.stagingLayout.version,sha256),replayPicks(core,data.pickFixture,data.layout),replayPlacements(core,data.placementFixture,data.layout),replayTransformProxies(core,data.proxyFixture,data.layout),replayArrangements(core,data.arrangeFixture,data.layout),replayWipeTowers(core,data.towerFixture,data.layout),await replayVolumeSplits(core,data.splitFixture,data.layout,data.stagingLayout.version),await replaySimplify(core,data.simplifyFixture,data.layout,data.stagingLayout.version,sha256),replayMeasure(core,data.measureFixture,data.layout),replayBrimEars(core,data.brimEarFixture,data.layout),await replayEmboss(core,data.embossFixture,data.layout,data.stagingLayout.version,sha256),await replaySvgParts(core,data.svgFixture,data.layout,data.stagingLayout.version,sha256,b64),await replayMeshPackets(core,data.packetFixture,data.layout,sha256),replayAssembly(core,data.assemblyFixture),replayPrintJobStatus(core,data.printJobFixture),replayPrinterControl(core,data.controlFixture),replayPrinterTools(core,data.toolsFixture),replayPrinterPreparation(core,data.preparationFixture),replayPrinterWorkflow(core,data.workflowFixture),replayPrinterSession(core,data.sessionFixture),replayMoonrakerPolicy(core,data.moonrakerPolicyFixture),replayMoonrakerTransport(core,data.transportFixture),replayPrinterStorage(core,data.storageFixture),replayPrintHistory(core,data.historyFixture),replayPrinterConsole(core,data.consoleFixture),replayPrinterCamera(core,data.cameraFixture),replayPrinterDirectory(core,data.directoryFixture),replayRememberedCredentials(core,data.credentialsFixture),replayExternalSlicer(core,data.slicerFixture),replayPlateProjection(core,data.plateFixture),await replaySlicingConfiguration(core,data.slicingFixture,b64(data.catalogBytes),{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))},data.layout,data.stagingLayout.version,sha256),replayWorkspaceBeds(core,data.bedFixture,data.layout),replayTransformFields(core,data.fieldFixture),replayPaintTool(core,data.paintToolFixture),replayPrimitives(core,data.primitiveFixture,data.layout,b64),replayFilamentAssignment(core,data.filamentFixture,data.layout,data.fixture.generation),replayVirtualFilaments(core,data.virtualFixture,data.layout,data.fixture.generation),replayVolumeRoles(core,data.volumeRoleFixture,data.layout,data.fixture.generation),replaySettingsPanel(core,data.panelFixture,data.layout,data.fixture.generation,[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))},{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}]),replayObjectTree(core,data.treeFixture,data.layout,data.fixture.generation,{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}),replayEditor(core,data.editorFixture,[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))},{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}]));self.postMessage({ok:true,result},[result.owned.buffer,result.ownedQueryText.buffer]);}catch(e){self.postMessage({ok:false,error:String(e)});}};`,
+            `import * as core from '${coreUrl}';\n${replay}\n${boundaries}\n${queryReplay}\n${stagedReplay}\n${stagedBoundaries}\n${clipboardBoundaries}\n${documentReplay}\n${archiveReplay}\n${modelReplay}\n${preflightReplay}\n${catalogReplay}\n${libraryReplay}\n${editorReplay}\n${projectionReplay}\n${capabilityReplay}\n${renderReplay}\n${regionReplay}\n${strokeReplay}\n${pickReplay}\n${placementReplay}\n${proxyReplay}\n${arrangeReplay}\n${towerReplay}\n${splitReplay}\n${simplifyReplay}\n${measureReplay}\n${brimEarReplay}\n${embossReplay}\n${svgReplay}\n${embossFontReplay}\n${drawnPartReplay}\n${packetReplay}\n${assemblyReplay}\n${treeReplay}\n${printJobReplay}\n${controlReplay}\n${toolsReplay}\n${preparationReplay}\n${workflowReplay}\n${sessionReplay}\n${moonrakerPolicyReplay}\n${transportReplay}\n${storageReplay}\n${historyReplay}\n${consoleReplay}\n${cameraReplay}\n${directoryReplay}\n${credentialsReplay}\n${slicerReplay}\n${plateReplay}\n${slicingReplay}\n${bedReplay}\n${fieldReplay}\n${gizmoReplay}\n${primitiveReplay}\n${filamentReplay}\n${virtualReplay}\n${paintToolReplay}\n${sliceOutputReplay}\n${panelReplay}\n${volumeRoleReplay}\nconst b64=(t)=>Uint8Array.from(atob(t),(c)=>c.charCodeAt(0));const sha256=async(b)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",b)),(x)=>x.toString(16).padStart(2,"0")).join("");self.onmessage=async({data})=>{try{await core.default({module_or_path:data.wasm});const result=await replayProject(core,data.fixture,data.layout);result.archives=await replayArchives(core,data.layout,data.archiveLayout,archiveCases(JSON.parse(data.canonicalArchives),JSON.parse(data.foreignArchives),(p)=>b64(data.archiveFiles[p]),b64),sha256);result.hostile=await replayHostileArchives(core,data.layout,data.archiveLayout,JSON.parse(data.hostileArchives),sha256,b64);result.models=await replayModelImports(core,data.layout,data.modelLayout,JSON.parse(data.modelTransactions),JSON.parse(data.modelStaging),JSON.parse(data.modelDecoding),sha256,(p)=>b64(data.archiveFiles[p]),b64);Object.assign(result,await replaySliceOutputs(core,data.sliceOutputFixture,data.sliceSidecarFixture,data.placementFixture,data.layout,sha256,b64));Object.assign(result,await replayTransformGizmo(core,data.gizmoFixture,sha256));Object.assign(result,replayProjectDocuments(core,data.documentFixture,data.layout),await replayStagedProject(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectStagedBoundaries(core,data.stagedFixture.traces[0],data.layout,data.stagingLayout),projectClipboardBoundaries(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectBoundaries(core,data.base,data.layout,data.timestamps),replayProjectQueries(core,data.queryFixture,data.queryLayout),replayPreflights(core,data.preflightFixture,data.layout,data.fixture.generation),replayCatalogs(core,data.catalogFixture,b64(data.catalogBytes),{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))}),replayLibrary(core,data.libraryFixture,b64(data.catalogBytes),[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))}]),replayProjection(core,data.projectionFixture,data.layout,data.fixture.generation,[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))},{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}]),replayCapabilities(core,data.capabilityFixture,data.layout),replayRender(core,data.renderFixture,data.layout),replayFacetRegions(core,data.regionFixture,data.layout),await replayPaintStrokes(core,data.strokeFixture,data.layout,data.stagingLayout.version,sha256),replayPicks(core,data.pickFixture,data.layout),replayPlacements(core,data.placementFixture,data.layout),replayTransformProxies(core,data.proxyFixture,data.layout),replayArrangements(core,data.arrangeFixture,data.layout),replayWipeTowers(core,data.towerFixture,data.layout),await replayVolumeSplits(core,data.splitFixture,data.layout,data.stagingLayout.version),await replaySimplify(core,data.simplifyFixture,data.layout,data.stagingLayout.version,sha256),replayMeasure(core,data.measureFixture,data.layout),replayBrimEars(core,data.brimEarFixture,data.layout),await replayEmboss(core,data.embossFixture,data.layout,data.stagingLayout.version,sha256),await replaySvgParts(core,data.svgFixture,data.layout,data.stagingLayout.version,sha256,b64),await replayEmbossFonts(core,data.embossFontFixture,sha256,b64),replayDrawnParts(core,data.drawnPartFixture,data.layout,b64),await replayMeshPackets(core,data.packetFixture,data.layout,sha256),replayAssembly(core,data.assemblyFixture),replayPrintJobStatus(core,data.printJobFixture),replayPrinterControl(core,data.controlFixture),replayPrinterTools(core,data.toolsFixture),replayPrinterPreparation(core,data.preparationFixture),replayPrinterWorkflow(core,data.workflowFixture),replayPrinterSession(core,data.sessionFixture),replayMoonrakerPolicy(core,data.moonrakerPolicyFixture),replayMoonrakerTransport(core,data.transportFixture),replayPrinterStorage(core,data.storageFixture),replayPrintHistory(core,data.historyFixture),replayPrinterConsole(core,data.consoleFixture),replayPrinterCamera(core,data.cameraFixture),replayPrinterDirectory(core,data.directoryFixture),replayRememberedCredentials(core,data.credentialsFixture),replayExternalSlicer(core,data.slicerFixture),replayPlateProjection(core,data.plateFixture),await replaySlicingConfiguration(core,data.slicingFixture,b64(data.catalogBytes),{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))},data.layout,data.stagingLayout.version,sha256),replayWorkspaceBeds(core,data.bedFixture,data.layout),replayTransformFields(core,data.fieldFixture),replayPaintTool(core,data.paintToolFixture),replayPrimitives(core,data.primitiveFixture,data.layout,b64),replayFilamentAssignment(core,data.filamentFixture,data.layout,data.fixture.generation),replayVirtualFilaments(core,data.virtualFixture,data.layout,data.fixture.generation),replayVolumeRoles(core,data.volumeRoleFixture,data.layout,data.fixture.generation),replaySettingsPanel(core,data.panelFixture,data.layout,data.fixture.generation,[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))},{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}]),replayObjectTree(core,data.treeFixture,data.layout,data.fixture.generation,{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}),replayEditor(core,data.editorFixture,[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))},{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}]));self.postMessage({ok:true,result},[result.owned.buffer,result.ownedQueryText.buffer]);}catch(e){self.postMessage({ok:false,error:String(e)});}};`,
           ],
           { type: "text/javascript" },
         ),
@@ -537,6 +549,8 @@ try {
               brimEarFixture,
               embossFixture,
               svgFixture,
+              embossFontFixture,
+              drawnPartFixture,
               packetFixture,
               assemblyFixture,
               treeFixture,
@@ -671,6 +685,16 @@ try {
           svgStages: result.svgStages,
           svgApplied: result.svgApplied,
           svgHistory: result.svgHistory,
+          svgReads: result.svgReads,
+          embossFontReads: result.embossFontReads,
+          embossFontRefused: result.embossFontRefused,
+          embossFontGlyphs: result.embossFontGlyphs,
+          embossFontCuts: result.embossFontCuts,
+          embossFontMeshes: result.embossFontMeshes,
+          drawnText: result.drawnText,
+          drawnSvg: result.drawnSvg,
+          drawnPlain: result.drawnPlain,
+          drawnRefused: result.drawnRefused,
           meshPacketsPrepared: result.meshPacketsPrepared,
           meshPacketsRefused: result.meshPacketsRefused,
           meshPacketChunks: result.meshPacketChunks,
@@ -823,6 +847,10 @@ try {
       embossFixture: JSON.parse(embossFixtureText),
       svgReplay,
       svgFixture: JSON.parse(svgFixtureText),
+      embossFontReplay,
+      embossFontFixture: JSON.parse(embossFontFixtureText),
+      drawnPartReplay,
+      drawnPartFixture: JSON.parse(drawnPartFixtureText),
       packetReplay,
       packetFixture: JSON.parse(packetFixtureText),
       assemblyReplay,
@@ -991,6 +1019,21 @@ try {
       result.svgHistory,
     ],
     [11, 11, 11, 15, 7, 4],
+  );
+  assert.equal(result.svgReads, 22);
+  assert.deepEqual(
+    [
+      result.embossFontReads,
+      result.embossFontRefused,
+      result.embossFontGlyphs,
+      result.embossFontCuts,
+      result.embossFontMeshes,
+    ],
+    [21, 25, 29, 20, 9],
+  );
+  assert.deepEqual(
+    [result.drawnText, result.drawnSvg, result.drawnPlain, result.drawnRefused],
+    [3, 3, 3, 2],
   );
   assert.deepEqual(
     [

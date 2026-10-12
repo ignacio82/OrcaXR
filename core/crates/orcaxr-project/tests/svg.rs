@@ -2,7 +2,8 @@
 //! drawings and seeded random documents) yields the browser's contours bit
 //! for bit, its size and every unsupported feature, or its refusal; every cut
 //! of a drawing's file bytes (with its refusals) and each cut's mesh bytes
-//! answer byte for byte; and the host's stages — new parts and re-cuts,
+//! answer byte for byte, as does each drawing read on its own (its size and
+//! notes, or its refusal); and the host's stages — new parts and re-cuts,
 //! applied and refused — leave the browser's revision, hash and undo label
 //! after every step.
 use orcaxr_contracts::{canonical::parse, project_intent_types as wire};
@@ -216,10 +217,13 @@ fn svg_parts_match_the_browser_over_a_live_session() {
     for (i, step) in f["steps"].as_array().unwrap().iter().enumerate() {
         let name = step["svg"].as_str().unwrap_or_default().to_owned();
         let kind = if let Some(request) = step["prepare"].as_str() {
-            let cut = svg::prepare(
-                &wire::decode_svg_part_request(request).unwrap(),
-                &base64(step["drawing"].as_str().unwrap()),
+            let drawing = base64(step["drawing"].as_str().unwrap());
+            assert_eq!(
+                wire::encode_svg_drawing_reply(&svg::read_drawing(&drawing)).unwrap(),
+                step["read"].as_str().unwrap(),
+                "step {i} read"
             );
+            let cut = svg::prepare(&wire::decode_svg_part_request(request).unwrap(), &drawing);
             let reply = wire::encode_svg_part_reply(&cut.reply()).unwrap();
             assert_eq!(reply, step["reply"].as_str().unwrap(), "step {i}");
             let kind = match cut.reply() {

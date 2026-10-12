@@ -2,6 +2,11 @@
 //! a recipe and the host's glyph outlines (already flattened to contours in
 //! font units, keyed by code point) laid out, triangulated and extruded
 //! (`mesh::extrude`), then staged as a new text part or a re-cut of one.
+//!
+//! A host without a font stack of its own reads the operator's font file
+//! with [`font`] (the browser's TrueType reader) and cuts a recipe with it
+//! ([`prepare_text`], `embossFontExchange.ts`).
+pub mod font;
 use crate::assets::AssetPayload;
 use crate::commands::staged::{CaptureError, CapturedCommand, StagedWork};
 use crate::commands::{PartPlacement, Recipe, StagedAsset};
@@ -295,7 +300,49 @@ fn prepared(request: &wire::EmbossRequest) -> Result<Prepared, wire::EmbossRefus
             },
         );
     }
-    let (mesh, missing) = build(&configuration, request.font.units_per_em, &glyphs)?;
+    cut(configuration, request.font.units_per_em, &glyphs)
+}
+
+/// `prepareEmbossTextWire`: a recipe cut with a font the host read. The
+/// recipe is checked first; then every character's outline is read in the
+/// order the cut looks it up, the first that cannot be read refusing the cut.
+pub fn prepare_text(font: &font::Font, request: &wire::EmbossTextRequest) -> PreparedEmboss {
+    PreparedEmboss {
+        outcome: prepared_text(font, request),
+    }
+}
+
+fn prepared_text(
+    font: &font::Font,
+    request: &wire::EmbossTextRequest,
+) -> Result<Prepared, wire::EmbossRefusal> {
+    let configuration = configuration(&request.configuration);
+    check(&configuration)?;
+    let mut glyphs = HashMap::new();
+    for code_point in font::code_points(configuration.text.units()) {
+        if let Some(outline) = font
+            .outline(code_point)
+            .map_err(|unreadable| unreadable.refusal())?
+        {
+            glyphs.insert(
+                u64::from(code_point),
+                Glyph {
+                    advance: outline.advance,
+                    contours: outline.contours,
+                },
+            );
+        }
+    }
+    cut(configuration, f64::from(font.units_per_em()), &glyphs)
+}
+
+/// The cut of a checked recipe with its glyphs, encoded under the preview ID.
+fn cut(
+    configuration: EmbossTextConfiguration,
+    units_per_em: f64,
+    glyphs: &HashMap<u64, Glyph>,
+) -> Result<Prepared, wire::EmbossRefusal> {
+    let (mesh, missing) = build(&configuration, units_per_em, glyphs)?;
     let first_line = configuration
         .text
         .units()

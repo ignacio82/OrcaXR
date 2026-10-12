@@ -12,8 +12,13 @@
  * the drawing as stored. Names are given at staging, since the archive path
  * hangs off the volume. The Rust core answers the same requests
  * (`orcaxr_project::svg`).
+ *
+ * A drawing is also read on its own, as the SVG part tool reads it when the
+ * operator picks it (`readSvgDrawing`): its size and what it holds that
+ * cannot be cut, or why it cannot be cut at all.
  */
 import type {
+  ProjectSvgDrawingReplyWire,
   ProjectSvgPartPreviewWire,
   ProjectSvgPartRefusalCodeWire,
   ProjectSvgPartReplyWire,
@@ -33,8 +38,8 @@ import {
   type StagedInputLimits,
   type StagedProjectWork,
 } from '../StagedProjectCommands';
-import { cutSvgDrawing, packageSvgPart, svgPartName, type SvgCut } from './svgCommands';
-import { SvgError, type SvgUnsupportedReason } from './svgShapes';
+import { cutSvgDrawing, packageSvgPart, readSvgDrawing, svgPartName, type SvgCut } from './svgCommands';
+import { SvgError, type SvgUnsupportedFeature, type SvgUnsupportedReason } from './svgShapes';
 
 /** Features a reply lists; `unsupportedCount` counts them all. */
 export const MAX_REPLY_FEATURES = 64;
@@ -64,6 +69,15 @@ const KERNEL_CODES: Readonly<Record<SvgError['code'], ProjectSvgPartRefusalCodeW
   'invalid-mesh': 'invalidMesh',
 };
 
+/** The first features a reply lists, each clipped. */
+function features(unsupported: readonly SvgUnsupportedFeature[]) {
+  return unsupported.slice(0, MAX_REPLY_FEATURES).map((feature) => ({
+    element: wireUnits(feature.element.slice(0, MAX_FEATURE_ELEMENT)),
+    reason: REASONS[feature.reason],
+    detail: wireUnits(feature.detail.slice(0, MAX_FEATURE_DETAIL)),
+  }));
+}
+
 /** The recipe a cut was made with, kept for naming it at staging. */
 interface SvgPartRecipe {
   readonly fileName: string;
@@ -87,11 +101,7 @@ export class PreparedSvgPartCut {
       openEdgeCount: mesh.openEdgeCount,
       coincidentEdgeCount: mesh.coincidentEdgeCount,
       sizeMm: [shapes.sizeMm[0], shapes.sizeMm[1]],
-      unsupported: shapes.unsupported.slice(0, MAX_REPLY_FEATURES).map((feature) => ({
-        element: wireUnits(feature.element.slice(0, MAX_FEATURE_ELEMENT)),
-        reason: REASONS[feature.reason],
-        detail: wireUnits(feature.detail.slice(0, MAX_FEATURE_DETAIL)),
-      })),
+      unsupported: features(shapes.unsupported),
       unsupportedCount: shapes.unsupported.length,
       digest: wireUnits(preview.descriptor.digest),
       byteLength: preview.descriptor.byteLength,
@@ -166,5 +176,22 @@ export function prepareSvgPartWire(
         refused: { code: KERNEL_CODES[error.code], message: wireUnits(error.message.slice(0, MAX_MESSAGE)) },
       },
     };
+  }
+}
+
+/** A drawing's bytes → `SvgDrawingReply`: what `readSvgDrawing` reads of it, or why it refuses. */
+export function readSvgDrawingWire(drawing: Uint8Array): ProjectSvgDrawingReplyWire {
+  try {
+    const shapes = readSvgDrawing(new TextDecoder().decode(drawing));
+    return {
+      read: {
+        sizeMm: [shapes.sizeMm[0], shapes.sizeMm[1]],
+        unsupported: features(shapes.unsupported),
+        unsupportedCount: shapes.unsupported.length,
+      },
+    };
+  } catch (error) {
+    if (!(error instanceof SvgError)) throw error;
+    return { refused: { code: KERNEL_CODES[error.code], message: wireUnits(error.message.slice(0, MAX_MESSAGE)) } };
   }
 }

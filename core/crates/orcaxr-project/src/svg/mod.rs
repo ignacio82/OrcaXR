@@ -7,6 +7,9 @@
 //! replaced), and that text, re-encoded, is what the part stores. A reply
 //! carries the cut's counts and size, the first unsupported features with
 //! their total, and the digests of the mesh and of the drawing as stored.
+//!
+//! A drawing is also read on its own ([`read_drawing`], `readSvgDrawing`), as
+//! the SVG part tool reads a picked file: its size and notes, or its refusal.
 pub mod shapes;
 
 use crate::assets::{AssetPayload, content_digest};
@@ -97,15 +100,7 @@ fn cut(request: &wire::SvgPartRequest, drawing: &[u8]) -> Result<Cut, wire::SvgP
         wire::OptionalFinite::Value(width) => Some(*width),
         wire::OptionalFinite::Absent(_) => None,
     };
-    let read = shapes::read(&source, width).map_err(|error| {
-        refused(
-            match error.code {
-                shapes::ErrorCode::InvalidSvg => Code::InvalidSvg,
-                shapes::ErrorCode::NoGeometry => Code::NoGeometry,
-            },
-            &error.message,
-        )
-    })?;
+    let read = shapes::read(&source, width).map_err(refusal)?;
     if !read.size_mm.iter().all(|size| size.is_finite()) {
         return Err(refused(
             Code::InvalidSvg,
@@ -205,6 +200,51 @@ fn reason(reason: shapes::Reason) -> wire::SvgUnsupportedReason {
     }
 }
 
+/// The first features a reply lists, each clipped.
+fn features(unsupported: &[shapes::Unsupported]) -> Vec<wire::SvgUnsupportedFeature> {
+    unsupported
+        .iter()
+        .take(MAX_REPLY_FEATURES)
+        .map(|feature| wire::SvgUnsupportedFeature {
+            element: clipped(&feature.element, MAX_FEATURE_ELEMENT),
+            reason: reason(feature.reason),
+            detail: clipped(&feature.detail, MAX_FEATURE_DETAIL),
+        })
+        .collect()
+}
+
+fn refusal(error: shapes::Error) -> wire::SvgPartRefusal {
+    refused(
+        match error.code {
+            shapes::ErrorCode::InvalidSvg => wire::SvgPartRefusalCode::InvalidSvg,
+            shapes::ErrorCode::NoGeometry => wire::SvgPartRefusalCode::NoGeometry,
+        },
+        &error.message,
+    )
+}
+
+/// `readSvgDrawingWire`: a drawing's bytes read as the SVG part tool reads
+/// a picked file (`readSvgDrawing`) — at its own size, refusing a drawing
+/// with nothing to cut or too large to record.
+pub fn read_drawing(drawing: &[u8]) -> wire::SvgDrawingReply {
+    let source = decode(drawing);
+    let read = match shapes::read(&source, None) {
+        Ok(read) => read,
+        Err(error) => return wire::SvgDrawingReply::Refused(refusal(error)),
+    };
+    if !read.size_mm.iter().all(|size| size.is_finite()) {
+        return wire::SvgDrawingReply::Refused(refused(
+            wire::SvgPartRefusalCode::InvalidSvg,
+            "That drawing is too large to cut",
+        ));
+    }
+    wire::SvgDrawingReply::Read(wire::SvgDrawingSummary {
+        size_mm: read.size_mm.to_vec(),
+        unsupported: features(&read.unsupported),
+        unsupported_count: read.unsupported.len() as u64,
+    })
+}
+
 impl PreparedSvgPart {
     /// `SvgPartReply`: the cut's summary, or the refusal.
     pub fn reply(&self) -> wire::SvgPartReply {
@@ -216,16 +256,7 @@ impl PreparedSvgPart {
                 open_edge_count: cut.open_edges,
                 coincident_edge_count: cut.coincident_edges,
                 size_mm: cut.size_mm.to_vec(),
-                unsupported: cut
-                    .unsupported
-                    .iter()
-                    .take(MAX_REPLY_FEATURES)
-                    .map(|feature| wire::SvgUnsupportedFeature {
-                        element: clipped(&feature.element, MAX_FEATURE_ELEMENT),
-                        reason: reason(feature.reason),
-                        detail: clipped(&feature.detail, MAX_FEATURE_DETAIL),
-                    })
-                    .collect(),
+                unsupported: features(&cut.unsupported),
                 unsupported_count: cut.unsupported.len() as u64,
                 digest: cut.digest.clone(),
                 byte_length: cut.preview.bytes.len() as u64,
