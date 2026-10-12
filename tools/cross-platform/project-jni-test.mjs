@@ -53,6 +53,7 @@ import { replayExternalSlicer } from "./external-slicer-replay.mjs";
 import { plateProjectionCases, plateProjectionCode, replayPlateProjection } from "./plate-projection-replay.mjs";
 import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
+import { replaySliceOutputs } from "./slice-output-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
 import { replayActionPresentation } from "./action-presentation-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
@@ -389,6 +390,33 @@ try {
     await readFile(new URL("testdata/parity/fixtures/reference.gcode", root)),
   );
   assert.equal(staleSliceChecks, 91);
+  // A slice's outputs: the browser's thumbnail and slice-plan corpus through
+  // the JNI exports and the Kotlin owners (each injection also streamed from a
+  // file through the core's anchor), the placement scene's plate drawn with
+  // the Rust core's bytes, and the Prepare journey on the default profile:
+  // Slice All Plates enabled as the browser enables it, its plates, each
+  // plate's own pictures in its archive and in its G-code, on both routes.
+  const outputFixture = await json("testdata/cross-platform/slice-output-vectors.json");
+  const placementState = await json("testdata/cross-platform/placement-vectors.json");
+  const sliceOutputs = replaySliceOutputs(projectJniCore(jvm.call), outputFixture, placementState, layout);
+  assert.deepEqual(sliceOutputs.sliceOutputAnswers, [68, 19, 100, 132, 40, 26, 3]);
+  const thumbnailState = JSON.parse(placementState.stateJson);
+  thumbnailState.config.thumbnails = "48x48/PNG, 300x300/PNG, 144x144/JPG, 5000x5000";
+  const outputChecks = jvm.call(
+    "outputChecks",
+    [
+      ...["lists", "blocks", "injections", "views", "plans"].flatMap((section) =>
+        outputFixture[section].map((c) => [section, c.request, c.reply].join("\t")),
+      ),
+      ...["listRefusals", "blockRefusals", "injectRefusals", "viewRefusals", "planRefusals"].flatMap((section) =>
+        outputFixture[section].map((c) => ["R", section, c.request].join("\t")),
+      ),
+    ].join("\n"),
+    await readFile(new URL("web/public/profiles/catalog.json", root)),
+    JSON.stringify(thumbnailState),
+    ...placementState.assets.map((a) => Uint8Array.from(a.bytes)),
+  );
+  assert.equal(outputChecks, 569);
   // What the status line says of a finished slice (the browser's
   // `SliceStatus.ts`), streamed through the core's tally over JNI in several
   // chunkings and worded by the Kotlin owner, for every artifact of the corpus.
@@ -1592,17 +1620,17 @@ try {
   );
   assert.deepEqual(
     replayExternalSlicer(projectJniCore(jvm.call), slicerFixture).externalSlicerAnswers,
-    [72, 230, 156, 247, 196, 44, 49],
+    [72, 230, 156, 247, 196, 44, 49, 102],
   );
   const slicerScript = [
     ...slicerFixture.endpoints.map((c) =>
       ["endpoints", c.requestJson, c.endpointJson, c.attestationPlanJson, c.submitPlanJson].join("\t"),
     ),
-    ...["attestations", "jobPlans", "submissions", "polls", "cancels", "artifacts"].flatMap((section) =>
+    ...["attestations", "jobPlans", "submissions", "polls", "cancels", "artifacts", "downloads"].flatMap((section) =>
       slicerFixture[section].map((c) => [section, c.requestJson, c.replyJson].join("\t")),
     ),
   ];
-  assert.equal(jvm.call("externalSlicerChecks", slicerScript.join("\n")), 996);
+  assert.equal(jvm.call("externalSlicerChecks", slicerScript.join("\n")), 1098);
   // One plate for an external slicer through the real JNI exports, then the Kotlin wrapper.
   const plateCases = plateProjectionCases(
     JSON.parse(await readFile(new URL("testdata/cross-platform/plate-projection-vectors.json", root))),
@@ -1741,6 +1769,8 @@ try {
     slicingChoiceChecks,
     localSliceChecks,
     staleSliceChecks,
+    sliceOutputs,
+    outputChecks,
     sliceStatusChecks,
     workspaceBeds,
     workspaceBedChecks,

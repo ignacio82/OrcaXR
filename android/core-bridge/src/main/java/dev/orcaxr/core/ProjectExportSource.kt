@@ -9,14 +9,16 @@ data class ProjectExportLimits(val jsonBytes: Long, val assets: Long, val assetB
 
 /** One plate's slice archive, once every byte reached its destination: the
  * projected project's fingerprint (the browser's archive `sourceHash`), the
- * print overrides a submission carries with it, the Save warnings, and —
- * from [ProjectWorkspace.projectPlate] — the state of the project it was
- * written from. */
+ * print overrides a submission carries with it, the Save warnings, the
+ * plate's pictures the slice's G-code is to carry (drawn from the same
+ * capture), and — from [ProjectWorkspace.projectPlate] — the state of the
+ * project it was written from. */
 class ProjectPlateArchive(
     val sourceHash: String,
     val overrides: Map<String, String>,
     val warnings: List<CharArray>,
     val revision: ProjectRevision? = null,
+    val thumbnails: PlateThumbnails = PlateThumbnails.NONE,
 )
 
 /** Borrowed on one export worker. Streams canonical JSON and assets in declaration
@@ -92,7 +94,7 @@ class ProjectExportSource internal constructor(
     /** Alternative for an external slice: write plate [plateId]'s one-plate
      * archive ([ProjectExportCapture.plate], admitted under [resolver] and
      * [profile]) to [destination], and answer what the submission needs with
-     * it. The plate's project is this capture's, so a guard checked against
+     * it — and the plate's pictures for its G-code, drawn from that capture. The plate's project is this capture's, so a guard checked against
      * this export is the projection's provenance. A plate archive completes an
      * export but never a save. A refused projection writes nothing. */
     fun writePlateArchive(
@@ -106,11 +108,17 @@ class ProjectExportSource internal constructor(
         return capture.plate(plateId, resolver, profile).use { plate ->
             val sourceHash = plate.project().use { it.hash() }
             val overrides = project.platePrintOverrides(plateId)
-            plate.writeArchive(options).use { output ->
-                val warnings = copy(output, destination)
-                checkActive(); plateWritten = true
-                ProjectPlateArchive(sourceHash, overrides, warnings)
+            val warnings = plate.writeArchive(options).use { output -> copy(output, destination) }
+            checkActive()
+            // The plate's pictures, from the capture the archive was written from: as in the
+            // browser, a picture is what a display shows, so one that cannot be drawn is none.
+            val thumbnails = try {
+                plate.thumbnails()
+            } catch (_: IllegalStateException) {
+                PlateThumbnails.NONE
             }
+            checkActive(); plateWritten = true
+            ProjectPlateArchive(sourceHash, overrides, warnings, thumbnails = thumbnails)
         }
     }
     private fun copy(output: ProjectArchiveOutput, destination: OutputStream): List<CharArray> {

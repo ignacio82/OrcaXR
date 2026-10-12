@@ -3,9 +3,10 @@
 // archive an external slicer loads, and `ExternalSlicerClient` (OkHttp) slices
 // it on the real slicer server (`server/server.js`, headless, its engine
 // replaced by a runner that writes one fixed G-code): attestation, submission,
-// polling, the streamed and checked artifact, release, a cancel the server
-// confirms and a failure. The Kotlin check asserts what the client saw; this
-// asserts what the server received.
+// polling, the streamed and checked artifact, release, a download cut off and
+// one corrupted (each fetched again from the result the server keeps), a
+// cancel the server confirms and a failure. The Kotlin check asserts what the
+// client saw; this asserts what the server received.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -54,20 +55,22 @@ try {
     Buffer.from(archive.archiveBase64, "base64"),
     gcode,
   );
-  assert.equal(checks, 31);
+  assert.equal(checks, 35);
   const received = await server.summary();
   // The pinned build attested from this repository's own patches.
   assert.deepEqual(
     received.patches,
     JSON.parse(await readFile(new URL("contracts/pinned-engine-provenance.json", root))).cliPatches,
   );
-  // Three jobs ran: the slice, the cancelled one and the failed one, each a
-  // one-plate project archive uploaded byte for byte as the client wrote it,
-  // with its plate's overrides.
+  // Five jobs ran: the slice, the two whose downloads were damaged, the
+  // cancelled one and the failed one, each a one-plate project archive
+  // uploaded byte for byte as the client wrote it, with its plate's overrides.
   assert.deepEqual(
     received.jobs.map((job) => [job.overrides.orcaxr_test ?? "", job.outcome]),
     [
       ["", "done"],
+      ["drop", "done"],
+      ["corrupt", "done"],
       ["hold", "cancelled"],
       ["fail", "failed"],
     ],
@@ -82,17 +85,29 @@ try {
   assert.deepEqual(received.authorizations.toSorted(), ["", `Bearer ${token}`]);
   // The slice: attested, submitted, polled, downloaded, released.
   const requests = received.requests;
-  const slice = requests.slice(0, requests.indexOf("DELETE /jobs/:id") + 1);
-  assert.equal(slice.filter((r) => r === "GET /engine").length, 4, "three attestations, then the slice's");
+  const first = requests.indexOf("POST /slice?async=1");
+  assert.equal(requests.slice(0, first).filter((r) => r === "GET /engine").length, 4, "three attestations, then the slice's");
+  // Each job's requests, from its submission to the next one's (attestations aside).
+  const jobs = [];
+  for (const request of requests.slice(first)) {
+    if (request === "POST /slice?async=1") jobs.push([]);
+    if (request !== "GET /engine") jobs.at(-1).push(request);
+  }
+  assert.equal(jobs.length, 5);
+  const downloads = (job) => job.filter((r) => r === "GET /jobs/:id/gcode").length;
   assert.deepEqual(
-    [...new Set(slice.slice(slice.indexOf("POST /slice?async=1")))],
+    [...new Set(jobs[0])],
     ["POST /slice?async=1", "GET /jobs/:id", "GET /jobs/:id/gcode", "DELETE /jobs/:id"],
   );
+  assert.equal(downloads(jobs[0]), 1);
+  // A damaged download is fetched again, once, and the result then released.
+  for (const job of [jobs[1], jobs[2]]) {
+    assert.equal(downloads(job), 2, "fetched again");
+    assert.equal(job.at(-1), "DELETE /jobs/:id", "released after the good transfer");
+  }
   // The cancel: confirmed through DELETE (and polls), never downloaded.
-  const rest = requests.slice(slice.length);
-  const cancel = rest.slice(0, rest.lastIndexOf("POST /slice?async=1"));
-  assert.ok(cancel.includes("DELETE /jobs/:id") && !cancel.includes("GET /jobs/:id/gcode"), "cancelled");
-  assert.ok(!rest.slice(cancel.length).includes("GET /jobs/:id/gcode"), "a failure is never downloaded");
+  assert.ok(jobs[3].includes("DELETE /jobs/:id") && downloads(jobs[3]) === 0, "cancelled");
+  assert.equal(downloads(jobs[4]), 0, "a failure is never downloaded");
   console.log(
     JSON.stringify({
       externalSlicerClientChecks: checks,

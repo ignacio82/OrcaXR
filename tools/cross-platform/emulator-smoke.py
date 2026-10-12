@@ -22,7 +22,8 @@ parser.add_argument("--pages", type=int, choices=(4, 16), default=4)
 SMOKES = ["android-smoke", "android-local-network-smoke", "android-device-smoke", "android-project-smoke",
           "android-preview-smoke", "android-prepare-smoke", "android-send-smoke", "android-locale-smoke",
           "android-edit-smoke", "android-inspector-smoke", "android-create-smoke", "android-filament-smoke",
-          "android-local-slice-smoke", "android-paint-smoke", "android-modeltools-smoke", "android-settings-smoke",
+          "android-local-slice-smoke", "android-outputs-smoke", "android-paint-smoke", "android-modeltools-smoke",
+          "android-settings-smoke",
           # The command palette, the Workspace toolbar, the scene's context menus and a mouse's hover.
           "android-palette-smoke",
           # Night mode, font scale 2.0, rotation and animation scales, each restored as it ends.

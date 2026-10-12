@@ -8,7 +8,8 @@ holding one loaded filament. The app's data is cleared first. The simulator
 is added in the Device area with its key and connected; the multicolour
 hexagon (which carries its own profiles) is opened and sliced in Prepare.
 "Send to Printer" opens the browser's confirmation: the printer and its state,
-the plate, the file and its size, the filaments, the blocker for the second
+the plate, the file and its size (the published file's, read back: it
+carries the plate's pictures), the filaments, the blocker for the second
 tool's empty slot (so starting is unavailable) and the start options. Uploaded
 only, it is stored under a unique name and verified. Sent again with the
 simulator holding the upload's reply, "Cancel send" stops it. With both
@@ -21,6 +22,7 @@ the levelling and one start, every request with the printer's key.
 import argparse
 import base64
 import json
+import math
 import re
 import subprocess
 import tempfile
@@ -45,8 +47,9 @@ BLOCKER = "The artifact prints with tool T1, but the printer reports no filament
 RED = {"color": "FF0000", "material": "PLA"}
 GREEN = {"color": "00FF00", "material": "PLA"}
 reference = ROOT / "testdata/parity/fixtures/reference.gcode"
-size = f"{reference.stat().st_size} B"
-kilobytes = f"{reference.stat().st_size / 1024:.0f}"
+# The published G-code's, once sliced: it carries the plate's pictures where the engine puts them,
+# so it is larger than the slicer's file. Read back from the device below.
+size = kilobytes = None
 
 screen = Screen(args.serial, output, "send")
 adb, find, tap, absent, enabled = screen.adb, screen.find, screen.tap, screen.absent, screen.enabled
@@ -170,6 +173,11 @@ try:
     tap("Prepare")
     find("SLICED in", exact=False, timeout=30)
     assert enabled("Send to Printer"), "Send to Printer was not offered for a current slice and a connected printer"
+    published = subprocess.check_output(["adb", "-s", args.serial, "exec-out", "run-as", PACKAGE, "sh", "-c",
+                                         "cat cache/prepare/gcode/*.gcode"], timeout=60)
+    size = f"{len(published)} B"
+    # The browser's toFixed(0): a half rounds up.
+    kilobytes = str(math.floor(len(published) / 1024 + 0.5))
 
     # One filament loaded: the confirmation names the blocker, starting is unavailable, uploading is not.
     unique, exact = confirmation()

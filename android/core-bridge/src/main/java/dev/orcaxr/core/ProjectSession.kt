@@ -547,6 +547,10 @@ class ProjectExportCapture internal constructor(handle: Long) : ProjectHandle(ha
     fun plate(plateId: String, resolver: LocalTimestampResolver, profile: ProjectIntegerProfile): ProjectExportCapture = read {
         own(NativeProject.exportPlate(it, CanonicalJson.quote(plateId), resolver, profile.bits), ::ProjectExportCapture)
     }
+    /** The pictures this capture's project asks for (its `thumbnails`), drawn
+     * from its active plate — a plate capture's only one — by the shared core
+     * (`orcaxr_archive::thumbnail`). Synchronous; run it on the export worker. */
+    fun thumbnails(): PlateThumbnails = read { GcodeThumbnails.read(NativeProject.exportThumbnails(it)) }
     /** Live slice preflight of exactly this frozen bundle. Synchronous; run it on
      * the export worker. Closing this capture cancels the native preflight. */
     fun preflight(request: ProjectIntents.PreflightRequest): ProjectPreflight = read {
@@ -699,6 +703,9 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
     fun workspaceBed(plateId: String?): WorkspaceBed = read {
         WorkspaceBeds.read(NativeProject.projectWorkspaceBed(it, "{\"plateId\":${plateId?.let(CanonicalJson::quote) ?: "null"}}"))
     }
+    /** The plates a slice of [scope] slices, in slicing order, or the browser's
+     * words for why it slices none ([SlicePlans]). */
+    fun slicePlan(scope: SliceScope): SlicePlan = read { SlicePlans.read(NativeProject.projectSlicePlan(it, scope.wire)) }
     /** What [target] would split for instance [instanceId] (the browser's
      * `splitSourceOf`): the object holding it, or the workspace's refusal in
      * its words — an instance this project lacks, an object the split would

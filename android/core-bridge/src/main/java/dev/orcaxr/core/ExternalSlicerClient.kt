@@ -29,6 +29,13 @@ import okio.source
  * of it each time it is asked for (the file a plate archive was written to). */
 class ExternalSlicerArchive(val length: Long, val open: () -> InputStream)
 
+/** Where a slice's artifact is written: [open] gives a fresh, empty stream
+ * each time a download starts — the result the server retains is fetched
+ * again after a transfer that failed, and the earlier one's bytes are void. */
+fun interface ExternalSlicerOutput {
+    fun open(): OutputStream
+}
+
 /** An accepted slice: every byte of the artifact reached the caller's sink,
  * with its transferred length and SHA-256, the engine that attested it, and
  * whether the server confirmed releasing the result. */
@@ -59,8 +66,11 @@ class ExternalSliceCall internal constructor(
  * drives it: the engine attested against the pinned build, the project
  * archive and its overrides submitted (`POST /slice?async=1`, multipart
  * `file` and `overrides`), the job polled every [pollIntervalMs], the
- * artifact streamed into the caller's sink while its length, SHA-256 and UTF-8
- * text are judged by the shared policy ([ExternalSlicerPolicy]), and an
+ * artifact streamed into the caller's output while its length, SHA-256 and
+ * UTF-8 text are judged by the shared policy ([ExternalSlicerPolicy]) —
+ * fetched again, while the policy allows, after a transfer that dropped, came
+ * up short or did not match its checksum, since the server keeps the result
+ * (a transfer in progress holds it) until it is released or expires — and an
  * accepted result released. A cancel confirms itself within one
  * [cancellationTimeoutMs] deadline and ends in the policy's outcome.
  *
@@ -83,6 +93,7 @@ class ExternalSlicerClient(
         private const val CHUNK = 64 * 1024
         private val OCTETS: MediaType = "application/octet-stream".toMediaType()
         private const val UNREACHABLE = "The external slicer could not be reached."
+        private const val NOT_WRITTEN = "OrcaXR could not keep the external slicer's G-code."
         private const val REDIRECTED = "The external slicer redirected the request; OrcaXR does not follow redirects."
     }
 
@@ -130,6 +141,12 @@ class ExternalSlicerClient(
 
     /** Thrown inside a call when the caller's cancel stopped an abortable step. */
     private class Aborted : IOException("aborted")
+
+    /** An artifact's reply that never arrived whole, in an operator's words. */
+    private class TransferFailed(val detail: String) : IOException(detail)
+
+    /** A downloaded artifact as the policy judged it, and its facts. */
+    private class Judged(val verdict: ProjectIntents.ExternalSlicerArtifact, val length: Long, val sha256: String)
 
     private fun request(send: ProjectIntents.ExternalSlicerSend, token: String?, body: RequestBody? = null): Request {
         val method = text(send.method)
@@ -203,20 +220,21 @@ class ExternalSlicerClient(
     /**
      * Slices [archive] on the external slicer at [endpoint] with [overrides]
      * (engine wire strings; [ProjectPlateArchive.overrides] for one plate),
-     * streaming the artifact into [sink]. [onProgress] hears the job's
-     * progress on the client's worker thread. On any failure [sink] may hold
-     * part of an artifact; discard it.
+     * streaming the artifact into [output] — a fresh stream for each download
+     * of it; only the last one's bytes are the result. [onProgress] hears the
+     * job's progress on the client's worker thread. On any failure [output]
+     * may hold part of an artifact; discard it.
      */
     fun slice(
         endpoint: String,
         token: String?,
         archive: ExternalSlicerArchive,
         overrides: Map<String, String>,
-        sink: OutputStream,
+        output: ExternalSlicerOutput,
         onProgress: (ProjectIntents.ExternalSlicerProgress) -> Unit = {},
     ): ExternalSliceCall {
         val flight = Flight()
-        val result = CompletableFuture.supplyAsync({ run(flight, endpoint, token, archive, overrides, sink, onProgress) }, workers)
+        val result = CompletableFuture.supplyAsync({ run(flight, endpoint, token, archive, overrides, output, onProgress) }, workers)
         return ExternalSliceCall(result) { flight.cancel() }
     }
 
@@ -226,7 +244,7 @@ class ExternalSlicerClient(
         token: String?,
         archive: ExternalSlicerArchive,
         overrides: Map<String, String>,
-        sink: OutputStream,
+        output: ExternalSlicerOutput,
         onProgress: (ProjectIntents.ExternalSlicerProgress) -> Unit,
     ): ExternalSliceResult {
         val canonical = when (val value = ExternalSlicerPolicy.endpoint(endpointRequest(endpoint))) {
@@ -300,14 +318,19 @@ class ExternalSlicerClient(
             }
             is ProjectIntents.ExternalSlicerSubmission.Job -> {
                 response.close()
-                poll(flight, canonical, step.value, token, engine, sink, onProgress)
+                poll(flight, canonical, step.value, token, engine, output, onProgress)
             }
             // A server without jobs answers the artifact itself; there is no
-            // job to cancel, so a cancel only stops the transfer.
+            // job to cancel or fetch again, so a cancel only stops the transfer.
             is ProjectIntents.ExternalSlicerSubmission.Artifact -> response.use {
                 flight.abortable = true
                 try {
-                    download(flight, it, canonical, null, token, engine, sink)
+                    val judged = try {
+                        download(flight, it, null, output)
+                    } catch (failure: TransferFailed) {
+                        throw ExternalSlicerException(ProjectIntents.ExternalSlicerFailureKind.Failed, failure.detail)
+                    }
+                    accept(flight, judged, canonical, token, engine)
                 } catch (_: Aborted) {
                     throw CancellationException("The external slice was cancelled.")
                 }
@@ -327,7 +350,7 @@ class ExternalSlicerClient(
         jobId: List<Int>,
         token: String?,
         engine: ProjectIntents.ExternalSlicerAttested,
-        sink: OutputStream,
+        output: ExternalSlicerOutput,
         onProgress: (ProjectIntents.ExternalSlicerProgress) -> Unit,
     ): ExternalSliceResult {
         flight.abortable = true
@@ -340,17 +363,7 @@ class ExternalSlicerClient(
                 val reply = reply(flight, request(status, token))
                 when (val step = ExternalSlicerPolicy.poll(ProjectIntents.ExternalSlicerPollRead(failures, reply))) {
                     is ProjectIntents.ExternalSlicerPollStep.Failed -> throw failed(step.value)
-                    is ProjectIntents.ExternalSlicerPollStep.Download -> {
-                        val artifact = jobSend(endpoint, jobId, ProjectIntents.ExternalSlicerJobStep.Artifact)
-                        val response = try {
-                            execute(flight, request(artifact, token))
-                        } catch (aborted: Aborted) {
-                            throw aborted
-                        } catch (failure: IOException) {
-                            throw ExternalSlicerException(ProjectIntents.ExternalSlicerFailureKind.Failed, detail(failure))
-                        }
-                        return response.use { download(flight, it, endpoint, jobId, token, engine, sink) }
-                    }
+                    is ProjectIntents.ExternalSlicerPollStep.Download -> return fetch(flight, endpoint, jobId, token, engine, output)
                     is ProjectIntents.ExternalSlicerPollStep.Wait -> {
                         failures = step.value.failures
                         (step.value.progress as? ProjectIntents.OptionalExternalSlicerProgress.Value)?.let { onProgress(it.value) }
@@ -362,23 +375,82 @@ class ExternalSlicerClient(
             // The caller cancelled: confirm it, unless the job already ended
             // in a way a cancellation cannot change.
             val ended = failure is ExternalSlicerException && failure.kind != ProjectIntents.ExternalSlicerFailureKind.Failed &&
-                failure.kind != ProjectIntents.ExternalSlicerFailureKind.Unconfirmed
+                failure.kind != ProjectIntents.ExternalSlicerFailureKind.Unconfirmed &&
+                failure.kind != ProjectIntents.ExternalSlicerFailureKind.Retained
             if (ended && failure.kind != ProjectIntents.ExternalSlicerFailureKind.Cancelled) throw failure
             if (!ended) confirmCancellation(flight, endpoint, jobId, token)
             throw CancellationException("The external slice was cancelled.")
         }
     }
 
-    /** Streams an artifact reply into [sink] once, for the facts the policy judges it by. */
+    /**
+     * A finished job's artifact, fetched as often as the policy allows
+     * (`readDownload`): a transfer that failed, or an artifact the server
+     * retained, is fetched again after the poll interval, into a fresh
+     * output, with the same checks; a cancel stops it where it stands.
+     */
+    private fun fetch(
+        flight: Flight,
+        endpoint: List<Int>,
+        jobId: List<Int>,
+        token: String?,
+        engine: ProjectIntents.ExternalSlicerAttested,
+        output: ExternalSlicerOutput,
+    ): ExternalSliceResult {
+        val artifact = jobSend(endpoint, jobId, ProjectIntents.ExternalSlicerJobStep.Artifact)
+        var attempt = 1L
+        while (true) {
+            var judged: Judged? = null
+            val outcome = try {
+                val read = execute(flight, request(artifact, token)).use { download(flight, it, jobId, output) }
+                judged = read
+                ProjectIntents.ExternalSlicerDownloadOutcome.Artifact(read.verdict)
+            } catch (aborted: Aborted) {
+                throw aborted
+            } catch (failure: TransferFailed) {
+                ProjectIntents.ExternalSlicerDownloadOutcome.TransferFailed(units(failure.detail))
+            } catch (failure: IOException) {
+                ProjectIntents.ExternalSlicerDownloadOutcome.TransferFailed(units(detail(failure)))
+            }
+            when (val step = ExternalSlicerPolicy.download(ProjectIntents.ExternalSlicerDownloadRead(attempt, outcome))) {
+                is ProjectIntents.ExternalSlicerDownloadStep.Accept -> return accept(flight, judged!!, endpoint, token, engine)
+                is ProjectIntents.ExternalSlicerDownloadStep.Failed -> throw failed(step.value)
+                is ProjectIntents.ExternalSlicerDownloadStep.Refetch -> {
+                    flight.pause(pollIntervalMs)
+                    if (flight.cancelled) throw Aborted()
+                    attempt++
+                }
+            }
+        }
+    }
+
+    /** An accepted artifact: its job released, when the transfer named one and its digest. */
+    private fun accept(
+        flight: Flight,
+        judged: Judged,
+        endpoint: List<Int>,
+        token: String?,
+        engine: ProjectIntents.ExternalSlicerAttested,
+    ): ExternalSliceResult = when (val verdict = judged.verdict) {
+        is ProjectIntents.ExternalSlicerArtifact.Failed -> throw failed(verdict.value)
+        is ProjectIntents.ExternalSlicerArtifact.Accepted -> {
+            val named = verdict.value.release as? ProjectIntents.OptionalText.Value
+            val released = named != null && release(endpoint, named.value, token)
+            if (flight.cancelled) {
+                throw ExternalSlicerException(ProjectIntents.ExternalSlicerFailureKind.AlreadyDone, "The external slice completed before cancellation.")
+            }
+            ExternalSliceResult(judged.length, judged.sha256, engine, released)
+        }
+    }
+
+    /** Streams an artifact reply into a fresh [output] once, for the facts the
+     * policy judges it by; a body that never arrives whole is [TransferFailed]. */
     private fun download(
         flight: Flight,
         response: Response,
-        endpoint: List<Int>,
         jobId: List<Int>?,
-        token: String?,
-        engine: ProjectIntents.ExternalSlicerAttested,
-        sink: OutputStream,
-    ): ExternalSliceResult {
+        output: ExternalSlicerOutput,
+    ): Judged {
         val digest = MessageDigest.getInstance("SHA-256")
         val decoder = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
         val chars = CharBuffer.allocate(CHUNK)
@@ -404,17 +476,24 @@ class ExternalSlicerClient(
                 val source = response.body!!.byteStream()
                 val buffer = ByteArray(CHUNK)
                 var carry = ByteBuffer.allocate(0)
-                while (true) {
-                    val count = source.read(buffer)
-                    if (count < 0) break
-                    sink.write(buffer, 0, count)
-                    digest.update(buffer, 0, count)
-                    length += count
-                    if (utf8) {
-                        val input = ByteBuffer.allocate(carry.remaining() + count).put(carry).put(buffer, 0, count)
-                        input.flip()
-                        judge(input, false)
-                        carry = input.slice()
+                output.open().use { sink ->
+                    while (true) {
+                        val count = try {
+                            source.read(buffer)
+                        } catch (failure: IOException) {
+                            if (flight.cancelled) throw Aborted()
+                            throw TransferFailed(detail(failure))
+                        }
+                        if (count < 0) break
+                        sink.write(buffer, 0, count)
+                        digest.update(buffer, 0, count)
+                        length += count
+                        if (utf8) {
+                            val input = ByteBuffer.allocate(carry.remaining() + count).put(carry).put(buffer, 0, count)
+                            input.flip()
+                            judge(input, false)
+                            carry = input.slice()
+                        }
                     }
                 }
                 if (utf8) {
@@ -422,13 +501,22 @@ class ExternalSlicerClient(
                     if (carry.hasRemaining()) utf8 = false
                 }
             } else {
-                errorBody = bodyText(response)
+                // A refusal is the server's answer, never fetched again, whatever became of its body.
+                errorBody = try {
+                    bodyText(response)
+                } catch (failure: IOException) {
+                    if (flight.cancelled) throw Aborted()
+                    throw ExternalSlicerException(ProjectIntents.ExternalSlicerFailureKind.Failed, detail(failure))
+                }
             }
         } catch (aborted: Aborted) {
             throw aborted
+        } catch (failure: TransferFailed) {
+            throw failure
         } catch (failure: IOException) {
+            // The caller's own output failing is no transfer to fetch again.
             if (flight.cancelled) throw Aborted()
-            throw ExternalSlicerException(ProjectIntents.ExternalSlicerFailureKind.Failed, detail(failure))
+            throw ExternalSlicerException(ProjectIntents.ExternalSlicerFailureKind.Failed, NOT_WRITTEN)
         }
         if (flight.cancelled) throw Aborted()
         val sha256 = digest.digest().joinToString("") { "%02x".format(it) }
@@ -438,17 +526,7 @@ class ExternalSlicerClient(
             optional(header("X-OrcaXR-Gcode-Bytes")), length, units(sha256), utf8, blank,
         )
         val expected = jobId?.let { ProjectIntents.OptionalText.Value(it) } ?: ProjectIntents.OptionalText.Absent(absent)
-        return when (val judged = ExternalSlicerPolicy.artifact(ProjectIntents.ExternalSlicerArtifactRead(expected, facts))) {
-            is ProjectIntents.ExternalSlicerArtifact.Failed -> throw failed(judged.value)
-            is ProjectIntents.ExternalSlicerArtifact.Accepted -> {
-                val named = judged.value.release as? ProjectIntents.OptionalText.Value
-                val released = named != null && release(endpoint, named.value, token)
-                if (flight.cancelled) {
-                    throw ExternalSlicerException(ProjectIntents.ExternalSlicerFailureKind.AlreadyDone, "The external slice completed before cancellation.")
-                }
-                ExternalSliceResult(length, sha256, engine, released)
-            }
-        }
+        return Judged(ExternalSlicerPolicy.artifact(ProjectIntents.ExternalSlicerArtifactRead(expected, facts)), length, sha256)
     }
 
     /** Best effort within the plan's own deadline: an older or unavailable

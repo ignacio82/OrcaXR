@@ -1,7 +1,8 @@
 // The real external slicer server (`external-slicer-server-worker.mjs`) for an
 // out-of-process client (an emulator's app): prints its URL, answers `summary`
 // on stdin with what it received, holds every later job until it is cancelled
-// from `hold` to `release`, and stops on `close` or end of input. Its first argument is the
+// from `hold` to `release`, cuts off (`drop`) or changes (`corrupt`) the next
+// artifact download, and stops on `close` or end of input. Its first argument is the
 // options as JSON: the bearer `token`, and `gcodeFile`, the G-code each job
 // writes (relative to the repository).
 import { readFile } from "node:fs/promises";
@@ -25,7 +26,7 @@ for await (const line of input) {
   if (line === "summary") {
     worker.postMessage("summary");
     console.log(JSON.stringify(await next()));
-  } else if (line === "hold" || line === "release") {
+  } else if (line === "hold" || line === "release" || line === "drop" || line === "corrupt") {
     worker.postMessage(line);
     console.log(await next());
   } else if (line === "close") break;

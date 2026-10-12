@@ -40,6 +40,10 @@ class LocalSliceJob internal constructor(
     val revision: ProjectRevision?,
     /** The archive's Save warnings, as the external route counts them. */
     val warnings: Int,
+    /** The plate's pictures for the G-code, drawn from the capture the archive was written from. */
+    val thumbnails: PlateThumbnails = PlateThumbnails.NONE,
+    /** The archive's Save warnings themselves, as the browser's coordinator collects them. */
+    val warningTexts: List<String> = emptyList(),
 )
 
 /** What the engine reported of one job ([LocalSlicing.result]): its own result document, read strictly. */
@@ -164,7 +168,7 @@ object LocalSlicing {
             SyncedOutput(FileOutputStream(overridesFile)).use { it.write(text) }
             val overridesInput = sealed(overridesFile, MAX_OVERRIDES_BYTES)
             return LocalSliceJob(id, directory, archiveInput, overridesInput, File(directory, "output.gcode"),
-                archive.sourceHash, archive.revision, archive.warnings.size)
+                archive.sourceHash, archive.revision, archive.warnings.size, archive.thumbnails, archive.warnings.map { String(it) })
         } catch (failure: Throwable) {
             deleteTree(directory.toPath())
             throw failure
@@ -362,6 +366,45 @@ object LocalSlicing {
         } catch (failure: Throwable) {
             Files.deleteIfExists(target)
             throw failure
+        }
+    }
+
+    /**
+     * [verified] with [job]'s pictures where the engine puts them
+     * ([GcodeThumbnails.embed]), written to [part] — every byte passing
+     * through [observer] — and read back for its length and SHA-256; the
+     * engine's own file is removed. The published G-code is this one, as the
+     * browser's route puts the pictures into the artifact it hashes.
+     */
+    fun withThumbnails(verified: VerifiedGcode, job: LocalSliceJob, part: File, observer: OutputStream? = null): VerifiedGcode {
+        try {
+            val sink = if (observer == null) FileOutputStream(part) else Tee(FileOutputStream(part), observer)
+            sink.use { GcodeThumbnails.embed(verified.file, job.thumbnails.blocks, it) }
+            val (bytes, sha) = digest(part.toPath(), MAX_GCODE_BYTES, null)
+            Files.deleteIfExists(verified.file.toPath())
+            return VerifiedGcode(part, bytes, sha)
+        } catch (failure: Throwable) {
+            Files.deleteIfExists(part.toPath())
+            throw failure
+        }
+    }
+
+    /** Writes to [file] and [observer] alike; closing closes only [file]. */
+    private class Tee(private val file: OutputStream, private val observer: OutputStream) : OutputStream() {
+        override fun write(b: Int) {
+            file.write(b)
+            observer.write(b)
+        }
+        override fun write(b: ByteArray, off: Int, len: Int) {
+            file.write(b, off, len)
+            observer.write(b, off, len)
+        }
+        override fun flush() {
+            file.flush()
+            observer.flush()
+        }
+        override fun close() {
+            file.close()
         }
     }
 

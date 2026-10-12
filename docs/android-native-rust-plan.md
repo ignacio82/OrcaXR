@@ -1857,6 +1857,18 @@ external slice routes, and verified output publication.
 - [ ] Generate the statistics sidecar, render thumbnails from captured geometry,
   finalize the exact G-code bytes, and bind output to project/revision/config/
   assets/engine. Preview, save, and send reject stale output.
+  Thumbnails ([native-core](engineering/native-core.md#android-slice-outputs)):
+  the shared core draws each plate's pictures in software from the export
+  capture its archive is written from (`orcaxr_archive::thumbnail`: the
+  browser's parts, framing — `frameCamera`, ported exactly — lights and
+  material; deterministic PNG/JPEG, the same bytes in Rust, WASM and JNI),
+  at the sizes the printer's `thumbnails` asks for, and both Android routes
+  put them where the browser does (`injectGcodeThumbnails`, ported with the
+  list and block grammar to `slicing::thumbnails`, streamed through the core's
+  anchor) before the figures are counted and the output is published. The
+  port fixed three browser defects (every plate's file showed the active
+  plate; only an object's first part was drawn; linear light in an 8-bit
+  target darkened every picture). The statistics sidecar remains.
 - [ ] Implement the native external-slicer client with explicit credentials,
   connection-generation capture, existing attestation, result digest/length
   validation, repeatable download, leases, and cancellation outcomes.
@@ -1874,8 +1886,15 @@ external slice routes, and verified output publication.
   controller's connection (canonical endpoint, generation-captured attestation,
   persisted record), the token in the shared remembered-credentials record
   (`SharedCredentials`, so the Device area's keys and switch govern it too),
-  and output tagged with the `ProjectRevision` it came from. Repeatable
-  download/leases remain.
+  and output tagged with the `ProjectRevision` it came from. A finished job's
+  artifact is fetched again after a transfer that failed or came up short or
+  mismatched (`readDownload`, the policy's `retained` kind, at most three
+  attempts, the same checks each time; 102 browser cases) while the server
+  keeps it (its release or expiry ends that; a transfer in progress holds
+  it), and released only once accepted — the browser's client promised a
+  retry it never made, and now makes it too; host-checked against the real
+  server cutting off and corrupting a download. Remaining: the emulator run
+  of `android-outputs-smoke.py`.
 - [ ] Define local/external route selection using measured resource limits and
   user preferences. Show the selected route and reason; do not upload models or
   silently reroute work to a server the user has not configured and authorized.
@@ -1953,6 +1972,17 @@ storage journeys on phone, tablet, and desktop-sized windows.
   (40 browser cases, 563 JNI checks).
   Its result offers "Send to Printer" for a current slice and a connected
   printer, through the Device area's shared send workflow.
+  "Slice All Plates" (`slice_all_plates`, enabled by the core's capability)
+  slices every printable plate holding a model, in plate order, on the route
+  the rule chose (`slicing::plate::slice_plan`, the coordinator's
+  `selectPlateIds`; the browser now passes over an empty plate that used to
+  fail the job), keeps each plate's result, publishes the set only for the
+  state it came from, says the browser's `SLICED n plate(s)` and opens the
+  active plate's result (else the first), which Send sends; every plate's
+  G-code carries its own pictures on both routes, and the external route
+  fetches a dropped download again ([native-core](engineering/native-core.md#android-slice-outputs);
+  569 host JNI checks, 6 JVM tests; `android-outputs-smoke.py` added, not yet
+  run on an emulator).
   The bar's order is Workspace (the home), Prepare, Preview, Device, Project.
   JVM tests cover its platform-free flow, and `android-prepare-smoke.py`
   runs it on API 34 and the 16 KB API 37 image against the real server.

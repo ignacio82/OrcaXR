@@ -6,7 +6,11 @@
 // keeps what each job uploaded and writes one fixed G-code, or holds until
 // cancelled, or fails, as the test override `orcaxr_test` asks — or, once the
 // parent sent `hold` (a client that sets no test override), holds every job
-// until it sends `release`.
+// until it sends `release`. A job asking for `drop` (or the parent's `drop`)
+// has the next artifact download cut off halfway, the connection closed; one
+// asking for `corrupt` (or the parent's `corrupt`) has its next download's
+// first byte changed — the server keeps the result either way, for the client
+// to fetch again.
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -44,6 +48,8 @@ const jobs = [];
 const requests = [];
 const authorizations = [];
 let holding = false;
+/** What becomes of the next artifact download: cut off (`drop`) or changed (`corrupt`). */
+let damageNext;
 const service = createSlicerService({
   engine: "cli",
   logger: { log() {}, info() {}, warn: console.error, error: console.error },
@@ -67,6 +73,7 @@ const service = createSlicerService({
     const job = { sha256: sha256(model), bytes: model.length, zip: model[0] === 0x50 && model[1] === 0x4b, overrides, outcome: "running" };
     jobs.push(job);
     const mode = overrides.orcaxr_test ?? (holding ? "hold" : undefined);
+    if (mode === "drop" || mode === "corrupt") damageNext = mode;
     onProgress(25, mode === "hold" ? "Holding for cancellation" : "Generating G-code");
     if (mode === "hold") {
       await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
@@ -88,9 +95,27 @@ await new Promise((resolve, reject) => {
   server.once("listening", resolve);
   server.once("error", reject);
 });
-server.on("request", (req) => {
+server.on("request", (req, res) => {
   requests.push(`${req.method} ${req.url.replace(/\/jobs\/[^/?]+/, "/jobs/:id")}`);
   authorizations.push(req.headers.authorization ?? "");
+  if (damageNext && req.method === "GET" && /^\/jobs\/[^/?]+\/gcode$/.test(req.url)) {
+    const damage = damageNext;
+    damageNext = undefined;
+    const write = res.write.bind(res);
+    let damaged = false;
+    res.write = (chunk, ...rest) => {
+      if (damaged) return write(chunk, ...rest);
+      damaged = true;
+      const bytes = Buffer.from(chunk);
+      if (damage === "corrupt") {
+        bytes[0] ^= 1;
+        return write(bytes, ...rest);
+      }
+      // Half the artifact on the wire, then the connection gone.
+      write(bytes.subarray(0, Math.max(1, bytes.length >> 1)), () => req.socket.destroy());
+      return false;
+    };
+  }
 });
 parentPort.postMessage(`http://127.0.0.1:${server.address().port}`);
 parentPort.on("message", async (message) => {
@@ -99,6 +124,9 @@ parentPort.on("message", async (message) => {
   } else if (message === "hold" || message === "release") {
     holding = message === "hold";
     parentPort.postMessage(holding ? "holding" : "released");
+  } else if (message === "drop" || message === "corrupt") {
+    damageNext = message;
+    parentPort.postMessage("damaging");
   } else if (message === "close") {
     await service.shutdown();
     await new Promise((resolve) => server.close(resolve));

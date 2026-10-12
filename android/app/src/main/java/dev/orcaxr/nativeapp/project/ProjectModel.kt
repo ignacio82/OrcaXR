@@ -35,6 +35,7 @@ import dev.orcaxr.core.ProjectMeasures
 import dev.orcaxr.core.ProjectPlateArchive
 import dev.orcaxr.core.ProjectPlatePreflight
 import dev.orcaxr.core.ProjectRecovery
+import dev.orcaxr.core.ProjectRevision
 import dev.orcaxr.core.ProjectRowSelection
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
@@ -42,6 +43,8 @@ import dev.orcaxr.core.RecentDocuments
 import dev.orcaxr.core.SimplifyConfiguration
 import dev.orcaxr.core.SimplifyPreview
 import dev.orcaxr.core.SimplifyPreviewResult
+import dev.orcaxr.core.SlicePlan
+import dev.orcaxr.core.SliceScope
 import dev.orcaxr.core.SlicingSlots
 import dev.orcaxr.core.SlotEdit
 import dev.orcaxr.core.SplitConfirmation
@@ -781,6 +784,14 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     /** The plate's one-plate slice archive ([ProjectWorkspace.projectPlate]); the project's saved state is untouched. */
     override fun projectPlate(plateId: String, output: ProjectDocumentOutput): CompletableFuture<ProjectPlateArchive> =
         started.thenCompose { it.projectPlate(plateId, output) }
+
+    /** The plates a slice of [scope] slices as the project stands ([ProjectWorkspace.slicePlan]). */
+    override fun slicePlan(scope: SliceScope): CompletableFuture<Pair<ProjectRevision, SlicePlan>> =
+        started.thenCompose { it.slicePlan(scope) }
+
+    /** The slice actions as the core enables them ([ProjectWorkspace.sliceActions]). */
+    override fun sliceActions(slicing: Boolean, block: Boolean): CompletableFuture<Map<String, ProjectActionState>> =
+        started.thenCompose { it.sliceActions(slicing, block) }
 
     fun undo() = work { workspace.undo().await() }
     fun redo() = work { workspace.redo().await() }

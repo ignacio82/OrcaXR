@@ -179,6 +179,9 @@ class ProjectWorkspace(
         )
         val PLACEMENT_TOOLBAR_ACTIONS = listOf("tool_lay_on_face", "drop_to_bed")
         val TRANSFORM_ACTIONS = listOf("tool_move", "tool_rotate", "tool_scale")
+        /** The slicing actions ([sliceActions]): Slice and Cancel Slice on the browser's toolbar, Slice All Plates in its menu. */
+        val SLICE_TOOLBAR_ACTIONS = listOf("slice_active_plate", "slice_cancel")
+        val SLICE_MENU_ACTIONS = listOf("slice_all_plates")
         /** The catalogue actions the Project area's Edit and Add menus offer for creation (`dom-menu`):
          * the clipboard, the bed fill, the primitives and the helper volumes. */
         val CREATE_ACTIONS = listOf(
@@ -769,6 +772,43 @@ class ProjectWorkspace(
     }
 
     /**
+     * The plates a slice of [scope] slices as the project stands now, in
+     * slicing order, or the browser's words for why it slices none
+     * ([SlicePlans]), with the state it describes.
+     */
+    fun slicePlan(scope: SliceScope): CompletableFuture<Pair<ProjectRevision, SlicePlan>> = inspect { session ->
+        session.snapshot().use { snapshot ->
+            ProjectRevision(snapshot.revision(), snapshot.hash(), session.assetFingerprint()) to snapshot.slicePlan(scope)
+        }
+    }
+
+    /**
+     * The slice actions as the core enables them now (the browser's registry
+     * gate: `slice_active_plate`, `slice_all_plates`, `slice_cancel`), while a
+     * slice is or is not [slicing] and the active plate's preflight does or
+     * does not [block] it — the host facts only the slicing area knows.
+     */
+    fun sliceActions(slicing: Boolean, block: Boolean): CompletableFuture<Map<String, ProjectActionState>> = inspect { session ->
+        val host = ProjectIntents.CapabilityHostState(
+            ProjectIntents.OptionalStartupSnapshot.Absent(ProjectIntents.Empty), ProjectIntents.WorkspaceMode.Prepare,
+            simplifyPreviewing = simplifyPreview != null, calibrationSessionOpen = false, projectionHealthy = true, hasClipboard = clipboard != null,
+            isSlicing = slicing, gcodeReady = false, preflightBlocked = block, printerJobState = ProjectIntents.PrinterJobUiState.Disconnected,
+        )
+        // Where the browser offers each: Slice and Cancel Slice on its toolbar, Slice All Plates in its menu.
+        listOf(ProjectIntents.ActionSurface.DomPrimary to SLICE_TOOLBAR_ACTIONS, ProjectIntents.ActionSurface.DomMenu to SLICE_MENU_ACTIONS)
+            .flatMap { (surface, ids) ->
+                val query = ProjectIntents.CapabilityQuery.Actions(ProjectIntents.CapabilityActions(ids.map(::units)))
+                session.capabilities(ProjectIntents.CapabilityRequest(surface, host, query)).actions
+            }
+            .associate { action ->
+                val availability = action.availability
+                val reason = (availability as? ProjectIntents.ActionAvailability.Disabled)?.value?.text
+                    ?: (availability as? ProjectIntents.ActionAvailability.Hidden)?.value?.text
+                text(action.id) to ProjectActionState(text(action.id), text(action.label), availability is ProjectIntents.ActionAvailability.Enabled, reason?.let(::text))
+            }
+    }
+
+    /**
      * Writes plate [plateId] as the one-plate archive an external slicer
      * loads (the browser's slice projection) to [output], and answers its
      * fingerprint, the print overrides to submit with it and the state of
@@ -798,7 +838,7 @@ class ProjectWorkspace(
             }
         }) { result ->
             // The export was guarded by the state just read, so the archive is that state's.
-            if (result is ProjectOutcome.Exported) archive?.let { ProjectPlateArchive(it.sourceHash, it.overrides, it.warnings, from) } else null
+            if (result is ProjectOutcome.Exported) archive?.let { ProjectPlateArchive(it.sourceHash, it.overrides, it.warnings, from, it.thumbnails) } else null
         }
             // The export reads a failed callback as uncertain; a refused projection wrote nothing.
             .handle { value, error -> if (error == null) value else throw (refusal ?: error) }

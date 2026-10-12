@@ -5,7 +5,8 @@ package dev.orcaxr.core
  * endpoint made canonical; what attesting the engine, submitting a project
  * and each step of its job send; and how an attestation, a submission, a
  * status poll, a cancellation and a downloaded artifact read — the artifact
- * by the facts its host streamed, so G-code never crosses into the core.
+ * by the facts its host streamed, so G-code never crosses into the core — and
+ * whether a download that failed is fetched again.
  * [ExternalSlicerClient] carries the exchanges out. */
 object ExternalSlicerPolicy {
     /** How long the browser waits between status polls. */
@@ -35,6 +36,10 @@ object ExternalSlicerPolicy {
         ProjectIntents.decodeExternalSlicerCancelStep(NativeProject.externalSlicerCancel(ProjectIntents.encodeExternalSlicerCancelRead(read)))
     fun artifact(read: ProjectIntents.ExternalSlicerArtifactRead): ProjectIntents.ExternalSlicerArtifact =
         ProjectIntents.decodeExternalSlicerArtifact(NativeProject.externalSlicerArtifact(ProjectIntents.encodeExternalSlicerArtifactRead(read)))
+    /** One download of a finished job's artifact read (`readDownload`):
+     * accept it, fetch the result the server retained again, or fail. */
+    fun download(read: ProjectIntents.ExternalSlicerDownloadRead): ProjectIntents.ExternalSlicerDownloadStep =
+        ProjectIntents.decodeExternalSlicerDownloadStep(NativeProject.externalSlicerDownload(ProjectIntents.encodeExternalSlicerDownloadRead(read)))
     /** Whether the attested [engine] carries [feature] (e.g. `wave-overhangs`). */
     fun supports(engine: ProjectIntents.ExternalSlicerEngine, feature: String): Boolean =
         NativeProject.externalSlicerSupports(if (engine == ProjectIntents.ExternalSlicerEngine.Wasm) "wasm" else "cli", feature)

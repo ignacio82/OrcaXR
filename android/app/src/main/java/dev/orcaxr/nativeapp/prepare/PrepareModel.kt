@@ -15,10 +15,13 @@ import dev.orcaxr.core.ExternalSliceCall
 import dev.orcaxr.core.ExternalSlicerArchive
 import dev.orcaxr.core.ExternalSlicerClient
 import dev.orcaxr.core.ExternalSlicerException
+import dev.orcaxr.core.ExternalSlicerOutput
 import dev.orcaxr.core.ExternalSlicerPolicy
+import dev.orcaxr.core.GcodeThumbnails
 import dev.orcaxr.core.LocalSliceOutcome
 import dev.orcaxr.core.LocalSliceRefusal
 import dev.orcaxr.core.LocalSlicing
+import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.core.ProjectDocumentOutput
 import dev.orcaxr.core.ProjectIntents
 import dev.orcaxr.core.ProjectPlateArchive
@@ -26,6 +29,9 @@ import dev.orcaxr.core.ProjectPlatePreflight
 import dev.orcaxr.core.ProjectRevision
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.SharedCredentials
+import dev.orcaxr.core.SliceFigures
+import dev.orcaxr.core.SlicePlan
+import dev.orcaxr.core.SliceScope
 import dev.orcaxr.core.SliceStatus
 import dev.orcaxr.core.SliceStatusTally
 import dev.orcaxr.nativeapp.engine.LocalEngineClient
@@ -47,11 +53,14 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 
-/** What Prepare reads of the project: its view, and one plate's preflight and slice archive. */
+/** What Prepare reads of the project: its view, which plates a slice slices,
+ * the slice actions as the core enables them, and one plate's preflight and slice archive. */
 interface PlateSource {
     val view: ProjectView
     fun preflight(plateId: String): CompletableFuture<ProjectPlatePreflight>
     fun projectPlate(plateId: String, output: ProjectDocumentOutput): CompletableFuture<ProjectPlateArchive>
+    fun slicePlan(scope: SliceScope): CompletableFuture<Pair<ProjectRevision, SlicePlan>>
+    fun sliceActions(slicing: Boolean, block: Boolean): CompletableFuture<Map<String, ProjectActionState>>
 }
 
 /** The active plate's preflight, as the browser's panel shows it, and the state it describes. */
@@ -84,6 +93,8 @@ class SlicedPlate(
     val endpoint: String,
     val summary: String,
     val local: Boolean = false,
+    /** What a results list says of this plate's file ([SliceAll.row]). */
+    val row: String = "",
 )
 
 /** What the Prepare area shows. */
@@ -97,7 +108,12 @@ data class PrepareState(
     val consent: SliceConsent = SliceConsent(),
     val preflight: PreflightView? = null,
     val job: SliceJob? = null,
+    /** The published slice Preview and Send take: the plate sliced, or after Slice All Plates the active plate's (else the first). */
     val result: SlicedPlate? = null,
+    /** Every plate's result of the last Slice All Plates, in slicing order; empty after a slice of one plate. */
+    val plates: List<SlicedPlate> = emptyList(),
+    /** Slice, Slice All Plates and Cancel Slice as the core enables them now (the browser's registry gate). */
+    val actions: Map<String, ProjectActionState> = emptyMap(),
     /** The browser's status line: what the last action did. */
     val status: String? = null,
     /** The endpoint a slice waits for the operator's consent to upload to. */
@@ -157,6 +173,12 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
     private var cancelRequested = false
     /** Preflight requests; only the latest is run. */
     private val preflights = AtomicInteger()
+    /** Slice-action reads; only the latest is shown. */
+    private val actionReads = AtomicInteger()
+    /** What the slice waiting for the operator's consent covers. */
+    private var pendingScope = SliceScope.CurrentPlate
+    /** Slicing-thread state: the plates done and to do while a slice of several runs. */
+    @Volatile private var completed: Pair<Int, Int>? = null
 
     init {
         // Jobs left by an earlier run of the app: none of them runs now, and none is ever claimed.
@@ -373,20 +395,29 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
      * operator turned on (whose first slice asks before anything is uploaded),
      * or this device's engine.
      */
-    fun slice() {
+    fun slice() = request(SliceScope.CurrentPlate)
+
+    /**
+     * "Slice All Plates" (`slice_all_plates`): every printable plate holding
+     * a model, in plate order, on the same route, each plate's result kept.
+     */
+    fun sliceAll() = request(SliceScope.AllPlates)
+
+    private fun request(scope: SliceScope) {
         val now = state
         if (now.job != null) return
         when (sliceRoute(now.connection, now.local)) {
             SliceRouteKind.External -> {
                 val endpoint = now.connection.endpoint
                 if (!now.consent.allows(endpoint)) {
+                    pendingScope = scope
                     state = now.copy(consentFor = endpoint)
                     return
                 }
-                start(endpoint)
+                start(scope, endpoint)
             }
-            SliceRouteKind.Local -> launch({ true }) { project, plateId, projectName, plateName ->
-                runLocal(project, plateId, projectName, plateName)
+            SliceRouteKind.Local -> launch(scope, { true }) { project, plateId, plateName, staged ->
+                runLocal(project, plateId, plateName, staged)
             }
             SliceRouteKind.None -> Unit
         }
@@ -400,7 +431,7 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         val granted = synchronized(lock) { consent.grant(endpoint).also { consent = it } }
         preferences.edit().putStringSet(CONSENTED, granted.endpoints).apply()
         state = state.copy(consent = granted)
-        start(endpoint)
+        start(pendingScope, endpoint)
     }
 
     /** "Cancel Slice": before the upload it stops at the next step; afterwards the client confirms it with the server. */
@@ -414,10 +445,27 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         pending?.cancel()
     }
 
-    private fun start(endpoint: String) {
+    /**
+     * Slice, Slice All Plates and Cancel Slice as the core enables them now,
+     * given what only this area knows: whether a slice runs and whether the
+     * active plate's preflight blocks it. A request made meanwhile replaces this one.
+     */
+    fun refreshActions() {
+        val project = source ?: return
+        val now = state
+        val blocked = now.preflight?.takeIf { it.plateId == project.view.activePlate?.id }?.canSlice == false
+        val request = actionReads.incrementAndGet()
+        project.sliceActions(now.job != null, blocked).whenComplete { actions, _ ->
+            if (actions != null && actionReads.get() == request) main.post { state = state.copy(actions = actions) }
+        }
+    }
+
+    private fun start(scope: SliceScope, endpoint: String) {
         var generation = 0L
         var held = ""
-        launch({
+        // The route is attested once for the job, as the browser resolves its route before the coordinator runs.
+        var attest = true
+        launch(scope, {
             // The route is captured once; a different one is refused, never re-decided mid-job.
             if (!connection.enabled || connection.endpoint != endpoint) {
                 false
@@ -426,19 +474,24 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
                 held = token
                 true
             }
-        }) { project, plateId, projectName, plateName -> run(project, endpoint, generation, held, plateId, projectName, plateName) }
+        }) { project, plateId, plateName, staged ->
+            run(project, endpoint, generation, held, plateId, plateName, staged, attest).also { attest = false }
+        }
     }
 
     /**
-     * Starts one slice of the active plate: [admit] (under the lock) captures
-     * its route, then [body] runs on the slicing thread and the outcome is
-     * shown — the published slice, or the status line.
+     * Starts one slice of [scope]: [admit] (under the lock) captures its route,
+     * then on the slicing thread each plate the core's plan names is sliced by
+     * [body] into its own staged file, and the set is published only while
+     * the project is still the state the plan read — the browser's
+     * coordinator, which discards every plate's result on any change. The
+     * outcome is shown: the published slice, or the status line.
      */
-    private fun launch(admit: () -> Boolean, body: (PlateSource, String, String, String) -> SlicedPlate) {
+    private fun launch(scope: SliceScope, admit: () -> Boolean, body: (PlateSource, String, String, File) -> PlateOutput) {
         val project = source ?: return
         val view = project.view
         val plate = view.activePlate
-        if (plate == null || plate.objects == 0) {
+        if (scope == SliceScope.CurrentPlate && (plate == null || plate.objects == 0)) {
             state = state.copy(status = PrepareWords.NO_MODELS)
             return
         }
@@ -449,15 +502,36 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         }
         // A new slice withdraws the previous output, as the browser's does.
         published = null
-        state = state.copy(job = SliceJob("preflighting"), result = null, status = null)
+        state = state.copy(job = SliceJob("preflighting"), result = null, plates = emptyList(), status = null)
+        refreshActions()
         slicer.execute {
             val outcome = try {
-                Outcome.Done(body(project, plate.id, view.name.ifBlank { "Untitled project" }, plate.name))
+                val started = SystemClock.elapsedRealtime()
+                val (revision, plan) = project.slicePlan(scope).get()
+                val ids = when (plan) {
+                    // The workspace's own words when nothing it would slice holds a model.
+                    is SlicePlan.Refused -> throw Quiet(plan.message)
+                    is SlicePlan.Plates -> plan.ids
+                }
+                val names = project.view.plateList.associate { it.id to it.name }
+                val staging = File(folder, "staged").apply { LocalSlicing.discard(this); mkdirs() }
+                val outputs = ArrayList<PlateOutput>()
+                for ((index, plateId) in ids.withIndex()) {
+                    completed = index to ids.size
+                    progress("preflighting")
+                    outputs += body(project, plateId, names[plateId] ?: "Plate ${index + 1}", File(staging, "$index.gcode"))
+                }
+                completed = null
+                Outcome.Done(publish(project, scope, revision, outputs, view.name.ifBlank { "Untitled project" }, started))
+            } catch (quiet: Quiet) {
+                Outcome.Failed(quiet.message)
             } catch (refusal: Refusal) {
                 Outcome.Failed(refusal.message)
             } catch (failure: Throwable) {
                 Outcome.Failed(describe(failure))
             } finally {
+                completed = null
+                File(folder, "staged").let(LocalSlicing::discard)
                 synchronized(lock) {
                     running = false
                     call = null
@@ -465,15 +539,51 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             }
             main.post {
                 state = when (outcome) {
-                    is Outcome.Done -> state.copy(job = null, result = outcome.plate, status = outcome.plate.summary)
+                    is Outcome.Done -> state.copy(job = null, result = outcome.published, plates = outcome.plates, status = outcome.status)
                     is Outcome.Failed -> state.copy(job = null, status = outcome.status)
                 }
                 if (outcome is Outcome.Done) {
-                    published = outcome.plate
-                    sliced = outcome.plate
+                    published = outcome.published
+                    sliced = outcome.published
                 }
+                refreshActions()
             }
         }
+    }
+
+    /**
+     * The staged plates published as one set: each plate's file under its
+     * send name, only while the project is still [revision] — the state the
+     * plan, every preflight and every archive read — else all of them are
+     * discarded in the browser's words. The active plate's result (else the
+     * first) is the one Preview and Send take.
+     */
+    private fun publish(project: PlateSource, scope: SliceScope, revision: ProjectRevision, outputs: List<PlateOutput>, projectName: String, started: Long): Published {
+        val stale = if (scope == SliceScope.AllPlates) SliceAll.STALE else PrepareWords.STALE
+        if (project.view.revision != revision || outputs.any { it.revision != revision }) throw Refusal(PrepareWords.failed(stale))
+        val directory = File(folder, "gcode")
+        LocalSlicing.discard(directory)
+        val elapsed = SystemClock.elapsedRealtime() - started
+        val names = HashSet<String>()
+        val plates = outputs.mapIndexed { index, output ->
+            val name = PrepareWords.slicedFilename(projectName, output.plateName)
+            // Each file under its send name; a plate whose name another took, in a folder of its own.
+            val target = if (names.add(name)) File(directory, name) else File(File(directory, "$index"), name)
+            // Output for a project that has since changed is discarded, never shown.
+            val file = output.publish(target, project.view.revision) ?: throw Refusal(PrepareWords.failed(stale))
+            val warnings = output.warnings.size
+            SlicedPlate(
+                file, name, output.plateId, output.plateName, revision, output.endpoint,
+                SliceStatus.describe(elapsed, output.figures, warnings), output.endpoint.isEmpty(), SliceAll.row(output.plateName, output.figures, warnings),
+            )
+        }
+        val chosen = SliceAll.published(plates, { it.plateId }, project.view.activePlate?.id) ?: throw Refusal(PrepareWords.failed(stale))
+        val status = if (scope == SliceScope.AllPlates) {
+            SliceAll.describe(plates.size, elapsed, outputs.sumOf { it.figures.bytes }, SliceAll.warnings(outputs.map { it.warnings }))
+        } else {
+            chosen.summary
+        }
+        return Published(chosen, if (scope == SliceScope.AllPlates) plates else emptyList(), status)
     }
 
     /** Whether to ask for the notification permission before a local slice: once, ever. */
@@ -504,13 +614,38 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         return if (isCurrent()) SliceToSend(sent.file, sent.name, sent.plateName, isCurrent) else null
     }
 
+    /**
+     * One plate's G-code, staged and not yet published: its figures (counted
+     * over the bytes published, its pictures included), its warnings, the
+     * state of the project its archive was written from, the external
+     * slicer's [endpoint] (none on this device's engine), and how it is
+     * published — moved under its send name only while the project is still
+     * that state.
+     */
+    private class PlateOutput(
+        val plateId: String,
+        val plateName: String,
+        val figures: SliceFigures,
+        val warnings: Set<String>,
+        val revision: ProjectRevision?,
+        val endpoint: String,
+        val publish: (File, ProjectRevision?) -> File?,
+    )
+
+    private class Published(val published: SlicedPlate, val plates: List<SlicedPlate>, val status: String)
+
     private sealed interface Outcome {
-        class Done(val plate: SlicedPlate) : Outcome
+        class Done(val published: SlicedPlate, val plates: List<SlicedPlate>, val status: String) : Outcome {
+            constructor(done: Published) : this(done.published, done.plates, done.status)
+        }
         class Failed(val status: String) : Outcome
     }
 
     /** A slice refused in words already written for the status line. */
     private class Refusal(override val message: String) : Exception(message)
+
+    /** Nothing to slice, in the workspace's own words (no "slice failed:"). */
+    private class Quiet(override val message: String) : Exception(message)
 
     private fun unwrap(failure: Throwable?): Throwable? =
         if ((failure is ExecutionException || failure is CompletionException) && failure.cause != null) unwrap(failure.cause) else failure
@@ -518,11 +653,16 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
     private fun describe(failure: Throwable): String = when (val cause = unwrap(failure)) {
         is CancellationException -> PrepareWords.failed(cause.message ?: "The external slice was cancelled.")
         is ExternalSlicerException -> PrepareWords.failed(cause.message ?: cause.kind.name)
+        is Quiet -> cause.message
+        is Refusal -> cause.message
         else -> PrepareWords.failed(cause?.message ?: cause?.javaClass?.simpleName ?: "unknown error")
     }
 
+    /** The job's line: [message] and the route's [percent], else the share of plates done (`renderCanonicalSliceStatus`). */
     private fun progress(message: String, percent: Double? = null) {
-        main.post { state.job?.takeIf { !it.cancelling }?.let { state = state.copy(job = SliceJob(message, percent)) } }
+        val share = completed
+        val shown = if (share == null) percent else SliceAll.percent(share.first, share.second, percent)
+        main.post { state.job?.takeIf { !it.cancelling }?.let { state = state.copy(job = SliceJob(message, shown)) } }
     }
 
     /** Stops here when the operator cancelled, or the route changed since it was captured. */
@@ -535,33 +675,41 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** One slice, on the slicing thread: route, preflight, archive, upload, artifact. */
+    /** The plate's preflight, shown when it is the active plate's; a blocking one refuses as `SlicePreflightError` does. */
+    private fun preflighted(project: PlateSource, plateId: String): ProjectPlatePreflight {
+        val preflight = project.preflight(plateId).get()
+        if (project.view.activePlate?.id == plateId) main.post { state = state.copy(preflight = preflightView(preflight)) }
+        if (!preflight.summary.canSlice) throw Refusal(PrepareWords.failed(PrepareWords.preflightBlocked(preflight.summary, preflight.issues)))
+        return preflight
+    }
+
+    /** One plate on the external slicer, on the slicing thread: route, preflight, archive, upload, artifact, pictures. */
     private fun run(
         project: PlateSource,
         endpoint: String,
         generation: Long,
         held: String,
         plateId: String,
-        projectName: String,
         plateName: String,
-    ): SlicedPlate {
-        val started = SystemClock.elapsedRealtime()
+        staged: File,
+        attest: Boolean,
+    ): PlateOutput {
         val bearer = held.ifEmpty { null }
-        // The route, attested now: a remembered proof is informational only.
-        val route = try {
-            client.attest(endpoint, bearer).get(PROBE_TIMEOUT_S, TimeUnit.SECONDS)
-        } catch (_: TimeoutException) {
-            throw Refusal(PrepareWords.unattested("The external slicer engine check timed out."))
+        if (attest) {
+            // The route, attested now: a remembered proof is informational only.
+            val route = try {
+                client.attest(endpoint, bearer).get(PROBE_TIMEOUT_S, TimeUnit.SECONDS)
+            } catch (_: TimeoutException) {
+                throw Refusal(PrepareWords.unattested("The external slicer engine check timed out."))
+            }
+            synchronized(lock) {
+                if (connection.generation != generation) throw Refusal(PrepareWords.failed(PrepareWords.CHANGED_WHILE_CHECKING))
+            }
+            if (route is ProjectIntents.ExternalSlicerAttestation.Unattested) throw Refusal(PrepareWords.unattested(text(route.value)))
         }
-        synchronized(lock) {
-            if (connection.generation != generation) throw Refusal(PrepareWords.failed(PrepareWords.CHANGED_WHILE_CHECKING))
-        }
-        if (route is ProjectIntents.ExternalSlicerAttestation.Unattested) throw Refusal(PrepareWords.unattested(text(route.value)))
         checkpoint(generation, endpoint)
 
-        val preflight = project.preflight(plateId).get()
-        main.post { state = state.copy(preflight = preflightView(preflight)) }
-        if (!preflight.summary.canSlice) throw Refusal(PrepareWords.failed(PrepareWords.preflightBlocked(preflight.summary, preflight.issues)))
+        val preflight = preflighted(project, plateId)
         checkpoint(generation, endpoint)
 
         progress("serializing")
@@ -577,31 +725,33 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             checkpoint(generation, endpoint)
 
             progress("Slicing project externally...")
-            // What the status line says of it is counted as it streams in, by the shared core.
-            val figures = SliceStatusTally(FileOutputStream(part).buffered()).use { tally ->
-                val inFlight = client.slice(
-                    endpoint, bearer, ExternalSlicerArchive(archiveFile.length()) { archiveFile.inputStream() }, archive.overrides, tally,
-                ) { update -> progress(text(update.message).ifEmpty { "slicing" }, update.percent) }
-                // A cancel that arrived before the call existed is carried out now.
-                val cancelled = synchronized(lock) {
-                    call = inFlight
-                    cancelRequested
-                }
-                if (cancelled) inFlight.cancel()
-                inFlight.result.get()
-                tally.flush()
+            // Each download of the artifact starts the part file again: only the one accepted counts.
+            val inFlight = client.slice(
+                endpoint, bearer, ExternalSlicerArchive(archiveFile.length()) { archiveFile.inputStream() }, archive.overrides,
+                ExternalSlicerOutput { FileOutputStream(part) },
+            ) { update -> progress(text(update.message).ifEmpty { "slicing" }, update.percent) }
+            // A cancel that arrived before the call existed is carried out now.
+            val cancelled = synchronized(lock) {
+                call = inFlight
+                cancelRequested
+            }
+            if (cancelled) inFlight.cancel()
+            inFlight.result.get()
+            // The plate's pictures where the engine puts them; the status line counts what is published.
+            val figures = SliceStatusTally(FileOutputStream(staged).buffered()).use { tally ->
+                GcodeThumbnails.embed(part, archive.thumbnails.blocks, tally)
                 tally.figures()
             }
-            // Output for a project that has since changed is discarded, never shown.
-            if (project.view.revision != archive.revision) throw Refusal(PrepareWords.failed(PrepareWords.STALE))
-            val name = PrepareWords.slicedFilename(projectName, plateName)
-            val outputs = File(folder, "gcode").apply { mkdirs() }
-            outputs.listFiles()?.forEach { it.delete() }
-            val file = File(outputs, name)
-            check(part.renameTo(file)) { "OrcaXR could not keep the sliced G-code." }
-            val elapsed = SystemClock.elapsedRealtime() - started
-            val summary = SliceStatus.describe(elapsed, figures, archive.warnings.size)
-            return SlicedPlate(file, name, plateId, plateName, archive.revision!!, endpoint, summary)
+            return PlateOutput(plateId, plateName, figures, SliceAll.plateWarnings(archive.warnings.map { String(it) }, preflight.issues), archive.revision, endpoint) { destination, current ->
+                if (current != archive.revision) {
+                    staged.delete()
+                    null
+                } else {
+                    destination.parentFile?.mkdirs()
+                    check(staged.renameTo(destination)) { "OrcaXR could not keep the sliced G-code." }
+                    destination
+                }
+            }
         } finally {
             archiveFile.delete()
             part.delete()
@@ -614,18 +764,16 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * One slice on this device's engine, on the slicing thread: preflight, the
-     * one-plate archive and its overrides staged privately (exactly what the
-     * external route uploads), the plate admitted against the memory the
+     * One plate on this device's engine, on the slicing thread: preflight,
+     * the one-plate archive and its overrides staged privately (exactly what
+     * the external route uploads), the plate admitted against the memory the
      * device has now, the engine's own process run with progress and
-     * cooperative cancel, then its G-code claimed, verified and published only
-     * while the project is still the state it was sliced from.
+     * cooperative cancel, then its G-code claimed and verified, the plate's
+     * pictures added, and published only while the project is still the
+     * state it was sliced from.
      */
-    private fun runLocal(project: PlateSource, plateId: String, projectName: String, plateName: String): SlicedPlate {
-        val started = SystemClock.elapsedRealtime()
-        val preflight = project.preflight(plateId).get()
-        main.post { state = state.copy(preflight = preflightView(preflight)) }
-        if (!preflight.summary.canSlice) throw Refusal(PrepareWords.failed(PrepareWords.preflightBlocked(preflight.summary, preflight.issues)))
+    private fun runLocal(project: PlateSource, plateId: String, plateName: String, staged: File): PlateOutput {
+        val preflight = preflighted(project, plateId)
         cancelledHere()
 
         progress("serializing")
@@ -655,24 +803,18 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
                 else -> throw Refusal(outcome.status ?: PrepareWords.failed(LocalSlicing.UNKNOWN_OUTCOME))
             }
             folder.mkdirs()
-            // The verified bytes pass through the shared core's count of what the status line says.
-            val (verified, figures) = SliceStatusTally().use { tally ->
-                val verified = try {
-                    LocalSlicing.claim(job, result, File(folder, "slice.gcode.part"), tally)
-                } catch (refusal: LocalSliceRefusal) {
-                    throw Refusal(PrepareWords.failed(refusal.message ?: LocalSlicing.MISMATCH))
-                }
-                verified to tally.figures()
+            val verified = try {
+                LocalSlicing.claim(job, result, File(folder, "slice.gcode.part"))
+            } catch (refusal: LocalSliceRefusal) {
+                throw Refusal(PrepareWords.failed(refusal.message ?: LocalSlicing.MISMATCH))
             }
-            val name = PrepareWords.slicedFilename(projectName, plateName)
-            val outputs = File(folder, "gcode").apply { mkdirs() }
-            outputs.listFiles()?.forEach { it.delete() }
-            // Output for a project that has since changed is discarded, never shown.
-            val file = LocalSlicing.publish(verified, job, project.view.revision, File(outputs, name))
-                ?: throw Refusal(PrepareWords.failed(PrepareWords.STALE))
-            val elapsed = SystemClock.elapsedRealtime() - started
-            val summary = SliceStatus.describe(elapsed, figures, job.warnings)
-            return SlicedPlate(file, name, plateId, plateName, job.revision!!, "", summary, local = true)
+            // The plate's pictures where the engine puts them; the status line counts what is published.
+            val (pictured, figures) = SliceStatusTally().use { tally ->
+                LocalSlicing.withThumbnails(verified, job, staged, tally) to tally.figures()
+            }
+            return PlateOutput(plateId, plateName, figures, SliceAll.plateWarnings(job.warningTexts, preflight.issues), job.revision, "") { destination, current ->
+                LocalSlicing.publish(pictured, job, current, destination)
+            }
         } finally {
             LocalSlicing.discard(job)
         }

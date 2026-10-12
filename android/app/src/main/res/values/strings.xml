@@ -45,6 +45,10 @@
     <string name="prepare_path">Path: %1$s</string>
     <string name="prepare_slice">Slice</string>
     <string name="prepare_cancel">Cancel Slice</string>
+    <!-- The browser's Slice All Plates (web/src/actions/groups/slice.ts), and the list of each plate's result it keeps. -->
+    <string name="prepare_slice_all">Slice All Plates</string>
+    <string name="prepare_sliced_plates">Plates sliced</string>
+    <string name="prepare_sliced_shown">Preview and Send to Printer use %1$s.</string>
     <string name="prepare_upload">Upload and slice</string>
     <string name="prepare_sliced_on">Sliced on %1$s</string>
     <!-- The local route: a plate sliced by this device's own engine, and that engine's foreground notification. -->

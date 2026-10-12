@@ -73,6 +73,7 @@ export function startProjectJni(profile = "debug") {
   signatures.slicingChoiceChecks = ["byte[]", "byte[]"];
   signatures.localSliceChecks = ["byte[]", "byte[]"];
   signatures.staleSliceChecks = ["byte[]", "byte[]"];
+  signatures.outputChecks = ["String", "byte[]", "String", "byte[]", "byte[]", "byte[]"];
   signatures.sliceStatusChecks = ["String"];
   signatures.workspaceBedChecks = ["String"];
   signatures.transformFieldChecks = ["String"];
@@ -573,6 +574,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     plate(plateId) {
       return new ProjectExport(call("exportPlate", this.handle, plateId, zone, profile));
     }
+    thumbnails() {
+      return call("exportThumbnails", this.handle);
+    }
     // An export is never a save: its archive carries no checkpoint guard.
     write_archive(version, policy) {
       return new ProjectArchiveOutput(call("exportArchive", this.handle, version, policy));
@@ -818,6 +822,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     workspace_bed(request) {
       return call("projectWorkspaceBed", this.handle, request);
+    }
+    slice_plan(scope) {
+      return call("projectSlicePlan", this.handle, scope);
     }
     split_source(request) {
       return call("projectSplitSource", this.handle, request);
@@ -1452,11 +1459,17 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     external_slicer_poll: (read) => call("externalSlicerPoll", read),
     external_slicer_cancel: (read) => call("externalSlicerCancel", read),
     external_slicer_artifact: (read) => call("externalSlicerArtifact", read),
+    external_slicer_download: (read) => call("externalSlicerDownload", read),
     external_slicer_supports: (engine, feature) => call("externalSlicerSupports", engine, feature),
     plate_projection: (state, plateId, omitted) => call("plateProjection", state, plateId, omitted, zone, profile),
     plate_print_overrides: (state, plateId) => call("platePrintOverridesJson", state, plateId),
     slicing_match: (request) => call("slicingMatch", request),
     workspace_bed: (request) => call("workspaceBed", request),
+    slice_thumbnail_list: (request) => call("sliceThumbnailList", request),
+    slice_thumbnail_block: (request) => call("sliceThumbnailBlock", request),
+    slice_thumbnail_inject: (request) => call("sliceThumbnailInject", request),
+    slice_thumbnail_view: (request) => call("sliceThumbnailView", request),
+    slice_plan: (request) => call("slicePlan", request),
     virtual_filament_form_defaults: (request) => call("virtualFilamentFormDefaults", request),
     virtual_filament_form: (request) => call("virtualFilamentForm", request),
     virtual_filament_triangle: (request) => call("virtualFilamentTriangle", request),

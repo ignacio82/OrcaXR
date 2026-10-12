@@ -4894,8 +4894,13 @@ and fragments refused); `attestation_plan` and `attestation` send
 `/gcode`, cancel, and a release bounded to 1 s), refusing a job ID no URL can
 carry; `submission`, `poll`, `cancel` and `artifact` read each reply into the
 next step or a failure whose kind (`failed`, `cancelled`, `alreadyDone`,
-`alreadyFailed`, `alreadyReleased`, `unconfirmed`) and browser sentence the
-host reports. Hosts own the transport, the bearer token, the poll interval
+`alreadyFailed`, `alreadyReleased`, `unconfirmed`, and `retained` for an
+artifact that came up short or did not match its checksum, which the server
+still holds) and browser sentence the host reports; `download` reads each
+attempt at a finished job's artifact (`readDownload`): accept it, fetch it
+again — after a transfer that failed, or a `retained` verdict — while
+`MAX_DOWNLOAD_ATTEMPTS` (3) allow, or fail with the transfer's or the
+verdict's own words. Hosts own the transport, the bearer token, the poll interval
 (700 ms in the browser) and the cancellation deadline (30 s, `timedOut`), and
 decode reply bodies as UTF-8. G-code never crosses into the core: a host
 streams the download once for its facts — length, SHA-256, whether it is
@@ -4911,24 +4916,29 @@ drift, and embedded by the core (`slicer::pinned`, `engine_supports`).
 `ExternalSlicerExchange.ts` (the job loops over a recording fetcher, the
 artifact reader over real `Response`s): 72 endpoints, 230 attestation
 replies, 156 job steps, 247 submission replies, 196 status polls, 44
-cancellation replies and 49 artifacts; Rust reproduces every one.
+cancellation replies, 49 artifacts and 102 download attempts (each distinct
+verdict and four transport failures at six attempt numbers); Rust reproduces
+every one.
 
 Bindings: WASM `external_slicer_endpoint`, `_attestation_plan`,
 `_attestation`, `_submit_plan`, `_job_plan`, `_submission`, `_poll`,
-`_cancel`, `_artifact` and `_supports` (in the printer and project cores),
+`_cancel`, `_artifact`, `_download` and `_supports` (in the printer and project cores),
 the matching JNI `externalSlicer*` exports and Kotlin `ExternalSlicerPolicy`
 (with the browser's 700 ms poll interval and 30 s cancellation deadline).
 Replies, reads and steps travel on the intent bulk tier. WASM in Node and
-Chrome, the printer core, JNI and 996 Kotlin checks reproduce every case.
+Chrome, the printer core, JNI and 1,098 Kotlin checks reproduce every case.
 
 Android hosts the route with `ExternalSlicerClient` (OkHttp, like
 `MoonrakerClient`): no redirect (one fails the exchange, so the bearer token
 never reaches another host), no retry, the local-network gate and cleartext
 rule, reply bodies read to at most 1 MiB, the artifact streamed into the
-caller's sink while its length, SHA-256, UTF-8 validity and JavaScript-blank
-text are computed. `slice` attests, submits the archive and overrides
-(multipart `file` `project.3mf`, `overrides` JSON), polls, downloads, judges
-and releases; the POST is never aborted (its reply holds the only job ID a
+caller's `ExternalSlicerOutput` while its length, SHA-256, UTF-8 validity and
+JavaScript-blank text are computed. `slice` attests, submits the archive and
+overrides (multipart `file` `project.3mf`, `overrides` JSON), polls,
+downloads, judges and releases — fetching a finished job's artifact again,
+into a fresh output, as the policy's `download` allows (the server keeps a
+result until its release or expiry, a transfer in progress holding it), and
+releasing it only once accepted; the POST is never aborted (its reply holds the only job ID a
 cancel can name), a cancel arriving meanwhile is carried out once the reply
 is read, and `cancel` ends in the policy's outcome or a
 `CancellationException` once the server confirms. Transport failures reach
@@ -4938,13 +4948,15 @@ server (`server/server.js` headless: a provenance manifest of the pinned
 build from this repository's `server/patches/`, a runner writing one fixed
 G-code): the Project area writes plate 1 of a two-plate project as its
 archive (plate 2, unprintable, and an unknown plate are refused), which is
-attested, submitted, polled, downloaded byte for byte and released; a held
-job is cancelled and confirmed; a failure reads in the policy's words; a
+attested, submitted, polled, downloaded byte for byte and released; a
+download cut off halfway and one whose first byte the server changed are each
+fetched again into a fresh output, checked and released (the server records
+two downloads, then the release); a held job is cancelled and confirmed; a failure reads in the policy's words; a
 tokenless slice and an unusable address are refused before any upload; the
 archive carries the `ProjectRevision` it was written from, which the plate's
 `ProjectWorkspace.preflight` describes too (the unprintable plate's blocks)
 and a new project leaves; and a connection left idle until the server
-closed it is not reused (31 Kotlin checks, and the server's own record of
+closed it is not reused (35 Kotlin checks, and the server's own record of
 each request and upload). That last check failed before: the client never
 retries, yet kept idle connections OkHttp's default five minutes while the
 Node server closes them after six seconds (its 5 s keep-alive and 1 s of
@@ -6021,10 +6033,10 @@ with them while the pickers say so. Its first run
 found the client's stale keep-alive connection (above) and a server defect:
 results in a temporary directory under a dot directory were never delivered
 ([runtime and deployment](runtime-and-deployment.md)). Slicing on the device's own engine
-is [below](#android-local-slicing). Not yet matched:
+is [below](#android-local-slicing); Slice All Plates, the plate's pictures and
+the repeatable download [further below](#android-slice-outputs). Not yet matched:
 the wave-overhang engine check,
-preflight actions (reveal, drop to bed), troubleshooting text, slicing all
-plates.
+preflight actions (reveal, drop to bed), troubleshooting text.
 
 ### Android profile selection
 
@@ -6182,9 +6194,9 @@ process killed mid-slice with the editor surviving, and a fresh engine for
 the next slice) passes on both emulators. `emulator-slices.py --adapter`, which reruns the
 eleven fixture comparisons through the adapter's C entry point (the one JNI
 calls) with its fixture driver, matches the browser engine's references in
-all eleven on the x86_64 emulator. Still open: thumbnails (neither Android
-route renders one), slicing all plates, ARM64 execution and
-physical-device qualification. The summary line is the browser's, from the
+all eleven on the x86_64 emulator. Both routes now carry the plate's
+pictures and slice every plate ([slice outputs](#android-slice-outputs)).
+Still open: ARM64 execution and physical-device qualification. The summary line is the browser's, from the
 shared core ([above](#g-code-artifact-summary)), on both routes.
 
 ### Android send to printer
@@ -6291,6 +6303,133 @@ project left, each of the three values withdrawing, opened files, failed
 reads and dismissal). `android-local-slice-smoke.py` now checks that the
 slice taken after undoing the scaling shows neither in Preview nor in
 Prepare as withdrawn; it passes on both emulators.
+
+### Android slice outputs
+
+What a slice produces besides the engine's G-code — the plate's pictures,
+every plate's result, and a result fetched again — as the browser produces
+it, on both Android routes.
+
+Thumbnails. The browser draws a plate's picture with its own WebGL renderer
+(`PlateThumbnailRenderer`) and puts each size its printer's `thumbnails`
+value asks for into the G-code's thumbnail block once the engine returns, on
+both of its routes (`CanonicalSlicerClientRoute`), so the artifact it hashes,
+previews and sends carries them. The uploaded or staged 3MF gets none: its
+`Metadata/plate_N.png` are the project's own imported pictures, which the
+one-plate projection already keeps. A GPU's pixels are its own (driver,
+rasteriser, the canvas's PNG encoder), so no port reproduces the browser's
+bytes, and the Filament renderer offscreen would be one more GPU. Android
+therefore draws the same plate the same way in the shared core, in software,
+deterministically: `orcaxr_archive::thumbnail` renders from the very capture
+the plate's archive is written from (`ProjectExportCapture.thumbnails`, inside
+`ProjectExportSource.writePlateArchive`, so no surface is needed and the
+pictures are of the state the archive is) — every model part of the plate's
+printable instances in its filament's colour (`volume_display_color`, else
+the workspace's grey), framed by the browser's `frameCamera` (ported exactly
+as `slicing::thumbnails::frame`), lit by the viewport's hemisphere and key
+lights through three.js's standard material (roughness 0.72, metalness 0.04,
+GGX), back faces culled, on transparency, stored as sRGB — and writes a PNG
+(zlib) or a baseline JPEG (composited on black, as a canvas does). Its
+arithmetic is IEEE and its trigonometry and powers the core's own fdlibm, so
+Rust, WASM and JNI write the same bytes (the placement scene's three
+pictures, asserted by digest in all three). What the value asks for
+(`parseThumbnailList`), the block (`encodeThumbnailBlock`) and where blocks
+go (`injectGcodeThumbnails`: after `; HEADER_BLOCK_END` and its blank line,
+at the top without one, nowhere in a file that has its own) are the
+browser's TypeScript ported to `orcaxr_project::slicing::thumbnails`; Android
+streams a G-code once through the core's `Anchor` (`NativeGcode.anchor*`)
+and writes it again with the blocks (`GcodeThumbnails.embed`), so a file of
+any size is never held. Both routes add them before the status line's
+figures are counted and before publication — the external route to the
+downloaded artifact, the local one to the engine's claimed and verified
+output (`LocalSlicing.withThumbnails`, its length and SHA-256 read again) —
+so Prepare, Preview and Send read the bytes published. A picture is what a
+display shows, so one that cannot be drawn is none, never a failed slice.
+
+The port found three browser defects, each fixed with a regression test:
+slicing every plate drew every file's picture from the active plate's models
+(the port took no plate: `canonical-slicer-client-route.test.ts`); only an
+object's first part was drawn, a modifier too when first — now every model
+part of printable instances (`plateThumbnailMeshes`,
+`plate-thumbnail.test.ts`); and three.js writes linear light into a plain
+render target, so every PNG held linear values and came out darker than the
+model on screen — the target now stores sRGB (`plate-thumbnail.test.ts`).
+
+`slice-output-vectors.mjs` records 68 `thumbnails` values (the bundled
+printers', and every `String`/`split`/`trim`/`\d`/`Number` coercion the list
+makes), 19 blocks (every row remainder), 100 injections (header markers of
+every placement, CRLF, a file with its own, none), 132 cameras and 40 slice
+plans, with 26 refusals; Rust replays them all (and every injection streamed
+through an `Anchor` in seven chunk sizes), as do WASM in Node and JNI
+(`slice-output-replay.mjs`, which also opens the placement scene as a
+session and checks its plate's pictures against Rust's digests and its
+captured plans against the state-document exchange).
+
+Slice All Plates. The browser's `slice_all_plates` ("Slice All Plates", in
+its menu) beside Slice and Cancel Slice in Prepare's bar. Its enablement is
+the core's capability (`ProjectWorkspace.sliceActions`, with the two host
+facts only Prepare knows — a slice running, the active plate's preflight
+blocking — the browser's rule being the active plate's models, so an empty
+active plate disables it, as in the browser). Which plates — the printable
+plates holding a model, by plate order then UTF-16 ID — is the
+coordinator's `selectPlateIds` behind the workspace's own refusal ("No
+printable plate has models to slice."), ported as
+`slicing::plate::slice_plan` (WASM `slice_plan` and
+`CapturedProject.slice_plan`, JNI `slicePlan`/`projectSlicePlan`,
+`ProjectWorkspace.slicePlan`). Prepare slices each plate in turn on the route
+the rule chose (preflight, archive, route, pictures), with the browser's
+progress ("Slicing: <step>", the route's percent, else the share of plates
+done), keeps every plate's result and publishes the set only while the
+project is still the state the plan read — else discards them all in the
+browser's words. The status is the browser's (`SLICED n plate(s) in … ms`
+and the total in whole KB, its warnings counted once each across plates);
+Preview opens the active plate's result, else the first — the one Send to
+Printer sends, as the browser's published G-code — and the result card lists
+each plate's result and names that plate. Cancel Slice stops the plate in
+flight and the job. The browser sent an empty printable plate to the engine,
+which failed the whole job; it now passes over it (`slice-pipeline.test.ts`),
+and Android follows. The single Slice runs the same path for the active
+plate, so its warnings are now the browser's too (the archive's and the
+preflight's), and its file's figures include the pictures.
+
+Repeatable download. The browser's client said "The result was retained for
+retry" yet never fetched a result again: a dropped transfer failed the
+attempt (or re-sliced the whole plate once), though the server keeps a
+finished result until its release or expiry and a transfer in progress
+holds it. Now a finished job's artifact is fetched again — after a transfer
+that failed, or a length or checksum mismatch (the policy's new `retained`
+kind) — up to three times, after the poll interval, with the same checks,
+and released only once accepted; a refusal (a released or expired result's
+410, another job's artifact, an invalid checksum header, text that is not
+UTF-8 or is empty) ends it at once (`readDownload`, ported as
+`orcaxr_printer::slicer::download`; `external-slicer-jobs.test.ts` drives the
+loop). `ExternalSlicerClient` writes each attempt into a fresh
+`ExternalSlicerOutput`. The cancellation outcomes stay distinct: a cancel
+while a result is fetched again is confirmed against a done job ("already
+done"), never reported as cancelled.
+
+Verified: `ProjectOutputChecks` (569 host JNI checks: the corpus through the
+Kotlin owners, every injection streamed from a file, the placement scene's
+pictures with Rust's bytes, and the Prepare journey on the default profile —
+Slice All Plates enabled as the browser enables it, two plates with a model
+and an empty one passed over, each plate's archive carrying its own two
+pictures at the U1's 48 × 48 and 300 × 300, the G-code carrying them after its
+header, a file with its own left alone, the local route's job publishing them,
+an unprintable plate left out); the external slicer's client against the real
+server cutting one download off halfway and corrupting another (35 checks,
+the server recording two downloads and the release); the external slicer
+policy's 102 download cases in Rust, WASM, JNI and Kotlin (1,098 Kotlin
+checks); `SliceAllTest` (6 JVM tests); Rust tests (`slice_outputs`,
+`thumbnail`, `slicer`); web tests. `android-outputs-smoke.py` (in
+`emulator-smoke.py` before the accessibility smoke) drives Slice All Plates
+on the device's engine with a cube on Plate 1 and a cylinder on Plate 2,
+Preview on Plate 1, both results listed, both published files read back with
+their two pictures right after the engine's header (PNGs of a model on
+transparency, each plate its own), then on the external slicer a download cut
+off and fetched again (the server's record) with the pictures at the top of a
+file without a header, and Slice All Plates there; it has not run yet. The
+send smoke now reads the published file's size from the device, since the
+file carries the plate's pictures.
 
 ### Android Device area
 
@@ -7756,6 +7895,7 @@ node tools/cross-platform/generate-opc-lowercase.mjs --verify-runtime
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/generate-filament-mixer.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slicing-configuration-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/workspace-bed-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slice-output-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/transform-field-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/placement-edit-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/build-volume-vectors.mjs

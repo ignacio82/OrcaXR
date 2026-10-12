@@ -22,7 +22,9 @@ import java.util.concurrent.TimeUnit
  * which its plate's preflight describes too (the unprintable plate's blocks)
  * and a new project leaves; the archive
  * sliced — submitted, polled with progress, the artifact streamed byte for
- * byte with its digest checked, released; a held job cancelled and the
+ * byte with its digest checked, released; a download cut off halfway and one
+ * whose bytes did not match fetched again from the result the server keeps,
+ * into a fresh output, checked and released; a held job cancelled and the
  * cancellation confirmed; a failed job reported in the policy's words; a
  * tokenless slice and an unusable address refused before any upload. */
 object ProjectExternalSlicerClientChecks {
@@ -140,22 +142,37 @@ object ProjectExternalSlicerClientChecks {
                 val tagged = plate.overrides + mapOf("orcaxr_test_archive" to hex(output.bytes), "orcaxr_test_plate" to "1")
                 val sink = ByteArrayOutputStream()
                 val progress = CopyOnWriteArrayList<ProjectIntents.ExternalSlicerProgress>()
-                val sliced = done(client.slice(endpoint, token, archive, tagged, sink) { progress += it }.result)
+                val sliced = done(client.slice(endpoint, token, archive, tagged, ExternalSlicerOutput { sink }) { progress += it }.result)
                 check(sink.toByteArray().contentEquals(expected), "artifact streamed byte for byte")
                 check(sliced.length == expected.size.toLong() && sliced.sha256 == hex(expected), "artifact facts $sliced")
                 check(sliced.released, "result released")
                 check(sliced.engine == engine, "attested engine")
                 check(progress.any { it.percent == 25.0 && text(it.message) == "Generating G-code" }, "progress $progress")
 
+                // A download cut off halfway, and one whose bytes did not match: the result the server
+                // keeps is fetched again into a fresh output, checked the same way, and released.
+                for (damage in listOf("drop", "corrupt")) {
+                    val outputs = CopyOnWriteArrayList<ByteArrayOutputStream>()
+                    val fetched = client.slice(endpoint, token, archive, tagged + ("orcaxr_test" to damage), ExternalSlicerOutput {
+                        ByteArrayOutputStream().also { outputs += it }
+                    })
+                    val again = done(fetched.result)
+                    check(
+                        outputs.size == 2 && !outputs[0].toByteArray().contentEquals(expected) && outputs[1].toByteArray().contentEquals(expected),
+                        "$damage: fetched again ${outputs.map { it.size() }}",
+                    )
+                    check(again.length == expected.size.toLong() && again.sha256 == hex(expected) && again.released, "$damage: checked and released $again")
+                }
+
                 // A held job, cancelled: the server confirms it.
                 val holding = CountDownLatch(1)
-                val held = client.slice(endpoint, token, archive, tagged + ("orcaxr_test" to "hold"), ByteArrayOutputStream()) { holding.countDown() }
+                val held = client.slice(endpoint, token, archive, tagged + ("orcaxr_test" to "hold"), ExternalSlicerOutput { ByteArrayOutputStream() }) { holding.countDown() }
                 check(holding.await(WAIT_S, TimeUnit.SECONDS), "held job running")
                 held.cancel()
                 check(failure(held.result) is CancellationException, "cancellation confirmed")
 
                 // A failed job, in the policy's words; nothing private.
-                val failed = failure(client.slice(endpoint, token, archive, tagged + ("orcaxr_test" to "fail"), ByteArrayOutputStream()).result)
+                val failed = failure(client.slice(endpoint, token, archive, tagged + ("orcaxr_test" to "fail"), ExternalSlicerOutput { ByteArrayOutputStream() }).result)
                 check(
                     failed is ExternalSlicerException && failed.kind == ProjectIntents.ExternalSlicerFailureKind.Failed &&
                         failed.message!!.startsWith("External Slicer Failed: ") && !failed.message!!.contains("PRIVATE"),
@@ -163,13 +180,13 @@ object ProjectExternalSlicerClientChecks {
                 )
 
                 // Refused before any upload: no token, an unusable address.
-                val unattested = failure(client.slice(endpoint, null, archive, tagged, ByteArrayOutputStream()).result)
+                val unattested = failure(client.slice(endpoint, null, archive, tagged, ExternalSlicerOutput { ByteArrayOutputStream() }).result)
                 check(
                     unattested is ExternalSlicerException &&
                         unattested.message == "The external slicer requires a token before it will report its engine.",
                     "unattested $unattested",
                 )
-                val credentials = failure(client.slice("http://user:secret@127.0.0.1:9", token, archive, tagged, ByteArrayOutputStream()).result)
+                val credentials = failure(client.slice("http://user:secret@127.0.0.1:9", token, archive, tagged, ExternalSlicerOutput { ByteArrayOutputStream() }).result)
                 check(
                     credentials is ExternalSlicerException &&
                         credentials.message == "Canonical external slicer URLs cannot contain credentials, query parameters, or fragments.",

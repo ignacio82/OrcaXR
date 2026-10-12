@@ -9,6 +9,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -68,9 +69,11 @@ import dev.orcaxr.nativeapp.send.SendWords
  * remove, the attested engine or why not), the route a slice takes and why
  * (that slicer when it is on, else this device's own engine),
  * the shared preflight's issues as the browser's panel shows them, and
- * "Slice" / "Cancel Slice" with the job's progress. The first slice on an
- * endpoint asks before uploading; a finished slice opens in Preview, and one
- * whose project changed afterwards is marked out of date. A current slice
+ * "Slice" / "Cancel Slice" / "Slice All Plates" (enabled as the core enables
+ * them) with the job's progress. The first slice on an endpoint asks before
+ * uploading; a finished slice opens in Preview — after Slice All Plates the
+ * active plate's, each plate's result listed — and one whose project
+ * changed afterwards is marked out of date. A current slice
  * goes to the printer the Device area connected ("Send to Printer", through
  * [device]'s shared workflow), with the send's progress and outcome below.
  */
@@ -107,6 +110,7 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
     // Slicing on this device shows its progress and Cancel in a notification, which Android 13 lets
     // the app post only once the operator allows it: asked once, before the first local slice.
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { model.slice() }
+    val allNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { model.sliceAll() }
     val slice = {
         val ask = Build.VERSION.SDK_INT >= ANDROID_13 && sliceRoute(connection, state.local) == SliceRouteKind.Local &&
             context.checkSelfPermission(NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED && model.askNotifications()
@@ -116,9 +120,19 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
     val job = state.job
     val preflight = state.preflight?.takeIf { it.plateId == plate?.id }
     val blocked = preflight?.canSlice == false
+    // Slice, Slice All Plates and Cancel Slice as the core enables them (the browser's registry gate),
+    // read again whenever what it judges changes: the project, a slice running, a blocking preflight.
+    LaunchedEffect(view.revision, plate?.id, job != null, blocked) { model.refreshActions() }
     // The route the rule chooses (the external slicer turned on, or this device's engine); none offers no Slice.
     val route = sliceRoute(connection, state.local)
-    val canSlice = route != SliceRouteKind.None && plate != null && plate.objects > 0 && job == null && !blocked
+    val canSlice = route != SliceRouteKind.None && plate != null && plate.objects > 0 && job == null && !blocked &&
+        state.actions["slice_active_plate"]?.enabled != false
+    val canSliceAll = route != SliceRouteKind.None && job == null && state.actions["slice_all_plates"]?.enabled == true
+    val sliceAll = {
+        val ask = Build.VERSION.SDK_INT >= ANDROID_13 && route == SliceRouteKind.Local &&
+            context.checkSelfPermission(NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED && model.askNotifications()
+        if (ask) allNotifications.launch(NOTIFICATIONS) else model.sliceAll()
+    }
 
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -128,11 +142,13 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
         // While the keyboard is up the bar steps aside, so the field being typed in keeps the room above it
         // (in landscape the keyboard leaves little).
         if (!WindowInsets.isImeVisible) Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Slice and Cancel Slice as the browser's toolbar has them, Slice All Plates (its menu's) beside them.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = slice, enabled = canSlice) { Text(stringResource(R.string.prepare_slice)) }
                 OutlinedButton(onClick = model::cancel, enabled = job != null && !job.cancelling) {
                     Text(stringResource(R.string.prepare_cancel))
                 }
+                OutlinedButton(onClick = sliceAll, enabled = canSliceAll) { Text(stringResource(R.string.prepare_slice_all)) }
             }
             if (job != null) {
                 val percent = job.percent
@@ -199,6 +215,12 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                                     }
                                 }
                                 if (!connected && !send.busy) Text(SendWords.CONNECT_FIRST, style = MaterialTheme.typography.bodySmall)
+                            }
+                            // After Slice All Plates: every plate's own result, and which one Preview and Send take.
+                            if (state.plates.isNotEmpty()) {
+                                Text(stringResource(R.string.prepare_sliced_plates), Modifier.semantics { heading() }, style = MaterialTheme.typography.labelLarge)
+                                for (sliced in state.plates) Text(sliced.row, style = MaterialTheme.typography.bodySmall)
+                                Text(stringResource(R.string.prepare_sliced_shown, result.plateName), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }

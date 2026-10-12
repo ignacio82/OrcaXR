@@ -122,6 +122,9 @@ public final class ProjectJniHarness {
     public static long staleSliceChecks(byte[] catalog, byte[] gcode) {
         return ProjectStaleSliceChecks.run(catalog, gcode);
     }
+    public static long outputChecks(String script, byte[] catalog, String placement, byte[] sphere, byte[] cube, byte[] terrain) {
+        return ProjectOutputChecks.run(script, catalog, placement, sphere, cube, terrain);
+    }
     public static long slicingChoiceChecks(byte[] cube, byte[] catalog) {
         return ProjectSlicingChoiceChecks.run(cube, catalog);
     }
@@ -441,6 +444,7 @@ public final class ProjectJniHarness {
             if (name.equals("slicingChoiceChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, byte[].class);
             if (name.equals("localSliceChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, byte[].class);
             if (name.equals("staleSliceChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, byte[].class);
+            if (name.equals("outputChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, byte[].class, byte[].class, byte[].class);
             if (name.equals("sliceStatusChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("workspaceBedChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("transformFieldChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);

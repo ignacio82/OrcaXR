@@ -45,6 +45,10 @@ object ProjectExternalSlicerChecks {
                     ExternalSlicerPolicy.artifact(ProjectIntents.decodeExternalSlicerArtifactRead(columns[1])) ==
                         ProjectIntents.decodeExternalSlicerArtifact(columns[2]),
                 ) { label }
+                "downloads" -> check(
+                    ExternalSlicerPolicy.download(ProjectIntents.decodeExternalSlicerDownloadRead(columns[1])) ==
+                        ProjectIntents.decodeExternalSlicerDownloadStep(columns[2]),
+                ) { label }
                 else -> error("unknown script entry ${columns[0]}")
             }
             checks++
