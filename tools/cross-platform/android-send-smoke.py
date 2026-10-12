@@ -87,6 +87,15 @@ def checked(text):
     return node.get("checked") == "true"
 
 
+def shown_size(length):
+    """The browser's formatBytes: bytes below 1 KiB, then KB (toFixed(0): a half rounds up), then MB to a tenth."""
+    if length < 1024:
+        return f"{length} B"
+    if length < 1024 * 1024:
+        return f"{math.floor(length / 1024 + 0.5)} KB"
+    return f"{math.floor(length / 1048576 * 10 + 0.5) / 10:.1f} MB"
+
+
 def confirmation():
     """Opens the send's confirmation and checks what it says about the printer, plate and file; returns the
     unique name it offers and the exact name the operator may choose instead."""
@@ -175,7 +184,8 @@ try:
     assert enabled("Send to Printer"), "Send to Printer was not offered for a current slice and a connected printer"
     published = subprocess.check_output(["adb", "-s", args.serial, "exec-out", "run-as", PACKAGE, "sh", "-c",
                                          "cat cache/prepare/gcode/*.gcode"], timeout=60)
-    size = f"{len(published)} B"
+    # The dialog's size, as the browser's formatBytes words it (the file carries its plate's pictures now).
+    size = shown_size(len(published))
     # The browser's toFixed(0): a half rounds up.
     kilobytes = str(math.floor(len(published) / 1024 + 0.5))
 

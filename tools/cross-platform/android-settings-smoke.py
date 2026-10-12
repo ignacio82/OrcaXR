@@ -167,9 +167,9 @@ shown = find(" settings shown; ", exact=False, timeout=60).get("text")
 
 # A wall count and an infill density, each applied as one step.
 type_setting("Wall loops", "6")
-find("Draft changes are not applied yet.", timeout=30)
+find("Draft changes are not applied yet.")
 apply("Update object settings", "Settings (1)")
-find("Applied 1 setting change atomically.", timeout=30)
+find("Applied 1 setting change atomically.")
 type_setting("Sparse infill density", "25%")
 apply("Update object settings", "Settings (2)")
 
@@ -180,9 +180,9 @@ assert overridden > baseline, f"The overrides did not reach the G-code ({baselin
 # "Use inherited" resets the wall count, found by its key.
 find("Object settings — cube.stl", timeout=60)
 type_setting("Search settings", "wall_loops")
-find("wall_loops", timeout=30)
+find("wall_loops")
 control("Use inherited")
-find("Draft changed", timeout=30)
+find("Draft changed")
 apply("Update object settings", "Settings (1)")
 
 # The object's height ranges: a 0–5 mm range, then its own wall count, undone.
@@ -194,8 +194,8 @@ screen.type_into("Minimum Z (mm)", "0")
 screen.type_into("Maximum Z (mm)", "5")
 control("Add range")
 find("Undo Add layer range", timeout=60)
-find("Added 0 mm–5 mm.", timeout=30)
-find("Selected 0 mm–5 mm", timeout=30)
+find("Added 0 mm–5 mm.")
+find("Selected 0 mm–5 mm")
 control("Settings")
 find("Height range settings — 0–5 mm", timeout=60)
 type_setting("Wall loops", "4")
