@@ -69,11 +69,37 @@ test('renders every arc edge while retaining one projected record and one projec
   approximately(position.getX(position.count - 1), 1.1);
   approximately(position.getY(position.count - 1), 0.32);
   approximately(position.getZ(position.count - 1), -0.2);
+  // The projection's sRGB colour, in three's linear working space for the vertex colours.
+  const authored = new THREE.Color().setRGB(
+    projection.colorsRgba[0],
+    projection.colorsRgba[1],
+    projection.colorsRgba[2],
+    THREE.SRGBColorSpace,
+  );
   for (let vertex = 0; vertex < color.count; vertex += 1) {
-    approximately(color.getX(vertex), projection.colorsRgba[0]);
-    approximately(color.getY(vertex), projection.colorsRgba[1]);
-    approximately(color.getZ(vertex), projection.colorsRgba[2]);
+    approximately(color.getX(vertex), authored.r);
+    approximately(color.getY(vertex), authored.g);
+    approximately(color.getZ(vertex), authored.b);
   }
+  surface.dispose();
+});
+
+test('draws each toolpath in its authored sRGB colour, not lighter', () => {
+  // three treats vertex colours as linear and encodes them to sRGB for the screen: a projection colour copied raw
+  // showed lighter than OrcaSlicer's (a mid grey of 0.5 at about 0.74). The screen gets back what was authored.
+  const model = arcFixture();
+  const projection = extrusionProjection(model);
+  const authored = Float32Array.from([0.5, 0.25, 1, 1]);
+  const custom = { ...projection, colorsRgba: authored } as ReadyGcodePreviewProjection;
+  const surface = new GcodePreviewSurface({ parent: new THREE.Group(), worldUnitsPerMm: 1 });
+  surface.render(model, custom);
+  const color = lines(surface).geometry.getAttribute('color');
+  approximately(color.getX(0), 0.21404114, 1e-6);
+  approximately(color.getY(0), 0.05087609, 1e-6);
+  approximately(color.getZ(0), 1, 1e-6);
+  assert.equal(THREE.ColorManagement.enabled, true, "the browser keeps three's colour management on");
+  const shown = new THREE.Color(color.getX(0), color.getY(0), color.getZ(0)).getStyle(THREE.SRGBColorSpace);
+  assert.equal(shown, 'rgb(128,64,255)');
   surface.dispose();
 });
 

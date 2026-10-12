@@ -116,11 +116,24 @@ export class GcodePreviewSurface {
     }
     const positions = new Float32Array(segments * 6);
     const colors = new Float32Array(segments * 6);
+    const linear = new THREE.Color();
     let output = 0;
     for (let index = 0; index < projection.count; index += 1) {
       const record = projection.recordIndices[index];
       if (!DRAWABLE_KINDS.has(columns.kind[record]) || countGcodeRecordPathSegments(model, record) === 0) continue;
       const rgba = index * 4;
+      // The projection's colours are sRGB, as authored (OrcaSlicer's own). three takes a vertex colour in its
+      // linear working space and encodes it for the screen, so each record's is converted once; copied raw,
+      // every toolpath showed lighter than authored (a mid grey of 0.5 at about 0.74).
+      linear.setRGB(
+        projection.colorsRgba[rgba],
+        projection.colorsRgba[rgba + 1],
+        projection.colorsRgba[rgba + 2],
+        THREE.SRGBColorSpace,
+      );
+      const red = linear.r;
+      const green = linear.g;
+      const blue = linear.b;
       visitGcodeRecordPathSegments(model, record, (startX, startY, startZ, endX, endY, endZ) => {
         const vertex = output * 6;
         // Printer frame (Z up, bed-corner origin) → world (Y up, centred).
@@ -136,9 +149,6 @@ export class GcodePreviewSurface {
         positions[vertex + 3] = worldEndX;
         positions[vertex + 4] = worldEndY;
         positions[vertex + 5] = worldEndZ;
-        const red = projection.colorsRgba[rgba];
-        const green = projection.colorsRgba[rgba + 1];
-        const blue = projection.colorsRgba[rgba + 2];
         colors[vertex] = red;
         colors[vertex + 1] = green;
         colors[vertex + 2] = blue;

@@ -776,7 +776,10 @@ are fixture-specific evidence, not device-independent performance guarantees.
 - The live G-code viewer renders the bounded rich model plus the preview
   projection: the UI-free session owns mode, bounded record/layer windows, and
   move-class filters; the browser owns its parser worker and cached projections, and `ui/preview/GcodePreviewSurface` draws exactly the
-  projected records with the projection's RGBA. Never colour or filter a
+  projected records with the projection's RGBA, shown as authored: the
+  projection's colours are sRGB and three's vertex colours are linear, so each
+  is converted to three's working space (copied raw, every toolpath showed
+  lighter). Never colour or filter a
   toolpath in the renderer, and never fabricate metadata the projection reports
   as unsupported. Standalone G-code opens read-only and must not touch canonical
   project state. A pinned XY `G2`/`G3` command remains one semantic/source record:
