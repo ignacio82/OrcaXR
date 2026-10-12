@@ -525,6 +525,30 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_transformGizmoAttach, transform_gizmo_attach, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_transformGizmoStep, transform_gizmo_step, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_transformGizmoPresent, transform_gizmo_present, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_transformGizmoGeometry, transform_gizmo_geometry, jstring,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_transformGizmoChanges, transform_gizmo_changes, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_commandPalette, command_palette, jstring,
     request: JString<'local>,
 }

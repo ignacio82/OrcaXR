@@ -1,11 +1,11 @@
-//! The workspace's bed, the transform inspector's fields and how the shells
-//! arrange catalogue actions (`orcaxr_project::placement::{bed, fields}`,
+//! The workspace's bed, the transform inspector's fields and gizmo, and how
+//! the shells arrange catalogue actions (`orcaxr_project::placement::{bed, fields, gizmo}`,
 //! `orcaxr_project::action_presentation`): canonical JSON requests and replies,
 //! as `WorkspaceBedExchange.ts`, `TransformFieldsExchange.ts` and
 //! `ActionPresentationExchange.ts` answer them. A malformed request throws
 //! `invalid_request`.
 use crate::project::error;
-use orcaxr_project::placement::{bed, fields};
+use orcaxr_project::placement::{bed, fields, gizmo};
 use wasm_bindgen::prelude::*;
 
 /// A project configuration's bed and a plate tower's keep-out
@@ -44,6 +44,42 @@ pub fn primitive_payload(request: &str) -> Result<Vec<u8>, JsValue> {
 #[wasm_bindgen]
 pub fn transform_rotation(request: &str) -> Result<String, JsValue> {
     fields::rotation_json(request).map_err(error)
+}
+
+/// The transform gizmo attached to a proxy pose (`orcaxr_project::placement::gizmo`):
+/// `{"proxy"}` in, the gizmo's state out.
+#[wasm_bindgen]
+pub fn transform_gizmo_attach(request: &str) -> Result<String, JsValue> {
+    gizmo::attach_json(request).map_err(error)
+}
+
+/// One pointer event (`transformGizmoExchange`'s steps):
+/// `{"camera","event","mode","root","space","state"}` in, the next state out.
+#[wasm_bindgen]
+pub fn transform_gizmo_step(request: &str) -> Result<String, JsValue> {
+    gizmo::step_json(request).map_err(error)
+}
+
+/// What the gizmo shows: `{"camera","mode","root","space","state"}` in,
+/// `{"axis","dragging","handles","proxy"}` out.
+#[wasm_bindgen]
+pub fn transform_gizmo_present(request: &str) -> Result<String, JsValue> {
+    gizmo::present_json(request).map_err(error)
+}
+
+/// Every gizmo handle's baked geometry and the drag plane's
+/// (`transformGizmoGeometryExchange`).
+#[wasm_bindgen]
+pub fn transform_gizmo_geometry() -> Result<String, JsValue> {
+    gizmo::geometry_json().map_err(error)
+}
+
+/// What a gizmo drag submits (`transformGizmoChangesExchange`):
+/// `{"initialProxy","mode","origins","proxy"}` in, `{"changes"}` or
+/// `{"error":"invalid_drag","message"}` out.
+#[wasm_bindgen]
+pub fn transform_gizmo_changes(request: &str) -> Result<String, JsValue> {
+    gizmo::changes_json(request).map_err(error)
 }
 
 /// The paint stroke sample a pointer hit makes with the painter's settings

@@ -136,6 +136,14 @@ final class NativeProject {
     static native String transformFields(String request);
     static native String transformFieldEdit(String request);
     static native String transformRotation(String request);
+    // The transform gizmo (three's TransformControls): attach to a proxy pose,
+    // step one pointer event, present the handles, the baked handle geometry,
+    // and the instance transforms a drag submits, as canonical JSON.
+    static native String transformGizmoAttach(String request);
+    static native String transformGizmoStep(String request);
+    static native String transformGizmoPresent(String request);
+    static native String transformGizmoGeometry();
+    static native String transformGizmoChanges(String request);
     // How the shells arrange catalogue actions (orcaxr_project::action_presentation,
     // the browser's ActionPresentationExchange): the command palette's search and a
     // context menu's sections or the model toolbar's runs, as canonical JSON.

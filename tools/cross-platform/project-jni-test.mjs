@@ -55,6 +55,7 @@ import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
 import { SLICE_SIDECAR_ANSWERS, replaySliceOutputs } from "./slice-output-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
+import { replayTransformGizmo } from "./transform-gizmo-replay.mjs";
 import { replayActionPresentation } from "./action-presentation-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
 import { replaySplitSources } from "./split-source-replay.mjs";
@@ -522,6 +523,22 @@ try {
     ].join("\n"),
   );
   assert.equal(transformFieldChecks, 1936);
+  // The transform gizmo through the JNI exports, then the Kotlin wrapper.
+  const gizmoFixture = await json("testdata/cross-platform/transform-gizmo-vectors.json");
+  const transformGizmo = await replayTransformGizmo(projectJniCore(jvm.call), gizmoFixture, async (bytes) =>
+    createHash("sha256").update(bytes).digest("hex"),
+  );
+  assert.deepEqual(Object.values(transformGizmo), [1, 564, 14161, 198, 34]);
+  const transformGizmoChecks = jvm.call(
+    "transformGizmoChecks",
+    [
+      `G\t${gizmoFixture.geometry}`,
+      ...gizmoFixture.sequences.map((c) => `S\t${c.request}\t${JSON.stringify(c.steps)}`),
+      ...gizmoFixture.changes.map((c) => `C\t${c.request}\t${c.reply}`),
+      ...gizmoFixture.refusals.map((r) => `X\t${r.exchange}\t${r.request}`),
+    ].join("\n"),
+  );
+  assert.equal(transformGizmoChecks, 29197);
   // How the shells arrange actions through the JNI exports, then the Kotlin wrapper and a real session.
   const presentationFixture = await json("testdata/cross-platform/action-presentation-vectors.json");
   const actionPresentation = replayActionPresentation(projectJniCore(jvm.call), presentationFixture);
@@ -1820,6 +1837,8 @@ try {
     workspaceBedChecks,
     transformFields,
     transformFieldChecks,
+    transformGizmo,
+    transformGizmoChecks,
     ...actionPresentation,
     commandPaletteChecks,
     placementEditChecks,

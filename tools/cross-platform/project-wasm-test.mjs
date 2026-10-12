@@ -46,6 +46,7 @@ import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
 import { SLICE_SIDECAR_ANSWERS, replaySliceOutputs } from "./slice-output-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
+import { replayTransformGizmo } from "./transform-gizmo-replay.mjs";
 import { replayActionPresentation } from "./action-presentation-replay.mjs";
 import { replayPaintTool } from "./paint-tool-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
@@ -358,6 +359,11 @@ if (isMainThread) {
     assert.deepEqual(
       [result.fieldReads, result.rotations, result.fieldEdits, result.fieldRefusals],
       [101, 1720, 94, 19],
+    );
+    // The transform gizmo: geometry, pointer sequences and their steps, drag changes, refusals.
+    assert.deepEqual(
+      [result.gizmoGeometry, result.gizmoSequences, result.gizmoSteps, result.gizmoChanges, result.gizmoRefusals],
+      [1, 564, 14161, 198, 34],
     );
     // How the shells arrange actions: palette searches, menu sections and toolbar runs, refusals.
     assert.deepEqual(
@@ -916,6 +922,11 @@ if (isMainThread) {
     core,
     JSON.parse(await readFile(new URL("testdata/cross-platform/transform-field-vectors.json", root))),
   );
+  const transformGizmo = await replayTransformGizmo(
+    core,
+    JSON.parse(await readFile(new URL("testdata/cross-platform/transform-gizmo-vectors.json", root))),
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
   const actionPresentation = replayActionPresentation(
     core,
     JSON.parse(await readFile(new URL("testdata/cross-platform/action-presentation-vectors.json", root))),
@@ -1004,6 +1015,7 @@ if (isMainThread) {
       ...workspaceBeds,
       ...sliceOutputs,
       ...transformFields,
+      ...transformGizmo,
       ...actionPresentation,
       ...settingsPanel,
       ...paintTool,

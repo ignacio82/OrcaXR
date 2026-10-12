@@ -231,7 +231,18 @@ pub fn sphere(radius: f64, width_segments: u32, height_segments: u32) -> Indexed
 
 /// `new TorusGeometry(radius, tube, radialSegments, tubularSegments)`: a full ring.
 pub fn torus(radius: f64, tube: f64, radial_segments: u32, tubular_segments: u32) -> Indexed {
-    let arc = TURN;
+    torus_arc(radius, tube, radial_segments, tubular_segments, TURN)
+}
+
+/// `new TorusGeometry(radius, tube, radialSegments, tubularSegments, arc)`:
+/// the ring swept through `arc` radians, the tube a full turn.
+pub fn torus_arc(
+    radius: f64,
+    tube: f64,
+    radial_segments: u32,
+    tubular_segments: u32,
+    arc: f64,
+) -> Indexed {
     let (theta_start, theta_length) = (0.0f64, TURN);
     let row = tubular_segments + 1;
     let mut geometry = Indexed::with_capacity(

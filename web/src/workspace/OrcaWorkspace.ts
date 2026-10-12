@@ -159,10 +159,10 @@ import { runCanonicalSplitToObjectsFlow } from './CanonicalSplitToObjectsFlow';
 import { CanonicalWorkspaceSlicer } from './CanonicalWorkspaceSlicer';
 import {
   primaryTransformEdit,
-  projectMultiInstanceTransform,
   type MultiInstanceTransformMode,
   type MultiInstanceTransformOrigin,
 } from './multiInstanceTransform';
+import { gizmoDragChanges, transformFromObject } from './transformGizmoChanges';
 import { authoredProjectPreflightTarget, catalogPreflightTarget } from './AuthoredSlicingTarget';
 import { deriveLiveProfilePreflightConstraints, LiveProfileSlicePreflight } from './ProfilePreflightConstraints';
 import { PaintOverlayRegistry } from './PaintOverlayRegistry';
@@ -568,15 +568,6 @@ function canonicalPreflightUnavailable(plateId: PlateId, error: unknown): Canoni
     printableInstanceIds: Object.freeze([]),
     usedFilamentIds: Object.freeze([]),
   });
-}
-
-function transformFromObject(object: THREE.Object3D): Transform {
-  const quaternion = object.quaternion.clone().normalize();
-  return {
-    translationMm: [object.position.x, object.position.y, object.position.z],
-    rotation: [quaternion.x, quaternion.y, quaternion.z, quaternion.w],
-    scale: [object.scale.x, object.scale.y, object.scale.z],
-  };
 }
 
 /** One plated model: its source geometry, the display mesh, and the grab proxy. */
@@ -1532,14 +1523,7 @@ export class OrcaWorkspace extends xb.Script {
       const current = transformFromObject(this.transformProxy);
       try {
         gesture.owner.update(
-          gesture.origins.length > 1
-            ? projectMultiInstanceTransform(
-                gesture.origins,
-                gesture.initialPivotTransform,
-                current,
-                this.transformMode(),
-              )
-            : [{ instanceId: gesture.origins[0].instanceId, transform: current }],
+          gizmoDragChanges(gesture.origins, gesture.initialPivotTransform, current, this.transformMode()),
         );
       } catch (error) {
         this.cancelTransformGestures();

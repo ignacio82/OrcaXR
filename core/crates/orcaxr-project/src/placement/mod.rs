@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 pub mod arrange;
 pub mod bed;
 pub mod fields;
+pub mod gizmo;
 pub mod wipe_tower;
 
 pub type Vec3 = [f64; 3];

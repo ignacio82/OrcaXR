@@ -1,13 +1,13 @@
-//! The workspace's bed, the transform inspector's fields, new geometry, what
+//! The workspace's bed, the transform inspector's fields and gizmo, new geometry, what
 //! a split would split and how the shells arrange catalogue actions
-//! (`orcaxr_project::placement::{bed, fields}`, `orcaxr_project::primitives`,
+//! (`orcaxr_project::placement::{bed, fields, gizmo}`, `orcaxr_project::primitives`,
 //! `orcaxr_project::split::source`, `orcaxr_project::action_presentation`):
 //! canonical JSON requests and replies over a configuration, a captured
 //! project, a session, three field texts or the actions a shell shows.
 use super::*;
 use orcaxr_contracts::generated::MAX_INPUT_BYTES;
 use orcaxr_project::action_presentation;
-use orcaxr_project::placement::{bed, fields};
+use orcaxr_project::placement::{bed, fields, gizmo};
 use orcaxr_project::primitives;
 
 fn exchange(
@@ -94,6 +94,37 @@ pub(super) fn transform_field_edit(env: &mut JNIEnv<'_>, request: JString<'_>) -
 /// `{"rotation"}` ↔ `{"eulerRadians"}`, as three converts them.
 pub(super) fn transform_rotation(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
     exchange(env, &request, fields::rotation_json)
+}
+/// `{"proxy"}` → a transform gizmo attached to a proxy pose
+/// (`orcaxr_project::placement::gizmo`).
+pub(super) fn transform_gizmo_attach(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(env, &request, gizmo::attach_json)
+}
+/// `{"camera","event","mode","root","space","state"}` → the gizmo's state after one pointer event.
+pub(super) fn transform_gizmo_step(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(env, &request, gizmo::step_json)
+}
+/// `{"camera","mode","root","space","state"}` → what the gizmo shows: axis, drag, proxy, handles.
+pub(super) fn transform_gizmo_present(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(env, &request, gizmo::present_json)
+}
+/// Every gizmo handle's baked geometry and the drag plane's.
+pub(super) fn transform_gizmo_geometry(env: &mut JNIEnv<'_>) -> Result<jstring> {
+    let json = gizmo::geometry_json()?;
+    string(env, json)
+}
+/// `{"initialProxy","mode","origins","proxy"}` → the instance transforms a gizmo drag submits.
+pub(super) fn transform_gizmo_changes(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(env, &request, gizmo::changes_json)
 }
 /// `{"actions":[{"hint"?,"id","label"}],"query"}` → the command palette's matches.
 pub(super) fn command_palette(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {

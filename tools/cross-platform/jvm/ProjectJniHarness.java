@@ -137,6 +137,9 @@ public final class ProjectJniHarness {
     public static long transformFieldChecks(String script) {
         return ProjectTransformFieldChecks.run(script);
     }
+    public static long transformGizmoChecks(String script) {
+        return ProjectTransformGizmoChecks.run(script);
+    }
     public static long commandPaletteChecks(String script) {
         return ProjectCommandPaletteChecks.run(script);
     }
@@ -452,6 +455,7 @@ public final class ProjectJniHarness {
             if (name.equals("sliceSidecarChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class);
             if (name.equals("workspaceBedChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("transformFieldChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("transformGizmoChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("commandPaletteChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("placementEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("buildVolumeChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class);

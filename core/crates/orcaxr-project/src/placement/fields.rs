@@ -173,7 +173,8 @@ pub struct Origin {
     pub pose: Pose,
 }
 
-type Message = Vec<u16>;
+/// A refusal in the workspace's words (UTF-16).
+pub type Message = Vec<u16>;
 fn message(text: &str) -> Message {
     text.encode_utf16().collect()
 }
@@ -253,8 +254,10 @@ fn validate_origins(origins: &[Origin]) -> Result<(), Message> {
     Ok(())
 }
 
-/// `projectMultiInstanceTransform`: every origin carried by the pivot's change.
-fn project(
+/// `projectMultiInstanceTransform`: every origin carried by the pivot's
+/// change from `initial` to `current` — moved by its translation, rotated
+/// about it, or scaled in its initial axes, as `tool` says.
+pub fn project(
     origins: &[Origin],
     initial: &Pose,
     current: &Pose,

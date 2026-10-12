@@ -1884,6 +1884,37 @@ export function transform_field_edit(request: string): string;
 export function transform_fields(request: string): string;
 
 /**
+ * The transform gizmo attached to a proxy pose (`orcaxr_project::placement::gizmo`):
+ * `{"proxy"}` in, the gizmo's state out.
+ */
+export function transform_gizmo_attach(request: string): string;
+
+/**
+ * What a gizmo drag submits (`transformGizmoChangesExchange`):
+ * `{"initialProxy","mode","origins","proxy"}` in, `{"changes"}` or
+ * `{"error":"invalid_drag","message"}` out.
+ */
+export function transform_gizmo_changes(request: string): string;
+
+/**
+ * Every gizmo handle's baked geometry and the drag plane's
+ * (`transformGizmoGeometryExchange`).
+ */
+export function transform_gizmo_geometry(): string;
+
+/**
+ * What the gizmo shows: `{"camera","mode","root","space","state"}` in,
+ * `{"axis","dragging","handles","proxy"}` out.
+ */
+export function transform_gizmo_present(request: string): string;
+
+/**
+ * One pointer event (`transformGizmoExchange`'s steps):
+ * `{"camera","event","mode","root","space","state"}` in, the next state out.
+ */
+export function transform_gizmo_step(request: string): string;
+
+/**
  * three's Euler ↔ quaternion conversion (`transformRotationExchange`):
  * `{"rotation"}` → `{"eulerRadians"}`, or `{"eulerRadians"}` → `{"rotation"}`.
  */
@@ -2389,6 +2420,11 @@ export interface InitOutput {
     readonly toolusagescanner_new: () => number;
     readonly transform_field_edit: (a: number, b: number) => [number, number, number, number];
     readonly transform_fields: (a: number, b: number) => [number, number, number, number];
+    readonly transform_gizmo_attach: (a: number, b: number) => [number, number, number, number];
+    readonly transform_gizmo_changes: (a: number, b: number) => [number, number, number, number];
+    readonly transform_gizmo_geometry: () => [number, number, number, number];
+    readonly transform_gizmo_present: (a: number, b: number) => [number, number, number, number];
+    readonly transform_gizmo_step: (a: number, b: number) => [number, number, number, number];
     readonly transform_rotation: (a: number, b: number) => [number, number, number, number];
     readonly virtual_filament_form: (a: number, b: number) => [number, number, number, number];
     readonly virtual_filament_form_defaults: (a: number, b: number) => [number, number, number, number];

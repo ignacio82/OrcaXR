@@ -2402,6 +2402,15 @@ storage journeys on phone, tablet, and desktop-sized windows.
   Status (2026-10-12): remains: the Workspace's transform gizmos with their
   keys G, R and S, and the semantic editor's volume roles (*Resume here* item
   1); the palette and the settings panels pass both emulator suites (round 2).
+  Status (transform gizmos): the browser's gizmo — three's
+  `TransformControls`, its handle geometry, picking and translate, rotate
+  and scale drags in world and local space, and the changes a drag submits —
+  is ported to the shared core and replayed bit for bit against the browser
+  in Rust, WASM and JNI (14,161 pointer events,
+  [§](engineering/native-core.md#transform-gizmo)), with a Kotlin wrapper
+  (`TransformGizmo`). Drawing the handles in the Workspace, routing touch,
+  mouse and stylus events to it, submitting its changes as one coalescing
+  gesture, re-attaching after each drag and the G/R/S keys remain.
 - [ ] Integrate the flat renderer with panel resizing, visibility, lifecycle,
   selection, painting, model tools, and preview controls. Keep CPU work and
   loading off the UI thread; avoid per-frame Compose recomposition for meshes.

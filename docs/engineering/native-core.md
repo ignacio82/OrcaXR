@@ -3879,6 +3879,115 @@ Node and Chrome and JNI answer all of them byte for byte; 1,936 Kotlin checks
 cover the wrapper. The Android app applies an edit to the session's selection
 in its [transform inspector](#android-transform-inspector).
 
+### Transform gizmo
+
+`placement::gizmo` ports the workspace's transform gizmo: three.js r184's own
+`TransformControls` as `OrcaWorkspace.setup2DControls` configures it (size 1,
+world space, no snaps, every axis and plane shown; Move, Rotate and Scale
+select `translate`, `rotate` and `scale`), as `TransformGizmoExchange.ts`
+drives the real class through its pointer API. Shared, operation for
+operation and with V8's trigonometry: the handles' geometry (three's
+cylinder, box, torus with its arc — `primitives::geometry::torus_arc` —
+sphere, octahedron with detail-2 subdivision and plane generators, then
+`setupGizmo`'s Euler-to-matrix baking, rounded to Float32 after each step as
+three stores it, and `computeBoundingSphere`); the camera
+(`updateProjectionMatrix`, `Object3D.lookAt` through `Matrix4.lookAt` and
+`Quaternion.setFromRotationMatrix`, `Raycaster.setFromCamera` through
+`unproject`); each render's handle placement (the screen-constant size from
+the camera distance and field of view, axes facing the camera and planes
+seen edge-on hidden with three's 1e-10 scale, rotate rings turned towards
+the eye, the E ring and XYZE sphere looking at it, the helper lines, start
+and end dots and delta line) and highlight (the axis and its letters yellow
+and opaque); hover picking (`Mesh.raycast`: the world bounding sphere, the
+ray in the mesh's inverse matrix, `Ray.intersectTriangle` with back faces
+culled for the pickers and both sides for the drag plane, the world
+distance, the nearest visible hit and the earlier one on a tie, as three's
+stable sort leaves it); and the drags — translate along an axis or in a
+plane, rotate (the XYZE trackball, an axis ring by the offset across the
+eye, the E ring and a ring seen face-on by the angle between the hits) and
+scale (per axis by the hits' ratio in the object's axes, uniformly by their
+lengths) — in world and local space (scale always local; E, XYZE and XYZ
+always world). Snaps and the ±∞ position bounds are unset in the browser
+and not ported beyond the bounds' identity clamp.
+
+Modelling choices, the same in the exchange and the port. Every pointer
+event is preceded by a render (`scene.updateMatrixWorld(true)`), so the drag
+plane and handles are current when it arrives: in the browser a mouse's
+hover keeps them so, while a touch press there would use the previous
+frame's plane. A press is the browser's `onPointerDown` — a hover, then a
+down — with a render between them, and a press whose ray misses the drag
+plane starts no drag (three would start one from stale start values; the
+plane passes through the gizmo and faces the eye, so this is a guard rather
+than a reachable case). An axis the mode has no plane for, reachable only by
+changing the mode during a drag, faces the camera where three keeps the
+previous frame's plane direction; hosts release before changing the mode.
+A NaN hit distance (a non-finite scene) never picks. The exchange models the
+controls, not the app around them: after a drag the browser's
+`finishTransformGesture` re-syncs the proxy from the committed project
+(`syncTransformProxy`), which a host does by attaching anew.
+
+The core is stateless canonical JSON. A state
+(`{"axis","changed","dragging","proxy","rotationAxis","start"}`) carries
+what three keeps between events — the axis, the drag, the proxy's pose, the
+last rotation axis and what the press captured — every number exactly
+(`-0`, `NaN` and the infinities as strings), so a state written and read back
+replays as three would; hosts keep it opaque. `attach_json` (`{"proxy"}`)
+makes one for new controls attached to a proxy pose
+(`{"position","quaternion","scale"}`); `step_json`
+(`{"camera","event","mode","root","space","state"}`) applies one event
+(`{"kind","x","y"}`: `hover`, `press`, `move` or `release`, the pointer in
+normalized device coordinates), its `changed` saying the proxy moved (three's
+`objectChange`, the change a host submits); `present_json`
+(`{"camera","mode","root","space","state"}`) answers what the gizmo shows
+(`{"axis","dragging","handles","proxy"}`: every handle of the mode's gizmo
+group then its helper group, each `{"color","group","matrix","name","opacity",
+"tag","visible"}`, the world matrix column-major and the colour in three's
+linear working space); `geometry_json` the baked geometry of every mode's
+gizmo, picker and helper handles (in the order a view lists them: Float32
+positions, the triangle index or `null`, a mesh or a line strip) and the
+plane's, built once. A camera is `{"aspect","far","fov","near","position",
+"target","up"}` (0° < fov < 180°, aspect > 0, 0 < near < far). World units
+are the host's: the root maps printer millimetres into them (the browser's
+surface root sits at the bed's centre, rotated −90° about X and scaled by
+0.00175; a host rendering in metres scales by 0.001), and in world space the
+gizmo's axes are three's (Y up: printer Z). A step reads and writes a state
+of about 430 bytes, renders the mode's handles (at most 29 with the
+pickers) and casts the ray at its pickers' triangles (fewer than a hundred,
+812 for the rotate rings); a view is 2–5 KB. In the project WASM a step takes
+about 22 µs and a view 43 µs, so a host steps every pointer event and
+presents once a frame; the geometry (226 KB) is read once.
+
+What a drag submits is shared too: `gizmoDragChanges`
+(`transformGizmoChanges.ts`, which `OrcaWorkspace`'s `objectChange` handler
+now calls, with `transformFromObject`) gives one selected instance the
+proxy's transform (its quaternion normalized) and carries a selection around
+the proxy's pose at the press with `projectMultiInstanceTransform` —
+`placement::fields::project`, now public. `changes_json`
+(`{"initialProxy","mode","origins","proxy"}`, the tool's `move`, `rotate` or
+`scale`) answers `{"changes"}` or `{"error":"invalid_drag","message"}` in the
+workspace's words.
+
+`transform-gizmo-vectors.mjs` drives the production exchange over 564
+sequences of 14,161 events: 7,660 hovers (misses, and the centres and
+vertices of every visible picker handle's triangles projected through
+three's camera), 1,372 presses, 3,857 moves (3,693 changes; 36 rays off the
+drag plane) and 1,272 releases, every one of the 19 mode and axis drags,
+under 13 views (oblique, front, top-down and rolled, edge-on, along an axis,
+at the 0.99 axis and 0.2 plane thresholds, from below, with Z up, and three
+seeded), fields of view from 30° to 75° and six aspects, three roots (the
+browser's, metres and millimetres) and five proxies (identity, rotated,
+scaled, mirrored and a selection's pivot), in all three modes and both
+spaces. It records each step's change and the SHA-256 of its view, the
+geometry whole (66 handles and the plane), 198 drag changes (7 refused) and
+34 malformed requests in the hosts' shapes. Rust, WASM in Node and Chrome and
+JNI answer all of it bit for bit; 29,197 Kotlin checks cover the wrapper.
+Bindings: WASM and JNI `transform_gizmo_attach`, `_step`, `_present`,
+`_geometry` and `_changes` (`transformGizmo…` on `NativeProject`), and Kotlin
+`TransformGizmo.attach`, `step`, `present`, `geometry` and `changes` over
+`GizmoScene`, `GizmoCamera`, `GizmoState` and `GizmoView`. Drawing the
+handles, touch and mouse input and the G/R/S keys in the Android Workspace
+remain.
+
 ### Primitives and helper volumes
 
 `primitives` ports how the browser creates new geometry. The six shapes of
