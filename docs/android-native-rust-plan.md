@@ -1,54 +1,295 @@
 # Native Android and shared Rust implementation plan
 
 **Status:** implementation in progress, started 2026-10-04 at the user's request.
-**Last reconciled:** 2026-10-07. Checked items below are implemented and verified
+**Last reconciled:** 2026-10-12. Checked items below are implemented and verified
 within their stated scope; unchecked items still require work. A checked sub-item
 does not close its parent task, phase exit, or physical-device gate. This document
 defines the required work; it does not change supported release platforms.
 
 ## Current handoff
 
-Keep this checklist current as work completes, including before a context or agent
-handoff. Record the implementation, verification and remaining limits together;
-do not mark a task complete merely because code exists or a target compiles.
-Detailed evidence and reproducible commands live in
-[native-core](engineering/native-core.md) and the phase entries below.
+Start here. This section is the authoritative status: keep it current in the
+same commit as the work it describes, and before any context or agent handoff.
+Record implementation, verification and remaining limits together; do not mark
+a task complete merely because code exists or a target compiles. Detailed
+evidence and reproducible commands live in [native-core](engineering/native-core.md),
+the phase entries below and the commit messages on `main`; do not require the
+next agent to reconstruct status from chat history.
 
-- [x] Establish shared Rust computation, generated contracts and development
+### Where the work stands
+
+All work is committed locally on `main` and has never been pushed, so the hosted
+workflows (`.github/workflows/native-core.yml`, `native-engine.yml`) have not
+run. The native app (`dev.orcaxr.nativeapp`) is verified on two owned x86_64
+emulators — API 34 with 4 KB pages, and API 37 with 16 KB pages — through
+`tools/cross-platform/emulator-smoke.py`. No physical device (ARM64 phone or
+tablet, Galaxy XR, Googlebook) and no real printer has qualified it, so every
+physical-device gate below is still open.
+
+- **Phase 0, baselines: partial.** Exists: the toolchain pins and the
+  separate-application-ID decision (native-core *Build decisions*), and the
+  migration inventory (`contracts/generated/migration-inventory.json`, written
+  by `tools/cross-platform/inventory.mjs` with its source commit). Remains: the
+  reference device matrix, the large fixtures and every baseline measurement,
+  which need physical devices.
+- **Phase 1, build foundations: mostly done.** The Compose app, the Rust
+  workspace, JNI and WASM bindings, generated schemas, cross-language trace
+  fixtures, and pinned Gradle (wrapper checksum, version catalog, dependency
+  verification) and Cargo (lockfile, toolchain) builds. Remains: ARM64
+  execution on a device, a first hosted CI run, and a recorded check that the
+  offline manifest set is complete.
+- **Phase 2, renderer and engine feasibility: partial.** The Filament flat
+  renderer draws the Workspace and Preview in every build. The pinned Snapmaker
+  engine builds cleanly for both ABIs, is packaged in every app build, loads on
+  the 16 KB image, and matches the browser engine on eleven fixtures through
+  its adapter on the x86_64 emulator. Remains: the SceneCore spatial comparison,
+  large-fixture picking and paint measurements, Home/Full Space lifecycle, the
+  written renderer selection, and real-device proof.
+- **Phase 3, G-code computation in Rust: done apart from device measurements.**
+  Parser, index, projection, inspection, playback and text search are shared;
+  the production browser preview runs on the Rust adapter, and the Android
+  Preview area renders the same core. Remains: repeated performance
+  measurements on reference devices.
+- **Phase 4, project state and commands: core done.** Every browser command
+  class has a native port replayed against browser traces, with sessions,
+  staged uploads, clipboard, the Kotlin actor, worker recovery and seeded
+  differential replay. Remains (browser side): preparation work and bulk export
+  off the UI thread. Production browser sessions on Rust are a Phase 5 item.
+- **Phase 5, archives and editing computation: core done.** Canonical and
+  foreign 3MF Open, complete package Save, STL/OBJ/AMF/ZIP import, edited round
+  trips, and the geometry ports (picking, regions, paint, placement, arrange,
+  split, simplify, measure, brim ears, emboss, SVG, assembly, mesh packets).
+  Remains: geometry-only 3MF import into an open project in the app, device
+  round trips, mesh packets in a spatial renderer, retained C++ geometry
+  kernels (Repair, mesh Booleans) through the engine's job service, and
+  Rust-backed browser sessions.
+- **Phase 6, native slicing: implemented and emulator-verified.** Slicing on
+  the packaged engine in its own `:engine` process, the attested external
+  slicer route, the route rule and its reason; round 2 adds plate pictures in
+  the G-code, slice sidecars, Slice All Plates and the repeatable download,
+  pending its suites. Remains: a reproducible clean-source engine build with a
+  hosted run, the full engine-feature matrix, a Save action for slice output,
+  the full statistics artifact, background-execution qualification, device
+  memory measurements for the route rule, and ARM64 execution.
+- **Phase 7, the adaptive Android application: largely done.** Workspace,
+  Prepare, Preview, Device and Project areas; selection and object edits,
+  creation, placement and the transform inspector, filaments and the virtual
+  filament library, painting, split, simplify and measure, settings panels and
+  height ranges, the command palette, toolbar and context menus, generated
+  localization (19 languages) and design tokens, accessibility, adaptive
+  layouts, file drop, recovery and multi-window document ownership (the
+  settings panels and the palette came with round 2, pending its suites).
+  Remains: *Resume here* items 1 to 4, and physical devices for the exit gate.
+- **Phase 8, Android XR: not started.** Only Phase 2's SceneCore candidate
+  (`android/renderer-scenecore`, `android/xr-experiment`) exists. Verification
+  needs the user's Galaxy XR.
+- **Phase 9, printers and platform services: done except supervised trials.**
+  The shared Moonraker policy, transport, session and send workflow; the Device
+  area (status, files, history, console, camera, job controls); DNS-SD
+  discovery, the local-network permission and Keystore credentials, all against
+  the printer simulator. Remains: supervised U1 and Centauri Carbon trials.
+- **Phase 10, feature coverage: not started as a phase.** Much coverage landed
+  through Phase 7. Calibration, Smart Paint, per-target parity tooling,
+  Googlebook and the glasses companion remain.
+- **Phase 11, release qualification: not started.**
+
+### Round 2: landed
+
+The second batch of parallel units is committed on `main`, from "build(core):
+bound the browser's project core at 12 MiB" to the migration-inventory refresh
+that ends it: the command palette's search and the menus' sections shared
+through the core, with the Android palette, Workspace toolbar, context menus
+and pointer input; the settings panel model and height-range editor, with
+object, part and height-range settings in the app; a slice's outputs (plate
+pictures, slice plans, the repeatable download, Slice All Plates and slice
+sidecars); menu headings in the operator's language; Slice, Slice All Plates,
+Cancel Slice and Send to Printer in the palette; and welded generated meshes,
+so every primitive slices. Verifying it found and fixed three defects: unsaved
+work lost when a task was swiped away seconds after an edit (the stopping
+activity now waits for the capture); a list item scrolled under Prepare's
+pinned bar hiding the bar's progress and status lines from accessibility
+services (the bar now sits above the list in z); and the debug build's
+viewport experiment covering the Workspace toolbar (now a launcher shortcut).
+The smokes' shared search also drags a list without a fling now: a swipe's
+fling had carried rows past the screen's edge and out of every dump.
+
+- [x] Round-2 emulator suites: `emulator-smoke.py` (API 34) and
+  `emulator-smoke.py --api 37 --pages 16` pass in full on the round-2 tree,
+  `android-palette-smoke.py`, `android-settings-smoke.py` and
+  `android-outputs-smoke.py` among them.
+
+Phase notes below that say "part of the round-2 suites" refer to that line.
+
+### Resume here
+
+1. Phase 7, input: the Workspace's move, rotate and scale gizmos and their
+   keys. The browser's 3D view takes no keys of its own (its OrbitControls
+   listen to none); its keyboard reaches the scene through the catalogue's
+   shortcuts, and of those Android already takes undo, redo, Delete, Escape,
+   the clipboard keys and the paint digits (`MainActivity.onKeyDown`,
+   `windowKey`), leaving G, R and S (`tool_move`, `tool_rotate`, `tool_scale`).
+   Those choose the browser's TransformControls gizmo, which Android lacks: the
+   transform tools exist only as the Project inspector's fields. Port the
+   gizmo's drag (axis, plane and ring math, snapping) to the core with a
+   browser corpus, draw and pick its handles in the Filament scene, commit
+   through the inspector's transform path, then bind the keys. Also the
+   semantic editor's volume roles (`objects_convert_volume_role`,
+   `set_negative_part`).
+   In flight: local branch `gizmo` (worktree `~/.cache/orcaxr-gizmo`, based
+   on round 2 before its rebuild) holds the gizmo — the core port of
+   TransformControls, bit-exact over 14,161 browser pointer events, where it
+   stands for a selection, and the Android Workspace's drawing, touch, hover,
+   coalescing drag gesture, toolbar tools and G/R/S keys — verified on the
+   host (a 38-check JNI journey, unit tests, lint) and on an emulator
+   (`android-gizmo-smoke.py`, against the branch's own APK). Its WASM repack,
+   its integration onto `main` and the suites on the integrated tree remain;
+   the volume roles are not started.
+2. Phase 7, model tools whose shared-core ports exist but have no Android UI:
+   emboss text (`orcaxr_project::emboss`, `add_emboss`), SVG parts (`svg`,
+   `tool_svg`), brim ears (`brim_ears`, `tool_brim_ears`), assembly (`assembly`,
+   `tool_assembly`), variable layer height (`layer_heights`,
+   `variable_layer_height`) and wipe-tower auto-placement
+   (`placement::wipe_tower`, `auto_place_wipe`); layer events belong with
+   Preview (`layer_event_mutate`). Magnets (`add_magnet`) and the wave-overhang
+   card (settings the core already resolves) need the browser's computation
+   checked first; Cut (`tool_cut`), the face detector and hollow have no core
+   port yet. Each one follows the exchange pattern below and gets an emulator
+   smoke.
+3. Phase 7, other surfaces: a Save/export action for slice output
+   (`save_gcode_to_downloads`, `file_export_gcode`), model and project exports
+   (STL, OBJ, 3MF, configuration), geometry-only 3MF import, the View menu's
+   display toggles, lighting and preview controls, handy and calibration
+   models, preset management, the Help menu, the Android-only words still
+   literal in Kotlin, and the in-app reduce-motion override. For the full gap,
+   compare `AppActions.PERFORMED` (`android/app/.../shell/AppActions.kt`, the
+   actions the app performs) with the catalogue in
+   `core/crates/orcaxr-contracts/src/capabilities/generated.rs`; some catalogue
+   actions are carried out outside the palette (the Device area's printer
+   actions, the plate bar, the filament bar, the settings panels).
+4. Phase 5 and 7: Repair and mesh Booleans, which the browser computes with
+   libslic3r in its slicing engine (`OrcaWorkspace.booleanModels` calls
+   `slicer.boolean`), through the `:engine` job service with the slicing job's
+   identity and cancellation checks; until then Android offers neither.
+5. Phase 6, emulator-reachable qualification: task switching, screen lock,
+   notification denial, Doze, the `dataSync` limit and reopening an interrupted
+   job; the engine-feature matrix (CC profiles, FullSpectrum modes, seam and
+   fuzzy-skin paint, layer events) through `tools/native-engine/emulator-slices.py`;
+   the reproducible clean-source engine build.
+6. Phase 2: write down the flat-renderer selection (lighting, colour
+   management, transparency); the SceneCore comparison needs XR hardware.
+7. Phases 10 and 11 work that needs no hardware: per-target parity tooling
+   (web DOM, WebXR, Android flat, Android XR), calibration and Smart Paint
+   ports, and the release checklist items that are not device-bound.
+
+### Needs the user
+
+- Physical devices: an ARM64 phone or tablet for the device gates of Phases 0,
+  2, 3, 6 and 7; the Galaxy XR for Phase 8 (automated tests never run on it;
+  ask before any use); Googlebook and glasses hardware for Phase 10.
+- Supervised U1 and Centauri Carbon print trials (Phases 9 and 11).
+- A design decision: the design-tokens unit (commit "wear the browser's design
+  tokens and make the app accessible") changed the browser's own colours in
+  `web/src/ui/tokens.ts` to meet WCAG AA (the dark teal as text, dark danger,
+  light warnings, field and switch boundaries). The code therefore differs from
+  the Claude Design project's `tokens.ts`; the user decides whether the design
+  project adopts these values or the contrast fixes are revisited.
+- Pushing to GitHub (so the hosted workflows run), signing and any release.
+
+### How work is done here
+
+- **Exchange pattern.** Port a browser behaviour from production TypeScript into
+  the shared core (`core/crates/`); capture a browser-authored corpus with a
+  `tools/cross-platform/*-vectors.mjs` generator that runs the production code;
+  replay it in Rust tests, in WASM under Node and Chrome (`*-replay.mjs`,
+  `project-wasm-browser.mjs`) and over host JNI (`project-jni-test.mjs`, debug
+  and `--release`); wrap it in Kotlin (`android/core-bridge`) with host checks;
+  build the Android UI (`android/app`); extend or add an emulator smoke
+  (`tools/cross-platform/android-*-smoke.py`, listed in `emulator-smoke.py`'s
+  `SMOKES`). A browser defect found on the way is fixed in the browser, with a
+  regression test, in the same change.
+- **Generated files.** Never hand-edit them; rerun the generator with `--write`
+  (`generate-*.mjs`, `*-vectors.mjs`, `android-strings.mjs`, `android-tokens.mjs`,
+  `inventory.mjs`). Every generator in `.github/workflows/native-core.yml` must
+  pass in check mode (without `--write`) before a commit.
+- **Browser WASM sets.** Their manifests hash the Rust sources, every
+  `contracts/**/*.json` and every `tools/cross-platform/*.py`, so a change to any
+  of them needs all three sets rebuilt and republished in that commit:
+  `python3 tools/cross-platform/build-wasm.py` with no flag, `--project` and
+  `--printer`; `node tools/cross-platform/package-browser-core.mjs --write` with
+  the same flags (without `--write` it checks the committed sets); `git rm` the
+  superseded `web/public/core*/<hash>/` set and add the new one; then
+  `python3 tools/cross-platform/verify-artifacts.py --wasm --project-wasm
+  --printer-wasm`. The project set is bounded at 12 MiB in
+  `package-browser-core.mjs`.
+- **Migration inventory.** `node tools/cross-platform/inventory.mjs --write`
+  records the current commit as provenance, so it is the last commit of a
+  batch, made on final hashes, with the WASM sets repackaged after it.
+- **Rust.** Use `cargo +1.94.1` from the repository root, or run Cargo inside
+  `core/`; `--manifest-path core/Cargo.toml` alone does not select the pinned
+  toolchain. Format, strict Clippy and tests as in *Verification interfaces*.
+- **Android builds.** In `android/`: `./gradlew :app:assembleDebug
+  :app:testDebugUnitTest :app:lintDebug`. The verified engine export lives only
+  in the main checkout (`tools/native-engine/build`; never clean it), so Gradle
+  in another worktree needs `-Porcaxr.localEngine=none` (that APK carries no
+  engine). The core admits four live documents per process; tests share the
+  app's profile catalog (`ProfileCatalogs.shared {}`).
+- **Emulators.** Only owned emulators.
+  `python3 tools/cross-platform/emulator-smoke.py` (API 34) and
+  `--api 37 --pages 16` (16 KB pages) create, boot and own their AVDs (serials
+  `emulator-5580` and `emulator-5582`, refused if already present) and run every
+  smoke in order; `--from <smoke>` resumes and `--only <smoke>` runs one.
+  Instrumented tests run as `adb -s <owned serial> shell am instrument -w -e
+  class <test class> dev.orcaxr.nativeapp.test/androidx.test.runner.AndroidJUnitRunner`,
+  never through `connected*AndroidTest`, which installs on and can clear apps
+  from every attached device, the user's Galaxy XR included. Tests reach only
+  the Moonraker simulator and the local external-slicer server, never a real
+  printer.
+- **Repository rules.** Commit locally on `main`; never push. Update GEMINI.md
+  (which stays exactly 512 lines), the topic documents and this plan in the same
+  commit as the behaviour they describe. Never stage `third_party/OrcaSlicer`
+  (vendored upstream) or `.claude/worktrees/`, and never commit private models.
+
+### Evidence recorded from 2026-10-04 to 2026-10-08
+
+Kept as written at the time. Statements that something "has not run" or
+"remains" describe that date; the status above and the phase checklists below
+supersede them.
+
+- Establish shared Rust computation, generated contracts and development
   WASM/JNI bindings; production browser preview uses the Rust adapter (Phase 3).
-- [x] Implement and replay the currently ported project/session/command families,
+- Implement and replay the currently ported project/session/command families,
   staged document adoption, captured queries and Kotlin actor ownership (Phase 4).
   Complete command coverage and production native editing are still open.
-- [x] Implement bounded ZIP read/write, canonical-envelope staging, OPC
+- Implement bounded ZIP read/write, canonical-envelope staging, OPC
   reconciliation and complete BBS/canonical package output from frozen captures
   (Phase 5). Independent browser Open/Save checks cover 947 native packages,
   including ten real native edits; this is the native-export direction only.
-- [x] Qualify canonical completion on the host: 229 workspace tests, 81 optimized
+- Qualify canonical completion on the host: 229 workspace tests, 81 optimized
   archive tests, strict Clippy, format checks and the archive/completion/package
   ownership probes pass.
   The archive also checks for wasm32 and both Android ABIs using Rust 1.94.1.
-- [x] Rebuild and verify both WASM packages and Android/JNI libraries. Executables,
+- Rebuild and verify both WASM packages and Android/JNI libraries. Executables,
   glue and 285 JVM classes retain their previously tested identity; this retains
   earlier binding replay evidence rather than claiming a fresh replay.
-- [x] Pass the production web build, offline inventory and bundle-size checks
+- Pass the production web build, offline inventory and bundle-size checks
   with the refreshed artifact sets. The full web quality gate remains open below.
-- [x] Complete canonical archive import after envelope/OPC staging: reconcile
+- Complete canonical archive import after envelope/OPC staging: reconcile
   regenerated BBS metadata, adopt unowned members with deterministic IDs, validate
   the completed bundle, and produce a guarded prepared document.
   The host corpus compares 385 browser imports (276 accepted / 109 refused),
   including complete state, exact asset bytes/IDs and warnings. Guarded adoption,
   eleven budget families, cancellation and timestamp failure have native tests.
-- [x] Add bounded native BBS model-XML syntax/namespace admission as the first
+- Add bounded native BBS model-XML syntax/namespace admission as the first
   foreign-import seam. Its streaming event/sanitized-text behavior matches all
   466 production-browser-derived cases (319 accepted / 147 refused), including
   arbitrary UTF-8 chunk splits and resource/cancellation failures. The reference
   generator is in native-core CI. This is not model-part projection or import.
-- [x] Capture fourteen independent foreign-3MF archive expectations through the
+- Capture fourteen independent foreign-3MF archive expectations through the
   production browser serializer: seven accepted projects and seven refusals,
   with exact ZIP input bytes, complete canonical state, asset descriptors/bytes,
   warnings and preserved entries. Generation is bound to browser serializer,
   model parser, XML validator and ZIP-writer source hashes and is checked in CI.
-- [x] Add a bounded streaming structural reader for one 3MF model part. It
+- Add a bounded streaming structural reader for one 3MF model part. It
   projects local object IDs, units, materials, packed mesh coordinates/indices,
   build items, component references/transforms and Production Extension paths.
   It also decodes BBS color, support, seam and fuzzy-skin roots into sparse
@@ -57,14 +298,14 @@ Detailed evidence and reproducible commands live in
   unsupported units and duplicate IDs; color slots remain import placeholders
   until package metadata can resolve printer filament IDs. This is a library
   projection, not a complete metadata reader or importer.
-- [x] Add bounded cross-part Production Extension reference validation and
+- Add bounded cross-part Production Extension reference validation and
   component-graph expansion. It preserves part-local IDs and build order,
   validates package paths and every object/build reference, rejects cycles, and
   enforces explicit part/object/reference/depth/expansion limits. The 14-archive
   browser corpus exercises internal and external references, missing parts and
   objects, and a component cycle. ZIP structural staging now invokes this
   resolver before returning its private result.
-- [x] Connect ZIP, XML admission, one-part projection and graph resolution into
+- Connect ZIP, XML admission, one-part projection and graph resolution into
   `read_xml::package::read_model_structure`. It streams only the root and
   referenced model parts, verifies each required member's archive integrity,
   shares geometry, title, encoded-facet, refinement-node and annotation-
@@ -76,20 +317,20 @@ Detailed evidence and reproducible commands live in
   scope are in [native-core evidence](engineering/native-core.md#bounded-foreign-model-staging).
   This is structural staging, not a canonical project candidate or a complete
   foreign-format importer.
-- [x] Project standard BBS facet paint during bounded model-part parsing. Decode
+- Project standard BBS facet paint during bounded model-part parsing. Decode
   explicit roots under shared package byte/node budgets, build sparse canonical
   color/support/seam/fuzzy-skin channels under a materialization budget, and
   verify paint states, refinement trees, the legacy fuzzy alias and refusals
   against browser-authored ZIP fixtures. Real filament-ID resolution still
   depends on BBS metadata parsing and remains open.
-- [x] Preserve bounded unknown extension attributes on foreign model objects,
+- Preserve bounded unknown extension attributes on foreign model objects,
   components, build items and facets. Resolve attribute namespaces, exclude
   namespace declarations/standard fields and the separately interpreted
   Production Extension path, and share count/text budgets across model parts.
   Browser-authored expected state and archive tests cover all four element types;
   graph leaves identify their source component edge without copying attributes
   across expanded occurrences. Canonical extensionData assembly remains open.
-- [x] Complete native foreign BBS/3MF import in `bbs::foreign::import`: metadata
+- Complete native foreign BBS/3MF import in `bbs::foreign::import`: metadata
   members read with the browser's exact expression/number semantics, physical and
   FullSpectrum filament identities, paint-slot resolution, plate membership and
   origins, canonical assembly, OPC, regenerated-member exclusion, adoption and
@@ -98,7 +339,7 @@ Detailed evidence and reproducible commands live in
   cases), as do the 15 authored foreign references. Three browser defects found
   on the way were fixed: empty builds, undeclared SVG drawings and unrepresentable
   layer events. Library scope only; bindings and adoption remain open below.
-- [x] Expose canonical and foreign archive Open and complete package Save through
+- Expose canonical and foreign archive Open and complete package Save through
   owned WASM/JNI tasks driven by one generated host policy
   (`contracts/project-archive.json`); every detailed limit derives from it and
   failures map to shared redacted codes. The Kotlin actor schedules Open through
@@ -107,27 +348,27 @@ Detailed evidence and reproducible commands live in
   (1,225 accepted, 1,223 saved, acknowledged and reopened) agree in Node WASM, a
   Chrome 150 worker and host JNI (debug and release); seven actor journeys pass.
   The instrumented Android test has not run on a device.
-- [x] Add the provider-neutral document layer for archive Open/Save:
+- Add the provider-neutral document layer for archive Open/Save:
   open-ended staging for unsized/nonseekable streams (shared `ArchiveInput`),
   stale-size fallback, redacted provider codes, package-before-truncate Save with
   checkpoint only after provider close, and a `ContentResolver` adapter. Six
   actor journeys pass over real JNI; 670 of the 1,341 replayed archives use the
   open-ended path in every host. Instrumented tests compile but have not run.
-- [x] Port signature-first STL/OBJ/AMF/compressed-AMF/ZIP model decoding
+- Port signature-first STL/OBJ/AMF/compressed-AMF/ZIP model decoding
   (`orcaxr_archive::models`): all 260 browser cases agree exactly (116 decoded,
   144 refusals), including the six shipped model files. One browser defect
   (prototype keys as extensions/units/attributes) was fixed on the way.
-- [x] Stage decoded models as a project merge (`models::stage`): 237 browser
+- Stage decoded models as a project merge (`models::stage`): 237 browser
   cases agree on IDs, state, assets and notices, including chained imports.
-- [x] Port the import preview/normalization (`orcaxr_project::import`) and the
+- Port the import preview/normalization (`orcaxr_project::import`) and the
   undoable `Import <filename>` commit (`ProjectSession::commit_import`): 21
   browser transactions agree on preview, confirmation refusals, committed
   state/assets/history and undo/redo.
-- [x] Bind model import to WASM/JNI host tasks and the Kotlin actor
+- Bind model import to WASM/JNI host tasks and the Kotlin actor
   (`prepareImport`/`commitImport`): the 21 browser transactions replay in Node,
   Chrome 150 and host JNI; seven actor journeys pass. Instrumented tests compile
   but have not run on a device.
-- [x] Wire provider Open/Save and model import into the application UI
+- Wire provider Open/Save and model import into the application UI
   (pickers, persisted grants, recent files, share intents) in Phase 7.
   The app's Project area (`ProjectWorkspace`/`ProjectModel`) opens, saves
   (back into a canonical document, never over a foreign 3MF), saves as,
@@ -135,52 +376,15 @@ Detailed evidence and reproducible commands live in
   starts new projects (the shared `fresh_project`, replayed against the
   browser), keeps recent documents with persisted grants and accepts incoming
   VIEW/SEND only as `content:` URIs, and shares a copy through the system's
-share sheet without saving; 27 host checks over JNI and an
+  share sheet without saving; 27 host checks over JNI and an
   owned-emulator smoke through the system picker pass.
-- [x] Share bounded G-code text windows and case-insensitive line search through
+- Share bounded G-code text windows and case-insensitive line search through
   Rust, WASM and JNI (Phase 3). Browser, host and Chrome WASM replays agree on
   18,710 searches; the Android instrumented replay has not run on a device yet.
-- [x] Exercise edited archive interchange through guarded native Open, native
+- Exercise edited archive interchange through guarded native Open, native
   session commands and browser commands: 2,159 complete journeys from 2,278
   canonical and foreign archives (949 foreign) in the optimized host harness.
   Application/provider journeys remain open.
-- [ ] Extend round trips to foreign formats and application/provider bindings,
-  finish remaining command/query coverage and production session integration,
-  then continue the app/device gates.
-
-**Resume here:** finish the remaining command families. Archive Open/Save,
-provider documents and STL/OBJ/AMF/ZIP model import (decode, stage, preview,
-undoable commit) now run in the shared core with owned WASM/JNI tasks and Kotlin
-actor operations ([native-core](engineering/native-core.md#signature-first-model-decoding)).
-Layer ranges, layer events, brim ears, layer-height profiles, physical and
-mixed filaments, project/scoped setting overrides, volume-role conversion and
-whole-facet paint strokes, project rename, plate wipe towers, auto-pair
-reconciliation, model-colour recreation and multi-volume split to objects are
-ported. So are the payload-carrying commands for add object, add object with
-asset, add volume, mesh topology replacement, mesh booleans, split to parts,
-single-volume split to objects, and SVG and embossed-text parts. They install
-validated payload leases without copying bytes. Whole-project replacement and
-refined (dense-root) facet commits are native too, so every browser command
-class now has a native counterpart replayed against browser-authored traces.
-All of them stage through command uploads: records declare their payload
-descriptors, then the bytes stream per declared payload, through Rust, WASM and
-JNI/Kotlin. Session cutover, the application shell and the device gates remain;
-the Android app now has its Device area (Phase 9, printers end to end) and
-Project area (Phase 7: new/open/save-as/import/undo, recents, guards), and
-Prepare/Preview wait for native slicing. Each family adds intent variants to
-`contracts/project-intents.json` (definitions before first use; regenerate with
-`generate-project-intents.mjs --write`), maps them in
-`web/src/project/PreparedProjectCommands.ts`, appends a scenario to
-`project-command-vectors.mjs`, regenerates the dependent captured-command/
-session/staged/query/document/clipboard corpora (every CI generator in
-`.github/workflows/native-core.yml` must pass in check mode), routes any
-browser `Math` through `orcaxr_project::js_math`, and ports the command under
-`core/crates/orcaxr-project/src/commands/`. Then continue Phase 6 (native
-slicing) and the Phase 7 application shell.
-Retain earlier binding replay evidence only when executable and JVM input
-identities still agree; otherwise rerun it. This host can run headless Chrome,
-git and memory-capped Gradle compiles; the full web quality gate, emulator runs
-and fresh dependency advisories still need an unloaded machine.
 
 `CanonicalArchiveSource::complete` now performs OPC/BBS reconciliation and adoption;
 only its completed result can produce the prepared document for guarded Open/reset.
@@ -200,23 +404,11 @@ reimport those exact bytes in Rust. Existing IDs and preserved payloads stay exa
 Debug and optimized results agree. Missing origins and the preserved model-settings
 collision remain explicit Save refusals, never successful round trips.
 
-For the next foreign-import tranche, start from production `importBbsCore` in
-`web/src/project/serialization/bbsCore.ts` and the serializer's `deserializeForeign`
-flow. Capture independent archive expectations before porting model-part parsing,
-unit conversion, production-extension path resolution and component expansion.
-Preserve model-part-local object IDs, the shared facet budget, depth/expansion
-limits, exact plate membership/origins and consumed-versus-absorbed member policy.
-Then assemble/admit the canonical bundle and extend this actual interchange
-harness to the foreign inputs. The current OPC compatibility scanner is not a
-full model XML parser. Archive task bindings and provider integration follow the
-completed format adapters; do not bypass guarded prepared-document adoption.
+## Implementation history through 2026-10-08
 
-Use `cargo +1.94.1` from the repository root, or run Cargo inside `core/`;
-`--manifest-path core/Cargo.toml` alone does not select its pinned toolchain.
-Work is committed on `main`; repository tests, generators and maintained evidence
-are the durable record.
-
-## Implementation status
+This narrative is kept as recorded through 2026-10-08. Where it calls work open,
+unqualified or impossible in this environment, check the *Current handoff* and
+the phase checklists, which supersede it.
 
 Initial Stage A evidence is maintained in [native-core build and evidence](engineering/native-core.md).
 The development shell, bounded Rust canonicalizer, generated request bindings,
@@ -383,6 +575,8 @@ The shared schema generates Rust codes and TypeScript/Kotlin packet validators.
 This removes full-document export from those reads, while paint summaries,
 resolved settings, capabilities, renderer packets and revisioned subscriptions
 still need implementation and production integration.
+
+## Purpose and authority
 
 Build an adaptive native Android application for phones, tablets, Googlebook,
 and Android XR while preserving the web application. Introduce Rust as a shared
@@ -740,22 +934,42 @@ baseline report, and resolved build/release assumptions.
 - [ ] Inventory every implemented workflow and current explicit limitation from
   the action registry and parity evidence. Record the source commit so later web
   improvements cannot disappear from native scope unnoticed.
+  Status (2026-10-12): `tools/cross-platform/inventory.mjs` writes
+  `contracts/generated/migration-inventory.json` from the action registry
+  (`web/src/actions`), the parity release report, the engine-option schema, the
+  profile manifest and catalog and the localization manifest, with their hashes
+  and its source commit. Remains: each workflow's explicit limitations recorded
+  with its per-target native coverage (Phase 10's parity tooling).
 - [ ] Define reference devices: an ARM64 phone, tablet or large-screen device,
   Galaxy XR, Googlebook hardware when available, and an x86_64 emulator/desktop
   environment. Record OS, GPU, RAM, refresh rate, page size, and input devices.
   Emulator evidence never closes a physical-device gate.
+  Status (2026-10-12): only the two owned x86_64 emulators (API 34 with 4 KB
+  pages, API 37 with 16 KB pages) are in use, plus a read-only inventory of the
+  user's Galaxy XR (SM-I610) from 2026-10-04 (native-core *Evidence and remaining
+  gates*). No ARM64 phone, tablet or Googlebook is recorded; this needs the user.
 - [ ] Select redistributable small, medium, and large fixtures, including roughly
   two million facets with substantial paint, repeated instances, multiple plates,
   FullSpectrum recipes, malformed archives, and large/arc-heavy G-code. Generate
   synthetic stress assets; keep private models outside Git.
+  Status (2026-10-12): the eleven canonical slice fixtures
+  ([native-slice-fixtures](engineering/native-slice-fixtures.md)), the hostile
+  archive corpora and synthetic two-million-facet probes exist; the large
+  painted, multi-plate FullSpectrum fixture set is not selected.
 - [ ] Record web load/import time, first useful frame, drag/paint latency, command
   commit time, preview indexing/window time, slice duration, cancellation,
   recovery duration, total process memory, and thermal behavior.
 - [ ] Capture both local-WASM and external-slicer journeys. Compare native and
   web on the same physical device, files, profiles, engine inputs, and conditions.
+  Status (2026-10-12): this and the measurement item above are not started; no
+  baseline is recorded on a physical device for either route.
 - [ ] Fix a compatible AGP/Gradle/JDK/Kotlin/Compose/XR/NDK/Rust toolchain matrix
   after a minimal build; choose minimum/target SDK deliberately. Do not assume
   XR artifact versions align or let optional XR support exclude ordinary devices.
+  Status (2026-10-12): fixed and recorded in native-core *Build decisions* (AGP
+  9.2.1, Gradle 9.5.0, JDK 21, Compose compiler 2.3.21, NDK 29.0.14206865, Rust
+  1.94.1; minimum SDK 31, target 37; XR optional). No XR artifact version is
+  selected yet; that waits for Phase 8.
 - [x] Inspect historical application ID/signing/storage expectations before
   selecting upgrade versus separate-install behavior for retired APK users.
   Record the result without assuming old data is compatible.
@@ -775,6 +989,12 @@ workspace, versioned protocol, CI jobs, and cross-language test runner.
 - [ ] Add pinned Gradle wrapper/toolchain, version catalog, dependency verification,
   Cargo lockfile/toolchain, Android manifests, and release/debug configuration.
   Build `arm64-v8a` and `x86_64`; qualify each actual device ABI before claiming it.
+  Status (2026-10-12): in place: `android/gradle/wrapper` with its distribution
+  checksum, `android/gradle/libs.versions.toml`,
+  `android/gradle/verification-metadata.xml` (CI runs Gradle with strict
+  verification), `core/Cargo.lock`, `core/rust-toolchain.toml`, and debug and
+  shrunk release builds of both ABIs. Remains: running the ARM64 ABI on a
+  device; only x86_64 has executed.
 - [x] Create a minimal Compose Activity and an optional XR feature boundary.
   Verify installation and startup on a non-XR emulator without loading XR runtime
   services, model files, or the slicing engine. Check manifest feature declarations
@@ -811,9 +1031,20 @@ workspace, versioned protocol, CI jobs, and cross-language test runner.
   copying inventories. Package required assets for offline use.
   The app's localized string resources are generated from the browser's
   catalogues (`android-strings.mjs`, Phase 7).
+  Status (2026-10-12): also generated or packaged from their authorities: the
+  design tokens (`android-tokens.mjs`), the action catalogue
+  (`generate-action-catalog.mjs`, which the core's capabilities serve), the
+  engine-option table (`generate-engine-options.mjs`) and the bundled profile
+  catalog (copied from `web/public/profiles/catalog.json` at build time).
+  Remains: a recorded check that nothing else the app needs offline is missing.
 - [ ] Extend CI with host Rust tests, WASM browser tests, Android assemble/lint/JVM
   tests, binding regeneration checks, dependency checks, and artifact provenance.
   Keep the existing web/server/WASM gates unchanged.
+  Status (2026-10-12): `.github/workflows/native-core.yml` (every generator in
+  check mode, Rust format, Clippy, tests and `cargo audit`, WASM in Node and
+  Chrome, host JNI, Android assemble, lint and JVM tests with strict dependency
+  verification) and `native-engine.yml` exist, but neither has run on a hosted
+  runner because nothing has been pushed. Remains: a hosted run.
 
 **Exit gate:** a clean checkout builds the minimal app and both Rust targets;
 native/WASM contract vectors agree; incompatible binaries/messages are rejected.
@@ -826,19 +1057,42 @@ Snapmaker NDK build proof, and an explicit renderer decision.
 - [ ] Render the same packed mesh fixture in a flat Filament candidate and a
   SceneCore candidate. Include transforms, selection, clipping, instancing,
   per-facet colors, transparency, and a representative toolpath window.
+  Status (2026-10-12): the Filament flat renderer draws production meshes,
+  paint and toolpaths in the Workspace and Preview; the SceneCore candidate
+  (`android/renderer-scenecore`, `android/xr-experiment`) builds against the same
+  mesh contract and starts without XR services on the emulator. No spatial
+  render or side-by-side comparison exists; it needs XR hardware (the
+  SwiftShader XR image did not boot).
 - [ ] Exercise continuous picking and paint overlays on the large fixture.
   Measure upload size/count, draw calls, frame pacing, memory, and update latency.
   Inspect actual SceneCore APIs for mutable attribute/material support; do not
   infer update behavior from static model-loading demonstrations.
+  Status (2026-10-12): flat picking and painting work on the emulators
+  (`android-paint-smoke.py`), with colour-only partial uploads; nothing is
+  measured on the large fixture, and SceneCore updates are untested.
 - [ ] Test context loss, Activity recreation, Home Space/Full Space transitions,
   panel creation/disposal, hidden UI, and repeated scene teardown. Account for
   CPU and GPU buffers retained by each renderer.
-- [ ] Cross-compile the current pinned Snapmaker engine from a clean source tree
+  Status (2026-10-12): the flat renderer exists only while its area is resumed
+  and survives leaving and returning (emulator smokes); Home Space/Full Space,
+  context loss and SceneCore teardown are untested.
+- [x] Cross-compile the current pinned Snapmaker engine from a clean source tree
   for both initial ABIs. Audit the old TBB allocator, threading, POD initialization,
   JNI lifetime, and NDK compiler issues against this fork before reusing any patch.
-- [ ] Slice fixed canonical fixtures through a minimal native adapter and compare
+  Done: the full-engine port builds from clean sources for both ABIs (oneTBB
+  2021.5.0, NDK 29.0.14206865) with ELF, dependency and package-mutation checks;
+  the current-source initialization audit added explicit `Print` and
+  `FakeWipeTower` defaults, and retired patches were checked against the current
+  source rather than reused ([slicing](engineering/slicing.md#native-android-dependency-feasibility)).
+  A reproducible hosted rebuild belongs to Phase 6's build tooling.
+- [x] Slice fixed canonical fixtures through a minimal native adapter and compare
   outputs with the current routes. This fixture harness does not introduce a
   second editable project model or legacy profile implementation.
+  Done: `tools/native-engine/emulator-slices.py` slices the eleven canonical
+  fixtures on the x86_64 emulator, and with `--adapter` through the app
+  adapter's C entry point (the one JNI calls); all eleven match the published
+  browser engine's references ([native-slice-fixtures](engineering/native-slice-fixtures.md)).
+  ARM64 execution belongs to the exit gate.
 - [ ] Check 16 KB alignment and dependency loading in the installed APK. Confirm
   required geometry libraries and engine operations can be packaged within the
   selected distribution format.
@@ -847,8 +1101,9 @@ Snapmaker NDK build proof, and an explicit renderer decision.
   page-size Android 17 emulator (`emulator-smoke.py --api 37 --pages 16`).
   The slicing engine is now packaged in every app build (its adapter, TBB and
   libc++ for both ABIs, checked by `verify-artifacts.py` against the verified
-  export); its loading on the 16 KB image is in `android-local-slice-smoke.py`,
-  not yet run, so its part remains.
+  export), and it loads and slices on the 16 KB image too
+  (`android-local-slice-smoke.py` on both emulators). Remains: packaging in the
+  distribution format, which is not chosen yet (APK or AAB, Phase 11).
 - [ ] Record the flat/spatial renderer selection and any required alternative
   prototype. Resolve blockers before building the full XR interface.
   The Workspace now uses the Filament candidate in release builds too; the
@@ -897,8 +1152,13 @@ that native code automatically reduces total memory.
   - [x] Integrate the production worker adapter, startup rollback selection and
     verified offline asset loading; exercise both adapters in browser regressions.
   - [ ] Complete repeated performance measurements on the reference devices.
-- [ ] Bind the same library to Android and render the resulting columns through
+- [x] Bind the same library to Android and render the resulting columns through
   the native viewport. Verify identical semantic IDs and projections across hosts.
+  Done: the Android Preview area renders the core's projection with the
+  Filament renderer (commit "add the Preview area as the browser's G-code
+  viewer"; `android-preview-smoke.py` on both emulators), and 4,554 view queries
+  agree across host Rust, browser WASM and Android JNI (native-core
+  *Source-owned view queries*). Device budgets stay in the exit gate.
 - [x] Add fuzz/property tests for malformed numbers, huge lines, truncated arcs,
   unsupported commands, invalid UTF-8, and allocation caps; retain independent
   expected results so both adapters cannot agree on the same new bug unnoticed.
@@ -994,6 +1254,9 @@ and replay coverage for the complete current command inventory.
   lifecycle operations. Remote projections and production worker/JNI execution
   are not migrated yet, and browser capture and placement planning still run
   synchronously on the UI thread.
+  Status (2026-10-12): every sub-item below is done except isolating the
+  browser's preparation work off the UI thread. On Android the Kotlin actor
+  already prepares staged work on its own preparation workers.
   - [x] Route the plate/history, rename, transform and specified lifecycle/staged
     browser actions through guarded asynchronous acknowledgements.
   - [x] Route project and scoped settings commits through guarded settings
@@ -1104,6 +1367,11 @@ and replay coverage for the complete current command inventory.
     export with host JVM/JNI lifecycle/failure checks.
   - [ ] Integrate live application projections, archive adoption, recovery and
     Android runtime qualification; isolate browser bulk export work.
+    Status (2026-10-12): integrated on Android: the Project area opens and
+    resets through guarded archive adoption, `ProjectRecovery` keeps unsaved
+    work across process death, the tree and the renderer read live projections,
+    and both emulator suites run it. Remains: isolating the browser's bulk
+    export and qualifying on physical devices.
 - [x] Port commands and transaction/history semantics by family, preserving
   rollback revision behavior, coalescing, checkpoint acknowledgement, selection,
   and history retention accounting. Test every command's failed and stale cases.
@@ -1473,10 +1741,12 @@ painting, and FullSpectrum operations that can support real native projects.
   unowned file with exact compressed-archive-derived IDs and recognizes plate PNG
   thumbnails. The final graph is re-admitted before prepared-document conversion.
   Independent browser comparisons cover 385 inputs (276 accepted / 109 refused),
-  complete state/assets/warnings and unknown metadata. Foreign import and the
-  WASM/JNI archive tasks are now complete (sub-items below); STL/OBJ/AMF and
-  application/provider import remain required. This does not close the archive
-  task or phase gate.
+  complete state/assets/warnings and unknown metadata. Foreign import, the
+  WASM/JNI archive tasks, STL/OBJ/AMF/ZIP import and the application's provider
+  import are now complete (sub-items below).
+  Status (2026-10-12): every sub-item is done. What keeps this open is
+  geometry-only 3MF import (a 3MF's models merged into the open project), which
+  is browser-only so far: the Android app opens a 3MF only as the project.
   - [x] Implement and independently verify bounded ZIP/ZIP64 indexing, streaming
     reads, integrity checks, cancellation and safe member paths.
   - [x] Stage canonical envelopes, legacy facet migrations and declared assets
@@ -1504,8 +1774,10 @@ painting, and FullSpectrum operations that can support real native projects.
   - [x] Stage decoded models as merges with exact browser parity (241 cases).
   - [x] Port the import preview and undoable commit (23 transactions agree).
   - [x] Bind model import to WASM/JNI host tasks and the Kotlin actor.
-  - [ ] Provider lifetimes and import UI in the application (Phase 7).
-- [ ] Port canonical-envelope and BBS authoring, scoped overrides, plate origins,
+  - [x] Provider lifetimes and import UI in the application (Phase 7): the
+    Project area's pickers, persisted grants, recent documents and validated
+    VIEW/SEND intents (`android-project-smoke.py` on both emulators).
+- [x] Port canonical-envelope and BBS authoring, scoped overrides, plate origins,
   assembly transforms, custom G-code, modifier/negative volumes, annotations,
   mixed recipes, and unknown metadata preservation. A consumed metadata member
   cannot later overwrite a newly generated authoritative member. The three OPC
@@ -1548,8 +1820,8 @@ painting, and FullSpectrum operations that can support real native projects.
   member names, deterministic UTF-16 ordering and same-limit readable compression
   ratios. Independent browser/Python readers verify its output, including actual
   65,535/65,536-member directories. A sparse host test streams a 4 GiB member and
-  reads a following member beyond 32-bit offsets. This container API has no
-  application binding; file-provider publication and Save handoff are still open.
+  reads a following member beyond 32-bit offsets. The archive Save task drives
+  it, and the Android Project area saves through that task (sub-item below).
   - [x] Port and verify OPC, facet/numeric/XML primitives, core-model authoring,
     model/project settings, scoped metadata, SVG/emboss and FullSpectrum output.
   - [x] Stream the canonical envelope and complete deterministic ZIP/ZIP64 package
@@ -1557,8 +1829,14 @@ painting, and FullSpectrum operations that can support real native projects.
   - [x] Compare all 1,032 independent package cases, including full warning
     inventory, member bytes and mappings; exercise native capture lifetimes,
     cancellation, output failures and bounded memory.
-  - [ ] Bind package jobs to host tasks and qualify actual provider publication
-    and Save checkpoint acknowledgement in the application.
+  - [x] Bind package jobs to host tasks and qualify actual provider publication
+    and Save checkpoint acknowledgement in the application. Save runs as an owned
+    WASM/JNI task (commit "owned WASM/JNI archive Open and Save tasks under one
+    host policy"); `ContentProjectDocument` builds the package before opening the
+    destination and acknowledges the checkpoint only after the provider closes
+    (commit "provider-neutral document Open/Save over archive tasks"); and
+    `android-project-smoke.py` saves as a 3MF, checks the ZIP and reopens it on
+    both emulators. Physical-device publication stays with Phase 11.
 - [ ] Verify web-to-native-to-web round trips and reverse round trips, including
   a real edit between each save. Compare untouched preserved members exactly and
   semantic structure independently; never use STL as the project interchange.
@@ -1572,6 +1850,10 @@ painting, and FullSpectrum operations that can support real native projects.
     native foreign Opens, edits, Saves and browser returns agree exactly.
   - [ ] Qualify STL/OBJ/AMF and application/provider round trips, including
     WASM/JNI task ownership, publication and physical-device execution.
+    Status (2026-10-12): the application journey runs on both emulators
+    (`android-project-smoke.py`: an STL imported, saved as a 3MF and reopened
+    from the recent documents through its persisted grant). Remains: OBJ and
+    AMF inputs through the application path, and physical-device execution.
 - [ ] Port measured geometry operations in order: packed mesh codec/bounds,
   picking and region selection, paint/refined-facet computation, then preparation
   operations required by the capability inventory. Reuse pinned native geometry
@@ -1789,6 +2071,9 @@ painting, and FullSpectrum operations that can support real native projects.
   service, with the same input identity and cancellation checks as slicing.
   Serialize incompatible kernel/slice jobs and bound their shared resource use;
   do not load a second unbudgeted engine into the editor process.
+  Status (2026-10-12): not started. Until it is, Android offers neither Repair
+  (native-core *Android model tools*) nor mesh Booleans, which the browser
+  computes in its slicing engine.
 - [x] Run hostile-file and fuzz corpora against both native and WASM archive
   paths. Keep import failures transactional and diagnostics bounded.
   `hostile-archive-vectors` holds 469 cases: seeded byte edits of three
@@ -1814,6 +2099,8 @@ painting, and FullSpectrum operations that can support real native projects.
   browser's acceptance, admitted state and warnings on every one.
 - [ ] Enable complete Rust-backed browser sessions only after all current project
   operations, save/recovery, and old-file compatibility pass their gates.
+  Status (2026-10-12): not started; production browser sessions still run the
+  TypeScript implementation.
 
 **Exit gate:** edited projects survive cross-platform round trips without loss;
 canonical identities match; large-model copy/resource budgets hold. The native
@@ -1851,9 +2138,19 @@ external slice routes, and verified output publication.
   reruns the eleven fixture comparisons through the adapter's C entry point
   (the one JNI calls) and all eleven match the browser engine's references
   on the x86_64 emulator.
+  Status (2026-10-12): implemented and verified on both emulators as above.
+  Remains: a test of the cleanup after the editor dies (implemented through the
+  owner token; no recorded test exercises it) and ARM64 execution.
 - [ ] Reuse canonical preflight and exact captured configuration. Exercise U1
   toolchanges, CC profiles, FullSpectrum modes, support/seam/fuzzy/color painting,
   layer events, scoped overrides, and every engine feature currently claimed.
+  Status (2026-10-12): both routes slice the export capture with the shared
+  preflight (`slicing::preflight`) and the captured configuration. The eleven
+  fixtures cover tool changes from physical and FullSpectrum mixed paint, scoped
+  walls and infill, a height range, manual and automatic support with a blocker,
+  and wave overhangs. Remains: CC profiles, the other FullSpectrum modes, seam
+  and fuzzy-skin paint, layer events and the rest of the claimed engine
+  features on the device's engine, and ARM64.
 - [ ] Generate the statistics sidecar, render thumbnails from captured geometry,
   finalize the exact G-code bytes, and bind output to project/revision/config/
   assets/engine. Preview, save, and send reject stale output.
@@ -1885,7 +2182,14 @@ external slice routes, and verified output publication.
   Preview and Send already refuse stale output by the browser's guard
   (`PreviewCurrency`, `SendGuard`); saving a slice's output is not an Android
   action yet.
-- [ ] Implement the native external-slicer client with explicit credentials,
+  Status (2026-10-12): thumbnails and sidecars ship on both routes with round
+  2 (commits "share a slice's outputs — plate pictures, slice plans and a
+  repeatable download", "Slice All Plates, each plate's pictures in its G-code,
+  and a dropped download fetched again", "bind each slice's output in a
+  sidecar"); `android-outputs-smoke.py` checks them, part of the round-2 suites.
+  Remains: an Android action that saves a slice's output, and the full
+  statistics artifact, which has no producer yet.
+- [x] Implement the native external-slicer client with explicit credentials,
   connection-generation capture, existing attestation, result digest/length
   validation, repeatable download, leases, and cancellation outcomes.
   The route's shared parts are in the core: `orcaxr_printer::slicer` is the
@@ -1909,8 +2213,8 @@ external slice routes, and verified output publication.
   keeps it (its release or expiry ends that; a transfer in progress holds
   it), and released only once accepted — the browser's client promised a
   retry it never made, and now makes it too; host-checked against the real
-  server cutting off and corrupting a download. Remaining: the emulator run
-  of `android-outputs-smoke.py`.
+  server cutting off and corrupting a download. `android-outputs-smoke.py`
+  drives it on both emulators (the round-2 suites, see Current handoff).
 - [ ] Define local/external route selection using measured resource limits and
   user preferences. Show the selected route and reason; do not upload models or
   silently reroute work to a server the user has not configured and authorized.
@@ -1928,7 +2232,13 @@ external slice routes, and verified output publication.
   started; notification with progress and Cancel) only while a job runs,
   started while the app is in the foreground; Android 15's time limit cancels
   the job; the editor polls, so a cached or frozen editor delays nothing.
-  None of the listed conditions has been tested on a device or emulator yet.
+  Status (2026-10-12): on both emulators `android-local-slice-smoke.py` checks
+  the service in the foreground while slicing, Cancel Slice, and the engine's
+  process killed mid-slice (the editor keeps its project; the next slice runs
+  in a fresh engine process). Untested: task switching, screen lock, thermal
+  pressure, notification denial, the `dataSync` daily limit, Doze, service
+  timeout, and reopening a job interrupted by process death (the slice is lost;
+  the project is not).
 
 **Exit gate:** qualified fixtures produce materially equivalent G-code across
 Android, browser, and server; service crashes leave the editor/recovery usable;
@@ -1940,7 +2250,7 @@ cancelled or incomplete output cannot become a sendable artifact.
 **Deliverables:** complete flat-device preparation, slicing, preview, and project
 storage journeys on phone, tablet, and desktop-sized windows.
 
-- [ ] Implement Prepare, Preview, Device, and Project navigation with the existing
+- [x] Implement Prepare, Preview, Device, and Project navigation with the existing
   action names and semantics. Use ViewModels/coroutines as host adapters to the
   core; Compose state contains projections and drafts, never a second project.
   The shell navigates between the workspace preview, the Project area
@@ -1997,8 +2307,8 @@ storage journeys on phone, tablet, and desktop-sized windows.
   active plate's result (else the first), which Send sends; every plate's
   G-code carries its own pictures on both routes, and the external route
   fetches a dropped download again ([native-core](engineering/native-core.md#android-slice-outputs);
-  569 host JNI checks, 6 JVM tests; `android-outputs-smoke.py` added, not yet
-  run on an emulator).
+  569 host JNI checks, 6 JVM tests; `android-outputs-smoke.py`, part of the
+  round-2 suites).
   The bar's order is Workspace (the home), Prepare, Preview, Device, Project.
   JVM tests cover its platform-free flow, and `android-prepare-smoke.py`
   runs it on API 34 and the 16 KB API 37 image against the real server.
@@ -2028,6 +2338,8 @@ storage journeys on phone, tablet, and desktop-sized windows.
   deletes recipes, each one undoable step with the browser's label (a
   105-check JNI journey; the filament smoke drives it on both
   emulators).
+  Status (2026-10-12): implemented across the five areas and verified on both
+  emulators (the round-2 suites); physical devices belong to the exit gate.
 - [ ] Adapt inspector/object tree, toolbars, menus, command palette, dialogs,
   settings, and progress states to narrow, medium, and wide windows. Support
   keyboard traversal, shortcuts, hover, context menus, trackpad navigation,
@@ -2061,7 +2373,8 @@ storage journeys on phone, tablet, and desktop-sized windows.
   settings) — the panel model and the range editor ported to the shared
   core from production TypeScript (669 panel steps and 525 range answers in
   Rust, WASM in Node and JNI; 1,363 JNI checks; the emulator settings smoke,
-  not yet run). Layer events stay with Preview, where the browser's live.
+  part of the round-2 suites). Layer events stay with Preview, where the
+  browser's live.
   The browser's command palette (Ctrl/⌘ K, and a search button) lists the 61
   catalogue actions the app performs, in catalogue order with the core's
   enablement — Slice, Slice All Plates, Cancel Slice and Send to Printer
@@ -2083,9 +2396,12 @@ storage journeys on phone, tablet, and desktop-sized windows.
   shortcuts. Tooltips on hover, the hand pointer, and the 3D views' mouse,
   wheel, trackpad and touchpad gestures follow OrbitControls; a stylus is a
   finger whose button is a secondary click (a 1,949-check JNI journey, JVM
-  tests, and `android-palette-smoke.py`, not yet run on an emulator). The
-  semantic editor's volume roles and keyboard control of the 3D views
-  remain.
+  tests, and `android-palette-smoke.py`, part of the round-2 suites). The
+  semantic editor's volume roles and the Workspace's transform gizmos, with
+  their keys G, R and S, remain.
+  Status (2026-10-12): remains: the Workspace's transform gizmos with their
+  keys G, R and S, and the semantic editor's volume roles (*Resume here* item
+  1); the palette and the settings panels pass both emulator suites (round 2).
 - [ ] Integrate the flat renderer with panel resizing, visibility, lifecycle,
   selection, painting, model tools, and preview controls. Keep CPU work and
   loading off the UI thread; avoid per-frame Compose recomposition for meshes.
@@ -2107,7 +2423,7 @@ storage journeys on phone, tablet, and desktop-sized windows.
   and been refused. A 74-check JNI journey per bed (the U1's bundled area and
   one far from the corner) finds nothing outside the volume after any
   placement; `android-local-slice-smoke.py` scales a cube to the U1's volume
-  and slices it (not run for this change). The Project area's transform
+  and slices it on both emulators. The Project area's transform
   inspector (Move/Rotate/Scale fields of the selected instance, each edit one
   `ProjectWorkspace.editTransform` step with the browser's label, never
   coalescing, as its field edits draw `single:<n>`/`batch:<n>`) and the Edit
@@ -2146,6 +2462,12 @@ storage journeys on phone, tablet, and desktop-sized windows.
   `android-modeltools-smoke.py` passes on both emulators. Repair is not offered: it
   needs libslic3r's mesh kernels in the `:engine` job service. Lighting and
   preview controls remain.
+  Status (2026-10-12): remains: lighting and preview controls; Repair (Phase
+  5's kernel routing), with mesh Booleans; and the model tools with no
+  Android UI yet — emboss text, SVG parts, brim ears, assembly, variable layer
+  height, wipe-tower auto-placement, magnets and the wave-overhang card, with
+  Cut, the face detector and hollow still to port (*Resume here* items 2
+  and 4).
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
   large-file streaming. Validate incoming open/share intents as untrusted input.
@@ -2158,6 +2480,9 @@ storage journeys on phone, tablet, and desktop-sized windows.
   drives them through the system picker; Share offers a 3MF copy through a
   read-only provider. A disk-full or revoked grant on a device and
   large-file timing remain unverified.
+  Status (2026-10-12): remains: disk-full and revoked-grant checks and
+  large-file timing on a device, exports (slice output, STL, OBJ, 3MF,
+  configuration) and geometry-only 3MF import (*Resume here* item 3).
 - [x] Implement recovery storage and Save/Discard/Cancel guards for back,
   navigation, new/open/replace, window close where observable, and app updates.
   Test process death during capture, write, commit, and restore.
@@ -2217,6 +2542,10 @@ storage journeys on phone, tablet, and desktop-sized windows.
   cutouts and the keyboard. `android-accessibility-smoke.py` passes on both
   emulators. The browser's in-app reduce-motion override waits for an Android
   preferences surface.
+  Status (2026-10-12): remains: the Android-only words still literal in Kotlin
+  (native-core *Android localization*), the in-app reduce-motion override, and
+  the user's decision on the design tokens that now differ from the Claude
+  Design project (*Needs the user*).
 
 **Exit gate:** open a large painted project, edit it, undo/redo, save/reopen,
 slice locally or externally, inspect toolpaths, and recover after process death
@@ -2227,6 +2556,9 @@ touch behavior; Googlebook remains unqualified until tested on real hardware.
 
 **Dependencies:** Phase 2 renderer decision and Phase 7 shared workflows.
 **Deliverables:** spatial workspace with complete authoring and output flows.
+
+Status (2026-10-12): not started. Only Phase 2's SceneCore candidate exists,
+and every item needs the user's Galaxy XR to verify.
 
 - [ ] Implement an XR capability adapter for session availability, space mode,
   supported input, anchors, and rendering lifecycle. Only initialize perception
@@ -2484,6 +2816,10 @@ credential storage, and explicit permission/error flows.
   simulator with no connection at all.
 - [ ] Test with the existing printer simulator before qualified, supervised U1
   and CC trials. Automated tests do not issue commands to real printers.
+  Status (2026-10-12): the simulator part is done: `android-device-smoke.py`
+  and `android-send-smoke.py` drive every Device tab and a complete send
+  against the Moonraker simulator on both emulators. Remains: supervised U1 and
+  Centauri Carbon trials, which need the user.
 
 **Exit gate:** identical simulator traces produce equivalent policy decisions
 on web and Android; permissions and reconnects are handled correctly; supervised
@@ -2493,6 +2829,10 @@ printer evidence closes only the specific behaviors actually observed.
 
 **Dependencies:** Phases 7–9. **Deliverables:** native capability/evidence matrix,
 remaining product workflows, and explicitly scoped companion support.
+
+Status (2026-10-12): not started as a phase; Phase 7 has carried much of the
+feature coverage. The open Android families are listed in *Resume here* items 2
+and 3.
 
 - [ ] Extend parity tooling to distinguish web DOM, WebXR, Android flat, and
   Android XR support and evidence. Generate manifests/reports through tooling;
@@ -2504,10 +2844,15 @@ remaining product workflows, and explicitly scoped companion support.
 - [ ] Port calibration definition binding, prerequisites, generated resources,
   preview/application, and history. Carry current unsupported firmware/automatic
   execution cases forward visibly; native packaging does not make them valid.
+  Status (2026-10-12): not started; neither the core nor the app has
+  calibration yet.
 - [ ] Port Smart Paint proposal validation and operator correction through the
   shared transaction pipeline. Adapt provider transport, camera/voice features,
   and consent per provider/payload where they exist in the current app. Optional
   services remain lazy and cannot gate core startup.
+  Status (2026-10-12): the browser commits a Smart Paint mask as one labelled
+  transaction of guarded intents that the core executes (Phase 4); proposal
+  validation, the provider transport and any Android UI are not ported.
 - [ ] Inventory existing automation and platform-specific integrations. Preserve
   action IDs and implement deliberate native adapters where applicable; document
   browser-only integrations explicitly rather than claiming automatic portability.
@@ -2532,6 +2877,8 @@ its own implementation and device evidence.
 **Dependencies:** all required gates for the target being released.
 **Deliverables:** reproducible release candidates, compatibility/rollback proof,
 hardware evidence, and maintained operating documentation.
+
+Status (2026-10-12): not started.
 
 - [ ] Run the complete web/server/WASM gate plus Rust, Android, cross-language,
   archive round-trip, engine route, hostile-input, lifecycle, and performance
@@ -2698,11 +3045,11 @@ effort separately from device availability and external distribution review.
 
 ## Implementation sequence and handoff discipline
 
-The foundation, engine/viewport experiments and G-code extraction now have the
-scoped evidence recorded above. Continue from the current handoff checklist;
-finish the shared project/archive seam while retaining the unresolved baseline,
-renderer and device dependencies. Broad native authoring begins only once the
-shared command and archive foundations can preserve real projects.
+The foundation, engine experiments, G-code extraction, the shared project and
+archive core, native slicing and most of the flat application now have the
+scoped evidence recorded above. Continue from *Resume here* in the Current
+handoff, keeping the unresolved baseline, renderer and device dependencies
+open until real evidence closes them.
 
 Track completion using the existing parity evidence convention: task, commit,
 date, fixture hashes, commands, device/OS/toolchain, result artifacts, reviewer,

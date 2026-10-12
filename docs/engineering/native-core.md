@@ -2561,8 +2561,9 @@ mutually exclusive bundle/package streams, budget and malformed-input refusals
 that leave the session untouched, chunk-order refusals, and closed-handle
 behavior. `tests/policy.rs` proves browser-equivalent budgets accept every
 browser Open and Save and that five tight budgets refuse with `resource_limit`.
-The Android instrumented test `actorArchiveOpenAndSaveCrossRealJni` has not run
-on a device.
+The Android instrumented test `actorArchiveOpenAndSaveCrossRealJni` runs with
+the rest of the core bridge's instrumented tests in both emulator suites (API 34,
+and API 37 with 16 KB pages).
 
 Staging rules live in `orcaxr_archive::staged::ArchiveInput`, shared by both
 bindings: a declared length is reserved before any chunk and must be met exactly;
@@ -5987,7 +5988,8 @@ applies a wall count of 6 and a 25% infill ("Undo Update object settings",
 "Settings (1)", "Settings (2)"), slices again and finds more G-code lines,
 resets the wall count by its key's "Use inherited", adds a 0–5 mm range
 from the "Layer ranges (0)" row, applies its own wall count ("Undo Update
-height range settings") and undoes it. The emulator smoke has not run yet.
+height range settings") and undoes it. It passes on both emulators (API 34,
+and API 37 with 16 KB pages).
 
 ### Android Preview area
 
@@ -6531,7 +6533,7 @@ file without a header, and Slice All Plates there; beside every published
 file it reads the sidecar and checks it binds that file's SHA-256 and length,
 its plate, one job per set, the profiles' configuration and the engine — the
 APK's engine manifest commit and ABI package digest locally, the attested
-stand-in build on the external slicer; it has not run yet. The
+stand-in build on the external slicer; it passes on both emulators. The
 send smoke now reads the published file's size from the device, since the
 file carries the plate's pictures.
 
@@ -6712,8 +6714,11 @@ and returning the focus and Escape, then resizes the display (`wm density`,
 `wm size`, always restored) for the medium rail and the expanded panels and
 crosses them with Tab. adb cannot drive a drag and drop. The smoke passes on
 both emulators. The command palette, the toolbar, the context menus, hover,
-trackpad and stylus input follow ([below](#android-command-palette-toolbar-and-context-menus));
-keyboard control of the 3D views remains.
+trackpad and stylus input follow ([below](#android-command-palette-toolbar-and-context-menus)).
+The browser's 3D view takes no keys of its own (its OrbitControls listen to
+none): its keyboard reaches the scene through the catalogue's shortcuts, which
+the app takes too, except G, R and S, whose move, rotate and scale gizmos the
+Workspace does not have yet.
 
 ### Android command palette, toolbar and context menus
 
@@ -8412,10 +8417,12 @@ the test authority, and absent source never silently skips that check.
 
 The workflow `.github/workflows/native-core.yml` repeats these checks independently
 of the existing web/server/engine gates. Its first GitHub-hosted run is not yet
-evidence. Physical ARM64, 16 KB runtime loading, API 37 runtime behavior, XR,
-Googlebook, sustained memory/thermal measurements, all project workflows, and
-supervised printer qualification remain open. No phase exit or release claim is
-closed by these foundation results.
+evidence. Physical ARM64, XR, Googlebook, sustained memory/thermal
+measurements, the project workflows the app does not have yet, and supervised
+printer qualification remain open. 16 KB runtime loading and API 37 behavior
+have emulator evidence since: an owned API 37 x86_64 image with 16 KB pages runs
+every smoke in `emulator-smoke.py` (see the plan's handoff), which is not device
+evidence. No phase exit or release claim is closed by these foundation results.
 
 Read-only inventory of a connected Samsung SM-I610 on 2026-10-04 reports Android
 14/API 34, ARM64, Adreno 740, 16,066,684 KiB reported RAM, and 4,096-byte pages.
