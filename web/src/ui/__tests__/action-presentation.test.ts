@@ -4,12 +4,19 @@
  * menu's sections and the toolbar's runs, each as the DOM and XR shells use it.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
-import { catalogGroups, paletteMatches, toolbarRuns } from '../ActionPresentation';
+import { catalogGroups, groupLabel, menuSectionLabel, paletteMatches, toolbarRuns } from '../ActionPresentation';
 import { actionGroupsExchange, commandPaletteExchange } from '../ActionPresentationExchange';
-import { GROUPS } from '../../actions/ActionRegistry';
+import { GROUPS, MENU_SECTIONS } from '../../actions/ActionRegistry';
 import { buildRegistry } from '../../actions/catalog';
 import { INITIAL_UI_STATE } from '../../actions/UiState';
+import { Localizer } from '../../l10n/Localizer';
+import { installLocalizer } from '../../l10n/t';
+import { contextMenuGroups } from '../dom/ContextMenu';
+import { xrMenuBarSections } from '../xr/XrMenuBar';
+import { xrInspectorPanels } from '../xr/XrPanels';
 import { xrPaletteMatches } from '../xr/XrCommandPalette';
 
 let passed = 0;
@@ -152,5 +159,47 @@ test('the exchange answers by position, and refuses what it cannot read', () => 
   ])
     assert.throws(() => actionGroupsExchange(bad), /invalid_request/, bad);
 });
+
+test('every group and menu-bar section has its message, by construction', () => {
+  const reference = catalogue('en');
+  for (const group of GROUPS) assert.equal(reference[`actionGroup.${group.id}.label`], group.label, group.id);
+  for (const section of MENU_SECTIONS) {
+    assert.equal(reference[`menuSection.${section.id}.label`], section.label, section.id);
+  }
+});
+
+test('a context menu, the XR panels and the menu bar are headed in the operator’s language', () => {
+  // Regression: the headings were each group's English label in every language, under translated entries.
+  const german = catalogue('de');
+  const l10n = new Localizer({ reference: catalogue('en') });
+  l10n.setCatalog('de', german);
+  const localized = buildRegistry().useTextSource(l10n);
+  installLocalizer(l10n);
+  try {
+    const headings = contextMenuGroups(localized, 'object', INITIAL_UI_STATE, () => {}).map((group) => group.label);
+    assert.deepEqual(headings, [german['actionGroup.edit.label'], german['actionGroup.scene.label'] ?? 'Scene']);
+    assert.equal(german['actionGroup.edit.label'], 'Bearbeiten', 'the edit group is translated from upstream');
+    assert.notEqual(headings[0], 'Edit');
+    const plate = contextMenuGroups(localized, 'plate', INITIAL_UI_STATE, () => {}).map((group) => group.label);
+    assert.equal(plate[0], german['actionGroup.file.label']);
+    assert.equal(groupLabel('file'), 'Datei');
+    assert.equal(menuSectionLabel('view'), german['menuSection.view.label']);
+    const panels = xrInspectorPanels(localized).map((panel) => panel.label);
+    assert.ok(panels.includes(german['actionGroup.file.label']), 'the XR panel for the File group');
+    const bar = xrMenuBarSections(localized).map((section) => section.label);
+    assert.equal(bar[0], german['menuSection.file.label']);
+  } finally {
+    installLocalizer(undefined);
+  }
+  // Without a localizer the headings stay the catalogue's English.
+  assert.equal(groupLabel('edit'), 'Edit');
+  assert.equal(menuSectionLabel('calibration'), 'Calibration');
+});
+
+function catalogue(locale: string): Record<string, string> {
+  return JSON.parse(
+    readFileSync(resolve(import.meta.dirname, `../../../public/l10n/${locale}.json`), 'utf8'),
+  ) as Record<string, string>;
+}
 
 console.log(`\nAction presentation: ${passed} tests passed.`);

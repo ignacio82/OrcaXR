@@ -20,6 +20,7 @@
  */
 import type { ActionRegistry } from '../../actions/ActionRegistry';
 import { MENU_SECTIONS, XR_PANELS_SECTION_ID } from '../../actions/ActionRegistry';
+import { menuSectionLabel } from '../ActionPresentation';
 import { t } from '../../l10n/t';
 import { tokens } from '../tokens';
 import {
@@ -53,7 +54,7 @@ export function xrMenuBarSections(registry: ActionRegistry): XrMenuBarSection[] 
   const menu = registry.forSurface('xr-menu');
   const sections: XrMenuBarSection[] = MENU_SECTIONS.filter((section) =>
     menu.some((action) => String(action.menuSection) === section.id),
-  ).map((section) => ({ id: String(section.id), label: section.label }));
+  ).map((section) => ({ id: String(section.id), label: menuSectionLabel(section.id) }));
   if (registry.forSurface('xr-inspector').length > 0) {
     sections.push({ id: XR_PANELS_SECTION_ID, label: t('ui.xrMenuBar.panels', 'Panels') });
   }

@@ -13,6 +13,7 @@
     <string name="project_save">Uložit projekt</string>
     <string name="project_undo">Zpět</string>
     <string name="project_redo">Vpřed</string>
+    <string name="project_edit_menu">Upravit</string>
     <string name="project_edit_select_all">Vybrat vše</string>
     <string name="project_edit_delete_all">Smazat vše</string>
     <string name="project_toggle_printable">Tisknout objekt</string>
@@ -27,6 +28,7 @@
     <string name="view_camera_right">Pohled zprava</string>
     <string name="view_camera_rear">Pohled zezadu</string>
     <string name="view_camera_bottom">Pohled zespod</string>
+    <string name="project_add_menu">Přidat</string>
     <string name="project_edit_cut">Řezat</string>
     <string name="project_edit_copy">Kopírovat</string>
     <string name="project_edit_paste">Vložit</string>
@@ -50,6 +52,15 @@
     <string name="paint_tool_sphere">Koule</string>
     <string name="action_delete_models">Smazat</string>
     <string name="action_tool_support_paint">Malování podpěr</string>
+    <string name="action_group_file">Soubor</string>
+    <string name="action_group_edit">Upravit</string>
+    <string name="action_group_view">Zobrazení</string>
+    <string name="action_group_paint">Malovat</string>
+    <string name="action_group_slice">Slicovat</string>
+    <string name="action_group_filament">Filament</string>
+    <string name="action_group_calibration">Kalibrace</string>
+    <string name="action_group_advanced">Pokročilé</string>
+    <string name="action_group_help">Nápověda</string>
     <string name="settings_detail_level">Úroveň detailu</string>
     <string name="ranges_heading">Výškové rozsahy</string>
     <string name="ranges_settings">Nastavení</string>

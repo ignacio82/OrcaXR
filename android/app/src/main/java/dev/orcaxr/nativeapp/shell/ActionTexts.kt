@@ -2,6 +2,7 @@ package dev.orcaxr.nativeapp.shell
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
+import dev.orcaxr.core.ActionSection
 import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.nativeapp.R
 
@@ -10,8 +11,26 @@ import dev.orcaxr.nativeapp.R
  * hint for it (`action.<id>.label` and `.hint`, as `ActionRegistry`'s text
  * source localizes them), as string resources in the app's language. The
  * hint is the browser's tooltip and the command palette's second column.
+ * And a catalogue group's label (`actionGroup.<id>.label`), a grouped
+ * menu's section heading as the browser's `groupLabel` words it.
  */
 object ActionTexts {
+    /** Every catalogue group, in the browser's declared order (`GROUPS`), with its label. */
+    val GROUPS: Map<String, Int> = linkedMapOf(
+        "file" to R.string.action_group_file,
+        "edit" to R.string.action_group_edit,
+        "view" to R.string.action_group_view,
+        "scene" to R.string.action_group_scene,
+        "paint" to R.string.action_group_paint,
+        "slice" to R.string.action_group_slice,
+        "filament" to R.string.action_group_filament,
+        "output" to R.string.action_group_output,
+        "calibration" to R.string.action_group_calibration,
+        "advanced" to R.string.action_group_advanced,
+        "help" to R.string.action_group_help,
+        "system" to R.string.action_group_system,
+    )
+
     /** Each action the app performs, by catalogue id, with its label. */
     val LABELS: Map<String, Int> = mapOf(
         "file_new_project" to R.string.project_new,
@@ -137,6 +156,14 @@ object ActionTexts {
     /** [action]'s label in the app's language; the core's English one for an action the app has no words for. */
     @Composable
     fun label(action: ProjectActionState): String = LABELS[action.id]?.let { stringResource(it) } ?: action.label
+
+    /**
+     * [section]'s heading in the app's language: its group's label, as the
+     * browser's `groupLabel` localizes it (the core's English for a group the
+     * app does not know).
+     */
+    @Composable
+    fun heading(section: ActionSection): String = GROUPS[section.group]?.let { stringResource(it) } ?: section.label
 
     /** [id]'s hint in the app's language, if it has one. */
     @Composable

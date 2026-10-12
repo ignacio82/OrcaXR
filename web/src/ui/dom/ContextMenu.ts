@@ -17,7 +17,7 @@
  */
 
 import type { Action, ActionRegistry, ContextTarget } from '../../actions/ActionRegistry';
-import { catalogGroups } from '../ActionPresentation';
+import { catalogGroups, groupLabel } from '../ActionPresentation';
 import type { UiStateShape } from '../../actions/UiState';
 
 /**
@@ -51,7 +51,7 @@ export function contextMenuGroups(
     });
   }
   return catalogGroups(entries).map(({ group, actions }) => ({
-    label: group.label,
+    label: groupLabel(group.id),
     items: actions.map((entry) => entry.item),
   }));
 }

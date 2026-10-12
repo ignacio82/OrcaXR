@@ -588,9 +588,7 @@ private fun TreeRow(row: ProjectIntents.ObjectTreeRow, view: ProjectView, model:
                 )
             }
             val actions = choices.filterIsInstance<ProjectEditing.Choice.Action>().map { it.state }
-            val sections = remember(actions) {
-                ActionPresentation.arrange(actions, ActionArrangement.CONTEXT) { it.id }.map { (section, members) -> section.label to members }
-            }
+            val sections = remember(actions) { ActionPresentation.arrange(actions, ActionArrangement.CONTEXT) { it.id } }
             ActionSections(sections, enabled = { !model.busy && (it.enabled || model.toolActive(it.id)) }) { action ->
                 menu = false
                 model.perform(action.id)

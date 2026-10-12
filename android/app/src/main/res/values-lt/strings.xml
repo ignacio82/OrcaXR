@@ -13,6 +13,7 @@
     <string name="project_save">Išsaugoti projektą</string>
     <string name="project_undo">Anuliuoti</string>
     <string name="project_redo">Perdaryti</string>
+    <string name="project_edit_menu">Redaguoti</string>
     <string name="project_edit_select_all">Pasirinkti viską</string>
     <string name="project_edit_deselect_all">Atšaukti visus</string>
     <string name="project_edit_delete_all">Ištrinti visus</string>
@@ -29,6 +30,7 @@
     <string name="view_camera_right">Vaizdas iš dešinės</string>
     <string name="view_camera_rear">Vaizdas iš galo</string>
     <string name="view_camera_bottom">Vaizdas iš apačios</string>
+    <string name="project_add_menu">Įtraukti</string>
     <string name="project_edit_cut">Pjauti</string>
     <string name="project_edit_copy">Kopijuoti</string>
     <string name="project_edit_paste">Įklijuoti</string>
@@ -52,6 +54,15 @@
     <string name="paint_tool_sphere">Sfera</string>
     <string name="action_delete_models">Ištrinti</string>
     <string name="action_tool_support_paint">Palaiko piešimą</string>
+    <string name="action_group_file">Failas</string>
+    <string name="action_group_edit">Redaguoti</string>
+    <string name="action_group_view">Vaizdas</string>
+    <string name="action_group_paint">Piešti</string>
+    <string name="action_group_slice">Sluoksniuoti</string>
+    <string name="action_group_filament">Gija</string>
+    <string name="action_group_calibration">Kalibravimas</string>
+    <string name="action_group_advanced">Plačiau</string>
+    <string name="action_group_help">Pagalba</string>
     <string name="settings_detail_level">Detalių lygis</string>
     <string name="ranges_heading">Aukščio diapazonai</string>
     <string name="ranges_settings">Nustatymai</string>

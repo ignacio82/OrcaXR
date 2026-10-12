@@ -13,6 +13,7 @@
     <string name="project_save">儲存專案項目</string>
     <string name="project_undo">復原</string>
     <string name="project_redo">重做</string>
+    <string name="project_edit_menu">編輯</string>
     <string name="project_edit_select_all">全選</string>
     <string name="project_edit_deselect_all">取消全選</string>
     <string name="project_edit_delete_all">刪除所有</string>
@@ -29,6 +30,7 @@
     <string name="view_camera_right">右視圖</string>
     <string name="view_camera_rear">後視圖</string>
     <string name="view_camera_bottom">底部視圖</string>
+    <string name="project_add_menu">新增</string>
     <string name="project_edit_cut">切割</string>
     <string name="project_edit_copy">複製</string>
     <string name="project_edit_paste">貼上</string>
@@ -52,6 +54,15 @@
     <string name="paint_tool_sphere">球體</string>
     <string name="action_delete_models">刪除</string>
     <string name="action_tool_support_paint">支撐筆刷</string>
+    <string name="action_group_file">檔案</string>
+    <string name="action_group_edit">編輯</string>
+    <string name="action_group_view">視角</string>
+    <string name="action_group_paint">繪製</string>
+    <string name="action_group_slice">切片</string>
+    <string name="action_group_filament">線材</string>
+    <string name="action_group_calibration">校正</string>
+    <string name="action_group_advanced">進階</string>
+    <string name="action_group_help">幫助</string>
     <string name="settings_detail_level">細節等級</string>
     <string name="ranges_heading">高度範圍</string>
     <string name="ranges_settings">設定</string>

@@ -15,6 +15,7 @@
  */
 import type { Action, ActionRegistry, ActionSurface, ContextTarget } from '../../actions/ActionRegistry';
 import { XR_PANELS_SECTION_ID, MENU_SECTIONS } from '../../actions/ActionRegistry';
+import { menuSectionLabel } from '../ActionPresentation';
 import { INITIAL_UI_STATE, type UiStateShape } from '../../actions/UiState';
 import type { ObjectTreeEntityRef, ObjectTreeProjection, ObjectTreeSelectionSnapshot } from '../../project/objects';
 import type { ScopedStepperRow, ScopedStepperView } from '../../settings/editor/scopedStepper';
@@ -640,7 +641,8 @@ function overlayCard(kind: string, layout: 'keypad' | 'keyboard' | undefined): X
 
 function sectionTitle(sectionId: string): string {
   if (sectionId === XR_PANELS_SECTION_ID) return t('ui.xrImmersiveShell.panels', 'Panels');
-  return MENU_SECTIONS.find((section) => String(section.id) === sectionId)?.label ?? sectionId;
+  const section = MENU_SECTIONS.find((candidate) => String(candidate.id) === sectionId);
+  return section ? menuSectionLabel(section.id) : sectionId;
 }
 
 /** The keypad a numeric wave-overhang option asks for: its engine bounds, unit, and integer-ness. */

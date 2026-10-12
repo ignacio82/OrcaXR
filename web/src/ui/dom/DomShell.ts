@@ -31,7 +31,7 @@
 import type { Action, ActionRegistry, ActionSurface } from '../../actions/ActionRegistry';
 import { MENU_SECTIONS } from '../../actions/ActionRegistry';
 import type { ActionContext } from '../../actions/ActionContext';
-import { toolbarRuns } from '../ActionPresentation';
+import { menuSectionLabel, toolbarRuns } from '../ActionPresentation';
 import { ariaShortcutValue } from '../../actions/ShortcutCatalog';
 import type { UiState, UiStateShape } from '../../actions/UiState';
 import { applyIcon } from '../icons';
@@ -151,7 +151,7 @@ export class DomShell {
       host.className = 'menu-host';
       hosts.menuBar.appendChild(host);
       this.menuHosts.push(host);
-      this.buildMenu(host, section.label, items);
+      this.buildMenu(host, section.id, menuSectionLabel(section.id), items);
     }
     this.bindMenuButton(hosts.menuButton, hosts.menuBar);
 
@@ -341,7 +341,7 @@ export class DomShell {
     });
   }
 
-  private buildMenu(host: HTMLElement, triggerLabel: string, actions: Action[]): void {
+  private buildMenu(host: HTMLElement, sectionId: string, triggerLabel: string, actions: Action[]): void {
     host.innerHTML = '';
     const trigger = document.createElement('button');
     trigger.type = 'button';
@@ -353,7 +353,8 @@ export class DomShell {
     dropdown.className = 'menu-dropdown';
     dropdown.setAttribute('role', 'menu');
     dropdown.setAttribute('aria-label', triggerLabel);
-    const dropdownId = `oxr-menu-${triggerLabel.toLowerCase()}`;
+    // By the section, not its words: the id is the same in every language.
+    const dropdownId = `oxr-menu-${sectionId}`;
     dropdown.id = dropdownId;
     trigger.setAttribute('aria-controls', dropdownId);
 

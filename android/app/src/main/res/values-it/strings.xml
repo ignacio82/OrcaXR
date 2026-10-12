@@ -13,6 +13,7 @@
     <string name="project_save">Salva Progetto</string>
     <string name="project_undo">Annulla</string>
     <string name="project_redo">Ripeti</string>
+    <string name="project_edit_menu">Modifica</string>
     <string name="project_edit_select_all">Seleziona tutto</string>
     <string name="project_edit_deselect_all">Deseleziona tutto</string>
     <string name="project_edit_delete_all">Elimina tutto</string>
@@ -29,6 +30,7 @@
     <string name="view_camera_right">Vista da destra</string>
     <string name="view_camera_rear">Vista da dietro</string>
     <string name="view_camera_bottom">Vista dal basso</string>
+    <string name="project_add_menu">Aggiungi</string>
     <string name="project_edit_cut">Taglia</string>
     <string name="project_edit_copy">Copia</string>
     <string name="project_edit_paste">Incolla</string>
@@ -52,6 +54,15 @@
     <string name="paint_tool_sphere">Sfera</string>
     <string name="action_delete_models">Elimina</string>
     <string name="action_tool_support_paint">Dipingi supporti</string>
+    <string name="action_group_file">File</string>
+    <string name="action_group_edit">Modifica</string>
+    <string name="action_group_view">Vista</string>
+    <string name="action_group_paint">Pittura</string>
+    <string name="action_group_slice">Elabora</string>
+    <string name="action_group_filament">Filamento</string>
+    <string name="action_group_calibration">Calibrazione</string>
+    <string name="action_group_advanced">Avanzate</string>
+    <string name="action_group_help">Aiuto</string>
     <string name="settings_detail_level">Livello di dettaglio</string>
     <string name="ranges_heading">Intervalli di altezza</string>
     <string name="ranges_settings">Impostazioni</string>

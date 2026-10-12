@@ -6674,7 +6674,10 @@ there, so it stays under the strip.)
 
 The context menus are the browser's (`ContextMenu.ts`): sections per
 catalogue group in `GROUPS` order with the group's label as a small
-heading (English, as the browser's headings are), each entry the symbol,
+heading in the app's language (`ActionTexts.heading`: the section's group id
+to an `action_group_<id>` resource carrying the browser's
+`actionGroup.<id>.label`, as the browser's `groupLabel` words it — the
+core's English label only for a group the app does not know), each entry the symbol,
 label and menu shortcut, enabled as the core enables it (its reason as the
 tooltip). A long press (finger or pen) or a secondary click (the mouse's
 right button, a touchpad's two-finger click, a pen's button) on the
@@ -6686,7 +6689,8 @@ this plate". An Objects-tree row's menu (Rename, then the same catalogue
 menu for the row's kind, now in its sections) opens on a long press, a
 secondary click, the keyboard's menu key or Shift+F10, as the browser's
 Objects panel. The Edit and Add menus show the actions' symbols and
-shortcuts.
+shortcuts, and are named as the browser's menu bar names those sections
+(`menuSection.edit.label`, `menuSection.add.label`).
 
 Pointer and hover: buttons, menu entries and palette rows show the hand
 pointer where the browser's `cursor: pointer` does, and tooltips appear on
@@ -6716,7 +6720,7 @@ with the core's reasons, a search finds the cube the Add menu's call adds as
 the object menu's sections (Edit, Scene) and the plate's (File, Edit, Scene,
 Slice, System), Clone Selected and the toolbar's Delete each one step, and
 Delete disabled with the browser's reason once nothing is selected.
-`AppActionsTest` (6) and `OrbitGesturesTest` (4, renderer-api) cover the
+`AppActionsTest` (7) and `OrbitGesturesTest` (4, renderer-api) cover the
 platform-free parts. `android-palette-smoke.py` (in `emulator-smoke.py`
 before the accessibility smoke) opens the palette with Ctrl+K, finds nothing
 for "zzzz", closes it with Escape, adds the cube with "cube" and Enter (its
@@ -7026,7 +7030,16 @@ compared as UTF-16 code units, in the order given — no ranking beyond the
 catalogue's order; a context menu's sections, the catalogue groups in
 `GROUPS`' declared order (the generated catalogue now carries each group's
 label and that order: `Group::label`, `Group::ORDER`); and the model
-toolbar's runs, consecutive actions of one group. The exchange
+toolbar's runs, consecutive actions of one group. A section's heading and a
+menu bar's section are worded by the shell, in its language: the browser's
+`groupLabel` and `menuSectionLabel` look up `actionGroup.<id>.label` and
+`menuSection.<id>.label`, which `generate-messages.mjs` derives from `GROUPS`
+and `MENU_SECTIONS` as it derives the actions' own messages (the context
+menus, the XR inspector's panels, the DOM and XR menu bars and the immersive
+shell's section titles had shown the English labels under translated
+entries; the DOM menu bar's dropdown ids are now the section's id, the same in
+every language), and Android maps them as resources; the exchange's `label`
+stays the catalogue's English. The exchange
 (`ActionPresentationExchange.ts`) is canonical JSON: `palette_json` reads
 `{"actions":[{"hint"?,"id","label"}],"query"}` and answers
 `{"matches":[index]}`; `groups_json` reads `{"actions":[id],"layout":"context"|"toolbar"}`

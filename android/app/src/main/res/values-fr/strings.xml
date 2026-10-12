@@ -13,6 +13,7 @@
     <string name="project_save">Enregistrer le projet</string>
     <string name="project_undo">Annuler</string>
     <string name="project_redo">Recommencer</string>
+    <string name="project_edit_menu">Éditer</string>
     <string name="project_edit_select_all">Tout sélectionner</string>
     <string name="project_edit_deselect_all">Désélectionner tout</string>
     <string name="project_edit_delete_all">Tout Supprimer</string>
@@ -29,6 +30,7 @@
     <string name="view_camera_right">Vue Droite</string>
     <string name="view_camera_rear">Vue Arrière</string>
     <string name="view_camera_bottom">Vue du Dessous</string>
+    <string name="project_add_menu">Ajouter</string>
     <string name="project_edit_cut">Couper</string>
     <string name="project_edit_copy">Copier</string>
     <string name="project_edit_paste">Coller</string>
@@ -52,6 +54,15 @@
     <string name="paint_tool_sphere">Sphère</string>
     <string name="action_delete_models">Supprimer</string>
     <string name="action_tool_support_paint">Peindre les supports</string>
+    <string name="action_group_file">Fichier</string>
+    <string name="action_group_edit">Éditer</string>
+    <string name="action_group_view">Affichage</string>
+    <string name="action_group_paint">Peindre</string>
+    <string name="action_group_slice">Découper</string>
+    <string name="action_group_filament">Filament</string>
+    <string name="action_group_calibration">Calibration</string>
+    <string name="action_group_advanced">Avancé</string>
+    <string name="action_group_help">Aide</string>
     <string name="settings_detail_level">Niveau de détail</string>
     <string name="ranges_heading">Plages de hauteur</string>
     <string name="ranges_settings">Réglages</string>

@@ -7,12 +7,15 @@
  *  - {@link catalogGroups}: a context menu's sections, one per catalogue group
  *    in {@link GROUPS} order, each keeping the order given;
  *  - {@link toolbarRuns}: the model toolbar's runs, a separator wherever the
- *    group changes.
+ *    group changes;
+ *  - {@link groupLabel} and {@link menuSectionLabel}: a section's heading and a
+ *    menu bar's section, in the operator's language.
  *
  * `ActionPresentationExchange.ts` answers the same questions over canonical
  * JSON, which is how the Rust port is held to these.
  */
-import { GROUPS, type ActionGroup, type GroupId } from '../actions/ActionRegistry';
+import { GROUPS, MENU_SECTIONS, type ActionGroup, type GroupId, type MenuSection } from '../actions/ActionRegistry';
+import { t } from '../l10n/t';
 
 /** The text the palette searches: an action's id, its label and its hint, as the shell shows them. */
 export interface PaletteSearchable {
@@ -75,6 +78,26 @@ export function toolbarRuns<T extends { readonly group: GroupId }>(actions: read
     else runs.push({ group: groupOf(action.group), actions: [action] });
   }
   return runs;
+}
+
+/**
+ * A catalogue group's label in the operator's language: the heading of a
+ * context menu's section, the name of an XR inspector panel.
+ *
+ * The ids are derived from {@link GROUPS} (`actionGroup.<id>.label`) and
+ * extracted from it by construction, as the actions' own labels are from the
+ * registry, so a menu of translated entries is never headed in English (the
+ * headings were English in every language before).
+ */
+export function groupLabel(id: GroupId): string {
+  const group = GROUPS.find((candidate) => candidate.id === id);
+  return group ? t(`actionGroup.${group.id}.label`, group.label) : id;
+}
+
+/** A menu-bar section's label in the operator's language (`menuSection.<id>.label`, from {@link MENU_SECTIONS}). */
+export function menuSectionLabel(id: MenuSection): string {
+  const section = MENU_SECTIONS.find((candidate) => candidate.id === id);
+  return section ? t(`menuSection.${section.id}.label`, section.label) : id;
 }
 
 function groupOf(id: GroupId): ActionGroup {

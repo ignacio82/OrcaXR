@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.orcaxr.core.ActionSection
 import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.nativeapp.theme.OrcaActionGlyphs
 
@@ -91,19 +92,20 @@ fun ActionIconButton(action: ProjectActionState, tool: Boolean, active: Boolean,
 
 /**
  * A grouped action menu's entries, as the browser's context menu draws them
- * (`ContextMenu.ts`): each section's heading (the catalogue group's label,
- * small and muted; none for a section without one), then its actions — the
+ * (`ContextMenu.ts`): each section's heading (the catalogue group's label in
+ * the app's language, [ActionTexts.heading], small and muted), then its actions — the
  * symbol, the label and the shortcut the browser's menus print, the hint as
  * the tooltip (or, for an entry the core does not enable, why: on mouse hover
  * or a long press) and a hand pointer over an enabled one.
  */
 @Composable
 fun ColumnScope.ActionSections(
-    sections: List<Pair<String, List<ProjectActionState>>>,
+    sections: List<Pair<ActionSection, List<ProjectActionState>>>,
     enabled: (ProjectActionState) -> Boolean = { it.enabled },
     run: (ProjectActionState) -> Unit,
 ) {
-    sections.forEachIndexed { index, (heading, actions) ->
+    sections.forEachIndexed { index, (section, actions) ->
+        val heading = ActionTexts.heading(section)
         if (heading.isNotEmpty()) {
             Text(
                 heading.uppercase(),

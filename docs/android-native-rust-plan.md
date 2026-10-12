@@ -2058,7 +2058,9 @@ storage journeys on phone, tablet, and desktop-sized windows.
   across a phone's width or centred from 600 dp. A long press or secondary
   click on the Workspace opens the browser's scene menu (a model's or the
   plate's) and a tree row's menu opens on a secondary click or the menu key,
-  both in the catalogue's sections; menus show the browser's symbols and
+  both in the catalogue's sections, headed in the app's language (the
+  browser's headings were English in every language; both now read
+  `actionGroup.<id>.label`); menus show the browser's symbols and
   shortcuts. Tooltips on hover, the hand pointer, and the 3D views' mouse,
   wheel, trackpad and touchpad gestures follow OrbitControls; a stylus is a
   finger whose button is a secondary click (a 1,949-check JNI journey, JVM

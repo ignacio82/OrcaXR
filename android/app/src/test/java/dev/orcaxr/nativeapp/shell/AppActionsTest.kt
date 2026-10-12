@@ -21,6 +21,16 @@ class AppActionsTest {
         assertEquals(57, AppActions.PERFORMED.size)
     }
 
+    @Test fun everyCatalogueGroupHeadsItsSectionsInTheAppsLanguage() {
+        // The browser's GROUPS in their declared order, each a resource carrying `actionGroup.<id>.label` (its translations
+        // generated from the browser's catalogues), so a menu of translated entries is never headed in the core's English.
+        assertEquals(
+            listOf("file", "edit", "view", "scene", "paint", "slice", "filament", "output", "calibration", "advanced", "help", "system"),
+            ActionTexts.GROUPS.keys.toList(),
+        )
+        assertEquals(ActionTexts.GROUPS.size, ActionTexts.GROUPS.values.toSet().size)
+    }
+
     @Test fun theMenusShortcutsAreTheBrowsers() {
         // DomShell's `shortcutHint`: the first binding, Control as Ctrl, Shift as ⇧.
         assertEquals("Ctrl+Z", OrcaActionGlyphs.actions.getValue("edit_undo").shortcut)

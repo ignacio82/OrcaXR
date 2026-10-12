@@ -12,6 +12,7 @@
     <string name="project_save">Bewaar project</string>
     <string name="project_undo">Ongedaan maken</string>
     <string name="project_redo">Opnieuw doen</string>
+    <string name="project_edit_menu">Bewerken</string>
     <string name="project_edit_select_all">Alles selecteren</string>
     <string name="project_edit_deselect_all">Alles deselecteren</string>
     <string name="project_edit_delete_all">Alles verwijderen</string>
@@ -27,6 +28,7 @@
     <string name="view_camera_right">Rechterzijde bekijken</string>
     <string name="view_camera_rear">Achteraanzicht</string>
     <string name="view_camera_bottom">Onderaanzicht</string>
+    <string name="project_add_menu">Toevoegen</string>
     <string name="project_edit_cut">Knippen</string>
     <string name="project_edit_copy">Kopie</string>
     <string name="project_edit_paste">Plakken</string>
@@ -50,6 +52,15 @@
     <string name="paint_tool_sphere">Bol</string>
     <string name="action_delete_models">Verwijderen</string>
     <string name="action_tool_support_paint">Ondersteuning (Support) tekenen</string>
+    <string name="action_group_file">Bestand</string>
+    <string name="action_group_edit">Bewerken</string>
+    <string name="action_group_view">Weergave</string>
+    <string name="action_group_paint">Tekenen</string>
+    <string name="action_group_slice">Slice</string>
+    <string name="action_group_filament">Filament</string>
+    <string name="action_group_calibration">Kalibratie</string>
+    <string name="action_group_advanced">Geavanceerd</string>
+    <string name="action_group_help">Hulp</string>
     <string name="settings_detail_level">Detailniveau</string>
     <string name="ranges_heading">Hoogtebereiken</string>
     <string name="ranges_settings">Instellingen</string>

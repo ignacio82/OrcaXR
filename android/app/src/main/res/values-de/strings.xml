@@ -13,6 +13,7 @@
     <string name="project_save">Projekt speichern</string>
     <string name="project_undo">Rückgängig machen</string>
     <string name="project_redo">Wiederholen</string>
+    <string name="project_edit_menu">Bearbeiten</string>
     <string name="project_edit_select_all">Alle auswählen</string>
     <string name="project_edit_deselect_all">Alle abwählen</string>
     <string name="project_edit_delete_all">Alles löschen</string>
@@ -29,6 +30,7 @@
     <string name="view_camera_right">Ansicht von rechts</string>
     <string name="view_camera_rear">Ansicht von Hinten</string>
     <string name="view_camera_bottom">Ansicht von unten</string>
+    <string name="project_add_menu">Hinzufügen</string>
     <string name="project_edit_cut">Schneiden</string>
     <string name="project_edit_copy">Kopieren</string>
     <string name="project_edit_paste">Einfügen</string>
@@ -52,6 +54,15 @@
     <string name="paint_tool_sphere">Kugel</string>
     <string name="action_delete_models">Löschen</string>
     <string name="action_tool_support_paint">Stützen aufmalen</string>
+    <string name="action_group_file">Datei</string>
+    <string name="action_group_edit">Bearbeiten</string>
+    <string name="action_group_view">Ansicht</string>
+    <string name="action_group_paint">Malen</string>
+    <string name="action_group_slice">Slice</string>
+    <string name="action_group_filament">Filament</string>
+    <string name="action_group_calibration">Kalibrierung</string>
+    <string name="action_group_advanced">Erweiterte Einstellungen</string>
+    <string name="action_group_help">Hilfe</string>
     <string name="settings_detail_level">Detailgrad</string>
     <string name="ranges_heading">Höhenbereiche</string>
     <string name="ranges_settings">Einstellungen</string>

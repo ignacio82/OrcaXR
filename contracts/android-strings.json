@@ -28,6 +28,20 @@
     "prepare_no_presets": { "key": "app.main.noCompatiblePresets" },
     "prepare_own_settings": { "key": "app.main.usingTheProjectSOwn" },
     "prepare_remove": { "key": "action.delete_models.label" },
+    "action_group_file": { "key": "actionGroup.file.label" },
+    "action_group_edit": { "key": "actionGroup.edit.label" },
+    "action_group_view": { "key": "actionGroup.view.label" },
+    "action_group_scene": { "key": "actionGroup.scene.label" },
+    "action_group_paint": { "key": "actionGroup.paint.label" },
+    "action_group_slice": { "key": "actionGroup.slice.label" },
+    "action_group_filament": { "key": "actionGroup.filament.label" },
+    "action_group_output": { "key": "actionGroup.output.label" },
+    "action_group_calibration": { "key": "actionGroup.calibration.label" },
+    "action_group_advanced": { "key": "actionGroup.advanced.label" },
+    "action_group_help": { "key": "actionGroup.help.label" },
+    "action_group_system": { "key": "actionGroup.system.label" },
+    "project_edit_menu": { "key": "menuSection.edit.label" },
+    "project_add_menu": { "key": "menuSection.add.label" },
     "prepare_preflight": {
       "key": "ui.slicePreflightPanel.slicePreflightIssues"
     },
@@ -411,7 +425,6 @@
     "project_import_blocked",
     "project_import_confirm",
     "project_import_accept",
-    "project_edit_menu",
     "project_plate_actions",
     "project_plate_move_up",
     "project_plate_move_down",
@@ -460,7 +473,6 @@
     "paint_status_erase_needs_model",
     "paint_status_erased_all",
     "paint_status_nothing",
-    "project_add_menu",
     "device_printers",
     "device_no_printers",
     "device_add_printer",
@@ -821,6 +833,37 @@
     }
   ],
   "declined": [
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "text": "File",
+      "key": "menuSection.file.label",
+      "reason": "The send dialog's File fact names the G-code file sent, not the browser's File menu or action group."
+    },
+    {
+      "resource": "prepare_filament",
+      "key": "actionGroup.filament.label",
+      "reason": "Prepare's Filament picker names the filament preset, not the catalogue's Filament group (a menu's section heading)."
+    },
+    {
+      "resource": "preview_view",
+      "key": "menuSection.view.label",
+      "reason": "The preview's View chooser names its colour mode, not the browser's View menu or action group (the camera views)."
+    },
+    {
+      "resource": "vf_edit",
+      "key": "menuSection.edit.label",
+      "reason": "The virtual-filament row's Edit button is a verb on that filament, not the browser's Edit menu or action group."
+    },
+    {
+      "resource": "settings_mode_advanced",
+      "key": "actionGroup.advanced.label",
+      "reason": "The settings panel's Advanced mode (Simple, Advanced, Develop) is not the catalogue's Advanced group (a menu's section heading; de: Erweiterte Einstellungen)."
+    },
+    {
+      "resource": "vf_submit_add",
+      "key": "menuSection.add.label",
+      "reason": "The virtual-filament dialog's Add submits the new filament, not the browser's Add menu."
+    },
     {
       "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
       "text": "Plate",

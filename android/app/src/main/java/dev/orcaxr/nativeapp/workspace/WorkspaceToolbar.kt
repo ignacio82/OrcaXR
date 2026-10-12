@@ -155,9 +155,7 @@ internal fun SceneMenu(model: ProjectModel, request: SceneMenuRequest, close: ()
     val run = LocalActionRunner.current
     val objectMenu = request.instanceId != null
     val actions = AppActions.performed(if (objectMenu) view.objectMenu else view.plateMenu)
-    val sections = remember(actions) {
-        ActionPresentation.arrange(actions, ActionArrangement.CONTEXT) { it.id }.map { (section, members) -> section.label to members }
-    }
+    val sections = remember(actions) { ActionPresentation.arrange(actions, ActionArrangement.CONTEXT) { it.id } }
     val name = stringResource(if (objectMenu) R.string.menu_scene_object else R.string.menu_scene_plate)
     Box(Modifier.offset { IntOffset(request.x.toInt(), request.y.toInt()) }) {
         DropdownMenu(

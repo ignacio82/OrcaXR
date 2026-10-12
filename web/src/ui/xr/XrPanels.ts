@@ -15,6 +15,7 @@
  */
 import type { ActionRegistry, GroupId } from '../../actions/ActionRegistry';
 import { GROUPS } from '../../actions/ActionRegistry';
+import { groupLabel } from '../ActionPresentation';
 import { t } from '../../l10n/t';
 
 export type XrPanelId = 'objects' | 'settings' | 'wave-overhangs' | `group:${GroupId}`;
@@ -61,7 +62,7 @@ export function xrInspectorPanels(registry: ActionRegistry): readonly XrPanelDes
   for (const group of GROUPS) {
     const count = inspector.filter((action) => action.group === group.id).length;
     if (count === 0) continue;
-    panels.push({ id: xrGroupPanelId(group.id), label: group.label, icon: group.icon, actionCount: count });
+    panels.push({ id: xrGroupPanelId(group.id), label: groupLabel(group.id), icon: group.icon, actionCount: count });
   }
   return panels;
 }

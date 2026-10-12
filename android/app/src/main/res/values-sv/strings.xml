@@ -13,6 +13,7 @@
     <string name="project_save">Spara Projekt</string>
     <string name="project_undo">Ångra</string>
     <string name="project_redo">Gör om</string>
+    <string name="project_edit_menu">Redigera</string>
     <string name="project_edit_select_all">Välj Alla</string>
     <string name="project_edit_deselect_all">Avmarkera alla</string>
     <string name="project_edit_delete_all">Radera Allt</string>
@@ -27,6 +28,7 @@
     <string name="view_camera_right">Vy Höger</string>
     <string name="view_camera_rear">Vy Bakifrån</string>
     <string name="view_camera_bottom">Vy Botten</string>
+    <string name="project_add_menu">Lägg till</string>
     <string name="project_edit_cut">Beskär</string>
     <string name="project_edit_copy">Kopiera</string>
     <string name="project_edit_paste">Klistra in</string>
@@ -49,6 +51,15 @@
     <string name="paint_tool_sphere">Sfär</string>
     <string name="action_delete_models">Radera</string>
     <string name="action_tool_support_paint">Färgläggning av Support</string>
+    <string name="action_group_file">Fil</string>
+    <string name="action_group_edit">Redigera</string>
+    <string name="action_group_view">Vy</string>
+    <string name="action_group_paint">Färglägga</string>
+    <string name="action_group_slice">Bered</string>
+    <string name="action_group_filament">Filament</string>
+    <string name="action_group_calibration">Kalibrering</string>
+    <string name="action_group_advanced">Avancerat</string>
+    <string name="action_group_help">Hjälp</string>
     <string name="settings_detail_level">Detaljnivå</string>
     <string name="ranges_heading">Höjd intervall</string>
     <string name="ranges_settings">Inställningar</string>
