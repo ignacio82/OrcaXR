@@ -97,9 +97,7 @@ internal object BrimEarDiscs {
  * workspace refuses, as it refuses an infinite one.
  */
 object BrimEarFields {
-    private val NUMBER = Regex("-?(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)(?:[eE][-+]?[0-9]+)?")
-
-    fun radius(text: String): Double = if (NUMBER.matches(text)) text.toDouble() else 0.0
+    fun radius(text: String): Double = HtmlNumberInput.value(text)
 }
 
 /**

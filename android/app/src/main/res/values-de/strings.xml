@@ -55,6 +55,7 @@
     <string name="simplify_apply">Anwenden</string>
     <string name="workspace_brim_ears">Mausohren</string>
     <string name="brim_ears_title">Brim Ohren</string>
+    <string name="svg_apply">SVG Teil hinzufügen</string>
     <string name="workspace_paint">Malen</string>
     <string name="paint_tool_sphere">Kugel</string>
     <string name="action_delete_models">Löschen</string>

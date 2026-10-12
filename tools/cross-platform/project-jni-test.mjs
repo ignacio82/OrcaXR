@@ -1423,6 +1423,13 @@ try {
     drawnFixture.parts.steps.map((s) => `${s.request}\t${s.reply}`).join("\n"),
   );
   assert.equal(drawnPartChecks, 163);
+  // The Workspace's Emboss and SVG part tools as the Android Workspace drives
+  // them, step by step against the browser's journey through its controller.
+  const drawnPartEditChecks = jvm.call(
+    "drawnPartEditChecks",
+    JSON.stringify({ defaults: drawnFixture.defaults, journey: drawnFixture.journey }),
+  );
+  assert.equal(drawnPartEditChecks, 99);
   // Mesh renderer packets: replies and paged bytes, then the Kotlin wrapper.
   const packetFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/mesh-packet-vectors.json", root)),

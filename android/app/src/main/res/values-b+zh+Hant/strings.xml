@@ -55,6 +55,7 @@
     <string name="simplify_apply">套用</string>
     <string name="workspace_brim_ears">邊緣支撐 (Brim)</string>
     <string name="brim_ears_title">耳狀 Brim</string>
+    <string name="svg_apply">加SVG物件</string>
     <string name="workspace_paint">繪製</string>
     <string name="paint_tool_sphere">球體</string>
     <string name="action_delete_models">刪除</string>

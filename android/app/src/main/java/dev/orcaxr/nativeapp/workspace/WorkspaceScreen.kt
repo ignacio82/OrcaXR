@@ -168,6 +168,11 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     val earsShown = model.brimEaring
     val ears = model.brimEarState
     SideEffect { renderer.brimEars(earsShown, ears) }
+    // The Emboss and SVG part tools read what applying acts on again whenever the project or the selection changes.
+    val drawn = model.drawn
+    LaunchedEffect(view.revision, view.selection, drawn.embossing, drawn.svgCutting) {
+        if (drawn.embossing || drawn.svgCutting) drawn.refreshTarget()
+    }
     // A simplify preview's meshes drawn in place of the previewed volumes' own.
     val previewed = model.simplifyMeshes
     SideEffect { renderer.preview(previewed) }
@@ -241,6 +246,10 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                 MeasureCard(model)
             } else if (model.brimEaring) {
                 BrimEarsCard(model)
+            } else if (drawn.embossing) {
+                EmbossCard(model)
+            } else if (drawn.svgCutting) {
+                SvgPartCard(model)
             } else if (model.layingFlat) {
                 // The Lay flat tool's status (the browser's), and the way out of it.
                 Card(Modifier.padding(16.dp)) {

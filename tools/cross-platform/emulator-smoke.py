@@ -34,6 +34,8 @@ SMOKES = ["android-smoke", "android-local-network-smoke", "android-device-smoke"
           "android-brimears-smoke",
           # Auto-place Wipe Tower from the Edit menu, the palette and Prepare's switch.
           "android-wipetower-smoke",
+          # Emboss Text and SVG Part: a picked font and drawing, parts added and re-cut, a refusal, undo.
+          "android-drawnparts-smoke",
           # Night mode, font scale 2.0, rotation and animation scales, each restored as it ends.
           "android-accessibility-smoke",
           # Last: it resizes the display (restoring it as it ends) for the window-size layouts.

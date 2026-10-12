@@ -3303,7 +3303,7 @@ checked there to equal the same recipe cut from its recorded outlines.
 `svg-part-vectors.mjs` reads each of its 22 drawings on its own.
 `drawn-part-vectors.mjs` asks every part of the project the browser's tools
 made for its kind (11 replies, 2 refused) and records the tools' journey for
-the Android Workspace's tools. Rust, WASM in Node
+[the Android tools](#android-emboss-text-and-svg-parts). Rust, WASM in Node
 and Chrome and JNI answer every reply byte for byte, and the Kotlin wrapper
 (`ProjectDrawnPartChecks`) matches every value. On real fonts,
 `emboss-font-differential.mjs` reads every TrueType font installed on a host
@@ -6279,6 +6279,92 @@ the Edit menu and from the palette (each "Auto-place wipe tower", undone),
 then switches Prepare's switch on (placed, "enabled") and off ("disabled",
 the tower left where it is). It passes on a suite-sized API 34 emulator; the
 API 37 suite has yet to run it.
+
+### Android emboss text and SVG parts
+
+The Workspace embosses text and adds SVG parts as the browser's workspace
+does, through the shared core ([emboss fonts, drawings and drawn
+parts](#emboss-fonts-drawings-and-drawn-parts), [SVG and embossed-text
+parts](#svg-and-embossed-text-parts)).
+
+The tools. Emboss Text (`add_emboss`) and SVG Part (`tool_svg`), enabled
+with a model on the plate, join the model toolbar, the command palette and
+the Edit menu's model tools; each is the Workspace's one tool with Lay flat,
+Measure, Brim Ears, painting and the gizmo's, as the browser's `setTool`,
+and choosing it again ends it. Taps still select while either is on, as the
+browser's clicks do. What applying acts on is the browser's: the one object
+the selection's model parts belong to (`brimEarTargetObject`), which a new
+part is added to at its origin, and — when the selection is one model part
+that is embossed text, or an SVG part — that part, which applying re-cuts
+(`embossTargetVolume`, `svgTargetVolume`); a drawn part of the other kind is
+not re-cut, its object gets a new part. `ProjectWorkspace.drawnPartTarget`
+reads it on the authority whenever the project or the selection changes
+while a tool is on.
+
+Applying. `ProjectWorkspace.applyEmboss` (a font read by
+`ProjectEmbossFont` and the panel's recipe) and `applySvgPart` (the drawing's
+file bytes and the panel's size) run on the authority as one staged step:
+the target read from the state and selection there, the part's identity
+drawn as the browser draws it — a volume, an asset (and the drawing's
+asset), before the cut, so a refused cut still spends them — the cut
+prepared by the core, and staged as "Add embossed text", "Edit embossed
+text", "Add SVG part" or "Edit SVG part". They answer `EmbossApplied` /
+`SvgPartApplied`: nothing to apply to, the cut's refusal in the core's
+words, or the part and the cut's summary.
+
+The panels (`DrawnPartModel`, `DrawnPartTools.kt`). While a tool is on, the
+browser's Emboss or SVG part panel takes the view's foot in turn with the
+other tools' (a third of the view at most, scrolling): its heading and
+Done; Load an emboss font / Load an SVG drawing, which open the system's
+document picker — the file is read off the main thread, at most 64 MiB for
+a font and 16 MiB for a drawing, and read by the core (a font that cannot be
+read keeps the one there was; a drawing that cannot be read leaves none);
+Add text / Update text and Add part / Update part (the browser's
+`emboss_apply`, `svg_apply`), enabled with a font or drawing and something
+to apply to; the file's name; the text (handed over as typed), Size, Depth,
+Letter gap and Line gap, and the horizontal and vertical alignment; or Depth
+and Width (0 keeps the drawing's size). Number fields show values as the
+browser does (`Number(value.toFixed(3))`) and hand over what was typed as its
+number input does (`HtmlNumberInput`), on Done, when the focus leaves, or as
+Apply is pressed (as a click blurs the browser's field first); the recipe
+takes them as given and the cut refuses what it cannot use, in the core's
+words. Then the hint and the tool's last status (polite live regions) and,
+for a drawing, what it holds that cannot be cut, listed (the first 64; the
+browser lists all). The statuses are the browser's (`ProjectEmbossing`,
+`ProjectSvgParts`): "Loaded … for embossing.", "Embossed the text as N
+triangles." or the characters the font lacks and edges that did not close,
+"Loaded … at W x H mm.", "Cut … at W x H mm." with the first thing not cut
+(sizes as `toFixed(1)` writes them), "Emboss failed: …", "SVG part failed:
+…", and the catalogue's "Choose a .ttf font file before embossing.",
+"Select one model part to add embossed text to." and their SVG twins. The
+palette runs Load (the tool opens with its picker) and Add (without the
+panel, its status the Project area's message). Words the browser's tools
+say about a browser not reading installed fonts are left out: an app is not
+so limited (it does not list them yet).
+
+`ProjectDrawnPartEditChecks` (99 checks over JNI on the host, via
+`project-jni-test.mjs`) opens the journey's canonical 3MF with the browser's
+seeded IDs and takes its 20 steps through `ProjectWorkspace` — selections
+(an instance, an object's and a part's row, nothing); text added to the
+base, re-cut at another size and alignment, refused for a font without the
+glyphs (its IDs still spent), refused with no object in scope, added to the
+pair; an SVG part added, re-cut at a width, refused for a drawing with no
+shapes; a drawn part of the other kind left alone (each tool adds to its
+object); an SVG part on a plain part — with the browser's outcome, part,
+triangles, size, semantic hash, undo label and target after each, then
+undoes all 8 entries; it also checks the tools' starting recipe and depth,
+a font's naming of the recipe and the drawings' reads. `DrawnPartsTest`
+(app JVM) covers the number input, the recipe and the words;
+`AppActionsTest` (75 performed actions) and `ProjectEditingTest` the actions
+and the menu. `android-drawnparts-smoke.py`, added to `emulator-smoke.py`
+after the wipe-tower smoke, pushes the journey's font and a drawing to
+Downloads, adds a cube, embosses "AOi" onto it through the picked font (the
+browser's 904 triangles), has a text without glyphs refused, re-cuts the
+text part selected in the tree, then switches to SVG Part, loads the
+drawing (its size and the part that cannot be cut listed) and adds it, each
+step by its undo label, and ends the tool. It passes on a suite-sized API 34
+emulator (720 × 1280 at 240 dpi, two cores); neither emulator suite has run
+it yet.
 
 ### Android filaments
 

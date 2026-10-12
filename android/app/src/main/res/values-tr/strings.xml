@@ -55,6 +55,7 @@
     <string name="simplify_apply">Uygula</string>
     <string name="workspace_brim_ears">Kenar \u0020kulakları</string>
     <string name="brim_ears_title">Kenar \u0020kulakları</string>
+    <string name="svg_apply">SVG parça ekle</string>
     <string name="workspace_paint">Boyama</string>
     <string name="paint_tool_sphere">Küre</string>
     <string name="action_delete_models">Sil</string>

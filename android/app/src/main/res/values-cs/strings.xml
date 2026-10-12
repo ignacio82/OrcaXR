@@ -53,6 +53,7 @@
     <string name="simplify_apply">Použít</string>
     <string name="workspace_brim_ears">Uši Límce</string>
     <string name="brim_ears_title">Uši límce</string>
+    <string name="svg_apply">Přidat SVG část</string>
     <string name="workspace_paint">Malovat</string>
     <string name="paint_tool_sphere">Koule</string>
     <string name="action_delete_models">Smazat</string>

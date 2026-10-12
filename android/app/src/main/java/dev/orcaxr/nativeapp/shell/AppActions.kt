@@ -24,14 +24,21 @@ object AppActions {
     val CAMERA = CameraView.entries.map { "view_camera_${it.id}" }
 
     /** The model toolbar's tools: each takes the Workspace's touch until it is chosen again or ended. */
-    val TOOLS = listOf("tool_lay_on_face", "tool_paint", "tool_support_paint", "tool_seam_paint", "tool_fuzzy_skin", "tool_measure", "tool_brim_ears")
+    val TOOLS = listOf(
+        "tool_lay_on_face", "tool_paint", "tool_support_paint", "tool_seam_paint", "tool_fuzzy_skin", "tool_measure", "tool_brim_ears",
+        "add_emboss", "tool_svg",
+    )
 
     /**
      * A tool panel's own actions the palette runs too: the Brim ears panel's
      * Place on corners, whose ears the Workspace draws (its tool opens), and
-     * Clear all.
+     * Clear all; the Emboss and SVG part panels' Load (their tool opens with
+     * its picker) and Add.
      */
-    val PANELS = listOf("brim_ears_auto", "brim_ears_clear")
+    val PANELS = listOf("brim_ears_auto", "brim_ears_clear", "emboss_load_font", "emboss_apply", "svg_load_drawing", "svg_apply")
+
+    /** Panel actions that open their tool on the Workspace: automatic brim ears, and choosing a font or a drawing. */
+    private val OPENS_TOOL = setOf("brim_ears_auto", "emboss_load_font", "svg_load_drawing")
 
     /** The gizmo's Move, Rotate and Scale (G, R and S): each chooses what a drag of the gizmo's handles does. */
     val GIZMO = ProjectEditing.GIZMO_TOOLS
@@ -50,10 +57,10 @@ object AppActions {
 
     /**
      * Whether running [id] needs the Workspace's 3D view on screen: a camera
-     * view, a tool that takes its touch, the gizmo's, or automatic brim ears,
-     * which open their tool on the model.
+     * view, a tool that takes its touch or shows its panel there, the
+     * gizmo's, or a panel action that opens its tool there.
      */
-    fun needsWorkspace(id: String): Boolean = id in CAMERA || isTool(id) || id == "brim_ears_auto"
+    fun needsWorkspace(id: String): Boolean = id in CAMERA || isTool(id) || id in OPENS_TOOL
 
     /** Whether [id] is one of the toolbar's tools, shown as the Workspace's tool while it is ([ProjectModel.toolActive]). */
     fun isTool(id: String): Boolean = id in TOOLS || id in GIZMO

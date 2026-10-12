@@ -137,6 +137,8 @@ class ProjectWorkspace(
         /** The tree's largest page (the browser renders it in windows of this size). */
         /** Vertices per mesh-packet chunk: small enough for 16-bit indices. */
         const val MESH_CHUNK_VERTICES = 65_535L
+        /** Where a drawn part lands in its object: the object's origin (the controller's `identityTransform`). */
+        internal val IDENTITY = ProjectIntents.Transform(listOf(0.0, 0.0, 0.0), listOf(0.0, 0.0, 0.0, 1.0), listOf(1.0, 1.0, 1.0))
         /** The bounds a project document the workspace makes (the starting, new or reset
          * project) is read under: 1 M nodes, 8 M text units, 4096 assets of at most 512 MiB
          * and 2 GiB in all, and 100 history entries in 64 MiB. */
@@ -2552,9 +2554,13 @@ class ProjectWorkspace(
      * to none.
      */
     private fun brimEarTarget(session: ProjectSession, snapshot: ProjectSnapshot): String? = snapshot.query().use { root ->
-        val parts = ProjectFacts.selectedModelParts(root, whole(session).refs).mapTo(HashSet()) { it.id }
-        val plate = ProjectFacts.plates(root).firstOrNull { it.active } ?: return@use null
-        ProjectFacts.objects(root, plate.id).filter { o -> o.instances.isNotEmpty() && o.volumes.any { it.id in parts } }.map { it.id }.distinct().singleOrNull()
+        targetObject(root, ProjectFacts.selectedModelParts(root, whole(session).refs).mapTo(HashSet()) { it.id })
+    }
+
+    /** The one object on the active plate owning model parts among [parts], or none. */
+    private fun targetObject(root: ProjectQueryNode, parts: Set<String>): String? {
+        val plate = ProjectFacts.plates(root).firstOrNull { it.active } ?: return null
+        return ProjectFacts.objects(root, plate.id).filter { o -> o.instances.isNotEmpty() && o.volumes.any { it.id in parts } }.map { it.id }.distinct().singleOrNull()
     }
 
     /** Object [objectId]'s view (`objectBrimEarView`): its ears, the stranded ones and its base; an unknown object refuses in the core's words. */
@@ -2665,6 +2671,118 @@ class ProjectWorkspace(
         val target = brimEarTarget(session, snapshot) ?: return@answer Answer(false)
         Answer(true, ProjectIntents.Command.RemoveBrimEar(ProjectIntents.RemoveBrimEar(units(target), index)))
     }
+
+    // ---- Drawn parts: the browser workspace's Emboss and SVG part tools over the shared core ----
+
+    /**
+     * What the Emboss and SVG part tools act on, read from [snapshot] and the
+     * selection: the one object the selection's model parts belong to
+     * (`brimEarTargetObject`), and the selection's one model part when it is
+     * embossed text or an SVG part (`embossTargetVolume`, `svgTargetVolume`,
+     * through [ProjectSession.drawnPart]).
+     */
+    private fun drawnTarget(session: ProjectSession, snapshot: ProjectSnapshot): DrawnPartTarget = snapshot.query().use { root ->
+        val parts = ProjectFacts.selectedModelParts(root, whole(session).refs).map { it.id }
+        val single = parts.singleOrNull()
+        val drawn = single?.let { session.drawnPart(ProjectIntents.DrawnPartRequest(units(it))) } as? ProjectIntents.DrawnPartReply.Part
+        DrawnPartTarget(
+            targetObject(root, parts.toSet()),
+            single.takeIf { drawn?.value?.text == true },
+            single.takeIf { drawn?.value?.svg == true },
+        )
+    }
+
+    /** What the Emboss and SVG part tools act on now, read on the authority. */
+    fun drawnPartTarget(): CompletableFuture<DrawnPartTarget> = inspect { session -> session.snapshot().use { drawnTarget(session, it) } }
+
+    /**
+     * Stages a drawn part on the authority from the state and selection it
+     * reads there, as the browser's tools apply: [plan] chooses the target
+     * (none: nothing staged), and the answer it records is what the step
+     * answers once committed — a refused cut stages nothing and answers so.
+     */
+    private fun <T> drawn(plan: (ProjectSession, DrawnPartTarget, java.util.concurrent.atomic.AtomicReference<T>) -> ProjectStagedInput?): CompletableFuture<T> {
+        val answer = java.util.concurrent.atomic.AtomicReference<T>()
+        return refreshed(
+            outcome(actor.stage { session, _ ->
+                session.snapshot().use { snapshot -> plan(session, drawnTarget(session, snapshot), answer) }
+            }).thenApply { outcome ->
+                stagedStep(outcome)
+                answer.get() ?: throw failure(outcome, null)
+            },
+        )
+    }
+
+    /**
+     * "Add embossed text" (`emboss_apply`, the workspace's `applyEmboss`):
+     * [configuration] cut with [font] as a new text part of the one object
+     * in scope (placed at the object's origin, as the browser places it), or
+     * as a re-cut of the selected text part — one "Add embossed text" or
+     * "Edit embossed text" step. The part's identity (a volume, then an
+     * asset) is drawn before the cut, as the browser draws it, so a cut the
+     * core refuses still spends it.
+     */
+    fun applyEmboss(font: ProjectEmbossFont, configuration: ProjectIntents.EmbossConfiguration): CompletableFuture<EmbossApplied> =
+        drawn { session, target, answer ->
+            val recut = target.textVolumeId
+            val objectId = target.objectId
+            if (recut == null && objectId == null) {
+                answer.set(EmbossApplied.NoTarget)
+                return@drawn null
+            }
+            val (volumeId, assetId) = ids.next(2)
+            font.prepare(ProjectIntents.EmbossTextRequest(configuration)).use { emboss ->
+                when (val reply = emboss.reply()) {
+                    is ProjectIntents.EmbossReply.Refused -> {
+                        answer.set(EmbossApplied.Failed(text(reply.value.message)))
+                        null
+                    }
+                    is ProjectIntents.EmbossReply.Prepared -> {
+                        answer.set(EmbossApplied.Cut(recut ?: volumeId, recut != null, reply.value))
+                        session.stageEmboss(
+                            emboss,
+                            if (recut != null) ProjectIntents.EmbossStage.Edit(ProjectIntents.EmbossEdit(units(recut), units(assetId)))
+                            else ProjectIntents.EmbossStage.Add(ProjectIntents.EmbossAdd(units(objectId!!), units(volumeId), units(assetId), IDENTITY)),
+                        )
+                    }
+                }
+            }
+        }
+
+    /**
+     * "Add SVG part" (`svg_apply`, the workspace's `applySvgPart`): the
+     * drawing [drawing] (the file's bytes) cut with [request] as a new part
+     * of the one object in scope, named after the file, or as a re-cut of
+     * the selected SVG part — one "Add SVG part" or "Edit SVG part" step. Its
+     * identity (a volume, an asset and the drawing's asset) is drawn before
+     * the cut, as the browser draws it.
+     */
+    fun applySvgPart(drawing: ByteArray, request: ProjectIntents.SvgPartRequest): CompletableFuture<SvgPartApplied> =
+        drawn { session, target, answer ->
+            val recut = target.svgVolumeId
+            val objectId = target.objectId
+            if (recut == null && objectId == null) {
+                answer.set(SvgPartApplied.NoTarget)
+                return@drawn null
+            }
+            val (volumeId, assetId, drawingId) = ids.next(3)
+            ProjectSvgPart.prepare(request, drawing).use { svg ->
+                when (val reply = svg.reply()) {
+                    is ProjectIntents.SvgPartReply.Refused -> {
+                        answer.set(SvgPartApplied.Failed(text(reply.value.message)))
+                        null
+                    }
+                    is ProjectIntents.SvgPartReply.Prepared -> {
+                        answer.set(SvgPartApplied.Cut(recut ?: volumeId, recut != null, reply.value))
+                        session.stageSvgPart(
+                            svg,
+                            if (recut != null) ProjectIntents.SvgPartStage.Edit(ProjectIntents.SvgPartEdit(units(recut), units(assetId), units(drawingId)))
+                            else ProjectIntents.SvgPartStage.Add(ProjectIntents.SvgPartAdd(units(objectId!!), units(volumeId), units(assetId), units(drawingId), IDENTITY)),
+                        )
+                    }
+                }
+            }
+        }
 
     // ---- The wipe tower: the browser workspace's auto-placement over the shared core ----
 

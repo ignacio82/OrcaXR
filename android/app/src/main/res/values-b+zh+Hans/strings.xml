@@ -55,6 +55,7 @@
     <string name="simplify_apply">应用</string>
     <string name="workspace_brim_ears">耳状帽檐</string>
     <string name="brim_ears_title">圆盘</string>
+    <string name="svg_apply">添加svg零件</string>
     <string name="workspace_paint">绘制</string>
     <string name="paint_tool_sphere">球</string>
     <string name="action_delete_models">删除</string>

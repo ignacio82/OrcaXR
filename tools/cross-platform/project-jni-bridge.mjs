@@ -43,6 +43,7 @@ export function startProjectJni(profile = "debug") {
   signatures.embossChecks = ["String", "byte[]", "String"];
   signatures.svgPartChecks = ["String", "byte[]", "String"];
   signatures.drawnPartChecks = ["String", "String", "String", "String", "String"];
+  signatures.drawnPartEditChecks = ["String"];
   signatures.meshPacketChecks = ["String", "byte[]", "String", "String"];
   signatures.assemblyChecks = ["String"];
   signatures.objectTreeChecks = ["String", "byte[]", "String"];

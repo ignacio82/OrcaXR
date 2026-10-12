@@ -157,10 +157,10 @@ class ProjectEditingTest {
 
     @Test
     fun modelToolsFollowPlacementAndObjectsOfferSplitAndSimplify() {
-        // The browser's Tools menu split and simplify, its toolbar's Measure and Brim Ears, then its Tools menu's
-        // wipe-tower placement: performed, with the core's enablement.
+        // The browser's Tools menu split and simplify, its toolbar's Measure, Brim Ears, Emboss Text and SVG Part,
+        // then its Tools menu's wipe-tower placement: performed, with the core's enablement.
         assertEquals(
-            listOf("split_to_objects", "split_to_parts", "simplify_model", "tool_measure", "tool_brim_ears", "auto_place_wipe"),
+            listOf("split_to_objects", "split_to_parts", "simplify_model", "tool_measure", "tool_brim_ears", "add_emboss", "tool_svg", "auto_place_wipe"),
             ProjectEditing.TOOLS_MENU,
         )
         assertTrue(ProjectEditing.PERFORMED.containsAll(ProjectEditing.TOOLS_MENU))

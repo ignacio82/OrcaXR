@@ -421,6 +421,42 @@
     <string name="brim_ears_cleared">Cleared the brim ears; undo restores them.</string>
     <string name="brim_ears_removed">Removed a brim ear.</string>
     <string name="brim_ears_missed">Click the selected model to place a brim ear.</string>
+    <!-- The Emboss Text and SVG Part tools: the browser's catalogue actions (web/src/actions/groups/gizmos.ts), its Emboss
+         and SVG part panels (web/src/ui/dom/EmbossPanel.ts, SvgPanel.ts) and the workspace's statuses its catalogue carries. -->
+    <string name="workspace_emboss">Emboss Text</string>
+    <string name="emboss_load_font">Load an emboss font</string>
+    <string name="emboss_apply">Add embossed text</string>
+    <string name="workspace_svg_part">SVG Part</string>
+    <string name="svg_load_drawing">Load an SVG drawing</string>
+    <string name="svg_apply">Add SVG part</string>
+    <string name="emboss_title">Emboss text</string>
+    <string name="svg_title">SVG part</string>
+    <string name="svg_unsupported">Parts of this drawing that cannot be cut</string>
+    <string name="emboss_choose_font">Choose a .ttf font file before embossing.</string>
+    <string name="emboss_select_part">Select one model part to add embossed text to.</string>
+    <string name="svg_choose_drawing">Choose an .svg file before adding a part.</string>
+    <string name="svg_select_part">Select one model part to add the drawing to.</string>
+    <string name="emboss_add">Add text</string>
+    <string name="emboss_update">Update text</string>
+    <string name="emboss_font">Font (.ttf)</string>
+    <string name="emboss_font_named">Font — %1$s</string>
+    <string name="emboss_text">Text</string>
+    <string name="emboss_size">Size (mm)</string>
+    <string name="drawn_depth">Depth (mm)</string>
+    <string name="emboss_char_gap">Letter gap (mm)</string>
+    <string name="emboss_line_gap">Line gap (mm)</string>
+    <string name="emboss_horizontal">Horizontal</string>
+    <string name="emboss_vertical">Vertical</string>
+    <string name="emboss_left">left</string>
+    <string name="emboss_center">center</string>
+    <string name="emboss_right">right</string>
+    <string name="emboss_top">top</string>
+    <string name="emboss_bottom">bottom</string>
+    <string name="svg_add">Add part</string>
+    <string name="svg_update">Update part</string>
+    <string name="svg_drawing">Drawing (.svg)</string>
+    <string name="svg_drawing_named">Drawing — %1$s</string>
+    <string name="svg_width">Width (mm, 0 keeps size)</string>
     <!-- The browser's wipe-tower auto-placement (web/src/actions/groups/advanced.ts), its Process card switch
          (web/index.html #chk-wipe-tower-auto) and the workspace's statuses. -->
     <string name="project_auto_place_wipe">Auto-place Wipe Tower</string>
@@ -553,6 +589,13 @@
     <string name="action_hint_tool_brim_ears">Click the selected part to place brim \"mouse ears\" that reach the slicer</string>
     <string name="action_hint_brim_ears_auto">Find the corners of the first layer that would peel, and put an ear on each</string>
     <string name="action_hint_brim_ears_clear">Remove every brim ear from the selected part as one undoable command</string>
+    <string name="action_hint_add_emboss">Cut text as a new part of the selected model</string>
+    <!-- The browser's hint adds that a browser cannot read the fonts installed on the machine, which is not this app's reason. -->
+    <string name="action_hint_emboss_load_font">Choose a .ttf font file</string>
+    <string name="action_hint_emboss_apply">Cut the text and add it to the selected part, or re-cut the selected text part</string>
+    <string name="action_hint_tool_svg">Cut an SVG drawing as a new part of the selected model</string>
+    <string name="action_hint_svg_load_drawing">Choose an .svg file; its filled shapes become the part</string>
+    <string name="action_hint_svg_apply">Cut the drawing and add it to the selected part, or re-cut the selected SVG part</string>
     <string name="action_hint_auto_place_wipe">Automatically position the wipe tower</string>
     <string name="action_hint_add_modifier">Add a modifier volume with per-region settings</string>
     <string name="action_hint_add_support_enforcer">Add a volume that forces supports inside it</string>

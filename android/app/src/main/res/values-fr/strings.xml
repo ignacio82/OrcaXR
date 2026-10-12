@@ -55,6 +55,7 @@
     <string name="simplify_apply">Appliquer</string>
     <string name="workspace_brim_ears">Bordure à oreilles</string>
     <string name="brim_ears_title">Bordures à oreilles</string>
+    <string name="svg_apply">Ajouter une partie SVG</string>
     <string name="workspace_paint">Peindre</string>
     <string name="paint_tool_sphere">Sphère</string>
     <string name="action_delete_models">Supprimer</string>

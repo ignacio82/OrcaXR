@@ -73,6 +73,7 @@ import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.device.PreferencesTextStore
 import dev.orcaxr.nativeapp.prepare.PlateSource
 import dev.orcaxr.nativeapp.shell.AppActions
+import dev.orcaxr.nativeapp.workspace.DrawnPartModel
 import dev.orcaxr.nativeapp.workspace.PaintModel
 import dev.orcaxr.renderer.CameraView
 import dev.orcaxr.renderer.PacketMeshes
@@ -195,6 +196,38 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         view = next
         inspector.projectChanged(next)
     }
+
+    /** The Workspace's Emboss Text and SVG Part tools over this project's session. */
+    val drawn = DrawnPartModel(object : DrawnPartModel.Host {
+        override fun workspace(): ProjectWorkspace = workspace
+        override fun work(task: () -> Unit) = this@ProjectModel.work(task)
+        override fun quietly(task: () -> Unit) = this@ProjectModel.quietly(task)
+        override fun read(uri: Uri, limit: Int): Pair<String, ByteArray?> = displayName(uri) to readAtMost(uri, limit)
+        override fun words(id: Int): String = this@ProjectModel.words(id)
+        override fun message(text: String) {
+            message = text
+        }
+        override fun otherToolsOff() {
+            layFlat(false)
+            if (measuring) measure(false)
+            if (brimEaring) brimEars(false)
+            if (paint.state.active) paint.stop()
+        }
+    })
+
+    /** A picked document's bytes, or none when it holds more than [limit]. Worker thread. */
+    private fun readAtMost(uri: Uri, limit: Int): ByteArray? =
+        (resolver.openInputStream(uri) ?: throw java.io.IOException("That file could not be opened")).use { input ->
+            val out = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                out.write(buffer, 0, read)
+                if (out.size() > limit) return@use null
+            }
+            out.toByteArray()
+        }
 
     /** The Workspace's paint tool over this project's session and scene. */
     val paint = PaintModel(object : PaintModel.Host {
@@ -883,6 +916,12 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "tool_brim_ears" -> brimEars(!brimEaring)
             "brim_ears_auto" -> autoPlaceBrimEars()
             "brim_ears_clear" -> clearBrimEars()
+            "add_emboss" -> drawn.emboss(!drawn.embossing)
+            "emboss_load_font" -> drawn.requestFont()
+            "emboss_apply" -> drawn.applyEmboss()
+            "tool_svg" -> drawn.svg(!drawn.svgCutting)
+            "svg_load_drawing" -> drawn.requestDrawing()
+            "svg_apply" -> drawn.applySvg()
             "auto_place_wipe" -> autoPlaceWipeTower()
             // The toolbar's, the command palette's and the menus' other actions: one call for all of them.
             "delete_models" -> work { workspace.deleteSelected().await() }
@@ -912,22 +951,32 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
                 layFlat(false)
                 if (measuring) measure(false)
                 if (brimEaring) brimEars(false)
+                drawnToolsOff()
                 paint.start(channel)
             }
         }
     }
 
+    /** The Emboss Text and SVG Part tools off, as another tool takes the Workspace. */
+    private fun drawnToolsOff() {
+        if (drawn.embossing) drawn.emboss(false)
+        if (drawn.svgCutting) drawn.svg(false)
+    }
+
     /**
      * Whether toolbar tool [id] is the Workspace's tool now: Lay flat, Measure,
-     * Brim Ears, the paint channel being painted, or — while none of those
-     * is — the gizmo's Move, Rotate or Scale.
+     * Brim Ears, Emboss Text, SVG Part, the paint channel being painted, or —
+     * while none of those is — the gizmo's Move, Rotate or Scale.
      */
     fun toolActive(id: String): Boolean = when (id) {
         "tool_lay_on_face" -> layingFlat
         "tool_measure" -> measuring
         "tool_brim_ears" -> brimEaring
+        "add_emboss" -> drawn.embossing
+        "tool_svg" -> drawn.svgCutting
         "tool_move", "tool_rotate", "tool_scale" ->
-            !layingFlat && !measuring && !brimEaring && !paint.state.active && ProjectEditing.gizmoAction(gizmoMode) == id
+            !layingFlat && !measuring && !brimEaring && !drawn.embossing && !drawn.svgCutting && !paint.state.active &&
+                ProjectEditing.gizmoAction(gizmoMode) == id
         else -> paint.state.active && PaintChannel.entries.any { it.toolAction == id && it == paint.state.channel }
     }
 
@@ -1038,6 +1087,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         layFlat(false)
         if (measuring) measure(false)
         if (brimEaring) brimEars(false)
+        drawnToolsOff()
         if (paint.state.active) paint.stop()
         gizmoMode = mode
     }
@@ -1105,6 +1155,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         // One Workspace tool at a time, as the browser's `setTool`.
         if (on && measuring) measure(false)
         if (on && brimEaring) brimEars(false)
+        if (on) drawnToolsOff()
         if (on && paint.state.active) paint.stop()
         layingFlat = on
         layFlatNote = R.string.workspace_lay_flat_hint
@@ -1303,6 +1354,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun measure(on: Boolean) {
         if (on) layFlat(false)
         if (on && brimEaring) brimEars(false)
+        if (on) drawnToolsOff()
         if (on && paint.state.active) paint.stop()
         measuring = on
         measurePicks = emptyList()
@@ -1386,6 +1438,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         if (on) {
             layFlat(false)
             if (measuring) measure(false)
+            drawnToolsOff()
             if (paint.state.active) paint.stop()
         }
         brimEaring = on
@@ -1624,6 +1677,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         inspector.close()
         sceneSync?.close()
         worker.execute {
+            drawn.close()
             owners.releaseAll(owner)
             subscription?.close()
             pendingImport?.candidate?.close()

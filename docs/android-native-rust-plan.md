@@ -78,13 +78,15 @@ physical-device gate below is still open.
   Prepare, Preview, Device and Project areas; selection and object edits,
   creation, placement and the transform inspector, filaments and the virtual
   filament library, painting, split, simplify, measure, brim ears and
-  wipe-tower auto-placement, settings panels and height ranges, the command
+  wipe-tower auto-placement, emboss text and SVG parts, settings panels and
+  height ranges, the command
   palette, toolbar and context menus, generated localization (19 languages)
   and design tokens, accessibility, adaptive layouts, file drop, recovery
   and multi-window document ownership, the Workspace's transform gizmo with
   its keys G, R and S, and the semantic editor's volume roles with Set as
-  Negative Part (the emulator suites for the gizmo, the roles, brim ears and
-  the wipe tower pending). Remains: *Resume here* items 1 to 4, and physical
+  Negative Part (the emulator suites for the gizmo, the roles, brim ears,
+  the wipe tower and drawn parts pending). Remains: *Resume here* items 1 to
+  4, and physical
   devices for the exit gate.
 - **Phase 8, Android XR: not started.** Only Phase 2's SceneCore candidate
   (`android/renderer-scenecore`, `android/xr-experiment`) exists. Verification
@@ -130,14 +132,13 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
 
 1. Both emulator suites on `main` with the smokes added since round 2:
    `android-gizmo-smoke.py` and `android-roles-smoke.py` (the Phase 7 input
-   item, otherwise done), `android-brimears-smoke.py` and
-   `android-wipetower-smoke.py` (item 2) have passed only on iteration
-   emulators. Run `emulator-smoke.py` and then
+   item, otherwise done), `android-brimears-smoke.py`,
+   `android-wipetower-smoke.py` and `android-drawnparts-smoke.py` (item 2)
+   have passed only on iteration emulators. Run `emulator-smoke.py` and then
    `emulator-smoke.py --api 37 --pages 16` on a quiet host (no builds, no
    other suite), and record the result here and in the Phase 7 statuses.
 2. Phase 7, model tools whose shared-core ports exist but have no Android UI:
-   emboss text (`orcaxr_project::emboss`, `add_emboss`), SVG parts (`svg`,
-   `tool_svg`), assembly (`assembly`,
+   assembly (`assembly`,
    `tool_assembly`) and variable layer height (`layer_heights`,
    `variable_layer_height`); layer events belong with
    Preview (`layer_event_mutate`). Magnets (`add_magnet`) and the wave-overhang
@@ -152,10 +153,18 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    `android-brimears-smoke.py` and `android-wipetower-smoke.py` passing on
    an API 34 iteration emulator; neither emulator suite has run them yet
    (*Resume here* item 1). The Workspace does not draw the wipe tower yet
-   (the browser's ghost).
-   In flight: emboss text and SVG parts on local branch `emboss` (worktree
-   `~/.cache/orcaxr-emboss`, from `main` after the wipe tower), a
-   sub-agent's.
+   (the browser's ghost). Emboss Text and SVG Part are done too
+   ([§](engineering/native-core.md#android-emboss-text-and-svg-parts)):
+   their toolbar tools and panels, a font or drawing picked through the
+   system's picker and read by the core (the browser's TrueType reader and
+   drawing read, ported), new parts and re-cuts, with
+   `android-drawnparts-smoke.py` passing on an API 34 iteration emulator;
+   neither emulator suite has run it yet (*Resume here* item 1).
+   They leave for later: the emboss tool's preview on the model before
+   applying (the browser has none either), offering the fonts installed on
+   the device (`SystemFonts`, which the browser cannot read), and the
+   recipe's `useSurface` projection onto the model and `boldnessMm` and
+   `perGlyph`, which the browser's cut ignores too.
 3. Phase 7, other surfaces: a Save/export action for slice output
    (`save_gcode_to_downloads`, `file_export_gcode`), model and project exports
    (STL, OBJ, 3MF, configuration), geometry-only 3MF import, the View menu's
@@ -2539,13 +2548,25 @@ storage journeys on phone, tablet, and desktop-sized windows.
   switch, one step with the browser's statuses; a 65-check JNI journey
   matches the browser controller's pick, hash and label after all 10 steps,
   and `android-wipetower-smoke.py` passes on an API 34 emulator.
+  Emboss Text and SVG Part embosses text and cuts drawings into parts as the
+  browser's tools do ([§](engineering/native-core.md#android-emboss-text-and-svg-parts)):
+  a font or drawing picked through the system's picker and read by the core
+  (the browser's TrueType reader, ported outline for outline, and its
+  drawing read), the panels' recipes, a new part of the selection's one
+  object or a re-cut of the selected text or SVG part, one step each. Four
+  browser reader defects were fixed on the way (a damaged font failed with a
+  range error, a map of overlapping ranges could exhaust memory, contours
+  out of order read NaN points, composites could multiply without bound). A
+  99-check JNI journey matches the browser controller's outcome, hash,
+  label and target after all 20 steps and undoes them;
+  `android-drawnparts-smoke.py` passes on an API 34 emulator.
   Status (2026-10-12): remains: lighting and preview controls; Repair (Phase
   5's kernel routing), with mesh Booleans; and the model tools with no
-  Android UI yet — emboss text, SVG parts, assembly, variable layer
-  height, magnets and the wave-overhang card, with
-  Cut, the face detector and hollow still to port (*Resume here* items 2
-  and 4); the wipe tower's ghost in the Workspace; both emulator suites'
-  runs of the brim-ear and wipe-tower smokes (*Resume here* item 1).
+  Android UI yet — assembly, variable layer height, magnets and the
+  wave-overhang card, with Cut, the face detector and hollow still to port
+  (*Resume here* items 2 and 4); the wipe tower's ghost in the Workspace;
+  both emulator suites' runs of the brim-ear, wipe-tower and drawn-part
+  smokes (*Resume here* item 1).
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
   large-file streaming. Validate incoming open/share intents as untrusted input.

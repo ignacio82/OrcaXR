@@ -55,6 +55,7 @@
     <string name="simplify_apply">Applica</string>
     <string name="workspace_brim_ears">Tese ad orecchio</string>
     <string name="brim_ears_title">Tesa ad orecchio</string>
+    <string name="svg_apply">Aggiungi parte SVG</string>
     <string name="workspace_paint">Pittura</string>
     <string name="paint_tool_sphere">Sfera</string>
     <string name="action_delete_models">Elimina</string>

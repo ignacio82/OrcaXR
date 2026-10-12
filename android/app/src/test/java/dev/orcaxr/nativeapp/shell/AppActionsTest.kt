@@ -19,7 +19,7 @@ class AppActionsTest {
         assertTrue(AppActions.TOOLBAR.all { it in AppActions.PERFORMED })
         assertTrue(AppActions.QUICK.all { it in AppActions.PERFORMED })
         assertTrue(AppActions.PANELS.all { it in AppActions.PERFORMED })
-        assertEquals(69, AppActions.PERFORMED.size)
+        assertEquals(75, AppActions.PERFORMED.size)
     }
 
     @Test fun everyCatalogueGroupHeadsItsSectionsInTheAppsLanguage() {
@@ -56,6 +56,9 @@ class AppActionsTest {
         // Placing ears on the corners opens the Brim Ears tool on the model; clearing them needs no view.
         assertTrue(AppActions.needsWorkspace("brim_ears_auto"))
         assertFalse(AppActions.needsWorkspace("brim_ears_clear") || AppActions.isTool("brim_ears_auto"))
+        // Choosing a font or a drawing opens its tool's panel with the picker; adding needs no view.
+        listOf("emboss_load_font", "svg_load_drawing").forEach { assertTrue(it, AppActions.needsWorkspace(it) && !AppActions.isTool(it)) }
+        listOf("emboss_apply", "svg_apply").forEach { assertFalse(it, AppActions.needsWorkspace(it)) }
         listOf("edit_undo", "add_primitive_cube", "delete_models", "drop_to_bed", "mirror_x").forEach {
             assertFalse(it, AppActions.needsWorkspace(it) || AppActions.needsProject(it))
         }
