@@ -6298,7 +6298,8 @@ canonical project revision". A range's filament is assigned from the
 selection filament bar ([Android filaments](#android-filaments)). Layer
 events are not part of this inspector in the browser: they live in its
 Preview card, beside the G-code listing (`LayerEventPanel`), and stay with
-Preview; the semantic editor's volume roles also remain.
+Preview. The semantic editor's volume roles follow the selection
+([Android volume roles](#android-volume-roles)).
 
 `ProjectSettingsChecks` (1,363 checks over JNI) read every reply of the
 panel corpus through the Kotlin wrappers, then on an imported cube list the
@@ -6319,6 +6320,61 @@ resets the wall count by its key's "Use inherited", adds a 0–5 mm range
 from the "Layer ranges (0)" row, applies its own wall count ("Undo Update
 height range settings") and undoes it. It passes on both emulators (API 34,
 and API 37 with 16 KB pages).
+
+### Android volume roles
+
+The browser's semantic editor shows its "Volume role" section for whatever
+the selection names; the Project area shows it under the tree, after the
+transform inspector, beside whichever panel a tree row opened. A selected
+object, instance or height range gives the browser's hint ("Select a part
+or semantic volume to inspect its role."); a selected part (a tree row of an
+opened object) gives its summary ("Modifier 1 — Parameter modifier"), the
+editor's status, and "Convert to": one radio row per role in Orca's order,
+the current one marked, each other enabled only when the core offers it,
+with the core's words under every role not offered ("This is the current
+role; no conversion is needed.", "The last model part on an object cannot be
+converted to a non-model role", …). Choosing one runs the browser's
+`runOperation`: "Converting Modifier 1 to Negative volume…", then one
+undoable "Convert volume to negative part" and "Converted Modifier 1 to
+Negative volume.", or "The guarded operation was rejected; the canonical
+view was not changed optimistically. …" (a stale read: "Semantic object
+edit was prepared for a stale canonical project revision"); the section
+then reads the project afresh, nothing changed optimistically. The status
+is the editor's own and stays as the selection moves from part to part, as
+the browser's does. The words come from the core
+([Volume-role conversion](#volume-role-conversion)): the role names and
+refusals are English in every language, as in the browser; the heading, the
+hint and "Convert to" are the browser's translated messages. TalkBack hears
+a heading, then a radio group whose rows read their role, their reason and
+whether they are selected or disabled; the status is a live region (a
+rejection assertive). `InspectorModel` reads a part's choices on its worker
+with the state's guard (`ProjectSettings.volumeRoles`) on every project or
+selection change and converts through `ProjectSettings.convertVolumeRole`;
+`VolumeRoleSection` holds the platform-free rules (what the selection shows,
+when a choice converts).
+
+Set as Negative Part (`set_negative_part`) is where the catalogue offers it
+on Android: the Add menu (the browser's menu offers it in the same section as
+Add Modifier and the support volumes, after them) and the command palette,
+enabled by the core for an instance selection, with the browser's glyph, words
+and hint. It runs `ProjectWorkspace.setNegativePart`; a refusal reads "Set as
+Negative Part failed: …", the browser's status. Its success words ("Set part
+as negative volume.") are not shown, as the helper volumes' are not: the
+history's label says which it did.
+
+`InspectorPanelsTest` covers what the selection shows and which choices
+convert; `ProjectEditingTest` the Add menu; `AppActionsTest` the glyph,
+words and hint of all 62 performed actions. `android-roles-smoke.py` (in
+`emulator-smoke.py` after the settings smoke) adds a cube (the hint), adds a
+modifier and reads its choices (the current one marked and explained, every
+other offered), converts it to a negative volume ("Undo Convert volume to
+negative part", "Converted Modifier 1 to Negative volume.", the tree's
+`negative-volume` indicator), selects the cube's own part and finds every
+other role refused as the object's last model part, runs Set as Negative
+Part from the Add menu and from the command palette ("Undo Add negative part
+to object" each), and undoes back to the modifier. It passes on the
+iteration emulator (API 34, x86_64, the branch's APK built without an
+engine); the two suites have not run it yet.
 
 ### Android Preview area
 

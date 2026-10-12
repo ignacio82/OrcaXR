@@ -80,8 +80,9 @@ physical-device gate below is still open.
   height ranges, the command palette, toolbar and context menus, generated
   localization (19 languages) and design tokens, accessibility, adaptive
   layouts, file drop, recovery and multi-window document ownership, and the
-  Workspace's transform gizmo with its keys G, R and S (its emulator suites
-  pending). Remains: *Resume here* items 1 to 4, and physical devices for the
+  Workspace's transform gizmo with its keys G, R and S, and the semantic
+  editor's volume roles with Set as Negative Part (the gizmo's and the roles'
+  emulator suites pending). Remains: *Resume here* items 1 to 4, and physical devices for the
   exit gate.
 - **Phase 8, Android XR: not started.** Only Phase 2's SceneCore candidate
   (`android/renderer-scenecore`, `android/xr-experiment`) exists. Verification
@@ -125,15 +126,12 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
 
 ### Resume here
 
-1. Phase 7, input: the semantic editor's volume roles
-   (`objects_convert_volume_role`, `set_negative_part`): the role decisions
-   the browser's `inspectVolumeRoleConversion` makes, shared through the core
-   with a browser corpus, and the editor's Volume role section in the Project
-   inspector. Their shared core, bindings and session workflows are in place
-   (native-core *Volume-role conversion*); the Android inspector section is
-   next. The Workspace's transform
-   gizmos and their keys G, R and S are done (the Phase 7 input item's
-   status); both emulator suites have yet to run with them.
+1. Both emulator suites on `main` with the Workspace's transform gizmo and
+   the semantic editor's volume roles (the Phase 7 input item, otherwise
+   done): `android-gizmo-smoke.py` and `android-roles-smoke.py` have passed
+   only on iteration emulators. Run `emulator-smoke.py` and then
+   `emulator-smoke.py --api 37 --pages 16` on a quiet host (no builds, no
+   other suite), and record the result here and in the input item's status.
 2. Phase 7, model tools whose shared-core ports exist but have no Android UI:
    emboss text (`orcaxr_project::emboss`, `add_emboss`), SVG parts (`svg`,
    `tool_svg`), brim ears (`brim_ears`, `tool_brim_ears`), assembly (`assembly`,
@@ -2405,10 +2403,15 @@ storage journeys on phone, tablet, and desktop-sized windows.
   wheel, trackpad and touchpad gestures follow OrbitControls; a stylus is a
   finger whose button is a secondary click (a 1,949-check JNI journey, JVM
   tests, and `android-palette-smoke.py`, part of the round-2 suites). The
-  semantic editor's volume roles remain.
-  Status (2026-10-12): remains: the semantic editor's volume roles (*Resume
-  here* item 1); the palette and the settings panels pass both emulator suites
-  (round 2).
+  semantic editor's volume roles follow the selection under the Project
+  area's tree — a part's role choices in Orca's order with the core's
+  decisions and words, a conversion as one undoable step with the browser's
+  status words — and Set as Negative Part is in the Add menu and the palette
+  (an 846-check JNI journey, JVM tests and `android-roles-smoke.py`, which
+  passes on the iteration emulator; native-core *Android volume roles*).
+  Status (2026-10-12): remains: both emulator suites' runs of
+  `android-gizmo-smoke.py` and `android-roles-smoke.py` (*Resume here* item
+  1); the palette and the settings panels pass both emulator suites (round 2).
   Status (transform gizmos): the browser's gizmo — three's
   `TransformControls`, its handle geometry, picking and translate, rotate
   and scale drags in world and local space, and the changes a drag submits —

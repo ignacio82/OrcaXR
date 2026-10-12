@@ -193,6 +193,8 @@
     <string name="project_add_modifier">Add Modifier</string>
     <string name="project_add_support_enforcer">Add Support Enforcer</string>
     <string name="project_add_support_blocker">Add Support Blocker</string>
+    <string name="project_set_negative_part">Set as Negative Part</string>
+    <string name="project_set_negative_part_failed">Set as Negative Part failed</string>
     <string name="device_printers">Printers</string>
     <string name="device_no_printers">No printer saved yet. Add one by its address on your network.</string>
     <string name="device_add_printer">Add printer</string>
@@ -521,6 +523,7 @@
     <string name="action_hint_add_modifier">Add a modifier volume with per-region settings</string>
     <string name="action_hint_add_support_enforcer">Add a volume that forces supports inside it</string>
     <string name="action_hint_add_support_blocker">Add a volume that blocks supports inside it</string>
+    <string name="action_hint_set_negative_part">Turn the selected part into a negative (cut) volume</string>
     <string name="action_hint_slice_active_plate">Slice the plated models to G-code</string>
     <string name="action_hint_slice_all_plates">Slice every printable plate and keep each plate’s own result</string>
     <string name="action_hint_slice_cancel">Stop the slice that is running</string>
@@ -548,6 +551,9 @@
     <string name="settings_dependency_note">Not applicable while Subdivide Mix Layer is off. Enable it to edit this Local-Z option.</string>
     <string name="settings_conflict">Project settings changed after this draft began. The draft is preserved, but it cannot be applied to the stale revision.</string>
     <string name="settings_discard_reload">Discard draft and reload current settings</string>
+    <string name="roles_heading">Volume role</string>
+    <string name="roles_select_hint">Select a part or semantic volume to inspect its role.</string>
+    <string name="roles_convert_to">Convert to</string>
     <string name="ranges_heading">Height ranges</string>
     <string name="ranges_none">No height ranges are defined.</string>
     <string name="ranges_select_hint">Select a height range to edit, split, merge, or delete it.</string>
@@ -578,8 +584,8 @@
     <string name="settings_error_not_applied">No settings were applied: %1$s</string>
     <string name="settings_error_default">Default reset failed: %1$s</string>
     <string name="settings_error_load">Loading settings failed: %1$s</string>
-    <string name="ranges_idle">Changes are applied only after the canonical adapter accepts a guarded request.</string>
-    <string name="ranges_rejected">The guarded operation was rejected; the canonical view was not changed optimistically. %1$s</string>
+    <string name="semantic_idle">Changes are applied only after the canonical adapter accepts a guarded request.</string>
+    <string name="semantic_rejected">The guarded operation was rejected; the canonical view was not changed optimistically. %1$s</string>
     <string name="ranges_add">Add range</string>
     <string name="ranges_edit_heading">Edit boundaries</string>
     <string name="ranges_min">Minimum Z (mm)</string>

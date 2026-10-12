@@ -182,11 +182,11 @@ class ProjectEditingTest {
         // The clipboard opens the Edit menu, as in the browser's; instance creations close it.
         assertEquals(listOf("edit_cut", "edit_copy", "edit_paste"), ProjectEditing.editMenu(view).take(3).map { it.id })
         assertEquals(listOf("add_instance", "fill_bed_with_instances"), ProjectEditing.editMenu(view).takeLast(2).map { it.id })
-        // The Add menu: the six primitives in the browser's order, then the helper volumes.
+        // The Add menu: the six primitives in the browser's order, then the helper volumes and Set as Negative Part.
         assertEquals(
             listOf(
                 "add_primitive_cube", "add_primitive_cylinder", "add_primitive_sphere", "add_primitive_cone", "add_primitive_disc",
-                "add_primitive_torus", "add_modifier", "add_support_enforcer", "add_support_blocker",
+                "add_primitive_torus", "add_modifier", "add_support_enforcer", "add_support_blocker", "set_negative_part",
             ),
             ProjectEditing.ADD_MENU,
         )
@@ -199,6 +199,8 @@ class ProjectEditingTest {
         assertTrue(add.first { it.id == "add_primitive_cube" }.enabled)
         assertFalse(add.first { it.id == "add_modifier" }.enabled)
         assertFalse(add.first { it.id == "add_support_blocker" }.enabled)
+        // An action the core has not answered for yet is disabled.
+        assertFalse(add.first { it.id == "set_negative_part" }.enabled)
         // Row menus offer the creations the app performs beside its other actions: a bed fill for an object, a primitive for a
         // plate (whose Arrange, as the browser's, arranges the active plate); what the app does not perform stays out.
         fun ids(row: ProjectIntents.ObjectTreeRow) = ProjectEditing.rowMenu(row, creating)

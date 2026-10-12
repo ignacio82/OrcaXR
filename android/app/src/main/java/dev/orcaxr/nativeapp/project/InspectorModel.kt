@@ -9,6 +9,7 @@ import dev.orcaxr.core.LayerRangeEditors
 import dev.orcaxr.core.LayerRangeOperation
 import dev.orcaxr.core.LayerRangePanel
 import dev.orcaxr.core.LayerRangeProjection
+import dev.orcaxr.core.VolumeRoleProjection
 import dev.orcaxr.core.ProjectSettings
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
@@ -16,21 +17,24 @@ import dev.orcaxr.core.SettingsPanel
 import dev.orcaxr.core.SettingsPanelApply
 import dev.orcaxr.core.SettingsPanelEdit
 import dev.orcaxr.core.SettingsPanelMode
+import dev.orcaxr.core.VolumeRole
+import dev.orcaxr.core.VolumeRoleEditors
+import dev.orcaxr.core.VolumeRolePanel
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 
-/** What the height-range editor says about its last operation. */
-sealed interface RangeStatus {
+/** What the semantic editor (its volume roles, its height ranges) says about its last operation. */
+sealed interface EditorStatus {
     /** "Changes are applied only after the canonical adapter accepts a guarded request." */
-    data object Idle : RangeStatus
+    data object Idle : EditorStatus
     /** An operation's words while it runs. */
-    data class Pending(val text: String) : RangeStatus
+    data class Pending(val text: String) : EditorStatus
     /** An operation's words once the project took it. */
-    data class Done(val text: String) : RangeStatus
+    data class Done(val text: String) : EditorStatus
     /** "The guarded operation was rejected; …" with the reason. */
-    data class Rejected(val reason: String) : RangeStatus
+    data class Rejected(val reason: String) : EditorStatus
 }
 
 /**
@@ -45,18 +49,35 @@ data class RangesShell(
     val edit: RangeForm = RangeForm(),
     val split: RangeForm = RangeForm(),
     val pending: Boolean = false,
-    val status: RangeStatus = RangeStatus.Idle,
+    val status: EditorStatus = EditorStatus.Idle,
     /** Read once: an object the project no longer has shows nothing. */
+    val loaded: Boolean = false,
+)
+
+/**
+ * The semantic editor's "Volume role" section as the operator sees it: what
+ * the selection asks it to show ([target]), the selected part's role choices
+ * read last (rebuilt from each read of the project, as the browser's editor
+ * renders afresh), whether a conversion is running, and its status — the
+ * editor's own, kept as the selection moves from part to part.
+ */
+data class RolesShell(
+    val target: RoleTarget,
+    val projection: VolumeRoleProjection? = null,
+    val pending: Boolean = false,
+    val status: EditorStatus = EditorStatus.Idle,
+    /** Read once: a part the project no longer has shows the hint. */
     val loaded: Boolean = false,
 )
 
 /**
  * The inspector's settings panels on the project ([ProjectSettings]): the
  * panel a tree row opened, the scoped settings panel's shell around the
- * shared core's panel model, and the height-range editor. The native panel is
- * owned and called on one worker thread; Compose state changes on the main
- * thread. A project change reloads an open panel, or — under a draft — keeps
- * it as the browser's conflict.
+ * shared core's panel model, the height-range editor, and — following the
+ * selection, beside whichever panel is open — the semantic editor's volume
+ * roles. The native panel is owned and called on one worker thread; Compose
+ * state changes on the main thread. A project change reloads an open panel,
+ * or — under a draft — keeps it as the browser's conflict.
  */
 class InspectorModel(private val host: Host) : AutoCloseable {
     /** What the inspector needs from the project area. */
@@ -77,6 +98,8 @@ class InspectorModel(private val host: Host) : AutoCloseable {
     private var native: SettingsPanel? = null
     /** The height ranges read last, with their state's guard (worker thread). */
     private var ranges: LayerRangePanel? = null
+    /** The selected part's role choices read last, with their state's guard (worker thread). */
+    private var roles: VolumeRolePanel? = null
     /** The project's revision and selection last seen (main thread). */
     private var seen: Pair<Long?, Any?>? = null
 
@@ -85,6 +108,8 @@ class InspectorModel(private val host: Host) : AutoCloseable {
     var settingsShell by mutableStateOf<SettingsShell?>(null)
         private set
     var rangesShell by mutableStateOf<RangesShell?>(null)
+        private set
+    var rolesShell by mutableStateOf<RolesShell?>(null)
         private set
 
     private fun cause(failure: Throwable): Throwable =
@@ -106,7 +131,7 @@ class InspectorModel(private val host: Host) : AutoCloseable {
                 val message = reason(failure)
                 post {
                     settingsShell?.let { settingsShell = it.copy(loading = false, busy = false, error = SettingsError(SettingsErrorKind.LoadFailed, message)) }
-                    rangesShell?.let { rangesShell = it.copy(pending = false, status = RangeStatus.Rejected(message)) }
+                    rangesShell?.let { rangesShell = it.copy(pending = false, status = EditorStatus.Rejected(message)) }
                 }
             }
         }
@@ -140,6 +165,7 @@ class InspectorModel(private val host: Host) : AutoCloseable {
         if (now == seen) return
         val revisionChanged = seen?.first != now.first
         seen = now
+        followSelection(view)
         rangesShell?.let { if (!it.pending) readRanges(it.objectId, keep = it) }
         val shell = settingsShell ?: return
         if (!revisionChanged) return
@@ -356,7 +382,7 @@ class InspectorModel(private val host: Host) : AutoCloseable {
         work { project ->
             val read = ranges ?: return@work
             val words = LayerRangeEditors.messages(operation)
-            post { rangesShell = rangesShell?.copy(pending = true, status = RangeStatus.Pending(words.pending)) }
+            post { rangesShell = rangesShell?.copy(pending = true, status = EditorStatus.Pending(words.pending)) }
             val failure = try {
                 edit(project, read).get()
                 null
@@ -366,7 +392,7 @@ class InspectorModel(private val host: Host) : AutoCloseable {
             post {
                 val current = rangesShell ?: return@post
                 if (current.objectId != shell.objectId) return@post
-                rangesShell = current.copy(pending = false, status = if (failure == null) RangeStatus.Done(words.success) else RangeStatus.Rejected(failure))
+                rangesShell = current.copy(pending = false, status = if (failure == null) EditorStatus.Done(words.success) else EditorStatus.Rejected(failure))
                 // The editor reads the project afresh either way: nothing was changed optimistically.
                 readRanges(current.objectId, keep = rangesShell)
             }
@@ -391,6 +417,72 @@ class InspectorModel(private val host: Host) : AutoCloseable {
     /** Selects a listed range, as its tree row does. */
     fun selectRange(rangeId: String) = work { project ->
         runCatching { project.selectLayerRange(rangeId).get() }
+    }
+
+    // ---- The volume roles ----
+
+    /** The section the selection asks for (main thread): a part's choices read afresh, the hint, or nothing. */
+    private fun followSelection(view: ProjectView) {
+        val target = VolumeRoleSection.target(view.selection.primary)
+        val shell = rolesShell
+        when {
+            target == null -> rolesShell = null
+            shell == null || shell.target != target -> {
+                rolesShell = RolesShell(target, status = shell?.status ?: EditorStatus.Idle)
+                if (target is RoleTarget.Part) readRoles(target.volumeId)
+            }
+            !shell.pending && target is RoleTarget.Part -> readRoles(target.volumeId)
+        }
+    }
+
+    /** Reads part [volumeId]'s role choices on the current state; the status stays. */
+    private fun readRoles(volumeId: String) {
+        val workspace = host.workspace() ?: return
+        worker.execute {
+            val read = try {
+                (settings ?: ProjectSettings(workspace).also { settings = it }).volumeRoles(volumeId).get()
+            } catch (_: Throwable) {
+                null
+            }
+            roles = read
+            post {
+                val shell = rolesShell ?: return@post
+                if ((shell.target as? RoleTarget.Part)?.volumeId != volumeId) return@post
+                rolesShell = shell.copy(projection = read?.projection, loaded = true)
+            }
+        }
+    }
+
+    /**
+     * Converts the selected part to [role] as the browser's editor does
+     * (`runOperation`): only a choice the core offers, its pending words, then
+     * done or rejected; the section reads the project afresh either way.
+     */
+    fun convertRole(role: VolumeRole) {
+        val shell = rolesShell?.takeIf { !it.pending } ?: return
+        val projection = shell.projection ?: return
+        if (projection.choices.none { it.role == role && VolumeRoleSection.choosable(it, pending = false) }) return
+        val workspace = host.workspace() ?: return
+        rolesShell = shell.copy(pending = true)
+        worker.execute {
+            val read = roles?.takeIf { it.projection.volumeId == projection.volumeId }
+            var success: String? = null
+            val failure = try {
+                checkNotNull(read) { "The part's roles were not read." }
+                val words = VolumeRoleEditors.messages(read.projection.volumeName, role)
+                post { rolesShell = rolesShell?.copy(status = EditorStatus.Pending(words.pending)) }
+                (settings ?: ProjectSettings(workspace).also { settings = it }).convertVolumeRole(read, role).get()
+                success = words.success
+                null
+            } catch (thrown: Throwable) {
+                reason(thrown)
+            }
+            post {
+                val current = rolesShell ?: return@post
+                rolesShell = current.copy(pending = false, status = success?.let { EditorStatus.Done(it) } ?: EditorStatus.Rejected(failure.orEmpty()))
+                (current.target as? RoleTarget.Part)?.let { readRoles(it.volumeId) }
+            }
+        }
     }
 
     override fun close() {

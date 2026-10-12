@@ -204,6 +204,8 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+        // The semantic editor's volume roles for the selected part (a hint for an object, instance or range).
+        volumeRoleItems(model.inspector)
         // The inspector's other panels, as the tree's Settings and Layer ranges rows open them.
         inspectorPanel(model.inspector, settingsSideBySide(widthDp))
         // The browser's Tools: the Simplify panel.

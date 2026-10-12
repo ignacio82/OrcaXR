@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -56,6 +57,7 @@ import dev.orcaxr.core.LayerRangeMerge
 import dev.orcaxr.core.SettingsPanelControl
 import dev.orcaxr.core.SettingsPanelMode
 import dev.orcaxr.core.SettingsPanelRow
+import dev.orcaxr.core.VolumeRoleProjection
 import dev.orcaxr.nativeapp.R
 
 /** The width from which a setting's name and control share a line, as the browser's sidebar grid does. */
@@ -433,19 +435,24 @@ private fun RangesHead(shell: RangesShell, inspector: InspectorModel) {
         }
         shell.projection?.let { Text(it.objectName, style = MaterialTheme.typography.bodySmall) }
         if (shell.pending) LinearProgressIndicator(Modifier.fillMaxWidth())
-        val status = shell.status
-        Text(
-            when (status) {
-                RangeStatus.Idle -> stringResource(R.string.ranges_idle)
-                is RangeStatus.Pending -> status.text
-                is RangeStatus.Done -> status.text
-                is RangeStatus.Rejected -> stringResource(R.string.ranges_rejected, status.reason)
-            },
-            color = if (status is RangeStatus.Rejected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.semantics { liveRegion = if (status is RangeStatus.Rejected) LiveRegionMode.Assertive else LiveRegionMode.Polite },
-        )
+        EditorStatusLine(shell.status)
     }
+}
+
+/** The semantic editor's status: idle words, an operation's own words, or its rejection — announced as it changes, a rejection at once. */
+@Composable
+private fun EditorStatusLine(status: EditorStatus) {
+    Text(
+        when (status) {
+            EditorStatus.Idle -> stringResource(R.string.semantic_idle)
+            is EditorStatus.Pending -> status.text
+            is EditorStatus.Done -> status.text
+            is EditorStatus.Rejected -> stringResource(R.string.semantic_rejected, status.reason)
+        },
+        color = if (status is EditorStatus.Rejected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodySmall,
+        modifier = Modifier.semantics { liveRegion = if (status is EditorStatus.Rejected) LiveRegionMode.Assertive else LiveRegionMode.Polite },
+    )
 }
 
 /** A Z field of a range form, in millimetres. */
@@ -554,6 +561,66 @@ private fun SelectedRange(shell: RangesShell, selected: LayerRangeEntry, previou
             enabled = !shell.pending,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
         ) { Text(stringResource(R.string.ranges_delete), color = MaterialTheme.colorScheme.error) }
+    }
+}
+
+// ---- The semantic editor's volume roles (SemanticObjectEditor) ----
+
+/**
+ * The semantic editor's "Volume role" section, following the selection: for
+ * a selected part its name and role, the editor's status, and "Convert to"
+ * with every role in Orca's order — the current one marked, each other
+ * enabled only when the core offers it, with the core's words when not; for a
+ * selected object, instance or height range the browser's hint.
+ */
+fun LazyListScope.volumeRoleItems(inspector: InspectorModel) {
+    val shell = inspector.rolesShell ?: return
+    item(key = "roles:head") { RolesHead(shell) }
+    val projection = shell.projection ?: return
+    item(key = "roles:choices:" + projection.volumeId) { RoleChoices(shell, projection, inspector) }
+}
+
+@Composable
+private fun RolesHead(shell: RolesShell) {
+    Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(stringResource(R.string.roles_heading), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+        val projection = shell.projection
+        when {
+            projection != null -> Text(projection.summary, style = MaterialTheme.typography.bodyMedium)
+            shell.target is RoleTarget.Hint || shell.loaded ->
+                Text(stringResource(R.string.roles_select_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (shell.target is RoleTarget.Part) {
+            if (shell.pending) LinearProgressIndicator(Modifier.fillMaxWidth())
+            EditorStatusLine(shell.status)
+        }
+    }
+}
+
+/** "Convert to": one radio choice per role; choosing an offered one converts the part, as the browser's role buttons do. */
+@Composable
+private fun RoleChoices(shell: RolesShell, projection: VolumeRoleProjection, inspector: InspectorModel) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.outlinedCardColors(), border = CardDefaults.outlinedCardBorder()) {
+        Column(Modifier.padding(10.dp).selectableGroup(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(stringResource(R.string.roles_convert_to), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleSmall)
+            for (choice in projection.choices) {
+                val enabled = VolumeRoleSection.choosable(choice, shell.pending)
+                Row(
+                    Modifier.fillMaxWidth()
+                        .selectable(selected = choice.current, enabled = enabled, role = Role.RadioButton) { inspector.convertRole(choice.role) }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = choice.current, onClick = null, enabled = enabled)
+                    Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                        Text(choice.label, style = MaterialTheme.typography.bodyLarge)
+                        choice.blockedReason?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

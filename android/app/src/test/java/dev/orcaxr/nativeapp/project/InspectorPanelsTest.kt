@@ -7,6 +7,9 @@ import dev.orcaxr.core.ProjectIntents
 import dev.orcaxr.core.SettingsPanelApply
 import dev.orcaxr.core.SettingsPanelState
 import dev.orcaxr.core.SettingsPanelView
+import dev.orcaxr.core.VolumeRole
+import dev.orcaxr.core.VolumeRoleChoice
+import dev.orcaxr.core.VolumeRoleDecision
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -107,5 +110,40 @@ class InspectorPanelsTest {
         // A merge names its neighbour, or says why not.
         assertEquals("r2" to null, RangeForms.merge(LayerRangeMerge(true, "r2", null)))
         assertEquals(null to "There is no previous height range.", RangeForms.merge(LayerRangeMerge(false, null, "There is no previous height range.")))
+    }
+
+    @Test
+    fun theVolumeRoleSectionFollowsTheSelectionAsTheBrowsersEditor() {
+        // A part shows its choices; an object, instance or height range the hint; anything else nothing.
+        assertEquals(RoleTarget.Part("v1"), VolumeRoleSection.target(ProjectIntents.SelectionEntity.Volume(units("v1"))))
+        for (entity in listOf(
+            ProjectIntents.SelectionEntity.Object(units("o1")),
+            ProjectIntents.SelectionEntity.Instance(units("i1")),
+            ProjectIntents.SelectionEntity.LayerRange(units("r1")),
+        )) assertEquals(RoleTarget.Hint, VolumeRoleSection.target(entity))
+        for (entity in listOf(
+            null,
+            ProjectIntents.SelectionEntity.Plate(units("p1")),
+            ProjectIntents.SelectionEntity.Project(ProjectIntents.Empty),
+            ProjectIntents.SelectionEntity.Filament(units("f1")),
+        )) assertNull(VolumeRoleSection.target(entity))
+    }
+
+    @Test
+    fun onlyAChoiceTheCoreOffersConvertsAndNeverWhileOneRuns() {
+        val offered = VolumeRoleChoice(VolumeRole.PARAMETER_MODIFIER, "Parameter modifier", false, VolumeRoleDecision.Allowed(false), null)
+        val current = VolumeRoleChoice(
+            VolumeRole.MODEL, "Part", true, VolumeRoleDecision.Allowed(true), "This is the current role; no conversion is needed.",
+        )
+        val refused = VolumeRoleChoice(
+            VolumeRole.NEGATIVE_VOLUME, "Negative volume", false,
+            VolumeRoleDecision.Blocked("last-model-volume", "The last model part on an object cannot be converted to a non-model role"),
+            "The last model part on an object cannot be converted to a non-model role",
+        )
+        assertTrue(VolumeRoleSection.choosable(offered, pending = false))
+        assertFalse(VolumeRoleSection.choosable(offered, pending = true))
+        assertFalse(VolumeRoleSection.choosable(current, pending = false))
+        assertFalse(VolumeRoleSection.choosable(refused, pending = false))
+        assertEquals(listOf("model", "negative-volume", "parameter-modifier", "support-blocker", "support-enforcer"), VolumeRole.entries.map { it.wire })
     }
 }

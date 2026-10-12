@@ -24,6 +24,8 @@ SMOKES = ["android-smoke", "android-local-network-smoke", "android-device-smoke"
           "android-edit-smoke", "android-inspector-smoke", "android-create-smoke", "android-filament-smoke",
           "android-local-slice-smoke", "android-outputs-smoke", "android-paint-smoke", "android-modeltools-smoke",
           "android-settings-smoke",
+          # The semantic editor's volume roles and Set as Negative Part.
+          "android-roles-smoke",
           # The command palette, the Workspace toolbar, the scene's context menus and a mouse's hover.
           "android-palette-smoke",
           # The Workspace's transform gizmo: a drag of its arrow, its rings, and G, R and S.

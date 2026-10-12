@@ -11,6 +11,7 @@ import dev.orcaxr.core.SettingsPanelMode
 import dev.orcaxr.core.SettingsPanelState
 import dev.orcaxr.core.SettingsPanelView
 import dev.orcaxr.core.SettingsTarget
+import dev.orcaxr.core.VolumeRoleChoice
 
 /**
  * The inspector's other panels, as the tree's rows lead to them: a node's
@@ -175,4 +176,37 @@ object RangeForms {
 
     /** The selected range of [projection], for the forms that act on it. */
     fun selected(projection: LayerRangeProjection?): LayerRangeEntry? = projection?.selectedRange
+}
+
+/** What the semantic editor's "Volume role" section shows for the selection. */
+sealed interface RoleTarget {
+    /** A selected part: its role choices. */
+    data class Part(val volumeId: String) : RoleTarget
+    /** A selected object, instance or height range: "Select a part or semantic volume to inspect its role." */
+    data object Hint : RoleTarget
+}
+
+/**
+ * The semantic editor's volume roles around the shared core's choices
+ * (`SemanticObjectEditor`'s "Volume role" section): when it shows, and when a
+ * choice converts.
+ */
+object VolumeRoleSection {
+    private fun text(units: List<Int>) = String(CharArray(units.size) { units[it].toChar() })
+
+    /**
+     * The section for the selection's [primary] entity, as the browser's
+     * editor has a snapshot for it: a part's choices; the hint for an object,
+     * an instance (its object) or a height range; nothing for a plate, the
+     * project, a filament or no selection.
+     */
+    fun target(primary: ProjectIntents.SelectionEntity?): RoleTarget? = when (primary) {
+        is ProjectIntents.SelectionEntity.Volume -> RoleTarget.Part(text(primary.value))
+        is ProjectIntents.SelectionEntity.Object, is ProjectIntents.SelectionEntity.Instance,
+        is ProjectIntents.SelectionEntity.LayerRange -> RoleTarget.Hint
+        else -> null
+    }
+
+    /** Whether choosing [choice] converts the part now: a role the core offers (not the current one, not refused), with nothing running. */
+    fun choosable(choice: VolumeRoleChoice, pending: Boolean): Boolean = choice.offered && !pending
 }

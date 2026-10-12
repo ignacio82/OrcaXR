@@ -60,9 +60,12 @@ object ProjectEditing {
     val EDIT_CLIPBOARD = listOf("edit_cut", "edit_copy", "edit_paste")
     val EDIT_INSTANCES = listOf("add_instance", "fill_bed_with_instances")
 
-    /** The Add menu: the browser's `add` section primitives (scene.ts), then the helper volumes for the selected object (gizmos.ts). */
+    /**
+     * The Add menu: the browser's `add` section primitives (scene.ts), then the helper volumes for the selected
+     * object and Set as Negative Part, in the catalogue's order (gizmos.ts, its menu's tools section).
+     */
     val ADD_MENU = PrimitiveShape.PRIMITIVES.mapNotNull { it.actionId } +
-        HelperVolumeRole.entries.mapNotNull { it.actionId }
+        HelperVolumeRole.entries.mapNotNull { it.actionId } + "set_negative_part"
 
     /** Creation's catalogue actions the app performs: the clipboard, the bed fill and the Add menu. */
     val CREATED = (EDIT_CLIPBOARD + EDIT_INSTANCES + ADD_MENU).toSet()

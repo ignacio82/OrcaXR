@@ -871,6 +871,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "drop_to_bed" -> work { status(ProjectEditing.droppedStatus(workspace.dropSelectedToBed().await())) }
             "arrange_all" -> work { status(ProjectEditing.arrangedStatus(workspace.arrangeActivePlate().await())) }
             "split_to_objects" -> splitToObjects()
+            "set_negative_part" -> setNegativePart()
             "split_to_parts" -> splitToParts()
             "simplify_model" -> simplifyNow()
             "tool_measure" -> measure(!measuring)
@@ -1380,6 +1381,19 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             else -> return false
         }
         return true
+    }
+
+    /**
+     * Set as Negative Part (`set_negative_part`): the selected part becomes a
+     * negative volume, or one is added to the selected object; refused with
+     * the browser's status ("Set as Negative Part failed: …").
+     */
+    private fun setNegativePart() = work {
+        try {
+            workspace.setNegativePart().await()
+        } catch (failure: Throwable) {
+            throw IllegalStateException("${words(R.string.project_set_negative_part_failed)}: ${cause(failure).message.orEmpty()}")
+        }
     }
 
     /** Ctrl/Meta+C, +X and +V (Copy, Cut, Paste) from the keyboard, when the core enables them; answers whether one applied. */
