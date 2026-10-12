@@ -25,6 +25,7 @@ import {
   type ProjectLayerEventTypeWire,
 } from '../../../contracts/generated/project-intents';
 import { createIntentTextEncoder } from '../project/PreparedProjectCommands';
+import { weldTriangleMesh } from '../project/meshWeld';
 import {
   captureAddEmbossTextCommand,
   captureAddObjectWithAssetCommand,
@@ -4808,7 +4809,8 @@ function extractTriangleMesh(geometry: THREE.BufferGeometry): {
     }
     indices[cursor] = vertex;
   }
-  return { positions, indices };
+  // One closed surface: a generated geometry arrives as a triangle soup the engine cannot slice.
+  return weldTriangleMesh(positions, indices);
 }
 
 function findReusableMeshAsset(candidates: readonly AssetPayload[], staged: AssetPayload): AssetPayload | undefined {
@@ -5099,7 +5101,9 @@ function createPrimitiveCubeGeometry(size = 10): { positions: number[]; indices:
     0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16, 17, 18, 16, 18, 19, 20, 21, 22,
     20, 22, 23,
   ];
-  return { positions, indices };
+  // Four corners a face, welded into one closed box as every stored mesh is (`meshWeld.ts`).
+  const welded = weldTriangleMesh(Float32Array.from(positions), Uint32Array.from(indices));
+  return { positions: Array.from(welded.positions), indices: Array.from(welded.indices) };
 }
 
 function createPrimitiveCylinderGeometry(

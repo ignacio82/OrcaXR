@@ -2,7 +2,8 @@
 // the shared core (`orcaxr_project::primitives`) and its hosts:
 //
 // - meshes: the six `add_primitive_*` shapes (`primitives.ts`, three's
-//   generators, `toNonIndexed`) and the helper-volume cube
+//   generators, `toNonIndexed`, welded into one closed surface by
+//   `meshWeld.ts` as the controller stores them) and the helper-volume cube
 //   (`addHelperVolume`'s `createPrimitiveCubeGeometry`) at several sizes, as
 //   the canonical mesh payload `CanonicalWorkspaceController` stores — read
 //   back from a real controller's repository;
@@ -31,6 +32,7 @@ import { seededRandom, UuidIdSource } from "../../web/src/project/domain/ids.ts"
 import { assertValidProjectState } from "../../web/src/project/domain/validation.ts";
 import { InMemoryAssetRepository } from "../../web/src/project/assets.ts";
 import { encodeIndexedMeshAsset } from "../../web/src/project/meshCodec.ts";
+import { weldTriangleMesh } from "../../web/src/project/meshWeld.ts";
 import { EditorSession } from "../../web/src/project/session.ts";
 import { Bbs3mfProjectSerializer } from "../../web/src/project/serialization/Bbs3mfProjectSerializer.ts";
 import { PRIMITIVE_KINDS, primitiveFileName, primitiveGeometry } from "../../web/src/project/objects/primitives.ts";
@@ -310,10 +312,12 @@ async function authored(name, seed, build) {
 }
 
 /** The cube primitive's payload under [id], as a project would hold it. */
+/** The cube's mesh as the controller stores it: its triangle list welded. */
 function cubePayload(id, extra = {}) {
   const geometry = primitiveGeometry("cube");
-  const positions = Float32Array.from(geometry.getAttribute("position").array);
-  const indices = Uint32Array.from({ length: positions.length / 3 }, (_, i) => i);
+  const soup = Float32Array.from(geometry.getAttribute("position").array);
+  const corners = Uint32Array.from({ length: soup.length / 3 }, (_, i) => i);
+  const { positions, indices } = weldTriangleMesh(soup, corners);
   return encodeIndexedMeshAsset({ id, positions, indices, ...extra });
 }
 function objectFor(project, objectId, assetPayload, triangleCount) {
@@ -369,15 +373,19 @@ for (const [name, seed, compatible] of [
   ["foreign layout and twin", 0xe4, true],
 ]) {
   const { controller, ids, entry } = await authored(name, seed, (project, assets) => {
-    const geometry = primitiveGeometry("cube");
-    const positions = Float32Array.from(geometry.getAttribute("position").array);
     const indexed = cubePayload("import:asset:indexed");
-    // The same bytes read as 48 unindexed vertices: one digest, another topology.
-    const unindexed = encodeIndexedMeshAsset({ id: "import:asset:a-unindexed", positions: [...positions, ...new Float32Array(indexed.bytes.buffer, 432)] });
+    // The same bytes read as 12 vertices and 8 triangles (the cube's 8 corners,
+    // then its first 12 indices as coordinates): one digest, another topology.
+    const bytes = indexed.bytes.slice().buffer;
+    const unindexed = encodeIndexedMeshAsset({
+      id: "import:asset:a-unindexed",
+      positions: new Float32Array(bytes, 0, 36),
+      indices: new Uint32Array(bytes, 144, 24),
+    });
     assert.equal(unindexed.descriptor.digest, indexed.descriptor.digest);
     assets.put(unindexed.descriptor, unindexed.bytes);
     project.sourceAssets.push(unindexed.descriptor);
-    objectFor(project, "import:object:unindexed", unindexed, 16);
+    objectFor(project, "import:object:unindexed", unindexed, 8);
     if (compatible) {
       assets.put(indexed.descriptor, indexed.bytes);
       project.sourceAssets.push(indexed.descriptor);
@@ -556,6 +564,7 @@ const sources = [
   "web/src/project/objects/primitives.ts",
   "web/src/workspace/geometryPlacement.ts",
   "web/src/workspace/CanonicalWorkspaceController.ts",
+  "web/src/project/meshWeld.ts",
   "web/src/workspace/WorkspaceBed.ts",
   "web/src/workspace/ProfilePreflightConstraints.ts",
   "web/src/project/meshCodec.ts",

@@ -46,6 +46,21 @@ object ProjectOutputChecks {
         return Base64.getDecoder().decode(base64)
     }
 
+    /** The archive's one mesh: its vertex count and its directed edges (each once, or the set is smaller). */
+    private fun surface(archive: ByteArray): Pair<Int, Set<Pair<Int, Int>>> {
+        val model = java.util.zip.ZipInputStream(archive.inputStream()).use { zip ->
+            generateSequence { zip.nextEntry }.first { it.name == "3D/3dmodel.model" }
+            zip.readBytes().toString(Charsets.UTF_8)
+        }
+        val vertices = Regex("<vertex ").findAll(model).count()
+        val edges = HashSet<Pair<Int, Int>>()
+        for (triangle in Regex("<triangle v1=\"(\\d+)\" v2=\"(\\d+)\" v3=\"(\\d+)\"").findAll(model)) {
+            val (a, b, c) = triangle.destructured.toList().map(String::toInt)
+            edges += listOf(a to b, b to c, c to a)
+        }
+        return vertices to edges
+    }
+
     /**
      * [script] lines: `<section>\t<request>\t<reply>` for the corpus's answers,
      * `R\t<section>\t<request>` for its refusals. [placement] is the placement
@@ -177,12 +192,20 @@ object ProjectOutputChecks {
                     check(third !in (plan as SlicePlan.Plates).ids, "the empty plate")
 
                     // Each plate's archive carries that plate's own pictures, at the profile's sizes.
+                    val written = HashMap<String, ByteArrayOutputStream>()
                     fun archive(plateId: String): ProjectPlateArchive =
                         done(workspace.projectPlate(plateId, object : ProjectDocumentOutput {
-                            override fun openOutput(): OutputStream = ByteArrayOutputStream()
+                            override fun openOutput(): OutputStream = ByteArrayOutputStream().also { written[plateId] = it }
                         }))
                     val cubePlate = archive(first)
                     val cylinderPlate = archive(second)
+                    // The cylinder added on the second plate reaches the engine as one closed surface:
+                    // stored as a triangle soup, it sliced to "The print is empty".
+                    for ((plateId, triangles) in listOf(first to 12, second to 192)) {
+                        val (vertices, edges) = surface(written.getValue(plateId).toByteArray())
+                        check(edges.size == triangles * 3 && edges.all { (it.second to it.first) in edges }, "plate $plateId's mesh is closed")
+                        check(vertices.toLong() - edges.size / 2 + triangles == 2L, "plate $plateId's mesh is one surface")
+                    }
                     check(cubePlate.thumbnails.thumbnails.map { "${it.width}x${it.height}/${it.format}" } == listOf("48x48/PNG", "300x300/PNG"), "the U1's sizes")
                     check(cubePlate.thumbnails.problems.isEmpty(), "every size honoured")
                     for (picture in cubePlate.thumbnails.thumbnails + cylinderPlate.thumbnails.thumbnails) {

@@ -153,3 +153,51 @@ fn plans_match_the_browser() {
         assert_eq!(reply, Err(INVALID_REQUEST), "{}", case["name"]);
     }
 }
+
+/// Every primitive and the helper volumes' cube is one closed surface the
+/// engine can slice: each edge of one triangle is the reverse edge of exactly
+/// one other, no triangle names a vertex twice, and the surface has the genus
+/// its shape has (V − E + F = 2, a torus 0). Stored as a triangle soup, a
+/// cylinder, cone, sphere or disc sliced to "The print is empty" and a torus
+/// lost its layers.
+#[test]
+fn every_primitive_is_one_closed_surface() {
+    use orcaxr_project::primitives::{Shape, mesh};
+    use std::collections::HashMap;
+    for shape in Shape::ALL.iter().copied() {
+        for size in [0.5, 20.0, 250.0] {
+            let mesh = mesh(shape, size);
+            let mut edges: HashMap<(u32, u32), usize> = HashMap::new();
+            for triangle in mesh.indices.chunks(3) {
+                let [a, b, c] = [triangle[0], triangle[1], triangle[2]];
+                assert!(
+                    a != b && b != c && a != c,
+                    "{shape:?} {size}: a degenerate triangle"
+                );
+                for edge in [(a, b), (b, c), (c, a)] {
+                    *edges.entry(edge).or_default() += 1;
+                }
+            }
+            for (&(a, b), &count) in &edges {
+                assert_eq!(
+                    count, 1,
+                    "{shape:?} {size}: edge {a}-{b} used {count} times"
+                );
+                assert_eq!(
+                    edges.get(&(b, a)),
+                    Some(&1),
+                    "{shape:?} {size}: open edge {a}-{b}"
+                );
+            }
+            let vertices = mesh.positions.len() / 3;
+            assert!(mesh.indices.iter().all(|&i| (i as usize) < vertices));
+            let euler =
+                vertices as i64 - (edges.len() / 2) as i64 + (mesh.indices.len() / 3) as i64;
+            assert_eq!(
+                euler,
+                if shape == Shape::Torus { 0 } else { 2 },
+                "{shape:?} {size}"
+            );
+        }
+    }
+}

@@ -49,7 +49,7 @@ fn outputs_match_the_browser() {
         ("blocks", block_json, 19),
         ("injections", inject_json, 100),
         ("views", view_json, 132),
-        ("plans", plan_json, 40),
+        ("plans", plan_json, 44),
     ];
     for (section, answer, count) in sections {
         let cases = cases(&corpus, section);

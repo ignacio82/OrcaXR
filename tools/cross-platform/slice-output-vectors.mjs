@@ -9,8 +9,10 @@
 // bundled printers' values, every JavaScript coercion the list makes
 // (`String` of array entries, `split`, `trim`, `\d`, `Number`), block row
 // wrapping at every remainder, header markers of every placement, bounds of
-// every proportion and the project model corpus's states with plates added,
-// emptied and made unprintable. Replayed by Rust, by WASM in Node and over JNI.
+// every proportion, the project model corpus's states with plates added,
+// emptied and made unprintable, and the production controller's journey of a
+// cylinder added on a second plate. Replayed by Rust, by WASM in Node and
+// Chrome, and over JNI.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -22,6 +24,12 @@ import {
 import { thumbnailViewExchange } from "../../web/src/workspace/PlateThumbnailExchange.ts";
 import { slicePlanExchange } from "../../web/src/project/slicing/SlicePlanExchange.ts";
 import { validateProjectState } from "../../web/src/project/domain/validation.ts";
+import * as THREE from "../../web/node_modules/three/build/three.module.js";
+import { seededRandom, UuidIdSource } from "../../web/src/project/domain/ids.ts";
+import { primitiveFileName, primitiveGeometry } from "../../web/src/project/objects/primitives.ts";
+import { CanonicalWorkspaceController } from "../../web/src/workspace/CanonicalWorkspaceController.ts";
+import { geometryBedPlacement } from "../../web/src/workspace/geometryPlacement.ts";
+import { workspaceBed } from "../../web/src/workspace/WorkspaceBed.ts";
 
 const root = new URL("../../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
@@ -277,6 +285,32 @@ for (const [name, state] of states) {
   reversed.plates.forEach((plate, index) => (plate.order = reversed.plates.length - 1 - index));
   variants.push([`${name} reversed`, reversed]);
 }
+// The Android outputs smoke's journey on the production controller: a cube, a
+// second plate, a cylinder added while it is active (sliced alone), then the
+// first plate active again (Slice All Plates slices both).
+{
+  const controller = CanonicalWorkspaceController.createEmpty({
+    idSource: new UuidIdSource(seededRandom(0x2b1a)),
+    clock: () => "2026-10-11T00:00:00.000Z",
+    parent: new THREE.Scene(),
+    mapping: { bedSizeMm: [270, 270], worldUnitsPerMm: 0.00175 },
+  });
+  const add = (kind) => {
+    const geometry = primitiveGeometry(kind);
+    const area = workspaceBed(controller.getSlicingConfiguration().config).areaMm;
+    const name = primitiveFileName(kind);
+    return controller.importGeometry(geometry, { name, sourceFilename: name, transform: geometryBedPlacement(geometry, area) });
+  };
+  const state = () => structuredClone(controller.createCanonicalSliceSource().capture().state);
+  const first = state().activePlateId;
+  await add("cube");
+  await controller.addPlate();
+  await add("cylinder");
+  variants.push(["second plate with a cylinder, active", state()]);
+  await controller.activatePlate(first);
+  variants.push(["second plate with a cylinder, first plate active", state()]);
+  controller.dispose();
+}
 const plans = [];
 for (const [name, state] of variants) {
   if (validateProjectState(state).some((issue) => issue.severity === "error")) continue;
@@ -301,6 +335,8 @@ const sources = [
   "web/src/workspace/PlateThumbnailExchange.ts",
   "web/src/project/slicing/SliceJobCoordinator.ts",
   "web/src/project/slicing/SlicePlanExchange.ts",
+  "web/src/workspace/CanonicalWorkspaceController.ts",
+  "web/src/project/meshWeld.ts",
 ];
 const corpus = {
   lists,

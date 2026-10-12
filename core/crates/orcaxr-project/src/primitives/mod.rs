@@ -78,8 +78,9 @@ pub struct Mesh {
     pub indices: Vec<u32>,
 }
 
-/// `primitiveGeometry(kind, side)` through `extractTriangleMesh`, or the helper
-/// cube (`createPrimitiveCubeGeometry(size)`), as the asset encoder receives it.
+/// `primitiveGeometry(kind, side)` through `extractTriangleMesh` — welded into
+/// one closed surface ([`mesh::weld`]) — or the helper cube
+/// (`createPrimitiveCubeGeometry(size)`), as the asset encoder receives it.
 pub fn mesh(shape: Shape, size_mm: f64) -> Mesh {
     use geometry::*;
     let radius = 0.5 * size_mm;
@@ -105,14 +106,16 @@ pub fn mesh(shape: Shape, size_mm: f64) -> Mesh {
         }
         Shape::Torus => torus(radius, 0.125 * size_mm, 32, 96),
     };
-    // `toNonIndexed()`, then `extractTriangleMesh`'s identity index buffer.
-    let positions = indexed.to_non_indexed();
-    let indices = (0..(positions.len() / 3) as u32).collect();
+    // `toNonIndexed()`, then `extractTriangleMesh`: its identity index buffer, welded.
+    let soup = indexed.to_non_indexed();
+    let corners: Vec<u32> = (0..(soup.len() / 3) as u32).collect();
+    let (positions, indices) = mesh::weld::weld(&soup, &corners);
     Mesh { positions, indices }
 }
 
 /// `createPrimitiveCubeGeometry(size)`: 24 vertices (four per face, ±size/2)
-/// and two triangles a face, as the controller lists them.
+/// and two triangles a face, as the controller lists them, welded into one
+/// closed box ([`mesh::weld`]).
 fn helper_cube(size_mm: f64) -> Mesh {
     let h = size_mm / 2.0;
     let corners: [[f64; 3]; 24] = [
@@ -141,16 +144,16 @@ fn helper_cube(size_mm: f64) -> Mesh {
         [-h, h, h],
         [-h, h, -h],
     ];
-    Mesh {
-        // `encodeIndexedMeshAsset` writes each double with `setFloat32`.
-        positions: corners.iter().flatten().map(|&v| v as f32).collect(),
-        indices: (0..6u32)
-            .flat_map(|face| {
-                let at = face * 4;
-                [at, at + 1, at + 2, at, at + 2, at + 3]
-            })
-            .collect(),
-    }
+    // Welded as Float32, as `Float32Array.from` rounds each double first.
+    let corners: Vec<f32> = corners.iter().flatten().map(|&v| v as f32).collect();
+    let faces: Vec<u32> = (0..6u32)
+        .flat_map(|face| {
+            let at = face * 4;
+            [at, at + 1, at + 2, at, at + 2, at + 3]
+        })
+        .collect();
+    let (positions, indices) = mesh::weld::weld(&corners, &faces);
+    Mesh { positions, indices }
 }
 
 /// The canonical payload of [mesh] under `id` (`encodeIndexedMeshAsset`).

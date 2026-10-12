@@ -7,6 +7,7 @@ mod indexed;
 pub mod simplify;
 pub mod split;
 pub mod triangulate;
+pub mod weld;
 use crate::assets::AssetLease;
 pub use bounds::{Bounds, BoundsLimits, instance_bounds};
 pub use encode::{Coordinates, EncodeOptions, encode};

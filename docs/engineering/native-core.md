@@ -3875,9 +3875,13 @@ for operation (`primitives::geometry`: `BoxGeometry`, `CylinderGeometry` with
 a cone's zero top radius, `SphereGeometry`, `TorusGeometry`, `rotateX` as
 `Matrix4.makeRotationX` through `Vector3.applyMatrix4` with its perspective
 divide, every coordinate the same double expression stored as Float32, V8's
-`sin`/`cos` from `js_math`), then `toNonIndexed` and `extractTriangleMesh`'s
-identity index buffer; the helper volumes' cube is
-`createPrimitiveCubeGeometry` (24 vertices, two triangles a face). Each
+`sin`/`cos` from `js_math`), then `toNonIndexed` and `extractTriangleMesh`,
+which welds the triangle list into one closed surface (`meshWeld.ts`,
+`mesh::weld`: corners within 1e-6 mm become one vertex, first corner's
+coordinates kept in corner order, every triangle kept in its order); the
+helper volumes' cube is
+`createPrimitiveCubeGeometry` (24 vertices, two triangles a face), welded the
+same way into a closed box of eight. Each
 encodes as the browser's canonical mesh payload (`encodeIndexedMeshAsset`).
 What a shape becomes in a project is planned against a session's
 acknowledged state: a primitive (`addPrimitive` → `importGeometry` →
@@ -3907,6 +3911,19 @@ canonical JSON a host stages. One browser defect was fixed on the way: the
 asset a new model shares was chosen by `localeCompare` order, so two assets
 holding the same mesh (two helper cubes do) made the choice depend on the
 runtime's locale; it is code-unit order now, with a regression test.
+A second was found by the Android outputs smoke: `extractTriangleMesh` kept
+three's triangle soup, so no two triangles shared a vertex and a wrapped
+shape's seam vertices differed by float noise. The pinned engine sliced only
+the cube from such a mesh — a cylinder, cone, sphere or disc reported "The
+print is empty. The model is not printable with current print settings." (on
+Android, Slice All Plates failed on a cylinder added to a second plate) and a
+torus lost most of its layers — in the browser's WASM engine and Android's
+alike. Every geometry the controller stores (primitives, calibration models,
+a model loaded from a URL, the helper volumes' and a cube magnet's box) is
+welded now; `every_primitive_is_one_closed_surface` proves each primitive and
+the helper cube at three sizes is a closed 2-manifold of the right genus, and `primitive-slice.test.ts` slices every primitive with the shipped
+engine (every layer extruding) and the smoke's journey — a cylinder added on
+a second plate, sliced alone and by Slice All Plates.
 Bindings: WASM `primitive_payload` and `ProjectSession.plan_primitive_object`
 / `plan_helper_volume`, the JNI exports `primitivePayload`,
 `sessionPrimitiveObject` and `sessionHelperVolume`, and Kotlin
@@ -6358,8 +6375,9 @@ model on screen — the target now stores sRGB (`plate-thumbnail.test.ts`).
 `slice-output-vectors.mjs` records 68 `thumbnails` values (the bundled
 printers', and every `String`/`split`/`trim`/`\d`/`Number` coercion the list
 makes), 19 blocks (every row remainder), 100 injections (header markers of
-every placement, CRLF, a file with its own, none), 132 cameras and 40 slice
-plans, with 26 refusals; Rust replays them all (and every injection streamed
+every placement, CRLF, a file with its own, none), 132 cameras and 44 slice
+plans (the last four the production controller's journey of a cylinder added
+on a second plate, sliced alone and by Slice All Plates), with 26 refusals; Rust replays them all (and every injection streamed
 through an `Anchor` in seven chunk sizes), as do WASM in Node and JNI
 (`slice-output-replay.mjs`, which also opens the placement scene as a
 session and checks its plate's pictures against Rust's digests and its
@@ -6408,14 +6426,16 @@ loop). `ExternalSlicerClient` writes each attempt into a fresh
 while a result is fetched again is confirmed against a done job ("already
 done"), never reported as cancelled.
 
-Verified: `ProjectOutputChecks` (569 host JNI checks: the corpus through the
+Verified: `ProjectOutputChecks` (581 host JNI checks: the corpus through the
 Kotlin owners, every injection streamed from a file, the placement scene's
 pictures with Rust's bytes, and the Prepare journey on the default profile —
 Slice All Plates enabled as the browser enables it, two plates with a model
 and an empty one passed over, each plate's archive carrying its own two
 pictures at the U1's 48 × 48 and 300 × 300, the G-code carrying them after its
 header, a file with its own left alone, the local route's job publishing them,
-an unprintable plate left out); the external slicer's client against the real
+an unprintable plate left out, and each plate's archive mesh — the cube's
+and the cylinder's added on the second plate — one closed surface); the
+external slicer's client against the real
 server cutting one download off halfway and corrupting another (35 checks,
 the server recording two downloads and the release); the external slicer
 policy's 102 download cases in Rust, WASM, JNI and Kotlin (1,098 Kotlin

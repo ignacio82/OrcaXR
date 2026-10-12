@@ -349,7 +349,7 @@ if (isMainThread) {
     assert.deepEqual([result.beds, result.bedRefusals, result.projectBeds], [85, 14, 12]);
     // A slice's outputs: thumbnail lists, blocks, injections, cameras, slice
     // plans, refusals, and a session's plate drawn with Rust's own bytes.
-    assert.deepEqual(result.sliceOutputAnswers, [68, 19, 100, 132, 40, 26, 3]);
+    assert.deepEqual(result.sliceOutputAnswers, [68, 19, 100, 132, 44, 26, 3]);
     // The transform inspector's fields: reads, rotations, edits and refusals.
     assert.deepEqual(
       [result.fieldReads, result.rotations, result.fieldEdits, result.fieldRefusals],

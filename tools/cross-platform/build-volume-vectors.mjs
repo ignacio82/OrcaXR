@@ -217,6 +217,7 @@ const journeys = [
 const sources = [
   "tools/cross-platform/build-volume-vectors.mjs",
   "web/src/workspace/CanonicalWorkspaceController.ts",
+  "web/src/project/meshWeld.ts",
   "web/src/workspace/WorkspaceBed.ts",
   "web/src/workspace/WorkspaceBedExchange.ts",
   "web/src/workspace/ProfilePreflightConstraints.ts",

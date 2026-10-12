@@ -399,7 +399,7 @@ try {
   const outputFixture = await json("testdata/cross-platform/slice-output-vectors.json");
   const placementState = await json("testdata/cross-platform/placement-vectors.json");
   const sliceOutputs = replaySliceOutputs(projectJniCore(jvm.call), outputFixture, placementState, layout);
-  assert.deepEqual(sliceOutputs.sliceOutputAnswers, [68, 19, 100, 132, 40, 26, 3]);
+  assert.deepEqual(sliceOutputs.sliceOutputAnswers, [68, 19, 100, 132, 44, 26, 3]);
   const thumbnailState = JSON.parse(placementState.stateJson);
   thumbnailState.config.thumbnails = "48x48/PNG, 300x300/PNG, 144x144/JPG, 5000x5000";
   const outputChecks = jvm.call(
@@ -416,7 +416,7 @@ try {
     JSON.stringify(thumbnailState),
     ...placementState.assets.map((a) => Uint8Array.from(a.bytes)),
   );
-  assert.equal(outputChecks, 569);
+  assert.equal(outputChecks, 581);
   // What the status line says of a finished slice (the browser's
   // `SliceStatus.ts`), streamed through the core's tally over JNI in several
   // chunkings and worded by the Kotlin owner, for every artifact of the corpus.
