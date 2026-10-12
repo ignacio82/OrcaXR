@@ -152,6 +152,9 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    an API 34 iteration emulator; neither emulator suite has run them yet
    (*Resume here* item 1). The Workspace does not draw the wipe tower yet
    (the browser's ghost).
+   In flight: emboss text and SVG parts on local branch `emboss` (worktree
+   `~/.cache/orcaxr-emboss`, from `main` after the wipe tower), a
+   sub-agent's.
 3. Phase 7, other surfaces: a Save/export action for slice output
    (`save_gcode_to_downloads`, `file_export_gcode`), model and project exports
    (STL, OBJ, 3MF, configuration), geometry-only 3MF import, the View menu's
