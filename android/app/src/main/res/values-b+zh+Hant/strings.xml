@@ -53,6 +53,8 @@
     <string name="vf_delete">刪除</string>
     <string name="project_measure">測量</string>
     <string name="simplify_apply">套用</string>
+    <string name="workspace_brim_ears">邊緣支撐 (Brim)</string>
+    <string name="brim_ears_title">耳狀 Brim</string>
     <string name="workspace_paint">繪製</string>
     <string name="paint_tool_sphere">球體</string>
     <string name="action_delete_models">刪除</string>

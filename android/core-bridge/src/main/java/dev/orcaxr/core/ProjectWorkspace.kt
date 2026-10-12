@@ -202,12 +202,16 @@ class ProjectWorkspace(
         /**
          * The model tools the Project area offers where the browser does: its
          * menu's split and simplify (`dom-menu`; split and simplify are also
-         * an object's context actions), its toolbar's Measure (`dom-toolbar`)
-         * and the Simplify and Measure panels' controls (`dom-inspector`).
+         * an object's context actions), its toolbar's Measure and Brim Ears
+         * (`dom-toolbar`) and the Simplify, Measure and Brim ears panels'
+         * controls (`dom-inspector`).
          */
         val MODEL_TOOL_MENU_ACTIONS = listOf("split_to_objects", "split_to_parts", "simplify_model")
-        val MODEL_TOOL_TOOLBAR_ACTIONS = listOf("tool_measure")
-        val MODEL_TOOL_INSPECTOR_ACTIONS = listOf("simplify_preview", "simplify_apply", "simplify_cancel", "measure_clear")
+        val MODEL_TOOL_TOOLBAR_ACTIONS = listOf("tool_measure", "tool_brim_ears")
+        val MODEL_TOOL_INSPECTOR_ACTIONS = listOf(
+            "simplify_preview", "simplify_apply", "simplify_cancel", "measure_clear",
+            "brim_ears_configure", "brim_ears_remove", "brim_ears_auto", "brim_ears_clear",
+        )
         /** The browser's words for a Split to Objects whose confirmation no longer describes the project (`StaleCanonicalSplitToObjectsError`). */
         const val STALE_SPLIT = "Split to Objects confirmation is stale; reselect the model and review the affected instances again"
         /** The quadric error a one-shot Simplify allows (`SIMPLIFY_DEFAULT_MAX_ERROR`). */
@@ -2516,6 +2520,150 @@ class ProjectWorkspace(
     /** The measurement of two picks (`measureSurfaceFeatures`): distances, their X/Y/Z parts and the angle; null when it is not finite. */
     fun measure(first: MeasurePick, second: MeasurePick): ProjectIntents.MeasureResult? =
         (ProjectMeasureVolume.measure(ProjectIntents.MeasureRequest(first.feature, second.feature)) as? ProjectIntents.MeasureReply.Measured)?.value
+
+    // ---- Brim ears: the browser workspace's brim-ear tool over the shared core ----
+
+    /** What a plan read on the authority answers, and the one command it commits under that state's guard, if any. */
+    private class Answer<T>(val result: T, val command: ProjectIntents.Command? = null)
+
+    /**
+     * A plan read on the authority from the state and selection it reads
+     * there, as [edit]'s, whose answer may commit nothing: its [Answer.command]
+     * runs under that very state's guard, a change in between refusing it as
+     * stale.
+     */
+    private fun <T> answer(plan: (ProjectSession, ProjectSnapshot) -> Answer<T>): CompletableFuture<T> = refreshed(
+        outcome(actor.inspect { session -> session.snapshot().use { snapshot -> plan(session, snapshot) to guardOf(session, snapshot) } })
+            .thenCompose { result ->
+                @Suppress("UNCHECKED_CAST")
+                val read = ((result as? ProjectOutcome.Inspected) ?: throw failure(result, null)).result.getOrThrow() as Pair<Answer<T>, ProjectIntents.SessionGuard>
+                val (planned, guard) = read
+                val command = planned.command ?: return@thenCompose CompletableFuture.completedFuture(planned.result)
+                commit(guard, Edit(listOf(command), planned.result))
+            },
+    )
+
+    /**
+     * The one object brim ears go on (`brimEarTargetObject`): the object
+     * owning the model parts the selection takes on the active plate
+     * ([ProjectFacts.selectedModelParts] — every part on the plate when
+     * nothing is selected), or none when they belong to several objects or
+     * to none.
+     */
+    private fun brimEarTarget(session: ProjectSession, snapshot: ProjectSnapshot): String? = snapshot.query().use { root ->
+        val parts = ProjectFacts.selectedModelParts(root, whole(session).refs).mapTo(HashSet()) { it.id }
+        val plate = ProjectFacts.plates(root).firstOrNull { it.active } ?: return@use null
+        ProjectFacts.objects(root, plate.id).filter { o -> o.instances.isNotEmpty() && o.volumes.any { it.id in parts } }.map { it.id }.distinct().singleOrNull()
+    }
+
+    /** Object [objectId]'s view (`objectBrimEarView`): its ears, the stranded ones and its base; an unknown object refuses in the core's words. */
+    private fun brimEarView(session: ProjectSession, objectId: String): ProjectIntents.BrimEarView =
+        when (val reply = session.brimEarView(ProjectIntents.BrimEarViewRequest(units(objectId)))) {
+            is ProjectIntents.BrimEarViewReply.View -> reply.value
+            is ProjectIntents.BrimEarViewReply.Refused -> throw ProjectFailure(text(reply.value.message))
+        }
+
+    private fun baseOf(view: ProjectIntents.BrimEarView): Double? = (view.baseZMm as? ProjectIntents.OptionalFinite.Value)?.value
+
+    /**
+     * What the brim-ear tool shows now (`getBrimEarSnapshot`), read on the
+     * authority: the object ears go on, its ears, the stranded ones and the
+     * base a tap places at; an empty state when no single object is in scope.
+     */
+    fun brimEars(): CompletableFuture<BrimEarState> = inspect { session ->
+        session.snapshot().use { snapshot ->
+            val target = brimEarTarget(session, snapshot) ?: return@use BrimEarState()
+            val view = brimEarView(session, target)
+            BrimEarState(
+                target,
+                view.ears.map { BrimEarPoint(it.positionMm, it.headFrontRadiusMm) },
+                view.stranded.map { it.toInt() },
+                baseOf(view),
+            )
+        }
+    }
+
+    private fun addBrimEar(session: ProjectSession, objectId: String, point: List<Double>, radiusMm: Double): Answer<Unit> {
+        // An ear is a first-layer feature: it sits at the object's base, wherever on the model the tap landed,
+        // since the pinned engine drops an ear above the bed (`placeBrimEar`); without a base, where it landed.
+        val z = baseOf(brimEarView(session, objectId)) ?: point[2]
+        return Answer(Unit, ProjectIntents.Command.AddBrimEar(ProjectIntents.AddBrimEar(units(objectId), ProjectIntents.BrimEar(listOf(point[0], point[1], z), radiusMm))))
+    }
+
+    /**
+     * One ear on object [objectId] at [pointMm] in the object's own frame
+     * (only its X and Y; it sits at the object's base) with front radius
+     * [radiusMm], as one "Place brim ear" step (the controller's
+     * `addBrimEar`). A radius outside 0.1–20 mm is refused in the core's
+     * words.
+     */
+    fun placeBrimEar(objectId: String, pointMm: List<Double>, radiusMm: Double): CompletableFuture<Unit> = later {
+        require(pointMm.size == 3) { "A point has three coordinates" }
+        answer { session, _ -> addBrimEar(session, objectId, pointMm, radiusMm) }
+    }
+
+    /**
+     * A tap's ear (`placeBrimEar`): the tap met part [volumeId] of object
+     * [objectId] at [pointMm], in the part's own millimetres; the ear goes
+     * where that is in the object's frame ([ProjectBrimEars.objectPoint]), at
+     * the object's base, as one "Place brim ear" step.
+     */
+    fun placeBrimEarOnPart(objectId: String, volumeId: String, pointMm: List<Double>, radiusMm: Double): CompletableFuture<Unit> = later {
+        require(pointMm.size == 3) { "A point has three coordinates" }
+        answer { session, snapshot ->
+            val volume = snapshot.query().use { root -> ProjectFacts.objects(root).firstOrNull { it.id == objectId }?.volumes?.firstOrNull { it.id == volumeId } }
+                ?: throw ProjectFailure("Unknown volume $volumeId")
+            addBrimEar(session, objectId, ProjectBrimEars.objectPoint(volume.transform, pointMm), radiusMm)
+        }
+    }
+
+    /**
+     * "Place brim ears automatically" (`brim_ears_auto`, `autoPlaceBrimEars`):
+     * the outward corners of the target object's first layer that would
+     * lift, found by the core's detector with front radius [radiusMm], as one
+     * "Place brim ears" step — or why none were placed.
+     */
+    fun autoPlaceBrimEars(radiusMm: Double): CompletableFuture<BrimEarAuto> = answer { session, snapshot ->
+        val target = brimEarTarget(session, snapshot) ?: return@answer Answer(BrimEarAuto.NoTarget)
+        if (baseOf(brimEarView(session, target)) == null) return@answer Answer(BrimEarAuto.NoGeometry)
+        val request = ProjectIntents.BrimEarDetectRequest(
+            units(target), ProjectBrimEars.MAX_ANGLE_DEG, ProjectBrimEars.DETECTION_RADIUS_MM, radiusMm,
+            ProjectIntents.OptionalFinite.Absent(ProjectIntents.Empty),
+        )
+        when (val reply = session.detectBrimEars(request)) {
+            is ProjectIntents.BrimEarDetectReply.Refused -> Answer(BrimEarAuto.NoGeometry)
+            is ProjectIntents.BrimEarDetectReply.Detected -> {
+                val ears = reply.value.ears
+                if (ears.isEmpty()) {
+                    Answer(BrimEarAuto.NoEars((reply.value.reason as? ProjectIntents.OptionalText.Value)?.value?.let(::text)))
+                } else {
+                    Answer(
+                        BrimEarAuto.Placed(ears.size),
+                        ProjectIntents.Command.AddBrimEars(
+                            ProjectIntents.AddBrimEars(units(target), ears.map { ProjectIntents.BrimEar(it.positionMm, it.headFrontRadiusMm) }),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    /** "Clear brim ears" (`brim_ears_clear`): every ear of the target object as one "Clear brim ears" step, or why there was nothing to clear. */
+    fun clearBrimEars(): CompletableFuture<BrimEarClear> = answer { session, snapshot ->
+        val target = brimEarTarget(session, snapshot) ?: return@answer Answer(BrimEarClear.NO_TARGET)
+        if (brimEarView(session, target).ears.isEmpty()) return@answer Answer(BrimEarClear.NO_EARS)
+        Answer(BrimEarClear.CLEARED, ProjectIntents.Command.ClearBrimEars(ProjectIntents.ClearBrimEars(units(target))))
+    }
+
+    /**
+     * "Remove a brim ear" (`brim_ears_remove`): ear [index] of the target
+     * object as one "Remove brim ear" step (undo puts it back at its index);
+     * false, with nothing done, without a single target object.
+     */
+    fun removeBrimEar(index: Long): CompletableFuture<Boolean> = answer { session, snapshot ->
+        val target = brimEarTarget(session, snapshot) ?: return@answer Answer(false)
+        Answer(true, ProjectIntents.Command.RemoveBrimEar(ProjectIntents.RemoveBrimEar(units(target), index)))
+    }
 
     override fun close() {
         synchronized(lock) { timer?.close() }

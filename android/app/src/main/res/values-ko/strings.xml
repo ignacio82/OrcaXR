@@ -53,6 +53,8 @@
     <string name="vf_delete">삭제</string>
     <string name="project_measure">측정</string>
     <string name="simplify_apply">적용</string>
+    <string name="workspace_brim_ears">브림 귀</string>
+    <string name="brim_ears_title">브림 귀</string>
     <string name="workspace_paint">칠하기</string>
     <string name="paint_tool_sphere">구체</string>
     <string name="action_delete_models">삭제</string>

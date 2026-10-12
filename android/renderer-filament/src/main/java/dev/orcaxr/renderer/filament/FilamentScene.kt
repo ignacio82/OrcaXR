@@ -83,6 +83,10 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         var leafEntity: Int? = null
     }
     private class Lines(val vertices: VertexBuffer, val indices: IndexBuffer, val entity: Int, val bytes: Long)
+    /** A marker shape on the GPU, shared by the markers drawing it. */
+    private class Shape(val vertices: VertexBuffer, val indices: IndexBuffer, val count: Int, val center: FloatArray, val extent: FloatArray)
+    /** One marker drawn: its entity and its own material. */
+    private class Marked(val entity: Int, val material: MaterialInstance)
     /** The viewport's vertical wash: a quad at the far end of the view, carried with the camera. */
     private class Backdrop(val vertices: VertexBuffer, val indices: IndexBuffer, val entity: Int, val material: MaterialInstance)
 
@@ -118,6 +122,11 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private val backdropBuffers = Collections.newSetFromMap(IdentityHashMap<ByteBuffer, Boolean>())
     private var toolpath: Lines? = null
     private var toolpathSegments = 0
+    /** Marker shapes uploaded, by key, and the markers drawn now. */
+    private val shapes = HashMap<String, Shape>()
+    private val marked = ArrayList<Marked>()
+    /** Buffers Filament still copies for marker shapes: kept alive until each copy completes. */
+    private val shapeBuffers = Collections.newSetFromMap(IdentityHashMap<ByteBuffer, Boolean>())
     private var selected: Set<String> = emptySet()
     private var busy = false
     private var pending = 0L
@@ -707,6 +716,85 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         return Backdrop(vertices, index, entity, material)
     }
 
+    /**
+     * Draws [markers] in place of the ones drawn before: each its shape
+     * placed by its transform, unlit in its colour and opacity, with depth
+     * test but without depth writes, after the models (three.js's
+     * `MeshBasicMaterial` with `depthWrite: false` at a later render order).
+     * Markers are never picked and never highlighted.
+     */
+    fun setMarkers(markers: List<SceneMarker>) {
+        checkOpen()
+        marked.forEach { destroyEntity(it.entity); engine.destroyMaterialInstance(it.material) }
+        marked.clear()
+        for (marker in markers) {
+            val shape = shapes.getOrPut(marker.shape.key) { createShape(marker.shape) }
+            val material = transparent.createInstance()
+            material.setParameter("clipHeight", clipHeight)
+            material.setParameter("opacity", marker.opacity)
+            material.setParameter("tint", ((marker.argb ushr 16) and 255) / 255f, ((marker.argb ushr 8) and 255) / 255f, (marker.argb and 255) / 255f, 1f)
+            material.setParameter("highlight", 0f, 0f, 0f, 0f)
+            val entity = engine.entityManager.create()
+            try {
+                RenderableManager.Builder(1)
+                    .boundingBox(Box(shape.center[0], shape.center[1], shape.center[2], shape.extent[0], shape.extent[1], shape.extent[2]))
+                    .geometry(0, RenderableManager.PrimitiveType.TRIANGLES, shape.vertices, shape.indices, 0, shape.count)
+                    .material(0, material)
+                    .priority(MARKER_PRIORITY)
+                    .culling(false).castShadows(false).receiveShadows(false)
+                    .build(engine, entity)
+                place(entity, marker.transform.renderMatrix())
+                scene.addEntity(entity)
+            } catch (failure: Throwable) {
+                destroyEntity(entity)
+                engine.destroyMaterialInstance(material)
+                throw failure
+            }
+            marked += Marked(entity, material)
+        }
+        invalidate()
+    }
+
+    /** [shape]'s facets on the GPU, in render space, every corner white so the marker's tint is its colour. */
+    private fun createShape(shape: MarkerShape): Shape {
+        val count = shape.facetCount * 3
+        val positions = MeshPacking.direct(count * 12)
+        val colors = MeshPacking.direct(count * 4)
+        val indices = MeshPacking.direct(count * 4)
+        val low = FloatArray(3) { Float.POSITIVE_INFINITY }; val high = FloatArray(3) { Float.NEGATIVE_INFINITY }
+        for (facet in 0 until shape.facetCount) repeat(3) { corner ->
+            val point = RenderSpace.point(shape.corner(facet, corner))
+            val coordinates = floatArrayOf(point.x.toFloat(), point.y.toFloat(), point.z.toFloat())
+            for (axis in 0..2) {
+                positions.putFloat(coordinates[axis])
+                low[axis] = min(low[axis], coordinates[axis]); high[axis] = max(high[axis], coordinates[axis])
+            }
+            colors.put(255.toByte()).put(255.toByte()).put(255.toByte()).put(255.toByte())
+            indices.putInt(indices.position() / 4)
+        }
+        positions.flip(); colors.flip(); indices.flip()
+        val vertices = VertexBuffer.Builder().bufferCount(2).vertexCount(count)
+            .attribute(VertexBuffer.VertexAttribute.POSITION, 0, VertexBuffer.AttributeType.FLOAT3, 0, 12)
+            .attribute(VertexBuffer.VertexAttribute.COLOR, 1, VertexBuffer.AttributeType.UBYTE4, 0, 4)
+            .normalized(VertexBuffer.VertexAttribute.COLOR)
+            .build(engine)
+        val index = try {
+            IndexBuffer.Builder().indexCount(count).bufferType(IndexBuffer.Builder.IndexType.UINT).build(engine)
+        } catch (failure: Throwable) {
+            engine.destroyVertexBuffer(vertices)
+            throw failure
+        }
+        for ((buffer, upload) in listOf<Pair<ByteBuffer, (ByteBuffer, Runnable) -> Unit>>(
+            positions to { b, done -> vertices.setBufferAt(engine, 0, b, 0, b.remaining(), handler, done) },
+            colors to { b, done -> vertices.setBufferAt(engine, 1, b, 0, b.remaining(), handler, done) },
+            indices to { b, done -> index.setBuffer(engine, b, 0, b.remaining(), handler, done) },
+        )) {
+            shapeBuffers.add(buffer)
+            upload(buffer, Runnable { shapeBuffers.remove(buffer) })
+        }
+        return Shape(vertices, index, count, FloatArray(3) { (low[it] + high[it]) * .5f }, FloatArray(3) { max((high[it] - low[it]) * .5f, 1e-5f) })
+    }
+
     /** The print bed: its outline and a grid every 10 mm (coarser on a large bed), on z = 0 from the origin. */
     fun setBed(widthMm: Double, depthMm: Double) {
         checkOpen(); require(widthMm.isFinite() && depthMm.isFinite() && widthMm in 1.0..5000.0 && depthMm in 1.0..5000.0)
@@ -824,6 +912,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             each.material.setParameter("clipHeight", clipHeight)
             each.leafMaterial?.setParameter("clipHeight", clipHeight)
         }
+        marked.forEach { it.material.setParameter("clipHeight", clipHeight) }
         invalidate()
     }
 
@@ -913,6 +1002,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         for (volumeId in geometries.keys.toList()) dropGeometry(volumeId)
         bed?.let(::destroyLines); bed = null
         toolpath?.let(::destroyLines); toolpath = null; toolpathSegments = 0
+        marked.forEach { destroyEntity(it.entity); engine.destroyMaterialInstance(it.material) }; marked.clear()
+        shapes.values.forEach { engine.destroyVertexBuffer(it.vertices); engine.destroyIndexBuffer(it.indices) }; shapes.clear()
         backdrop?.let {
             destroyEntity(it.entity)
             engine.destroyVertexBuffer(it.vertices); engine.destroyIndexBuffer(it.indices)
@@ -949,5 +1040,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         const val MAX_TOOLPATH_SEGMENTS = 240_000
         /** Leaves are pulled toward the eye, as the browser offsets its paint overlay (`polygonOffsetFactor/Units -2`). */
         const val LEAF_OFFSET = -2f
+        /** Markers draw after the models (three's render order 2 for the brim-ear discs), before the backdrop. */
+        const val MARKER_PRIORITY = 5
     }
 }

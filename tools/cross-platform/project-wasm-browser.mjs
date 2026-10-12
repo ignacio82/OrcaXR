@@ -968,7 +968,7 @@ try {
   );
   assert.deepEqual(
     [result.brimEarDetections, result.brimEarStrandedChecks, result.brimEarViews],
-    [40, 9, 9],
+    [41, 10, 10],
   );
   assert.deepEqual(
     [

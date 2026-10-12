@@ -2812,7 +2812,9 @@ undoable entry.
 first layer an ear holds is the object's model volumes, each moved by its own
 transform into object space (composed as three.js composes them). Detection
 (`BrimEarDetectRequest`) cuts that layer just above its base, chains the cut
-into loops and keeps the outward corners sharp enough to peel, thinned to the
+into loops — a segment that only ends where the chain stands walked backwards,
+since a triangulation does not keep the cut's direction from one triangle to
+the next — and keeps the outward corners sharp enough to peel, thinned to the
 sharpest of each cluster. The stranded check (`BrimEarStrandedRequest`) names
 the placed ears whose discs reach neither the layer nor, through overlapping
 discs, an anchored ear. An object's view (`BrimEarViewRequest`, the browser's
@@ -2830,12 +2832,13 @@ Kotlin `ProjectSession.detectBrimEars`, `strandedBrimEars` and `brimEarView`.
 `brim-ear-vectors.mjs` detects ears on recentred split parts, a pyramid whose
 sides are single triangles, a plus with inward corners, a smooth prism, a part
 turned, scaled and mirrored by its own transform, a part beside a modifier, a
-flat sheet and a notch whose corners collide, under default and explicit
+flat sheet, a notch whose corners collide and three's box (the Add menu's
+cube, whose walls' triangles cut opposite ways), under default and explicit
 angles, thinning radii, ear radii and cut heights; checks placed ears for the
 stranded ones (touching, chained through other ears, and islands); and reads
-every object's view: 40 detections, 9 stranded checks and 9 views (3
-refusals). Rust, WASM in Node and Chrome and JNI answer all 58 byte for byte;
-126 Kotlin checks cover the wrapper. It also records a journey through the
+every object's view: 41 detections, 10 stranded checks and 10 views (3
+refusals). Rust, WASM in Node and Chrome and JNI answer all 61 byte for byte;
+133 Kotlin checks cover the wrapper. It also records a journey through the
 production `CanonicalWorkspaceController` on a canonical 3MF, as the
 workspace's tool runs it: the one object the selection's model parts belong
 to, taps on its parts read in the object's frame through three.js and placed
@@ -2843,7 +2846,7 @@ at its base (one onto a part lifted off the bed, whose ear reaches nothing),
 the detector's corners, a removal, clears, and the cases that place nothing
 (a smooth outline, a flat sheet, no single object), with the semantic hash,
 undo label and the target's view after each of its 20 steps and the 8 undo
-entries.
+entries, which [the Android Brim Ears tool](#android-brim-ears) replays.
 
 ### Layer-height profile commands
 
@@ -6038,6 +6041,109 @@ the accessibility smoke, passes on both emulators. Its steps:
    counts and undo label.
 3. Move a 20 mm cube beside the pair and read the 10 mm between the two
    tops picked with two taps.
+
+### Android brim ears
+
+The Workspace places brim ears as the browser's workspace does, through the
+shared core ([brim-ear detection and the tool's view](#brim-ear-detection-and-the-tools-view),
+[commands](#brim-ear-commands)).
+
+The tool. Brim Ears (`tool_brim_ears`, enabled with an instance selected)
+joins the model toolbar, the command palette and the Edit menu's model tools;
+it is the Workspace's one tool with Lay flat, Measure, painting and the
+gizmo's Move, Rotate and Scale, as the browser's `setTool`, and choosing it
+again ends it. Its object is the browser's `brimEarTargetObject`: the one
+object owning the model parts the selection takes on the active plate
+(`ProjectFacts.selectedModelParts`, every part on the plate when nothing is
+selected), none when they belong to several. `ProjectWorkspace.brimEars`
+reads, on the authority, that object and its view — its ears, the stranded
+ones and its base — whenever the project or the selection changes while the
+tool is on.
+
+A tap (no drag, a handle of the gizmo included, as the browser's click
+handler takes it before the gizmo) meets only that object's parts, the
+nearest, whatever lies in front of them, as the browser's ray meets only
+them. Where it met the part, in the part's own millimetres
+(`FilamentScene.Pick.localPoint`), is moved into the object's frame by the
+part's transform composed as three.js composes it
+(`ProjectBrimEars.objectPoint`; the browser reaches the same point through the
+instance's `worldToLocal`, and the two agree to rounding), and
+`ProjectWorkspace.placeBrimEarOnPart` commits one "Place brim ear" there, at
+the object's base, with the panel's radius. A part a simplify preview draws
+refuses the tap in the browser's words; a tap that meets none says "Click the
+selected model to place a brim ear."; with no single object in scope, "Select
+one model part before placing brim ears.".
+
+The panel. While the tool is on, the browser's Brim ears panel takes the
+view's foot in turn with the paint and Measure panels (a third of the view at
+most, scrolling): its heading and Done; Place on corners (`brim_ears_auto`,
+enabled with an object in scope, its tooltip the browser's), which places an
+ear on every first-layer corner the core's detector finds with the panel's
+radius as one "Place brim ears", or says why none; Clear all
+(`brim_ears_clear`, with ears placed), one "Clear brim ears"; the Ear radius
+field (`brim_ears_configure`; the three in one row that wraps only on a narrow
+window, so the view above stays in sight), handed over as the browser's number input
+hands it over (`BrimEarFields`) and refused outside 0.1–20 mm in its words,
+the field then showing the radius again; the hint, the tool's last status (a
+polite live region, the browser's status bar while the tool is on) and the
+warning about ears that reach nothing (an assertive one, as the browser's
+`role=alert`); and the placed ears in order, each its position and diameter
+as the browser writes them (`Number(value.toFixed(2))`), a stranded one in the
+error colour saying so, and its Remove (`brim_ears_remove`, one "Remove brim
+ear", which TalkBack names with the ear). Place on corners and Clear all are
+in the command palette too, and run without the panel: Place on corners then
+opens the tool, as the browser's does, so its discs are on the model, and
+shows the Workspace; a status with the tool off is the Project area's
+message. The browser's panel lives in its sidebar with a Place ears button
+that turns the tool on; here the panel exists only while the tool is on, so
+Done takes that button's place.
+
+The discs. While the tool is on, each placed ear is drawn as the browser
+draws it (`refreshBrimEarPreview`): the pinned flat disc, three's
+`CylinderGeometry(r, r, 0.2, 32)` lying on the bed, grey (`#b3b3b3`) where it
+works and translucent red (`#ff4d4d` at half opacity) where it reaches
+nothing, on every instance of its object, with that instance's own scale
+undone as three's `decompose` reads it, so a disc is the ear's printed size.
+`FilamentScene.setMarkers` draws such markers: unlit, tested against depth
+but never writing it, after the models (three's `MeshBasicMaterial` with
+`depthWrite: false` at render order 2), never picked or highlighted; they
+follow their object's instances as the draws change and go when the tool
+ends.
+
+Checking it found two browser defects, each fixed with a regression. The
+outline chainer followed each cut segment the way its triangle's first
+crossed edge led, which a triangulation does not keep consistent: three's
+box walls cut their two triangles opposite ways, so the Add menu's cube read
+"No closed outline could be read from the first layer" — Place on corners
+placed nothing and every placed ear was called stranded. A segment that only
+ends where the chain stands is now walked backwards (`brimEarDetection.ts`
+and `brim_ears`; `brim-ear-detection.test.ts`, and three's box in the
+corpus; every earlier reply is unchanged). And Place on corners set its
+status, then opened the tool, whose own status ("tool: brim_ears -
+pinch-drag the model") replaced it, so the operator never read how many ears
+were placed (`brim-ear-frames.test.ts`).
+
+`ProjectBrimEarEditChecks` (134 checks over JNI on the host, via
+`project-jni-test.mjs`) opens the journey's canonical 3MF and takes its 20
+steps through `ProjectWorkspace` — selecting instances, an object's row and
+nothing; taps through the part they met (the object-frame point the
+browser's to rounding, the ear at the base, "Place brim ear", undone) and at
+the browser's exact point; the detector's corners; a removal; clears; and the
+cases that place nothing — with the browser's semantic hash, undo label,
+target object and view after each, then undoes all 8 entries back to the
+opened project, and checks the panel's and workspace's words. `AppActionsTest`,
+`ProjectEditingTest` and `BrimEarsTest` (app JVM) cover the actions, the
+menu, the field, the words and the discs' placement; `SceneMarkersTest`
+(`renderer-api`) the disc's shape and the scale decomposition.
+`android-brimears-smoke.py`, added to `emulator-smoke.py` after the gizmo
+smoke, moves a cube toward the back of the bed, takes the tool from the
+toolbar (dragged sideways to it on a phone), deselects with Escape (the
+plate's only object stays the one ears go on), places ears on the cube's
+corners (four, listed and drawn around its base), sets a 2.5 mm radius and
+taps the cube for one more, has 50 mm refused, removes one and clears them,
+each by its undo label, and ends the tool, its discs going with it. It passes
+on a suite-sized API 34 emulator (720 × 1280 at 240 dpi, two cores); the API 37
+suite has yet to run it.
 
 ### Android filaments
 

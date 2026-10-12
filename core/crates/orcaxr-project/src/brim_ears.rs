@@ -121,11 +121,15 @@ pub fn slice_outline(positions: &[f64], indices: &[u32], z: f64) -> Vec<Vec<P2>>
     chain(&segments)
 }
 
-/// `chainSegments`: segments chained end to start into loops.
+/// `chainSegments`: segments chained end to start into loops; one that only
+/// ends where the chain stands is walked backwards (a triangulation does not
+/// keep the cut's direction consistent from one triangle to the next).
 fn chain(segments: &[(P2, P2)]) -> Vec<Vec<P2>> {
     let mut by_start: HashMap<(u64, u64), Vec<usize>> = HashMap::new();
+    let mut by_end: HashMap<(u64, u64), Vec<usize>> = HashMap::new();
     for (index, segment) in segments.iter().enumerate() {
         by_start.entry(key(segment.0)).or_default().push(index);
+        by_end.entry(key(segment.1)).or_default().push(index);
     }
     let mut used = vec![false; segments.len()];
     let mut loops = Vec::new();
@@ -134,21 +138,26 @@ fn chain(segments: &[(P2, P2)]) -> Vec<Vec<P2>> {
             continue;
         }
         let mut chain = vec![segments[start].0];
-        let mut current = start;
-        used[current] = true;
+        let mut end = segments[start].1;
+        used[start] = true;
         for _ in 0..segments.len() + 1 {
-            chain.push(segments[current].1);
-            if key(segments[current].1) == key(chain[0]) {
+            chain.push(end);
+            if key(end) == key(chain[0]) {
                 break;
             }
-            let next = by_start
-                .get(&key(segments[current].1))
-                .and_then(|bucket| bucket.iter().copied().find(|&candidate| !used[candidate]));
-            let Some(next) = next else {
-                break;
+            let unused = |ends: &HashMap<(u64, u64), Vec<usize>>| {
+                ends.get(&key(end))
+                    .and_then(|bucket| bucket.iter().copied().find(|&candidate| !used[candidate]))
             };
-            used[next] = true;
-            current = next;
+            if let Some(next) = unused(&by_start) {
+                used[next] = true;
+                end = segments[next].1;
+            } else if let Some(next) = unused(&by_end) {
+                used[next] = true;
+                end = segments[next].0;
+            } else {
+                break;
+            }
         }
         // Two points cannot enclose anything.
         if chain.len() < 4 {

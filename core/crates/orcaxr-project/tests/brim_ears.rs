@@ -86,6 +86,6 @@ fn brim_ears_match_the_browser_over_a_live_session() {
     }
     assert_eq!(
         counts,
-        BTreeMap::from([("detect", 40), ("stranded", 9), ("view", 9)])
+        BTreeMap::from([("detect", 41), ("stranded", 10), ("view", 10)])
     );
 }

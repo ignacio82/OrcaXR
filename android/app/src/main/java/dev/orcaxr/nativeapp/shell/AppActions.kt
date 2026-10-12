@@ -24,7 +24,14 @@ object AppActions {
     val CAMERA = CameraView.entries.map { "view_camera_${it.id}" }
 
     /** The model toolbar's tools: each takes the Workspace's touch until it is chosen again or ended. */
-    val TOOLS = listOf("tool_lay_on_face", "tool_paint", "tool_support_paint", "tool_seam_paint", "tool_fuzzy_skin", "tool_measure")
+    val TOOLS = listOf("tool_lay_on_face", "tool_paint", "tool_support_paint", "tool_seam_paint", "tool_fuzzy_skin", "tool_measure", "tool_brim_ears")
+
+    /**
+     * A tool panel's own actions the palette runs too: the Brim ears panel's
+     * Place on corners, whose ears the Workspace draws (its tool opens), and
+     * Clear all.
+     */
+    val PANELS = listOf("brim_ears_auto", "brim_ears_clear")
 
     /** The gizmo's Move, Rotate and Scale (G, R and S): each chooses what a drag of the gizmo's handles does. */
     val GIZMO = ProjectEditing.GIZMO_TOOLS
@@ -39,10 +46,14 @@ object AppActions {
     val PREPARE = PrepareCommands.IDS
 
     /** Every catalogue action the app performs. */
-    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PREPARE).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
+    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PANELS + PREPARE).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
 
-    /** Whether running [id] needs the Workspace's 3D view on screen: a camera view, a tool that takes its touch, or the gizmo's. */
-    fun needsWorkspace(id: String): Boolean = id in CAMERA || isTool(id)
+    /**
+     * Whether running [id] needs the Workspace's 3D view on screen: a camera
+     * view, a tool that takes its touch, the gizmo's, or automatic brim ears,
+     * which open their tool on the model.
+     */
+    fun needsWorkspace(id: String): Boolean = id in CAMERA || isTool(id) || id == "brim_ears_auto"
 
     /** Whether [id] is one of the toolbar's tools, shown as the Workspace's tool while it is ([ProjectModel.toolActive]). */
     fun isTool(id: String): Boolean = id in TOOLS || id in GIZMO

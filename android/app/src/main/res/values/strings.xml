@@ -399,6 +399,28 @@
     <string name="measure_diameter">Diameter</string>
     <string name="measure_unsupported">Two circles in non-parallel planes need the engine’s polynomial solver, which this build does not carry.</string>
     <string name="measure_clear">Clear</string>
+    <!-- The Brim Ears tool: the browser's catalogue actions (web/src/actions/groups/gizmos.ts), its Brim ears panel
+         (web/src/ui/dom/BrimEarsPanel.ts) and the workspace's statuses its catalogue carries. -->
+    <string name="workspace_brim_ears">Brim Ears</string>
+    <string name="brim_ears_auto">Place brim ears automatically</string>
+    <string name="brim_ears_clear">Clear brim ears</string>
+    <string name="brim_ears_title">Brim ears</string>
+    <string name="brim_ears_radius">Ear radius (mm)</string>
+    <string name="brim_ears_corners_hint">Find the first-layer corners that would lift and put an ear on each</string>
+    <string name="brim_ears_placed_list">Placed brim ears</string>
+    <string name="brim_ears_place_corners">Place on corners</string>
+    <string name="brim_ears_clear_all">Clear all</string>
+    <string name="brim_ears_remove">Remove</string>
+    <string name="brim_ears_start">Brim ears: click the model where an ear should sit.</string>
+    <string name="brim_ears_failed">Brim ears: %1$s</string>
+    <string name="brim_ears_select_auto">Select one model part before placing brim ears on it.</string>
+    <string name="brim_ears_select_clear">Select one model part before clearing its brim ears.</string>
+    <string name="brim_ears_select_tap">Select one model part before placing brim ears.</string>
+    <string name="brim_ears_no_geometry">That part has no geometry to read corners from.</string>
+    <string name="brim_ears_none">That part has no brim ears.</string>
+    <string name="brim_ears_cleared">Cleared the brim ears; undo restores them.</string>
+    <string name="brim_ears_removed">Removed a brim ear.</string>
+    <string name="brim_ears_missed">Click the selected model to place a brim ear.</string>
     <!-- The browser's drop overlay (app.main.dropA3MFSTLOBJ in web/src/main.ts), shown while a file is dragged over the window. -->
     <string name="drop_prompt">Drop a 3MF, STL, OBJ, AMF, ZIP, or G-code file to load it</string>
     <!-- The Workspace's paint tool: the browser's Paint action (scene.ts), its paint panel (web/src/ui/dom/PaintPanel.ts) and its painter's statuses (OrcaWorkspace). -->
@@ -520,6 +542,9 @@
     <string name="action_hint_tool_seam_paint">Paint where layer seams may or may not be placed</string>
     <string name="action_hint_tool_fuzzy_skin">Paint regions that should get a fuzzy surface</string>
     <string name="action_hint_tool_measure">Click two features to measure the distance, angle, or hole diameter between them</string>
+    <string name="action_hint_tool_brim_ears">Click the selected part to place brim \"mouse ears\" that reach the slicer</string>
+    <string name="action_hint_brim_ears_auto">Find the corners of the first layer that would peel, and put an ear on each</string>
+    <string name="action_hint_brim_ears_clear">Remove every brim ear from the selected part as one undoable command</string>
     <string name="action_hint_add_modifier">Add a modifier volume with per-region settings</string>
     <string name="action_hint_add_support_enforcer">Add a volume that forces supports inside it</string>
     <string name="action_hint_add_support_blocker">Add a volume that blocks supports inside it</string>

@@ -53,6 +53,8 @@
     <string name="vf_delete">Delete</string>
     <string name="project_measure">Виміряти</string>
     <string name="simplify_apply">Застосувати</string>
+    <string name="workspace_brim_ears">Краєчки</string>
+    <string name="brim_ears_title">Вушка кайми</string>
     <string name="workspace_paint">Малювання</string>
     <string name="paint_tool_sphere">Сфера</string>
     <string name="action_delete_models">Delete</string>

@@ -3,9 +3,10 @@
 // objects whose model parts are recentred split parts, a pyramid whose sides
 // are single triangles, a plus with inward corners, a smooth prism, a part
 // turned, scaled and mirrored by its own transform, a part with a modifier
-// beside it, a flat sheet and a notch whose
-// corners collide — detected under default and explicit angles, thinning
-// radii, ear radii and cut heights; then placed ears checked for the ones
+// beside it, a flat sheet, a notch whose corners collide and three's box
+// (the Add menu's cube), whose walls' triangles cut opposite ways — detected
+// under default and explicit angles, thinning radii, ear radii and cut
+// heights; then placed ears checked for the ones
 // stranded (touching, chained through other ears, and islands), with every
 // refusal; and each object's view (`brimEarViewWire`: its ears, the stranded
 // ones and the base a placed ear sits on). Replayed by Rust, by WASM in Node
@@ -35,6 +36,7 @@ import { emptyFacetAnnotations } from "../../web/src/project/domain/model.ts";
 import { assertValidProjectState } from "../../web/src/project/domain/validation.ts";
 import { InMemoryAssetRepository } from "../../web/src/project/assets.ts";
 import { encodeIndexedMeshAsset } from "../../web/src/project/meshCodec.ts";
+import { weldTriangleMesh } from "../../web/src/project/meshWeld.ts";
 import { createProjectFixture } from "../../web/src/project/__tests__/fixtures.ts";
 import {
   brimEarViewWire,
@@ -162,6 +164,18 @@ const sheet = {
     [0, 2, 3],
   ],
 };
+// three's BoxGeometry, welded as a stored mesh is (the Add menu's cube): its walls' triangles cut opposite ways.
+const threeBox = (() => {
+  const geometry = new THREE.BoxGeometry(20, 20, 20).toNonIndexed();
+  const flat = geometry.getAttribute("position").array;
+  geometry.dispose();
+  const welded = weldTriangleMesh(Float32Array.from(flat), Uint32Array.from({ length: flat.length / 3 }, (_, i) => i));
+  const vertices = [];
+  for (let i = 0; i < welded.positions.length; i += 3) vertices.push([welded.positions[i], welded.positions[i + 1], welded.positions[i + 2]]);
+  const triangles = [];
+  for (let i = 0; i < welded.indices.length; i += 3) triangles.push([welded.indices[i], welded.indices[i + 1], welded.indices[i + 2]]);
+  return { vertices, triangles };
+})();
 const big = recentred(prism(square(0, 0, 10), 10));
 const small = recentred(prism(square(20, 2, 6), 6));
 const meshes = {
@@ -173,6 +187,7 @@ const meshes = {
   notch,
   sheet,
   cube: prism(square(0, 0, 8), 8),
+  box: threeBox,
 };
 const payloads = Object.fromEntries(
   Object.entries(meshes).map(([name, mesh]) => [
@@ -239,6 +254,7 @@ const objects = {
   ],
   sheet: [volume("sheet", "sheet")],
   notch: [volume("notch", "notch")],
+  box: [volume("box", "box")],
 };
 const ears = {
   split: [
@@ -254,6 +270,10 @@ const ears = {
     { positionMm: [20, 7.5, 0], headFrontRadiusMm: 5.1 },
   ],
   pyramid: [{ positionMm: [-5, -5, 0], headFrontRadiusMm: 5 }],
+  box: [
+    { positionMm: [10, 10, -10], headFrontRadiusMm: 5 },
+    { positionMm: [30, 0, -10], headFrontRadiusMm: 5 },
+  ],
 };
 state.plates[0].objects = Object.entries(objects).map(([name, volumes], i) => ({
   ...structuredClone(template),
@@ -540,6 +560,7 @@ const sources = [
   "web/src/project/objects/brimEarDetection.ts",
   "web/src/project/objects/brimEarPreview.ts",
   "web/src/project/picking.ts",
+  "web/src/project/meshWeld.ts",
   "contracts/project-intents.json",
 ];
 const output =

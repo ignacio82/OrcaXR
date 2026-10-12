@@ -18,7 +18,8 @@ class AppActionsTest {
         assertTrue(ProjectEditing.CREATED.all { it in AppActions.PERFORMED })
         assertTrue(AppActions.TOOLBAR.all { it in AppActions.PERFORMED })
         assertTrue(AppActions.QUICK.all { it in AppActions.PERFORMED })
-        assertEquals(65, AppActions.PERFORMED.size)
+        assertTrue(AppActions.PANELS.all { it in AppActions.PERFORMED })
+        assertEquals(68, AppActions.PERFORMED.size)
     }
 
     @Test fun everyCatalogueGroupHeadsItsSectionsInTheAppsLanguage() {
@@ -52,6 +53,9 @@ class AppActionsTest {
         assertEquals(listOf("tool_move", "tool_rotate", "tool_scale"), AppActions.GIZMO)
         (AppActions.TOOLS + AppActions.GIZMO).forEach { assertTrue(it, AppActions.isTool(it)) }
         assertFalse(AppActions.isTool("drop_to_bed"))
+        // Placing ears on the corners opens the Brim Ears tool on the model; clearing them needs no view.
+        assertTrue(AppActions.needsWorkspace("brim_ears_auto"))
+        assertFalse(AppActions.needsWorkspace("brim_ears_clear") || AppActions.isTool("brim_ears_auto"))
         listOf("edit_undo", "add_primitive_cube", "delete_models", "drop_to_bed", "mirror_x").forEach {
             assertFalse(it, AppActions.needsWorkspace(it) || AppActions.needsProject(it))
         }

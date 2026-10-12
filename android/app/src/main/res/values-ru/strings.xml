@@ -53,6 +53,8 @@
     <string name="vf_delete">Удалить</string>
     <string name="project_measure">Измерения</string>
     <string name="simplify_apply">Применить</string>
+    <string name="workspace_brim_ears">Кайма «мышиные уши»</string>
+    <string name="brim_ears_title">Ушки каймы</string>
     <string name="workspace_paint">Рисовать</string>
     <string name="paint_tool_sphere">Сфера</string>
     <string name="action_delete_models">Удалить</string>

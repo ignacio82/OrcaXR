@@ -53,6 +53,8 @@
     <string name="vf_delete">Usuń</string>
     <string name="project_measure">Zmierz</string>
     <string name="simplify_apply">Zastosuj</string>
+    <string name="workspace_brim_ears">Uszy brim</string>
+    <string name="brim_ears_title">Uszy brim</string>
     <string name="workspace_paint">Maluj</string>
     <string name="paint_tool_sphere">Sfera</string>
     <string name="action_delete_models">Usuń</string>

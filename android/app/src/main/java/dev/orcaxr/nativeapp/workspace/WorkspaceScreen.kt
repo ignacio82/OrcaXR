@@ -61,6 +61,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.orcaxr.core.BrimEarState
 import dev.orcaxr.core.GizmoEventKind
 import dev.orcaxr.core.GizmoMode
 import dev.orcaxr.core.GizmoState
@@ -83,6 +84,7 @@ import dev.orcaxr.renderer.OrbitCamera
 import dev.orcaxr.renderer.OrbitGestures
 import dev.orcaxr.renderer.PreviewFraming
 import dev.orcaxr.renderer.ProjectScene
+import dev.orcaxr.renderer.SceneMarker
 import dev.orcaxr.renderer.SceneSync
 import dev.orcaxr.renderer.TriangleMesh
 import dev.orcaxr.renderer.filament.FilamentScene
@@ -115,9 +117,10 @@ import kotlin.math.abs
  * drawn on the model; while a paint tool is on (the toolbar's Paint or a
  * channel's painting), a drag that starts on a model paints it, as the
  * browser's painter does, and its panel chooses the channel, palette row,
- * tool and brush. The tool's
- * panel — the paint panel, the Measure panel or the Lay flat card — takes
- * the view's foot. A simplify preview draws the decimated parts in place of
+ * tool and brush; while the Brim Ears tool is on, a tap on the object ears go
+ * on places an ear there, at the object's base, and the placed ears are drawn
+ * as the browser's discs. The tool's panel — the paint panel, the Measure
+ * panel, the Brim ears panel or the Lay flat card — takes the view's foot. A simplify preview draws the decimated parts in place of
  * the model's, with the Simplify panel's Apply and Cancel beneath the strip
  * at the view's top, whichever tool is on.
  *
@@ -160,6 +163,11 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     val gizmoMode = model.gizmoMode
     SideEffect { renderer.gizmo(proxy, gizmoMode) }
     LaunchedEffect(view.bed.widthMm, view.bed.depthMm) { renderer.bed(view.bed.widthMm, view.bed.depthMm) }
+    // The Brim Ears tool reads what it shows again whenever the project or the selection changes, and draws its discs.
+    LaunchedEffect(view.revision, view.selection, model.brimEaring) { if (model.brimEaring) model.refreshBrimEars() }
+    val earsShown = model.brimEaring
+    val ears = model.brimEarState
+    SideEffect { renderer.brimEars(earsShown, ears) }
     // A simplify preview's meshes drawn in place of the previewed volumes' own.
     val previewed = model.simplifyMeshes
     SideEffect { renderer.preview(previewed) }
@@ -231,6 +239,8 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                 PaintPanel(paint, Modifier.padding(8.dp))
             } else if (model.measuring) {
                 MeasureCard(model)
+            } else if (model.brimEaring) {
+                BrimEarsCard(model)
             } else if (model.layingFlat) {
                 // The Lay flat tool's status (the browser's), and the way out of it.
                 Card(Modifier.padding(16.dp)) {
@@ -511,6 +521,51 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         if (!gizmoPressed) stepGizmo(GizmoEventKind.HOVER, x, y)
     }
 
+    // ---- The Brim Ears tool's discs ----
+
+    private var earsShown = false
+    private var ears = BrimEarState()
+    /** The markers drawn now, in every scene made later too. */
+    private var markers: List<SceneMarker> = emptyList()
+
+    /** Draws [state]'s ears as the browser's discs on every instance of their object while the tool is [on]; nothing otherwise. */
+    fun brimEars(on: Boolean, state: BrimEarState) {
+        if (on == earsShown && state == ears) return
+        earsShown = on
+        ears = state
+        refreshMarkers()
+    }
+
+    /** The discs again, from the tool's state and the draws as they stand (an instance moved, added or removed). */
+    private fun refreshMarkers() {
+        if (!earsShown && markers.isEmpty()) return
+        markers = if (earsShown) BrimEarDiscs.markers(ears, drawn) else emptyList()
+        scene?.setMarkers(markers)
+    }
+
+    /**
+     * A tap while placing brim ears (`placeBrimEar`): the nearest part of the
+     * object ears go on that the tap meets — it alone, as the browser's ray
+     * meets only that object's parts — takes an ear where the tap met it; a
+     * part a simplify preview draws refuses it, a tap that meets none says
+     * so, and with no single object in scope nothing can be placed.
+     */
+    private fun placeEar(renderer: FilamentScene, x: Float, y: Float) {
+        val objectId = model.brimEarState.objectId ?: return model.brimEarMissed(inScope = false)
+        var nearest: FilamentScene.Pick? = null
+        for ((key, draw) in draws) {
+            if (draw.objectId != objectId) continue
+            val hit = renderer.pick(x.toDouble(), y.toDouble(), key) ?: continue
+            if (nearest == null || hit.distanceMetres < nearest.distanceMetres) nearest = hit
+        }
+        when (val met = met(nearest)) {
+            ToolPick.Missed -> model.brimEarMissed(inScope = true)
+            ToolPick.Previewed -> model.refusePreviewedPick()
+            is ToolPick.Part -> met.pick.localPoint?.let { point -> model.placeBrimEarAt(objectId, met.pick.volumeId, listOf(point.x, point.y, point.z)) }
+                ?: model.brimEarMissed(inScope = true)
+        }
+    }
+
     /** A simplify preview's meshes, by volume, drawn in their volumes' place. */
     private var previewed: Map<String, TriangleMesh> = emptyMap()
 
@@ -623,6 +678,7 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         pendingView = null
         renderer.setActive(true)
         renderer.select(highlighted)
+        renderer.setMarkers(markers)
         previewed.forEach { (volumeId, mesh) -> renderer.setMesh(previewKey(volumeId), mesh) }
         // The first update is everything known; later ones are what changed.
         listening = model.listenScene { update -> if (scene === renderer) apply(renderer, update) }
@@ -634,6 +690,8 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         drawn = update.draws
         draws = update.draws.associateBy { it.key }
         renderer.setDraws(substituted(update.draws))
+        // The discs follow their object's instances.
+        if (earsShown) refreshMarkers()
         // Paint changes colour bytes alone (a previewed volume's wait for its own mesh to show again).
         update.paint.forEach(renderer::setPaint)
     }
@@ -658,11 +716,13 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
 
     /**
      * A tap at the event's point with no drag: Lay flat lays the facet it met
-     * on the bed and Measure picks the feature, each owning the tap as the
-     * browser's tools do; otherwise it selects the model it met, or nothing
-     * (Shift, Ctrl or Meta extending the selection).
+     * on the bed, Measure picks the feature and Brim Ears places an ear, each
+     * owning the tap as the browser's tools do; otherwise it selects the
+     * model it met, or nothing (Shift, Ctrl or Meta extending the selection).
      */
     private fun tapTool(renderer: FilamentScene, event: MotionEvent) {
+        // The Brim Ears tool meets only the object ears go on, whatever lies in front of it.
+        if (model.brimEaring) return placeEar(renderer, event.x, event.y)
         val hit = renderer.pick(event.x.toDouble(), event.y.toDouble())
         // A tool's facet is the project's: a tap on a simplify preview's is refused.
         val met = met(hit)
@@ -771,10 +831,10 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
                         paint.end()
                     } else if (gizmoPressed) {
                         liftGizmo(event.x, event.y)
-                        // A tap on a handle still reaches Lay flat and Measure, as the browser's click handler takes it
+                        // A tap on a handle still reaches Lay flat, Measure and Brim Ears, as the browser's click handler takes it
                         // before it looks at the gizmo; otherwise it leaves the selection be ("Don't unselect if they
                         // clicked the transform gizmo directly").
-                        if (!dragged && !scaling && (model.layingFlat || model.measuring)) tapTool(renderer, event)
+                        if (!dragged && !scaling && (model.layingFlat || model.measuring || model.brimEaring)) tapTool(renderer, event)
                     } else if (menuShown) {
                         // The long press opened the menu: lifting the finger chooses nothing.
                     } else if (context) {

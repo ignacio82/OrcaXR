@@ -10,6 +10,7 @@ import android.os.Looper
 import android.provider.OpenableColumns
 import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.neverEqualPolicy
@@ -17,6 +18,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import dev.orcaxr.core.ActionArrangement
 import dev.orcaxr.core.ActionPresentation
+import dev.orcaxr.core.BrimEarAuto
+import dev.orcaxr.core.BrimEarClear
+import dev.orcaxr.core.BrimEarState
 import dev.orcaxr.core.ContentProjectDocument
 import dev.orcaxr.core.DigestingDocument
 import dev.orcaxr.core.DocumentOwners
@@ -32,6 +36,7 @@ import dev.orcaxr.core.PrimitiveShape
 import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.core.ProjectActorImport
 import dev.orcaxr.core.ProjectArchiveFormat
+import dev.orcaxr.core.ProjectBrimEars
 import dev.orcaxr.core.ProjectDocumentOutput
 import dev.orcaxr.core.ProjectIntents
 import dev.orcaxr.core.ProjectMeasures
@@ -875,6 +880,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "split_to_parts" -> splitToParts()
             "simplify_model" -> simplifyNow()
             "tool_measure" -> measure(!measuring)
+            "tool_brim_ears" -> brimEars(!brimEaring)
+            "brim_ears_auto" -> autoPlaceBrimEars()
+            "brim_ears_clear" -> clearBrimEars()
             // The toolbar's, the command palette's and the menus' other actions: one call for all of them.
             "delete_models" -> work { workspace.deleteSelected().await() }
             "edit_undo" -> if (view.undo != null) undo()
@@ -902,6 +910,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             paint.enabled(channel.toolAction) -> {
                 layFlat(false)
                 if (measuring) measure(false)
+                if (brimEaring) brimEars(false)
                 paint.start(channel)
             }
         }
@@ -909,14 +918,15 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
 
     /**
      * Whether toolbar tool [id] is the Workspace's tool now: Lay flat, Measure,
-     * the paint channel being painted, or — while none of those is — the
-     * gizmo's Move, Rotate or Scale.
+     * Brim Ears, the paint channel being painted, or — while none of those
+     * is — the gizmo's Move, Rotate or Scale.
      */
     fun toolActive(id: String): Boolean = when (id) {
         "tool_lay_on_face" -> layingFlat
         "tool_measure" -> measuring
+        "tool_brim_ears" -> brimEaring
         "tool_move", "tool_rotate", "tool_scale" ->
-            !layingFlat && !measuring && !paint.state.active && ProjectEditing.gizmoAction(gizmoMode) == id
+            !layingFlat && !measuring && !brimEaring && !paint.state.active && ProjectEditing.gizmoAction(gizmoMode) == id
         else -> paint.state.active && PaintChannel.entries.any { it.toolAction == id && it == paint.state.channel }
     }
 
@@ -1026,6 +1036,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     private fun gizmoTool(mode: GizmoMode) {
         layFlat(false)
         if (measuring) measure(false)
+        if (brimEaring) brimEars(false)
         if (paint.state.active) paint.stop()
         gizmoMode = mode
     }
@@ -1092,6 +1103,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun layFlat(on: Boolean) {
         // One Workspace tool at a time, as the browser's `setTool`.
         if (on && measuring) measure(false)
+        if (on && brimEaring) brimEars(false)
         if (on && paint.state.active) paint.stop()
         layingFlat = on
         layFlatNote = R.string.workspace_lay_flat_hint
@@ -1282,12 +1294,14 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             paint.state.active -> paint.refusePreviewed()
             measuring -> measureStatus = words(R.string.simplify_preview_pick)
             layingFlat -> layFlatNote = R.string.simplify_preview_pick
+            brimEaring -> brimEarStatus = words(R.string.simplify_preview_pick)
         }
     }
 
     /** Turns the Measure tool on — with a fresh pair of picks, as the browser's `measureTool` — or off; Lay flat and painting go off. */
     fun measure(on: Boolean) {
         if (on) layFlat(false)
+        if (on && brimEaring) brimEars(false)
         if (on && paint.state.active) paint.stop()
         measuring = on
         measurePicks = emptyList()
@@ -1343,6 +1357,132 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
                 }
             }
         }
+    }
+
+    // ---- The Brim Ears tool, as the browser's workspace runs it ----
+
+    /** The Brim Ears tool (`tool_brim_ears`): while on, a tap in the Workspace places an ear where it meets the object ears go on. */
+    var brimEaring by mutableStateOf(false)
+        private set
+    /** The front radius the next ear takes (`brimEarRadiusMm`, the panel's Ear radius). */
+    var brimEarRadiusMm by mutableDoubleStateOf(ProjectBrimEars.DEFAULT_RADIUS_MM)
+        private set
+    /** Radius edits finished (main thread): the field shows the radius again after each, even a refused one. */
+    var brimEarRadiusEdits by mutableIntStateOf(0)
+        private set
+    /** What the tool shows (the object ears go on, its ears, the stranded ones), as last read ([refreshBrimEars]). */
+    var brimEarState by mutableStateOf(BrimEarState())
+        private set
+    /** The tool's last status (what the browser's status bar says while it is on). */
+    var brimEarStatus by mutableStateOf<String?>(null)
+        private set
+
+    /**
+     * Turns the Brim Ears tool on — Lay flat, Measure and painting go off,
+     * one tool at a time as the browser's `setTool` — with its status, or off.
+     */
+    fun brimEars(on: Boolean) {
+        if (on) {
+            layFlat(false)
+            if (measuring) measure(false)
+            if (paint.state.active) paint.stop()
+        }
+        brimEaring = on
+        brimEarStatus = if (on) words(R.string.brim_ears_start) else null
+        if (on) refreshBrimEars()
+    }
+
+    /** Reads what the tool shows again (`getBrimEarSnapshot`), as the browser's panel does after every change of the project or the selection. */
+    fun refreshBrimEars() = quietly {
+        val state = workspace.brimEars().await()
+        main.post { brimEarState = state }
+    }
+
+    /** A status of the tool: its own line while it is on, the area's message otherwise (the browser's one status bar). */
+    private fun brimStatus(text: String) {
+        main.post { if (brimEaring) brimEarStatus = text else message = text }
+    }
+
+    /** The panel's Ear radius (`brim_ears_configure`, `setBrimEarRadius`): one outside 0.1–20 mm is refused with the browser's status. */
+    fun setBrimEarRadius(radiusMm: Double) {
+        if (ProjectBrimEars.radiusAllowed(radiusMm)) brimEarRadiusMm = radiusMm else brimStatus(ProjectBrimEars.RADIUS_BOUNDS)
+        brimEarRadiusEdits++
+    }
+
+    /**
+     * A tap while placing ears met nothing to place on (`placeBrimEar`): no
+     * single object is in scope ([inScope] false), or the tap missed it.
+     */
+    fun brimEarMissed(inScope: Boolean) = brimStatus(words(if (inScope) R.string.brim_ears_missed else R.string.brim_ears_select_tap))
+
+    /**
+     * A tap met part [volumeId] of object [objectId] at [point] (the part's
+     * own millimetres): one ear there, at the object's base, with the
+     * current radius, as one undoable step (`placeBrimEar`).
+     */
+    fun placeBrimEarAt(objectId: String, volumeId: String, point: List<Double>) {
+        val radius = brimEarRadiusMm
+        work {
+            brimStatus(
+                try {
+                    workspace.placeBrimEarOnPart(objectId, volumeId, point, radius).await()
+                    ProjectBrimEars.placed(radius)
+                } catch (failure: Throwable) {
+                    ProjectBrimEars.failed(cause(failure).message)
+                },
+            )
+        }
+    }
+
+    /**
+     * "Place on corners" (`brim_ears_auto`, `autoPlaceBrimEars`): an ear on
+     * every first-layer corner of the object that would lift, with the
+     * current radius, as one undoable step; then the tool opens, so the discs
+     * are on the model, as the browser's does.
+     */
+    fun autoPlaceBrimEars() {
+        val radius = brimEarRadiusMm
+        work {
+            val status = try {
+                when (val outcome = workspace.autoPlaceBrimEars(radius).await()) {
+                    BrimEarAuto.NoTarget -> words(R.string.brim_ears_select_auto)
+                    BrimEarAuto.NoGeometry -> words(R.string.brim_ears_no_geometry)
+                    is BrimEarAuto.NoEars -> ProjectBrimEars.noEars(outcome.reason)
+                    is BrimEarAuto.Placed -> {
+                        main.post { if (!brimEaring) brimEars(true) }
+                        ProjectBrimEars.autoPlaced(outcome.count)
+                    }
+                }
+            } catch (failure: Throwable) {
+                words(R.string.brim_ears_failed, cause(failure).message.orEmpty())
+            }
+            brimStatus(status)
+        }
+    }
+
+    /** "Clear all" (`brim_ears_clear`): every ear of the object as one undoable step. */
+    fun clearBrimEars() = work {
+        brimStatus(
+            try {
+                when (workspace.clearBrimEars().await()) {
+                    BrimEarClear.NO_TARGET -> words(R.string.brim_ears_select_clear)
+                    BrimEarClear.NO_EARS -> words(R.string.brim_ears_none)
+                    BrimEarClear.CLEARED -> words(R.string.brim_ears_cleared)
+                }
+            } catch (failure: Throwable) {
+                words(R.string.brim_ears_failed, cause(failure).message.orEmpty())
+            },
+        )
+    }
+
+    /** A placed ear's Remove (`brim_ears_remove`): ear [index] as one undoable step; undo puts it back at its index. */
+    fun removeBrimEar(index: Int) = work {
+        val status = try {
+            if (workspace.removeBrimEar(index.toLong()).await()) words(R.string.brim_ears_removed) else null
+        } catch (failure: Throwable) {
+            ProjectBrimEars.failed(cause(failure).message)
+        }
+        status?.let(::brimStatus)
     }
 
     /** Renames an object or part (the Objects panel's Rename). */

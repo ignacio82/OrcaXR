@@ -53,6 +53,8 @@
     <string name="vf_delete">Ištrinti</string>
     <string name="project_measure">Matuoti</string>
     <string name="simplify_apply">Taikyti</string>
+    <string name="workspace_brim_ears">Krašto \"ausys\"</string>
+    <string name="brim_ears_title">Krašto \"ausys\"</string>
     <string name="workspace_paint">Piešti</string>
     <string name="paint_tool_sphere">Sfera</string>
     <string name="action_delete_models">Ištrinti</string>

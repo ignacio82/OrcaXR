@@ -74,6 +74,7 @@ const APP_ACTIONS = [
   "add_primitive_disc", "add_primitive_torus",
   "simplify_model", "add_plate", "delete_plate", "arrange_all", "duplicate_plate", "split_to_objects",
   "split_to_parts", "tool_support_paint", "tool_seam_paint", "tool_fuzzy_skin", "tool_measure",
+  "tool_brim_ears", "brim_ears_auto", "brim_ears_clear",
   "add_modifier", "add_support_enforcer", "add_support_blocker", "set_negative_part",
   "slice_active_plate", "slice_all_plates", "slice_cancel", "send_to_printer",
 ];

@@ -106,18 +106,25 @@ function key(point: readonly [number, number]): string {
 function chainSegments(
   segments: readonly [readonly [number, number], readonly [number, number]][],
 ): readonly OutlinePolygon[] {
-  const byStart = new Map<string, [readonly [number, number], readonly [number, number]][]>();
+  type Segment = readonly [readonly [number, number], readonly [number, number]];
+  const byStart = new Map<string, Segment[]>();
+  const byEnd = new Map<string, Segment[]>();
   for (const segment of segments) {
-    const bucket = byStart.get(key(segment[0])) ?? [];
-    bucket.push(segment);
-    byStart.set(key(segment[0]), bucket);
+    for (const [ends, point] of [
+      [byStart, segment[0]],
+      [byEnd, segment[1]],
+    ] as const) {
+      const bucket = ends.get(key(point)) ?? [];
+      bucket.push(segment);
+      ends.set(key(point), bucket);
+    }
   }
-  const used = new Set<[readonly [number, number], readonly [number, number]]>();
+  const used = new Set<Segment>();
   const loops: OutlinePolygon[] = [];
   for (const segment of segments) {
     if (used.has(segment)) continue;
     const loop: (readonly [number, number])[] = [segment[0]];
-    let current = segment;
+    let current: Segment = segment;
     used.add(current);
     for (let guard = 0; guard < segments.length + 1; guard += 1) {
       loop.push(current[1]);
@@ -125,10 +132,18 @@ function chainSegments(
       // dropped below. Testing before pushing the closing point lost a real
       // corner of every loop whose last side was one segment.
       if (key(current[1]) === key(loop[0])) break;
-      const next = (byStart.get(key(current[1])) ?? []).find((candidate) => !used.has(candidate));
+      // A segment runs the way its triangle's first crossed edge leads, which
+      // a triangulation does not keep consistent from one triangle to the next
+      // (three's box walls cut their two triangles opposite ways): one that
+      // only ends here is walked backwards.
+      const forward = (byStart.get(key(current[1])) ?? []).find((candidate) => !used.has(candidate));
+      const backward = forward
+        ? undefined
+        : (byEnd.get(key(current[1])) ?? []).find((candidate) => !used.has(candidate));
+      const next = forward ?? backward;
       if (!next) break;
       used.add(next);
-      current = next;
+      current = forward ? next : [next[1], next[0]];
     }
     // Two points cannot enclose anything; a stray chain is dropped rather than
     // reported as an outline.

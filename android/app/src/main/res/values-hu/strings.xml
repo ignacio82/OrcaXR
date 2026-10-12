@@ -51,6 +51,8 @@
     <string name="vf_delete">Törlés</string>
     <string name="project_measure">Mérés</string>
     <string name="simplify_apply">Alkalmaz</string>
+    <string name="workspace_brim_ears">Karimás Fülek</string>
+    <string name="brim_ears_title">Karimás fülek</string>
     <string name="workspace_paint">Festés</string>
     <string name="paint_tool_sphere">Gömb</string>
     <string name="action_delete_models">Törlés</string>

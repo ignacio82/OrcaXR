@@ -56,8 +56,8 @@ public final class ProjectJniHarness {
     public static long measureChecks(String source, byte[] cube, byte[] washer, byte[] hexagon, byte[] dodecagon, byte[] wedge, byte[] terrain, String script) {
         return ProjectMeasureChecks.run(source, java.util.List.of(cube, washer, hexagon, dodecagon, wedge, terrain), script);
     }
-    public static long brimEarChecks(String source, byte[] big, byte[] small, byte[] pyramid, byte[] plus, byte[] smooth, byte[] notch, byte[] sheet, byte[] cube, String script) {
-        return ProjectBrimEarChecks.run(source, java.util.List.of(big, small, pyramid, plus, smooth, notch, sheet, cube), script);
+    public static long brimEarChecks(String source, byte[] big, byte[] small, byte[] pyramid, byte[] plus, byte[] smooth, byte[] notch, byte[] sheet, byte[] cube, byte[] box, String script) {
+        return ProjectBrimEarChecks.run(source, java.util.List.of(big, small, pyramid, plus, smooth, notch, sheet, cube, box), script);
     }
     public static long embossChecks(String source, byte[] asset, String script) {
         return ProjectEmbossChecks.run(source, java.util.List.of(asset), script);
@@ -190,6 +190,9 @@ public final class ProjectJniHarness {
     }
     public static long splitSourceChecks(String state, byte[] cube, byte[] pair, byte[] quad, byte[] big, String script) {
         return ProjectModelToolChecks.splitSources(state, java.util.List.of(cube, pair, quad, big), script);
+    }
+    public static long brimEarEditChecks(String corpus, byte[] archive) {
+        return ProjectBrimEarEditChecks.journey(corpus, archive);
     }
     public static long modelToolChecks(String corpus, byte[] archive) {
         return ProjectModelToolChecks.journey(corpus, archive);
@@ -440,7 +443,7 @@ public final class ProjectJniHarness {
             if (name.equals("volumeSplitChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, String.class);
             if (name.equals("simplifyChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, String.class);
             if (name.equals("measureChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, String.class);
-            if (name.equals("brimEarChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, String.class);
+            if (name.equals("brimEarChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, String.class);
             if (name.equals("embossChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class);
             if (name.equals("svgPartChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class);
             if (name.equals("assemblyChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
@@ -473,6 +476,7 @@ public final class ProjectJniHarness {
             if (name.equals("transformGestureChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);
             if (name.equals("splitSourceChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class, byte[].class, String.class);
             if (name.equals("modelToolChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
+            if (name.equals("brimEarEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("settingsChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("volumeRoleChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("primitiveChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);

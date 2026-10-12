@@ -53,6 +53,8 @@
     <string name="vf_delete">Supprimer</string>
     <string name="project_measure">Mesurer</string>
     <string name="simplify_apply">Appliquer</string>
+    <string name="workspace_brim_ears">Bordure à oreilles</string>
+    <string name="brim_ears_title">Bordures à oreilles</string>
     <string name="workspace_paint">Peindre</string>
     <string name="paint_tool_sphere">Sphère</string>
     <string name="action_delete_models">Supprimer</string>

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 
+import * as THREE from 'three';
+
 import {
   DEFAULT_BRIM_EAR_DETECTION,
   detectBrimEars,
@@ -241,6 +243,25 @@ test('a footprint whose last side is one cut segment keeps all its corners', () 
     const [x, y] = ear.point.positionMm;
     assert.ok(Math.min(Math.abs(x), Math.abs(x - 20)) < 0.2 && Math.min(Math.abs(y), Math.abs(y - 20)) < 0.2);
   }
+});
+
+test('walls whose triangles cut opposite ways still close their outline (three\u2019s box, the Add menu\u2019s cube)', () => {
+  // three's BoxGeometry, centred on its origin, as the Add menu's cube is generated: each wall's two
+  // triangles meet the cut along edges in opposite orders, so their segments run opposite ways.
+  const geometry = new THREE.BoxGeometry(20, 20, 20).toNonIndexed();
+  const positions = Array.from(geometry.getAttribute('position').array);
+  geometry.dispose();
+  const loops = sliceMeshOutline(positions, undefined, -9.8);
+  assert.equal(loops.length, 1, 'one closed loop');
+  assert.equal(loops[0].length, 4, 'a square');
+  const result = detectBrimEars(positions, undefined, DEFAULT_BRIM_EAR_DETECTION);
+  assert.equal(result.reason, undefined);
+  assert.deepEqual(result.ears.map((ear) => ear.point.positionMm.join(',')).sort(), [
+    '-10,-10,-10',
+    '-10,10,-10',
+    '10,-10,-10',
+    '10,10,-10',
+  ]);
 });
 
 console.log(`\nBrim ear detection: ${passed} tests passed.`);

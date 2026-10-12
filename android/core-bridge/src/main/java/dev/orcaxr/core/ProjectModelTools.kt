@@ -245,7 +245,7 @@ object ProjectMeasures {
     }
 
     /** `Matrix4.compose` (column-major) of a canonical transform. */
-    private fun compose(transform: ProjectIntents.Transform): DoubleArray {
+    internal fun compose(transform: ProjectIntents.Transform): DoubleArray {
         var (x, y, z, w) = transform.rotation
         val length = sqrt(x * x + y * y + z * z + w * w)
         if (length == 0.0) {

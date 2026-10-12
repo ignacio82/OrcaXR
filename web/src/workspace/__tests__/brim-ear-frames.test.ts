@@ -141,7 +141,14 @@ await test('automatic brim ears land on every part’s corners in object space',
     assert.equal(object.volumes.length, 2);
     assert.ok(object.volumes.every((volume) => volume.transform.translationMm.some((v) => v !== 0)));
     // Split parts are recentred: their own frames are not the object's.
+    const statuses: string[] = [];
+    workspace.onStatusChanged = (status) => statuses.push(status);
     assert.ok(await internals.autoPlaceBrimEars());
+    // The placement's status is the last word: opening the tool for its discs once replaced it.
+    assert.match(
+      statuses.at(-1) ?? '',
+      /^Placed \d+ brim ears on the corners that would lift; one undo removes them all\.$/,
+    );
     const ears = controller.getBrimEars(objectId);
     assert.deepEqual(
       ears.map((ear) => `${ear.positionMm[0].toFixed(3)},${ear.positionMm[1].toFixed(3)}`).sort(),

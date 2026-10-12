@@ -1252,9 +1252,9 @@ try {
     await readFile(new URL("testdata/cross-platform/brim-ear-vectors.json", root)),
   );
   assert.deepEqual(replayBrimEars(projectJniCore(jvm.call), brimEarFixture, layout), {
-    brimEarDetections: 40,
-    brimEarStrandedChecks: 9,
-    brimEarViews: 9,
+    brimEarDetections: 41,
+    brimEarStrandedChecks: 10,
+    brimEarViews: 10,
   });
   const brimEarChecks = jvm.call(
     "brimEarChecks",
@@ -1270,7 +1270,19 @@ try {
       )
       .join("\n"),
   );
-  assert.equal(brimEarChecks, 126);
+  assert.equal(brimEarChecks, 133);
+  // The Workspace's Brim Ears tool as the Android Workspace drives it, step by step
+  // against the browser's journey through its production controller.
+  const brimEarEditChecks = jvm.call(
+    "brimEarEditChecks",
+    JSON.stringify({
+      opened: brimEarFixture.journey.opened,
+      steps: brimEarFixture.journey.steps,
+      undo: brimEarFixture.journey.undo,
+    }),
+    Buffer.from(brimEarFixture.journey.archive, "base64"),
+  );
+  assert.equal(brimEarEditChecks, 134);
   // Text embossing: cuts and stages, then the Kotlin wrapper.
   const embossFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/emboss-vectors.json", root)),
@@ -1894,6 +1906,7 @@ try {
     ...splitSources,
     splitSourceChecks,
     modelToolChecks,
+    brimEarEditChecks,
     settingsChecks,
     volumeRoles,
     volumeRoleChecks,

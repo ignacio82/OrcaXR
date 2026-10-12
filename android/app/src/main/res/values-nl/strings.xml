@@ -51,6 +51,8 @@
     <string name="vf_delete">Verwijderen</string>
     <string name="project_measure">Maatregel</string>
     <string name="simplify_apply">Toepassen</string>
+    <string name="workspace_brim_ears">Rand Oren</string>
+    <string name="brim_ears_title">Rand oren</string>
     <string name="workspace_paint">Tekenen</string>
     <string name="paint_tool_sphere">Bol</string>
     <string name="action_delete_models">Verwijderen</string>

@@ -40,9 +40,9 @@ object ProjectEditing {
     /**
      * The model tools, after the placement actions: the browser's split and
      * simplify (its Tools menu, also an object's context actions) and its
-     * toolbar's Measure, a Workspace tap tool as Lay flat is.
+     * toolbar's Measure and Brim Ears, Workspace tap tools as Lay flat is.
      */
-    val TOOLS_MENU = listOf("split_to_objects", "split_to_parts", "simplify_model", "tool_measure")
+    val TOOLS_MENU = listOf("split_to_objects", "split_to_parts", "simplify_model", "tool_measure", "tool_brim_ears")
 
     /** The catalogue actions the app performs, by ID. */
     val PERFORMED = setOf(
