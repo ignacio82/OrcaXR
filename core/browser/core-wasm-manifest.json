@@ -5,7 +5,7 @@
     "gcode"
   ],
   "inputs": {
-    "contracts/android-strings.json": "6118a4d76e5996ca0b922aac243671cc98a8a0b58fa85cf6f091a561bac7e2c1",
+    "contracts/android-strings.json": "31acaedcb34085466134ba42e358bb77794a534c3cc41147e9141776c4e1a724",
     "contracts/core-protocol.json": "63e7ed821d0da12f863004109a41f5dbfd00b73a2c29584ae2b3a3a6b1320f7a",
     "contracts/gcode-buffer.json": "237797f7310f4eb9cd1fe14bedc5c1bce31e2b2fb7b6995056c98da975c7f716",
     "contracts/gcode-metadata.json": "9839972a577bf7fb31f3fbbbffca1ec3003c4dbbd86ec165b9fbf8263b7d23df",
@@ -488,7 +488,7 @@
     "tools/cross-platform/android-modeltools-smoke.py": "a10a4e151d4b638b5345490e74a1bd8d76ca3c8f853b62bb7a478aecb8a00884",
     "tools/cross-platform/android-outputs-smoke.py": "d4b7e3da07c3bf0c2901170df1717a42adacaf8a2adb57ca25978863f7b682ce",
     "tools/cross-platform/android-paint-smoke.py": "bd729e92a335058898fb3d46f15b38070a8952205cc93518c27910b62bcd5826",
-    "tools/cross-platform/android-palette-smoke.py": "84d7a63a40a860480f4e023ae1c4ad41ae8c5d03e790348c51323706d05df37e",
+    "tools/cross-platform/android-palette-smoke.py": "956883c33bd9fc144149b6b7667ebfe9762951c61d475a7df75b077b3571ef91",
     "tools/cross-platform/android-prepare-smoke.py": "aec3144773b5f34f7d3549f084ea8718eaea58d2a5d8ee4bdc5aadafdc1c77b6",
     "tools/cross-platform/android-preview-smoke.py": "37e9fba629eb336e58c049a8adcafe04a88f3d23e6e6a4c8b58f996780b97ed2",
     "tools/cross-platform/android-project-smoke.py": "8bedadc2ede8fd857c5ea42bdca8d8f2d9560f03bd5c359b79bd9bd58798752e",

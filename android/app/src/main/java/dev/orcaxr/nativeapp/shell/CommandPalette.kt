@@ -88,7 +88,9 @@ private class PaletteRow(val action: ProjectActionState, val label: String, val 
  * the app performs, by name, one search away. The list is the core's
  * `command-palette` surface in catalogue order with its enablement
  * ([ProjectModel.surfaceActions]), limited to the actions the app performs
- * ([AppActions.PERFORMED]); the search is the browser's, in the shared core
+ * ([AppActions.PERFORMED]) — Slice, Slice All Plates, Cancel Slice and Send
+ * to Printer enabled as the Prepare area's buttons are ([LocalActionStates]),
+ * as the browser's palette asks its slicing controller for them; the search is the browser's, in the shared core
  * ([ActionPresentation.palette]: label, id or hint containing the trimmed
  * query, case ignored). A row shows the action's symbol, its label and its
  * hint — or, when the core does not enable it, why. ArrowDown and ArrowUp
@@ -113,7 +115,9 @@ fun CommandPalette(model: ProjectModel, fromKeys: Boolean, onDismiss: () -> Unit
     var query by remember { mutableStateOf("") }
     var selected by remember { mutableIntStateOf(0) }
     var status by remember { mutableStateOf<String?>(null) }
-    val rows = actions.map { PaletteRow(it, ActionTexts.label(it), ActionTexts.hint(it.id)) }
+    // Slice, Slice All Plates, Cancel Slice and Send to Printer as the Prepare area enables them, the rest as the core does.
+    val enable = LocalActionStates.current
+    val rows = actions.map(enable).map { PaletteRow(it, ActionTexts.label(it), ActionTexts.hint(it.id)) }
     val matches = remember(actions, rows.map { it.label to it.hint }, query) {
         ActionPresentation.palette(query, rows) { PaletteSearchable(it.action.id, it.label, it.hint) }
     }

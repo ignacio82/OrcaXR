@@ -160,6 +160,13 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
     /** A finished slice for Preview to open, once. */
     var sliced by mutableStateOf<SlicedPlate?>(null)
         private set
+    /**
+     * What the command palette or a plate's menu asked of this area (one of
+     * [PrepareCommands.IDS]) until the area, shown for it, carries it out as
+     * its button for it does.
+     */
+    var asked by mutableStateOf<String?>(null)
+        private set
     /** The slice [state] shows (`state.result`), readable from any thread: the output a send checks it still is. */
     @Volatile private var published: SlicedPlate? = null
 
@@ -591,6 +598,18 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         if (preferences.getBoolean(NOTIFICATIONS_ASKED, false)) return false
         preferences.edit().putBoolean(NOTIFICATIONS_ASKED, true).apply()
         return true
+    }
+
+    /** Asks this area to run [id] (one of [PrepareCommands.IDS]) as its button does, once it shows. */
+    fun ask(id: String) {
+        require(id in PrepareCommands.IDS) { "$id is not one of the Prepare area's actions" }
+        asked = id
+    }
+
+    /** The asked action was taken up — or, no longer possible, refused for [refusal], which the status line shows. */
+    fun answered(refusal: String? = null) {
+        asked = null
+        if (refusal != null) state = state.copy(status = refusal)
     }
 
     fun slicedShown() {

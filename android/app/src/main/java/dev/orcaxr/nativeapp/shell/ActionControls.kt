@@ -39,6 +39,16 @@ import dev.orcaxr.nativeapp.theme.OrcaActionGlyphs
 val LocalActionRunner = staticCompositionLocalOf<(String) -> Unit> { {} }
 
 /**
+ * A catalogue action as the app enables it: the Prepare area's Slice, Slice
+ * All Plates, Cancel Slice and Send to Printer as its buttons are
+ * (`PrepareCommands`: the browser's palette asks its own slicing controller
+ * for them), every other action as the core enables it. The shell provides
+ * it; it reads the areas' state as it is called, so whatever calls it in a
+ * composition follows that state.
+ */
+val LocalActionStates = staticCompositionLocalOf<(ProjectActionState) -> ProjectActionState> { { it } }
+
+/**
  * What a control says when a pointer rests on it, as the browser's `title`
  * does: a plain tooltip on mouse hover (and on a long press by touch or pen,
  * Material's way), kept while the pointer stays.

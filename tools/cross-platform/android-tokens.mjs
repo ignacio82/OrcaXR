@@ -75,6 +75,7 @@ const APP_ACTIONS = [
   "simplify_model", "add_plate", "delete_plate", "arrange_all", "duplicate_plate", "split_to_objects",
   "split_to_parts", "tool_support_paint", "tool_seam_paint", "tool_fuzzy_skin", "tool_measure",
   "add_modifier", "add_support_enforcer", "add_support_blocker",
+  "slice_active_plate", "slice_all_plates", "slice_cancel", "send_to_printer",
 ];
 
 const problems = [];

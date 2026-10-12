@@ -6620,10 +6620,12 @@ context menus — and every one of them runs the call the menus make
 area the action needs: the Project area for New, Open, Save, Save As and
 Import Model (its pickers and dialogs carry them out, from a
 `documentRequest`), the Workspace for a camera view or a tool that takes its
-touch. What the app performs is one list (`AppActions.PERFORMED`, 57
-actions: the document actions, Undo and Redo, the View menu's seven camera
-views, the Edit, Add and placement menus, the model tools, the plates, and
-the toolbar's Delete and paint channels); nothing else is ever listed.
+touch, the Prepare area for Slice, Slice All Plates, Cancel Slice and Send
+to Printer (which it carries out as its buttons do, below). What the app
+performs is one list (`AppActions.PERFORMED`, 61 actions: the document
+actions, Undo and Redo, the View menu's seven camera views, the Edit, Add
+and placement menus, the model tools, the plates, the toolbar's Delete and
+paint channels, and Prepare's four); nothing else is ever listed.
 Their words are the browser's labels and hints (`action.<id>.label` and
 `.hint`, `ActionTexts`, mapped in `contracts/android-strings.json`), their
 symbols the browser's Material symbols and their menu shortcuts its menus'
@@ -6654,9 +6656,32 @@ before an on-screen keyboard sees them (`onPreInterceptKeyBeforeSoftKeyboard`:
 the keyboard took Escape to hide itself and the palette stayed open), and
 opened from the keys the palette brings up no on-screen keyboard
 (`showKeyboardOnFocus`); "No matching actions" when nothing matches. The
-placeholder is the XR palette's message ("Search every action"). The Prepare area's Slice and Send stay out: the Android
-shell's capability host facts carry no slicing, G-code or preflight state
-yet, so the core could not gate them as the browser does.
+placeholder is the XR palette's message ("Search every action").
+
+Slice, Slice All Plates, Cancel Slice and Send to Printer are listed, and
+offered in the plate's scene menu, enabled as the Prepare area's buttons are,
+not as the shell's capability host facts would have them (they know nothing
+of slicing): the browser's palette asks its own slicing controller for these
+(`UiState`'s `isSlicing`, `preflightBlocked`, `gcodeReady`), and so does the
+app (`PrepareCommands`, platform-free, which Prepare's buttons now use too).
+Slice needs a route (the external slicer turned on, else this device's
+engine), an active plate with a model, no slice running, no blocking
+preflight and the core's gate given those facts (`sliceActions`); Slice All
+Plates a route, no slice running and that gate (which judges every plate);
+Cancel Slice a slice running not yet being cancelled; Send to Printer the
+published slice still current (`SendGuard`), a printer the Device area
+connected and no send running. A disabled row says why: this device's
+engine's reason, "No models to slice.", the browser's `not-slicing` and
+`preflight-clear` words, the core's reason, or Send's own ("Slice the active
+plate before sending it to the printer.", "A send is already in progress…",
+"Connect to a printer in the Device area to send this plate."). While the
+palette is open, whichever area shows, the active plate's preflight and the
+core's gate are kept current as Prepare keeps them (`FollowSlicing`).
+Running one shows the Prepare area and asks it (`PrepareModel.ask`), which
+carries it out exactly as its button: the notification permission asked
+once before the first local slice, an external slicer's upload consent, the
+progress, Preview opening the result, a send's confirmation dialog — or, no
+longer possible by then, says why on its status line.
 
 The Workspace wears the browser's strip and model toolbar: its title, then
 the strip's quick actions (Save Project, Undo, Redo — bare symbols enabled
@@ -6743,7 +6768,15 @@ the palette, then deselects and hovers the disabled Delete with
 entering) for its tooltip, read from a dump of every window or from its
 pixels. adb cannot press a right button or drive a touchpad, so secondary
 clicks and trackpad gestures are covered by the code paths the long press
-and the JVM tests share. The emulator smoke has not run for this change.
+and the JVM tests share. The smoke then finds Slice by its hint (a row
+shows its hint only while enabled), whose Enter slices the plate on this
+device's engine as Prepare's Slice does (Prepare shows; Preview opens the
+result; Prepare says "Sliced on this device"), and Send to Printer, now with
+a slice to send, is held back with "Connect to a printer in the Device area
+to send this plate." — its Enter leaves the palette open with "Send to
+Printer: …", and Escape closes it. `PrepareCommandsTest` (7) holds the
+enablement and the reasons to Prepare's rules. The emulator smoke has not
+run for these changes.
 
 ### Android localization
 

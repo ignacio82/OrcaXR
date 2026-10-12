@@ -2046,9 +2046,12 @@ storage journeys on phone, tablet, and desktop-sized windows.
   core from production TypeScript (669 panel steps and 525 range answers in
   Rust, WASM in Node and JNI; 1,363 JNI checks; the emulator settings smoke,
   not yet run). Layer events stay with Preview, where the browser's live.
-  The browser's command palette (Ctrl/⌘ K, and a search button) lists the 57
+  The browser's command palette (Ctrl/⌘ K, and a search button) lists the 61
   catalogue actions the app performs, in catalogue order with the core's
-  enablement, searched as the browser searches them — ported to the shared
+  enablement — Slice, Slice All Plates, Cancel Slice and Send to Printer
+  with the Prepare area's (`PrepareCommands`, as the browser's palette asks
+  its slicing controller), run there as its buttons run them — searched as
+  the browser searches them — ported to the shared
   core (`orcaxr_project::action_presentation`, with the context menus'
   sections and the toolbar's runs: 21 language catalogues, 1,827 searches
   and 92 arrangements replayed by Rust, WASM and JNI) — and runs the call the
@@ -2066,8 +2069,7 @@ storage journeys on phone, tablet, and desktop-sized windows.
   finger whose button is a secondary click (a 1,949-check JNI journey, JVM
   tests, and `android-palette-smoke.py`, not yet run on an emulator). The
   semantic editor's volume roles and keyboard control of the 3D views
-  remain; Prepare's Slice and Send wait for the shell's slicing host facts
-  before the palette lists them.
+  remain.
 - [ ] Integrate the flat renderer with panel resizing, visibility, lifecycle,
   selection, painting, model tools, and preview controls. Keep CPU work and
   loading off the UI thread; avoid per-frame Compose recomposition for meshes.

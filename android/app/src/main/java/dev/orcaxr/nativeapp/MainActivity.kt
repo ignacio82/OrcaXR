@@ -65,8 +65,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.orcaxr.core.CoreCompatibility
 import dev.orcaxr.core.DocumentOwners
+import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.nativeapp.device.DeviceModel
 import dev.orcaxr.nativeapp.device.DeviceScreen
+import dev.orcaxr.nativeapp.prepare.FollowSlicing
+import dev.orcaxr.nativeapp.prepare.PrepareCommands
 import dev.orcaxr.nativeapp.prepare.PrepareModel
 import dev.orcaxr.nativeapp.prepare.PrepareScreen
 import dev.orcaxr.nativeapp.preview.PreviewModel
@@ -78,6 +81,7 @@ import dev.orcaxr.nativeapp.send.SendDialog
 import dev.orcaxr.nativeapp.shell.AppActions
 import dev.orcaxr.nativeapp.shell.CommandPalette
 import dev.orcaxr.nativeapp.shell.LocalActionRunner
+import dev.orcaxr.nativeapp.shell.LocalActionStates
 import dev.orcaxr.nativeapp.shell.LocalCommandPalette
 import dev.orcaxr.nativeapp.shell.FocusVisibleTheme
 import dev.orcaxr.nativeapp.shell.Navigation
@@ -148,9 +152,25 @@ class MainActivity : ComponentActivity() {
      * or a tool that takes its touch.
      */
     private fun runAction(id: String) {
+        if (AppActions.needsPrepare(id)) {
+            // Slice, Slice All Plates, Cancel Slice and Send: the Prepare area carries them out as its buttons do,
+            // with their permission prompt, consent, progress and outcome.
+            area = R.string.nav_prepare
+            prepare.ask(id)
+            return
+        }
         if (AppActions.needsProject(id)) area = R.string.nav_project
         if (AppActions.needsWorkspace(id) && !workspaceShown) area = R.string.nav_workspace
         project.perform(id)
+    }
+
+    /** [action] as the app enables it: the Prepare area's four as its buttons are, from its state and the Device area's. */
+    private fun actionState(action: ProjectActionState): ProjectActionState {
+        if (!AppActions.needsPrepare(action.id)) return action
+        val view = project.view
+        val plate = view.activePlate
+        val facts = PrepareCommands.Facts.of(prepare.state, plate?.id, plate?.objects, view.revision, device.state.connected, device.sendState.busy)
+        return PrepareCommands.state(action, facts)
     }
 
     /** A document another app opened or shared with OrcaXR, if [intent] carries one. */
@@ -354,6 +374,7 @@ class MainActivity : ComponentActivity() {
                     palette = true
                 },
                 LocalActionRunner provides ::runAction,
+                LocalActionStates provides remember { { action: ProjectActionState -> actionState(action) } },
             ) { FocusVisibleTheme {
                 val ready = state == R.string.workspace_development
                 val layout = ShellLayout.of(LocalWindowInfo.current.containerDpSize.width.value.toInt(), shellArea(area))
@@ -426,7 +447,11 @@ class MainActivity : ComponentActivity() {
                 // A send's confirmation waits above whichever area is shown: the operator may have moved on.
                 device.sendConfirmation?.let { pending -> SendDialog(pending.view, device::answerSend) }
                 // The command palette, over whichever area is shown, once the app is ready.
-                if (palette && ready) CommandPalette(project, paletteFromKeys, onDismiss = { palette = false }, run = ::runAction)
+                if (palette && ready) {
+                    // What the palette's Slice and Send are judged by, kept current while it is open, whichever area shows.
+                    FollowSlicing(prepare, project)
+                    CommandPalette(project, paletteFromKeys, onDismiss = { palette = false }, run = ::runAction)
+                }
             } } }
         }
     }

@@ -514,6 +514,10 @@
     <string name="action_hint_add_modifier">Add a modifier volume with per-region settings</string>
     <string name="action_hint_add_support_enforcer">Add a volume that forces supports inside it</string>
     <string name="action_hint_add_support_blocker">Add a volume that blocks supports inside it</string>
+    <string name="action_hint_slice_active_plate">Slice the plated models to G-code</string>
+    <string name="action_hint_slice_all_plates">Slice every printable plate and keep each plate’s own result</string>
+    <string name="action_hint_slice_cancel">Stop the slice that is running</string>
+    <string name="action_hint_send_to_printer">Upload the sliced G-code to a Moonraker printer, and start it only when you confirm</string>
     <string name="palette_search">Search every action</string>
     <string name="palette_empty">No matching actions</string>
     <string name="palette_open">Search actions &amp; settings</string>

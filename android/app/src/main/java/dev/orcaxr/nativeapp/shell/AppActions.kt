@@ -1,6 +1,7 @@
 package dev.orcaxr.nativeapp.shell
 
 import dev.orcaxr.core.ProjectActionState
+import dev.orcaxr.nativeapp.prepare.PrepareCommands
 import dev.orcaxr.nativeapp.project.ProjectEditing
 import dev.orcaxr.renderer.CameraView
 
@@ -9,7 +10,8 @@ import dev.orcaxr.renderer.CameraView
  * checked on the JVM: what the command palette may list (never an action the
  * app cannot perform), what the Workspace's toolbar draws, and where running
  * one has to happen. Every one runs through `ProjectModel.perform`, the call
- * the menus, the toolbar, the context menus and the shortcuts make.
+ * the menus, the toolbar, the context menus and the shortcuts make — except
+ * the Prepare area's, which it carries out as its buttons do.
  */
 object AppActions {
     /** The File menu's document actions: the Project area's pickers and dialogs carry them out. */
@@ -30,14 +32,20 @@ object AppActions {
     /** The browser's menu strip quick actions (DomShell's `QUICK_ACTIONS`), in its order: bare symbols beside the menus. */
     val QUICK = listOf("file_save_project", "edit_undo", "edit_redo")
 
+    /** Slice, Slice All Plates, Cancel Slice and Send to Printer: the Prepare area's buttons, enabled as they are ([PrepareCommands]). */
+    val PREPARE = PrepareCommands.IDS
+
     /** Every catalogue action the app performs. */
-    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
+    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PREPARE).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
 
     /** Whether running [id] needs the Workspace's 3D view on screen: a camera view, or a tool that takes its touch. */
     fun needsWorkspace(id: String): Boolean = id in CAMERA || id in TOOLS
 
     /** Whether running [id] needs the Project area, whose pickers and dialogs carry it out. */
     fun needsProject(id: String): Boolean = id in DOCUMENT
+
+    /** Whether running [id] is the Prepare area's: its buttons carry it out, with their progress and outcome. */
+    fun needsPrepare(id: String): Boolean = id in PREPARE
 
     /** The [actions] (a surface's, in catalogue order) the app performs, in that order. */
     fun performed(actions: List<ProjectActionState>): List<ProjectActionState> = actions.filter { it.id in PERFORMED }

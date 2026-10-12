@@ -48,6 +48,7 @@ import dev.orcaxr.nativeapp.shell.ActionTexts
 import dev.orcaxr.nativeapp.shell.ActionTooltip
 import dev.orcaxr.nativeapp.shell.AppActions
 import dev.orcaxr.nativeapp.shell.LocalActionRunner
+import dev.orcaxr.nativeapp.shell.LocalActionStates
 import dev.orcaxr.nativeapp.shell.LocalCommandPalette
 import dev.orcaxr.nativeapp.theme.LocalOrcaTheme
 import dev.orcaxr.nativeapp.theme.OrcaActionGlyphs
@@ -154,7 +155,8 @@ internal fun SceneMenu(model: ProjectModel, request: SceneMenuRequest, close: ()
     val view = model.view
     val run = LocalActionRunner.current
     val objectMenu = request.instanceId != null
-    val actions = AppActions.performed(if (objectMenu) view.objectMenu else view.plateMenu)
+    // The plate's Slice as the Prepare area enables it, the rest as the core does.
+    val actions = AppActions.performed(if (objectMenu) view.objectMenu else view.plateMenu).map(LocalActionStates.current)
     val sections = remember(actions) { ActionPresentation.arrange(actions, ActionArrangement.CONTEXT) { it.id } }
     val name = stringResource(if (objectMenu) R.string.menu_scene_object else R.string.menu_scene_plate)
     Box(Modifier.offset { IntOffset(request.x.toInt(), request.y.toInt()) }) {

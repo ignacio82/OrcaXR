@@ -90,6 +90,10 @@ object ActionTexts {
         "add_modifier" to R.string.project_add_modifier,
         "add_support_enforcer" to R.string.project_add_support_enforcer,
         "add_support_blocker" to R.string.project_add_support_blocker,
+        "slice_active_plate" to R.string.prepare_slice,
+        "slice_all_plates" to R.string.prepare_slice_all,
+        "slice_cancel" to R.string.prepare_cancel,
+        "send_to_printer" to R.string.send_action,
     )
 
     /** Each action the app performs, by catalogue id, with its hint. */
@@ -151,6 +155,10 @@ object ActionTexts {
         "add_modifier" to R.string.action_hint_add_modifier,
         "add_support_enforcer" to R.string.action_hint_add_support_enforcer,
         "add_support_blocker" to R.string.action_hint_add_support_blocker,
+        "slice_active_plate" to R.string.action_hint_slice_active_plate,
+        "slice_all_plates" to R.string.action_hint_slice_all_plates,
+        "slice_cancel" to R.string.action_hint_slice_cancel,
+        "send_to_printer" to R.string.action_hint_send_to_printer,
     )
 
     /** [action]'s label in the app's language; the core's English one for an action the app has no words for. */

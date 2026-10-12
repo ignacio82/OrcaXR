@@ -60,7 +60,6 @@ import dev.orcaxr.nativeapp.project.VirtualFilamentDeleteDialog
 import dev.orcaxr.nativeapp.project.VirtualFilamentLibraryPanel
 import kotlinx.coroutines.launch
 import dev.orcaxr.nativeapp.device.DeviceModel
-import dev.orcaxr.nativeapp.send.SendGuard
 import dev.orcaxr.nativeapp.send.SendWords
 
 /**
@@ -87,8 +86,8 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
     val connection = state.connection
     val plate = view.activePlate
     val context = LocalContext.current
-    // The preflight follows the project while this area is shown.
-    LaunchedEffect(view.revision, plate, profiles) { model.refreshPreflight() }
+    // The preflight, and the core's gate on the slice actions, follow the project while this area is shown.
+    FollowSlicing(model, project)
     // A draft the field edits; the connected endpoint replaces it once canonical.
     var url by rememberSaveable(connection.endpoint) { mutableStateOf(connection.endpoint) }
     // Android 17 asks for the local network first; the check then says what it reached.
@@ -119,19 +118,32 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
     var hidden by remember { mutableStateOf(emptySet<String>()) }
     val job = state.job
     val preflight = state.preflight?.takeIf { it.plateId == plate?.id }
-    val blocked = preflight?.canSlice == false
-    // Slice, Slice All Plates and Cancel Slice as the core enables them (the browser's registry gate),
-    // read again whenever what it judges changes: the project, a slice running, a blocking preflight.
-    LaunchedEffect(view.revision, plate?.id, job != null, blocked) { model.refreshActions() }
     // The route the rule chooses (the external slicer turned on, or this device's engine); none offers no Slice.
     val route = sliceRoute(connection, state.local)
-    val canSlice = route != SliceRouteKind.None && plate != null && plate.objects > 0 && job == null && !blocked &&
-        state.actions["slice_active_plate"]?.enabled != false
-    val canSliceAll = route != SliceRouteKind.None && job == null && state.actions["slice_all_plates"]?.enabled == true
+    // Slice, Slice All Plates, Cancel Slice and Send to Printer enabled as the command palette enables them.
+    val facts = PrepareCommands.Facts.of(state, plate?.id, plate?.objects, view.revision, device.state.connected, send.busy)
+    val canSlice = PrepareCommands.canSlice(facts)
+    val canSliceAll = PrepareCommands.canSliceAll(facts)
     val sliceAll = {
         val ask = Build.VERSION.SDK_INT >= ANDROID_13 && route == SliceRouteKind.Local &&
             context.checkSelfPermission(NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED && model.askNotifications()
         if (ask) allNotifications.launch(NOTIFICATIONS) else model.sliceAll()
+    }
+    // What the command palette or a plate's menu asked, carried out as this area's button for it is, once shown;
+    // what has stopped being possible meanwhile says why on the status line instead.
+    LaunchedEffect(model.asked) {
+        val asked = model.asked ?: return@LaunchedEffect
+        if (!PrepareCommands.enabled(asked, facts)) {
+            model.answered(PrepareCommands.reason(asked, facts))
+            return@LaunchedEffect
+        }
+        model.answered()
+        when (asked) {
+            PrepareCommands.SLICE -> slice()
+            PrepareCommands.SLICE_ALL -> sliceAll()
+            PrepareCommands.CANCEL -> model.cancel()
+            PrepareCommands.SEND -> device.send(model.sendable())
+        }
     }
 
     val list = rememberLazyListState()
@@ -145,7 +157,7 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
             // Slice and Cancel Slice as the browser's toolbar has them, Slice All Plates (its menu's) beside them.
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = slice, enabled = canSlice) { Text(stringResource(R.string.prepare_slice)) }
-                OutlinedButton(onClick = model::cancel, enabled = job != null && !job.cancelling) {
+                OutlinedButton(onClick = model::cancel, enabled = PrepareCommands.canCancel(facts)) {
                     Text(stringResource(R.string.prepare_cancel))
                 }
                 OutlinedButton(onClick = sliceAll, enabled = canSliceAll) { Text(stringResource(R.string.prepare_slice_all)) }
@@ -204,13 +216,12 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                                 // Output for a state the project has left is never previewed or sent.
                                 Text(PrepareWords.OUT_OF_DATE, color = MaterialTheme.colorScheme.error)
                             } else {
-                                val current = SendGuard.current(state.result, result, view.activePlate?.id, view.revision)
                                 val connected = device.state.connected
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton(onClick = model::showResult) { Text(stringResource(R.string.nav_preview)) }
                                     // While a send runs, its Cancel send is the status line's, above the list, beside the
                                     // words that name it (the browser's one button turns into it there).
-                                    Button(onClick = { device.send(model.sendable()) }, enabled = current && connected && !send.busy) {
+                                    Button(onClick = { device.send(model.sendable()) }, enabled = PrepareCommands.canSend(facts)) {
                                         Text(stringResource(R.string.send_action))
                                     }
                                 }
@@ -357,6 +368,23 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
             dismissButton = { TextButton(onClick = { model.answerConsent(false) }) { Text(stringResource(R.string.device_cancel)) } },
         )
     }
+}
+
+/**
+ * Keeps what the slice actions are judged by current while shown — the
+ * Prepare area, or the command palette over any area: the active plate's
+ * preflight as the project and its profiles change, and Slice, Slice All
+ * Plates and Cancel Slice as the core enables them (the browser's registry
+ * gate), read again whenever what it judges changes: the project, a slice
+ * running, a blocking preflight.
+ */
+@Composable
+fun FollowSlicing(model: PrepareModel, project: ProjectModel) {
+    val view = project.view
+    val plate = view.activePlate
+    LaunchedEffect(view.revision, plate, project.profilesView) { model.refreshPreflight() }
+    val blocked = model.state.preflight?.takeIf { it.plateId == plate?.id }?.canSlice == false
+    LaunchedEffect(view.revision, plate?.id, model.state.job != null, blocked) { model.refreshActions() }
 }
 
 /** One issue, as the browser's preflight card: severity and code, message, help, path, entities, and Hide. */

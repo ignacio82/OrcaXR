@@ -66,6 +66,10 @@ object OrcaActionGlyphs {
         "add_modifier" to OrcaActionGlyph(R.drawable.ic_symbol_tune),
         "add_support_enforcer" to OrcaActionGlyph(R.drawable.ic_symbol_add_box),
         "add_support_blocker" to OrcaActionGlyph(R.drawable.ic_symbol_disabled_by_default),
+        "slice_active_plate" to OrcaActionGlyph(R.drawable.ic_symbol_play_circle),
+        "slice_all_plates" to OrcaActionGlyph(R.drawable.ic_symbol_play_circle),
+        "slice_cancel" to OrcaActionGlyph(R.drawable.ic_symbol_play_circle),
+        "send_to_printer" to OrcaActionGlyph(R.drawable.ic_symbol_send),
     )
 
     /** The browser's search symbol, on the command palette's trigger. */

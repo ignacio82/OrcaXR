@@ -14,7 +14,13 @@ the bare plate opens the plate's menu (FILE, …, Select All), which Back closes
 Escape deselects all, which the core answers by disabling the toolbar's
 Delete; a mouse over it (adb's `input mouse`: Compose takes a mouse's first
 event as the pointer entering) shows its tooltip, the browser's reason:
-"Select a model instance for this action."
+"Select a model instance for this action." The palette's Slice (found by its
+hint, which a row shows only while it is enabled: Prepare's rule, not the
+core's) runs a local slice as Prepare's Slice does — Prepare shows, the plate
+slices on this device's engine and Preview opens it — and its Send to Printer
+then says why it waits: no printer is connected (the app's own words, where
+the core would have said "Slice successfully first."); Enter leaves it open
+with "Send to Printer: …", and Escape closes it.
 
 A tooltip is a popup window of its own, outside the active window a plain
 uiautomator dump reads: the smoke dumps every window (`--windows`) and, where
@@ -42,6 +48,8 @@ app_apk = ROOT / "android/app/build/outputs/apk/debug/app-debug.apk"
 CTRL, K, ENTER, ESCAPE, BACK = "113", "39", 66, 111, 4
 SEARCH = "Search every action"
 NEEDS_INSTANCE = "Select a model instance for this action."
+SLICE_HINT = "Slice the plated models to G-code"
+CONNECT_FIRST = "Connect to a printer in the Device area to send this plate."
 
 screen = Screen(args.serial, output, "palette")
 adb, find, tap, absent = screen.adb, screen.find, screen.tap, screen.absent
@@ -113,6 +121,8 @@ def tooltip(text, anchor, before, timeout=10):
 assert adb("shell", "getprop", "sys.boot_completed") == "1", "Emulator is not ready"
 adb("install", "-r", str(app_apk))
 adb("shell", "pm", "clear", PACKAGE)
+# Granted up front: the app asks for it once before its first local slice (a system dialog).
+adb("shell", "pm", "grant", PACKAGE, "android.permission.POST_NOTIFICATIONS")
 screen.launch(PACKAGE)
 find("Import a model in the Project area to see it here.")
 width, height = screen.screenshot()[:2]
@@ -189,4 +199,22 @@ before = screen.screenshot()
 dx, dy = screen.center(delete)
 adb("shell", "input", "mouse", "tap", str(dx), str(dy))
 assert tooltip(NEEDS_INSTANCE, delete, before), "Hovering the toolbar's Delete showed no tooltip"
+
+# The palette's Slice, enabled as Prepare's Slice is: Enter slices the plate on this device's engine, as that button does.
+palette("slice the plated")
+find(SLICE_HINT, timeout=60)
+screen.key(ENTER)
+closed()
+find("Sliced in Prepare from the project as it stands.", timeout=240)
+tap("Prepare")
+find("Sliced on this device", timeout=30)
+find("SLICED in", exact=False, timeout=30)
+
+# Send to Printer is listed now there is a slice to send, held back by the Device area: no printer is connected.
+palette("send to printer")
+find(CONNECT_FIRST, timeout=30)
+screen.key(ENTER)
+find("Send to Printer: " + CONNECT_FIRST, timeout=20)
+screen.key(ESCAPE)
+closed()
 print("Palette smoke passed")
