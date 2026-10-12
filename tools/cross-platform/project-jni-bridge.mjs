@@ -33,6 +33,7 @@ export function startProjectJni(profile = "debug") {
   signatures.paintStrokeChecks = ["String", "byte[]", "byte[]", "String"];
   signatures.pickChecks = ["String", "byte[]", "byte[]", "byte[]", "String"];
   signatures.placementChecks = ["String", "byte[]", "byte[]", "byte[]", "String"];
+  signatures.transformProxyChecks = ["String", "byte[]", "byte[]", "byte[]", "String"];
   signatures.arrangeChecks = ["String", "byte[]", "byte[]", "byte[]", "String"];
   signatures.wipeTowerChecks = ["String", "byte[]", "byte[]", "byte[]", "String"];
   signatures.volumeSplitChecks = ["String", ...Array(6).fill("byte[]"), "String"];
@@ -437,6 +438,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     plan_helper_volume(request) {
       return call("sessionHelperVolume", this.handle, request);
+    }
+    plan_transform_proxy(request) {
+      return call("sessionTransformProxy", this.handle, request);
     }
     plan_placement(request) {
       return call("sessionPlacement", this.handle, request);

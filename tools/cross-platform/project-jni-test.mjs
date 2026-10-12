@@ -56,6 +56,7 @@ import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
 import { SLICE_SIDECAR_ANSWERS, replaySliceOutputs } from "./slice-output-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
 import { replayTransformGizmo } from "./transform-gizmo-replay.mjs";
+import { replayTransformProxies } from "./transform-proxy-replay.mjs";
 import { replayActionPresentation } from "./action-presentation-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
 import { replaySplitSources } from "./split-source-replay.mjs";
@@ -1075,6 +1076,22 @@ try {
     placementFixture.cases.map((c) => `${c.request}\t${c.reply}`).join("\n"),
   );
   assert.equal(placementChecks, 181);
+  // Where the transform gizmo stands over a live session, then the Kotlin wrapper.
+  const proxyFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/transform-proxy-vectors.json", root)),
+  );
+  const transformProxies = replayTransformProxies(projectJniCore(jvm.call), proxyFixture, layout);
+  assert.deepEqual(Object.values(transformProxies), [19, 8]);
+  const transformProxyChecks = jvm.call(
+    "transformProxyChecks",
+    proxyFixture.stateJson,
+    ...proxyFixture.assets.map((a) => Uint8Array.from(a.bytes)),
+    [
+      ...proxyFixture.cases.map((c) => `P\t${c.request}\t${c.reply}`),
+      ...proxyFixture.refusals.map((r) => `X\t${r}`),
+    ].join("\n"),
+  );
+  assert.equal(transformProxyChecks, 45);
   // Arrangement and bed fill over a live session, then the Kotlin wrapper.
   const arrangeFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/arrange-vectors.json", root)),
@@ -1839,6 +1856,8 @@ try {
     transformFieldChecks,
     transformGizmo,
     transformGizmoChecks,
+    transformProxies,
+    transformProxyChecks,
     ...actionPresentation,
     commandPaletteChecks,
     placementEditChecks,

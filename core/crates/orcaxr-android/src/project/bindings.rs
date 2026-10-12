@@ -549,6 +549,12 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sessionTransformProxy, session_transform_proxy, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_commandPalette, command_palette, jstring,
     request: JString<'local>,
 }

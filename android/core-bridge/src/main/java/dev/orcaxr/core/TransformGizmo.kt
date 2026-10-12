@@ -103,10 +103,26 @@ class GizmoGeometry(
     val plane: GizmoShape,
 )
 
+/** Where the gizmo stands for a selection (`syncTransformProxy`) and what a drag over it changes. */
+sealed interface TransformProxy {
+    /** No primary instance the project has: the browser detaches the gizmo. */
+    data object None : TransformProxy
+    /** The proxy's pose, the primary instance, and the origins a drag carries (the primary and the selection on its plate). */
+    data class Placed(
+        val primaryInstanceId: String,
+        val origins: List<ProjectIntents.InstanceTransform>,
+        val pose: GizmoPose,
+    ) : TransformProxy
+    /** The selection's bounds cannot be measured, in the workspace's words. */
+    data class Refused(val message: String) : TransformProxy
+}
+
 /**
  * The workspace's transform gizmo as the browser has it (three.js r184's
  * `TransformControls`, `OrcaWorkspace.setup2DControls`), in the shared core as
- * `orcaxr_project::placement::gizmo`: [attach] to the selection's proxy pose,
+ * `orcaxr_project::placement::gizmo`: [attach] to the pose [proxy] places for
+ * the selection (again whenever the project or selection changes, as the
+ * browser's `syncTransformProxy` does, a finished drag included),
  * [step] every pointer event (normalized device coordinates; a press picks the
  * handle under it and starts a drag on it), [present] once a frame to draw the
  * handles from [geometry], and submit [changes] whenever a step reports
@@ -206,6 +222,35 @@ object TransformGizmo {
 
     /** Every handle's baked geometry, read once. */
     fun geometry(): GizmoGeometry = shapes
+
+    /**
+     * Where the proxy stands in [session]'s project for a selection whose
+     * primary instance is [primaryInstanceId] (null without one) among
+     * [selectedInstanceIds] (the selection's instances, in order): one
+     * instance's own pose, or the centre of the selection's bounds; with the
+     * origins a drag over it carries. Attach to [TransformProxy.Placed.pose].
+     */
+    fun proxy(session: ProjectSession, primaryInstanceId: String?, selectedInstanceIds: List<String>): TransformProxy {
+        val request = "{\"primaryInstanceId\":${primaryInstanceId?.let(CanonicalJson::quote) ?: "null"}" +
+            ",\"selectedInstanceIds\":${selectedInstanceIds.joinToString(",", "[", "]", transform = CanonicalJson::quote)}}"
+        val reply = CanonicalJson.read(session.planTransformProxy(request)) as ProjectJsonObject
+        val keys = reply.keys().asSequence().toSet()
+        if ("error" in keys) return TransformProxy.Refused(reply.get("message") as String)
+        if ("origins" !in keys) return TransformProxy.None
+        val origins = reply.get("origins") as ProjectJsonArray
+        return TransformProxy.Placed(
+            reply.get("primaryInstanceId") as String,
+            List(origins.length()) { index ->
+                val origin = origins.get(index) as ProjectJsonObject
+                val t = origin.get("transform") as ProjectJsonObject
+                ProjectIntents.InstanceTransform(
+                    (origin.get("instanceId") as String).map { it.code },
+                    ProjectIntents.Transform(doubles(t.get("translationMm")), doubles(t.get("rotation")), doubles(t.get("scale"))),
+                )
+            },
+            poseOf(reply.get("proxy")),
+        )
+    }
 
     /**
      * What a drag submits for the proxy at [proxy], having been at

@@ -181,6 +181,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slice-sidecar-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/transform-field-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/transform-gizmo-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/transform-proxy-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/placement-edit-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/build-volume-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/primitive-vectors.mjs

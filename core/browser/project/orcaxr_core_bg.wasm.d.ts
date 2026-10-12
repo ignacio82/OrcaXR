@@ -389,6 +389,7 @@ export const projectsession_plan_bed_fill: (a: number, b: number, c: number) => 
 export const projectsession_plan_helper_volume: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_plan_placement: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_plan_primitive_object: (a: number, b: number, c: number) => [number, number, number, number];
+export const projectsession_plan_transform_proxy: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_plan_wipe_tower: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_release_staged: (a: number, b: number) => [number, number, number];
 export const projectsession_render: (a: number, b: number, c: number) => [number, number, number, number];

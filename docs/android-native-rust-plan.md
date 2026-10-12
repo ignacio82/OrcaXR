@@ -2408,9 +2408,11 @@ storage journeys on phone, tablet, and desktop-sized windows.
   is ported to the shared core and replayed bit for bit against the browser
   in Rust, WASM and JNI (14,161 pointer events,
   [§](engineering/native-core.md#transform-gizmo)), with a Kotlin wrapper
-  (`TransformGizmo`). Drawing the handles in the Workspace, routing touch,
-  mouse and stylus events to it, submitting its changes as one coalescing
-  gesture, re-attaching after each drag and the G/R/S keys remain.
+  (`TransformGizmo`); so is where it stands for a selection and the origins a
+  drag carries (`syncTransformProxy`, a session query: 19 browser
+  selections). Drawing the handles in the Workspace, routing touch, mouse and
+  stylus events to it, submitting its changes as one coalescing gesture,
+  re-attaching after each drag and the G/R/S keys remain.
 - [ ] Integrate the flat renderer with panel resizing, visibility, lifecycle,
   selection, painting, model tools, and preview controls. Keep CPU work and
   loading off the UI thread; avoid per-frame Compose recomposition for meshes.

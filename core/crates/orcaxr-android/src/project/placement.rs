@@ -152,6 +152,16 @@ pub(super) fn session_primitive_object(
     let json = with_session(handle, |s| s.plan_primitive_object(&request))?;
     string(env, json)
 }
+/// Where the transform gizmo's proxy stands for a selection, in the session's acknowledged state.
+pub(super) fn session_transform_proxy(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let json = with_session(handle, |s| s.plan_transform_proxy(&request))?;
+    string(env, json)
+}
 /// A helper volume for the object a selection names, in the session's acknowledged state.
 pub(super) fn session_helper_volume(
     env: &mut JNIEnv<'_>,

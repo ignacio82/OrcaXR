@@ -144,6 +144,9 @@ final class NativeProject {
     static native String transformGizmoPresent(String request);
     static native String transformGizmoGeometry();
     static native String transformGizmoChanges(String request);
+    // Where the gizmo's proxy stands for a selection, and the origins a drag
+    // captures, in a session's project.
+    static native String sessionTransformProxy(long handle, String request);
     // How the shells arrange catalogue actions (orcaxr_project::action_presentation,
     // the browser's ActionPresentationExchange): the command palette's search and a
     // context menu's sections or the model toolbar's runs, as canonical JSON.

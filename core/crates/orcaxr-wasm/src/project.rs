@@ -704,6 +704,12 @@ impl ProjectSession {
     pub fn plan_helper_volume(&self, request: &str) -> Result<String, JsValue> {
         self.inner.plan_helper_volume(request).map_err(error)
     }
+    /// Where the transform gizmo's proxy stands for a selection:
+    /// `{"primaryInstanceId","selectedInstanceIds"}` → `{"origins",
+    /// "primaryInstanceId","proxy"}`, `{"proxy":null}` or `{"error","message"}`.
+    pub fn plan_transform_proxy(&self, request: &str) -> Result<String, JsValue> {
+        self.inner.plan_transform_proxy(request).map_err(error)
+    }
     /// Copies of one instance in a plate's free space: a `BedFillRequest`;
     /// returns a `BedFillReply`.
     pub fn plan_bed_fill(&self, request: &str) -> Result<String, JsValue> {

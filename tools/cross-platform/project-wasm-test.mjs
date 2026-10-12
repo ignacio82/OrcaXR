@@ -16,6 +16,7 @@ import { replayFacetRegions } from "./facet-region-replay.mjs";
 import { replayPaintStrokes } from "./paint-stroke-replay.mjs";
 import { replayPicks } from "./pick-replay.mjs";
 import { replayPlacements } from "./placement-replay.mjs";
+import { replayTransformProxies } from "./transform-proxy-replay.mjs";
 import { replayArrangements } from "./arrange-replay.mjs";
 import { replayWipeTowers } from "./wipe-tower-replay.mjs";
 import { replayVolumeSplits } from "./volume-split-replay.mjs";
@@ -165,6 +166,8 @@ if (isMainThread) {
     assert.deepEqual([result.picks, result.pickRefusals], [486, 1]);
     // Placement planning over a live session.
     assert.equal(result.placements, 90);
+    // Where the transform gizmo stands over a live session: selections, refusals.
+    assert.deepEqual([result.proxySelections, result.proxyRefusals], [19, 8]);
     // Arrangement and bed fill over a live session.
     assert.equal(result.arrangements, 35);
     // Wipe-tower auto-placement over a live session.
@@ -694,6 +697,11 @@ if (isMainThread) {
     ),
     layout,
   );
+  const proxies = replayTransformProxies(
+    core,
+    JSON.parse(await readFile(new URL("testdata/cross-platform/transform-proxy-vectors.json", root))),
+    layout,
+  );
   const arranged = replayArrangements(
     core,
     JSON.parse(
@@ -984,6 +992,7 @@ if (isMainThread) {
       ...strokes,
       ...picks,
       ...placed,
+      ...proxies,
       ...arranged,
       ...towers,
       ...splits,

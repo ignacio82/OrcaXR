@@ -9,6 +9,9 @@ import {
   transformGizmoGeometryExchange,
   type TransformGizmoSetup,
 } from '../TransformGizmoExchange';
+import { transformProxyExchange } from '../TransformProxyExchange';
+import { InMemoryAssetRepository } from '../../project/assets';
+import { createPickingFixture } from '../../project/__tests__/pickingFixture';
 
 let passed = 0;
 function test(name: string, run: () => void): void {
@@ -150,6 +153,28 @@ test('a drag submits the proxy for one instance and carries a selection around i
     ],
   );
   assert.throws(() => transformGizmoChangesExchange('{}'), /invalid_request/);
+});
+
+test('the proxy stands at one instance, or at the centre of a selection on the primary plate', () => {
+  const fixture = createPickingFixture();
+  const assets = new InMemoryAssetRepository();
+  for (const payload of fixture.assets) assets.put(payload.descriptor, payload.bytes);
+  const [plain, turned] = fixture.state.plates[0].objects[0].instances.map((instance) => instance.id);
+  const ask = (primaryInstanceId: string | null, selectedInstanceIds: string[]) =>
+    JSON.parse(
+      transformProxyExchange(fixture.state, assets, JSON.stringify({ primaryInstanceId, selectedInstanceIds })),
+    );
+  assert.deepEqual(ask(null, [plain]), { proxy: null });
+  const one = ask(plain, [plain]);
+  assert.deepEqual(one.proxy, { position: [50, 40, 8], quaternion: [0, 0, 0, 1], scale: [1, 1, 1] });
+  const pair = ask(turned, [plain, turned]);
+  assert.deepEqual(
+    pair.origins.map((origin: { instanceId: string }) => origin.instanceId),
+    [plain, turned],
+  );
+  assert.deepEqual(pair.proxy.quaternion, [0, 0, 0, 1]);
+  assert.ok(pair.proxy.position[0] > 50 && pair.proxy.position[0] < 120);
+  assert.equal(ask(plain, [plain, plain]).error, 'invalid_proxy');
 });
 
 console.log(`transform gizmo exchange: ${passed} passed`);

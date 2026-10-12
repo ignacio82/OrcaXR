@@ -3924,7 +3924,8 @@ previous frame's plane direction; hosts release before changing the mode.
 A NaN hit distance (a non-finite scene) never picks. The exchange models the
 controls, not the app around them: after a drag the browser's
 `finishTransformGesture` re-syncs the proxy from the committed project
-(`syncTransformProxy`), which a host does by attaching anew.
+(`syncTransformProxy`), which a host does by attaching anew at the pose
+below.
 
 The core is stateless canonical JSON. A state
 (`{"axis","changed","dragging","proxy","rotationAxis","start"}`) carries
@@ -3966,6 +3967,29 @@ the proxy's pose at the press with `projectMultiInstanceTransform` —
 (`{"initialProxy","mode","origins","proxy"}`, the tool's `move`, `rotate` or
 `scale`) answers `{"changes"}` or `{"error":"invalid_drag","message"}` in the
 workspace's words.
+
+So is where the proxy stands. `transformProxy.ts` (which `OrcaWorkspace`'s
+`syncTransformProxy` and `captureSelectedInstanceOrigins` now call) takes the
+selection summary the workspace reads — the primary selected instance and
+every selected instance — and gives the origins a drag carries (the primary
+and the selected instances on its plate, in selection order; the primary
+alone when the selection leaves it out) and the proxy's pose: one instance's
+own (three's `Quaternion.normalize` of its rotation) or the centre of the
+selection's bounds (`computeCanonicalInstanceBounds` over every volume role)
+unrotated at unit scale. It needs meshes, so it is a session query:
+`ProjectSession::plan_transform_proxy` (`placement::gizmo::proxy`,
+`{"primaryInstanceId","selectedInstanceIds"}` → `{"origins",
+"primaryInstanceId","proxy"}`, `{"proxy":null}` without a primary instance
+the project has, or `{"error":"invalid_proxy","message"}` when the bounds
+cannot be measured), bound as the WASM session's `plan_transform_proxy`, JNI
+`sessionTransformProxy` and Kotlin `TransformGizmo.proxy(session, …)`.
+`transform-proxy-vectors.mjs` opens the picking scene with a second plate
+through `TransformProxyExchange.ts`: 19 selections (13 placed — plain,
+rotated and scaled, mirrored and second-plate instances, pairs, the plate,
+selections across plates and a primary outside them — 5 without a proxy and
+a duplicated selection refused) and 8 malformed requests; Rust, WASM in Node
+and Chrome and JNI over a live session agree byte for byte, and 45 Kotlin
+checks cover the wrapper.
 
 `transform-gizmo-vectors.mjs` drives the production exchange over 564
 sequences of 14,161 events: 7,660 hovers (misses, and the centres and

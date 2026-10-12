@@ -580,6 +580,19 @@ impl<P: TimestampPolicy> ProjectSession<P> {
         }
         crate::primitives::helper_volume_json(self.bus.snapshot().state(), request)
     }
+    /// Where the transform gizmo's proxy stands for a selection summary, and
+    /// the origins a drag captures, from the acknowledged state and its assets
+    /// ([`crate::placement::gizmo::proxy::proxy_json`]).
+    pub fn plan_transform_proxy(&self, request: &str) -> Result<String, &'static str> {
+        if self.disposed {
+            return Err("disposed");
+        }
+        crate::placement::gizmo::proxy::proxy_json(
+            self.bus.snapshot().state(),
+            self.bus.assets(),
+            request,
+        )
+    }
     /// One plate's volumes captured for picking from the acknowledged state;
     /// the scene owns its meshes, so picks run off the session.
     pub fn pick_scene(

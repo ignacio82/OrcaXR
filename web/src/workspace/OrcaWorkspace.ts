@@ -163,6 +163,7 @@ import {
   type MultiInstanceTransformOrigin,
 } from './multiInstanceTransform';
 import { gizmoDragChanges, transformFromObject } from './transformGizmoChanges';
+import { selectedInstanceOrigins, transformProxyPose } from './transformProxy';
 import { authoredProjectPreflightTarget, catalogPreflightTarget } from './AuthoredSlicingTarget';
 import { deriveLiveProfilePreflightConstraints, LiveProfileSlicePreflight } from './ProfilePreflightConstraints';
 import { PaintOverlayRegistry } from './PaintOverlayRegistry';
@@ -1774,22 +1775,15 @@ export class OrcaWorkspace extends xb.Script {
       }
       return;
     }
-    if (selection.origins.length > 1) {
-      const bounds = this.canonicalProject.getInstanceBounds(selection.origins.map((origin) => origin.instanceId));
-      this.transformProxy.position.set(
-        (bounds.min[0] + bounds.max[0]) / 2,
-        (bounds.min[1] + bounds.max[1]) / 2,
-        (bounds.min[2] + bounds.max[2]) / 2,
-      );
-      this.transformProxy.quaternion.identity();
-      this.transformProxy.scale.setScalar(1);
-    } else {
-      const instance = this.canonicalProject.getInstance(selection.primaryInstanceId);
-      if (!instance) return;
-      this.transformProxy.position.fromArray(instance.transform.translationMm);
-      this.transformProxy.quaternion.fromArray(instance.transform.rotation).normalize();
-      this.transformProxy.scale.fromArray(instance.transform.scale);
-    }
+    const pose = transformProxyPose(
+      selection,
+      (instanceId) => this.canonicalProject.getInstance(instanceId),
+      (instanceIds) => this.canonicalProject.getInstanceBounds(instanceIds),
+    );
+    if (!pose) return;
+    this.transformProxy.position.fromArray(pose.position);
+    this.transformProxy.quaternion.fromArray(pose.quaternion);
+    this.transformProxy.scale.fromArray(pose.scale);
     this.transformProxy.updateMatrix();
     this.transformProxy.updateMatrixWorld(true);
   }
@@ -1800,19 +1794,9 @@ export class OrcaWorkspace extends xb.Script {
         readonly origins: readonly MultiInstanceTransformOrigin[];
       }
     | undefined {
-    const summary = this.canonicalProject.getSummary();
-    const primaryInstanceId = summary.primaryInstanceId;
-    if (!primaryInstanceId) return undefined;
-    const primary = this.canonicalProject.getInstance(primaryInstanceId);
-    if (!primary) return undefined;
-    const selectedIds = summary.selectedInstanceIds.includes(primaryInstanceId)
-      ? summary.selectedInstanceIds
-      : [primaryInstanceId];
-    const origins = selectedIds.flatMap((instanceId) => {
-      const instance = this.canonicalProject.getInstance(instanceId);
-      return instance && instance.plateId === primary.plateId ? [{ instanceId, transform: instance.transform }] : [];
-    });
-    return origins.length > 0 ? { primaryInstanceId, origins: Object.freeze(origins) } : undefined;
+    return selectedInstanceOrigins(this.canonicalProject.getSummary(), (instanceId) =>
+      this.canonicalProject.getInstance(instanceId),
+    );
   }
 
   private async commitSelectedPrimaryTransform(

@@ -224,7 +224,7 @@ fn unique(ids: &[Vec<u16>]) -> Vec<Vec<u16>> {
 
 /// `computeCanonicalInstanceBounds` over volumes of the given roles, with one
 /// instance's transform optionally replaced (lay-on-face's probe).
-fn bounds_with(
+pub(crate) fn bounds_with(
     state: &ProjectState,
     assets: &AssetSnapshot,
     ids: &[Vec<u16>],

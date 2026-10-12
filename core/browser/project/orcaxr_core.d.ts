@@ -1012,6 +1012,12 @@ export class ProjectSession {
      */
     plan_primitive_object(request: string): string;
     /**
+     * Where the transform gizmo's proxy stands for a selection:
+     * `{"primaryInstanceId","selectedInstanceIds"}` → `{"origins",
+     * "primaryInstanceId","proxy"}`, `{"proxy":null}` or `{"error","message"}`.
+     */
+    plan_transform_proxy(request: string): string;
+    /**
      * The plate's wipe tower, auto-placed: a `WipeTowerRequest`; returns a
      * `WipeTowerReply`.
      */
@@ -2343,6 +2349,7 @@ export interface InitOutput {
     readonly projectsession_plan_helper_volume: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_plan_placement: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_plan_primitive_object: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectsession_plan_transform_proxy: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_plan_wipe_tower: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_release_staged: (a: number, b: number) => [number, number, number];
     readonly projectsession_render: (a: number, b: number, c: number) => [number, number, number, number];

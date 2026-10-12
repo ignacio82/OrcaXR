@@ -283,6 +283,11 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun planHelperVolume(request: String): PrimitivePlan<HelperVolumePlan> = read {
         Primitives.helperReply(NativeProject.sessionHelperVolume(it, request))
     }
+    /** Where the transform gizmo's proxy stands for a selection, and the origins a
+     * drag captures ([TransformGizmo.proxy]); the core's canonical reply. */
+    internal fun planTransformProxy(request: String): String = read {
+        NativeProject.sessionTransformProxy(it, request)
+    }
     fun planPlacement(request: ProjectIntents.PlacementRequest): ProjectIntents.PlacementReply = read {
         ProjectIntents.decodePlacementReply(NativeProject.sessionPlacement(it, ProjectIntents.encodePlacementRequest(request)))
     }

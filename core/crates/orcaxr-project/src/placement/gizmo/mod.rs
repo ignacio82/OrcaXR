@@ -38,7 +38,10 @@
 //!   handle order matching the view's;
 //! - [`changes_json`]: `{"initialProxy","mode","origins","proxy"}` → the
 //!   instance transforms a drag submits (`gizmoDragChanges`), or
-//!   `{"error":"invalid_drag","message"}`.
+//!   `{"error":"invalid_drag","message"}`;
+//! - [`proxy::proxy_json`] (a session's, over its project and assets):
+//!   `{"primaryInstanceId","selectedInstanceIds"}` → where the proxy stands
+//!   for a selection and the origins a drag captures.
 //!
 //! A camera is `{"aspect","far","fov","near","position","target","up"}`
 //! (0° < fov < 180°, aspect > 0, 0 < near < far). A malformed request is
@@ -46,6 +49,7 @@
 pub mod controls;
 pub mod geometry;
 pub mod math;
+pub mod proxy;
 
 use super::fields::{self, Origin, Tool};
 use geometry::{Kind, Shape};
