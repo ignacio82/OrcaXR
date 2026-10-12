@@ -847,6 +847,23 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_projectVolumeRoleEditor, project_volume_role_editor, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectVolumeRoleDecision, project_volume_role_decision, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_volumeRoleMessages, volume_role_messages, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_projectPaintPalette, project_paint_palette, jstring,
     handle: jlong,
     request: JString<'local>,

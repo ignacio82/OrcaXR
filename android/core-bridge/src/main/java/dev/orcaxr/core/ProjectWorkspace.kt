@@ -183,12 +183,14 @@ class ProjectWorkspace(
         val SLICE_TOOLBAR_ACTIONS = listOf("slice_active_plate", "slice_cancel")
         val SLICE_MENU_ACTIONS = listOf("slice_all_plates")
         /** The catalogue actions the Project area's Edit and Add menus offer for creation (`dom-menu`):
-         * the clipboard, the bed fill, the primitives and the helper volumes. */
+         * the clipboard, the bed fill, the primitives, the helper volumes and Set as Negative Part. */
         val CREATE_ACTIONS = listOf(
             "edit_cut", "edit_copy", "edit_paste", "fill_bed_with_instances",
             "add_primitive_cube", "add_primitive_cylinder", "add_primitive_sphere", "add_primitive_cone", "add_primitive_disc", "add_primitive_torus",
-            "add_modifier", "add_support_enforcer", "add_support_blocker",
+            "add_modifier", "add_support_enforcer", "add_support_blocker", "set_negative_part",
         )
+        /** The browser's words for Set as Negative Part with nothing selected (`CanonicalWorkspaceController.setNegativePart`). */
+        const val NEGATIVE_PART_UNSELECTED = "Set as Negative Part requires a selected object, instance, or volume"
         /**
          * The painting actions, read where the browser offers each: the paint
          * tools on its toolbar (`dom-toolbar`, as the paint panel's Start
@@ -1955,6 +1957,32 @@ class ProjectWorkspace(
     }
 
     /**
+     * Set as Negative Part (`set_negative_part`, the browser's
+     * `setNegativePart`): a selected part that is not a negative volume
+     * becomes one — the semantic editor's "Convert volume to negative part",
+     * guarded by the state the part was read on, and refused before anything
+     * is submitted in the conversion command's words (the object's last model
+     * part, facet paint, a local filament) — and otherwise a negative volume
+     * is added to the object the selection names, as [addHelperVolume] adds
+     * one ("Add negative part to object", the new part selected). Nothing
+     * selected is refused in the browser's words.
+     */
+    fun setNegativePart(): CompletableFuture<NegativePartResult?> = edit { session, snapshot ->
+        val primary = whole(session).primary ?: throw ProjectFailure(NEGATIVE_PART_UNSELECTED)
+        val volumeId = (primary as? ProjectIntents.SelectionEntity.Volume)?.let { text(it.value) } ?: return@edit null
+        val part = snapshot.volumeRoleEditor(volumeId)?.takeIf { it.role != VolumeRole.NEGATIVE_VOLUME } ?: return@edit null
+        val decision = snapshot.volumeRoleDecision(part.volumeId, VolumeRole.NEGATIVE_VOLUME.wire)
+        if (decision is VolumeRoleDecision.Blocked) throw ProjectFailure(decision.reason)
+        Edit(
+            listOf(ProjectIntents.Command.ConvertVolumeRole(ProjectIntents.ConvertVolumeRole(units(part.volumeId), VolumeRole.NEGATIVE_VOLUME.intent))),
+            NegativePartResult.Converted(part.volumeId) as NegativePartResult,
+        )
+    }.thenCompose { converted ->
+        if (converted != null) CompletableFuture.completedFuture<NegativePartResult?>(converted)
+        else addHelperVolume(HelperVolumeRole.NEGATIVE_VOLUME).thenApply<NegativePartResult?> { added -> added?.let { NegativePartResult.Added(it) } }
+    }
+
+    /**
      * Fill Bed with Instances (`fill_bed_with_instances`, the browser's
      * `fillPlateWithSelection`): copies of the last selected instance laid into
      * its plate's free space in the project's printable area, keeping the active plate's
@@ -2517,6 +2545,12 @@ data class ProjectPrimitiveAdded(val objectId: String, val instanceId: String, v
 
 /** A helper volume added: the object it joined and the new part. */
 data class ProjectHelperAdded(val objectId: String, val volumeId: String)
+
+/** What Set as Negative Part did: converted the selected part, or added a negative volume to the selected object. */
+sealed interface NegativePartResult {
+    data class Converted(val volumeId: String) : NegativePartResult
+    data class Added(val added: ProjectHelperAdded) : NegativePartResult
+}
 
 /** A bed fill: how many copies were added, and how many free slots the copy limit left. */
 data class ProjectBedFill(val created: Int, val withheld: Long)

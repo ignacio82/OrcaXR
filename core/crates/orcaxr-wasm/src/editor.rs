@@ -252,6 +252,11 @@ pub fn layer_range_split(request: &str) -> Result<String, JsValue> {
 pub fn layer_range_messages(request: &str) -> Result<String, JsValue> {
     orcaxr_project::layer_range_editor::messages_json(request).map_err(error)
 }
+/// What converting a part's role says (`volumeRoleMessagesExchange`).
+#[wasm_bindgen]
+pub fn volume_role_messages(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::volume_role_editor::messages_json(request).map_err(error)
+}
 
 /// `CapturedProject.settings_editor`: the editor a settings panel opens for
 /// one node of the captured project.

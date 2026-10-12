@@ -6,6 +6,12 @@ import {
   type VolumeRoleConversionDecision,
 } from '../../project/objects/semanticVolumeCommands';
 import {
+  volumeRoleBlockReason,
+  volumeRoleLabel as roleLabel,
+  volumeRoleOperationMessages,
+  volumeRoleSummary,
+} from '../../project/objects/volumeRoleEditor';
+import {
   formatLayerRangeBounds as formatBounds,
   inspectAllowedLayerRangeMerge as inspectAllowedMerge,
   layerRangeOperationMessages,
@@ -272,7 +278,7 @@ export class SemanticObjectEditor {
 
     section.dataset.volumeId = selected.id;
     const summary = document.createElement('p');
-    summary.textContent = `${selected.name} — ${roleLabel(selected.role)}`;
+    summary.textContent = volumeRoleSummary(selected.name, selected.role);
     summary.style.cssText = 'margin:0;';
     section.appendChild(summary);
 
@@ -303,7 +309,7 @@ export class SemanticObjectEditor {
     const matching = selected.roleDecisions.filter((entry) => entry.role === role);
     const decision = matching.length === 1 ? matching[0].decision : undefined;
     const isCurrent = selected.role === role;
-    const blockedReason = roleBlockReason(decision, isCurrent, matching.length);
+    const blockedReason = volumeRoleBlockReason(decision, isCurrent, matching.length);
 
     const button = document.createElement('button');
     button.type = 'button';
@@ -331,11 +337,8 @@ export class SemanticObjectEditor {
         volumeId: selected.id,
         nextRole: role,
       });
-      void this.runOperation(
-        `Converting ${selected.name} to ${roleLabel(role)}…`,
-        `Converted ${selected.name} to ${roleLabel(role)}.`,
-        () => this.adapter.onConvertVolumeRole(request),
-      );
+      const messages = volumeRoleOperationMessages(selected.name, role);
+      void this.runOperation(messages.pending, messages.success, () => this.adapter.onConvertVolumeRole(request));
     });
     wrapper.appendChild(button);
     return wrapper;
@@ -786,16 +789,6 @@ function freezeRequest<T extends object>(request: T): Readonly<T> {
   return Object.freeze({ ...request });
 }
 
-function roleBlockReason(
-  decision: VolumeRoleConversionDecision | undefined,
-  isCurrent: boolean,
-  matchingDecisionCount: number,
-): string | undefined {
-  if (matchingDecisionCount !== 1 || !decision) return 'A unique canonical conversion decision was not provided.';
-  if (isCurrent || (decision.allowed && decision.noop)) return 'This is the current role; no conversion is needed.';
-  return decision.allowed ? undefined : decision.reason;
-}
-
 function inspectSnapshot(snapshot: SemanticObjectEditorSnapshot): string | undefined {
   if (!Number.isSafeInteger(snapshot.sourceRevision) || snapshot.sourceRevision < 0) {
     return 'sourceRevision must be a non-negative safe integer.';
@@ -825,21 +818,6 @@ function inspectSnapshot(snapshot: SemanticObjectEditorSnapshot): string | undef
     return `selected layer range ${snapshot.selectedLayerRange.id} is not owned by this object.`;
   }
   return undefined;
-}
-
-function roleLabel(role: VolumeRole): string {
-  switch (role) {
-    case 'model':
-      return 'Part';
-    case 'negative-volume':
-      return 'Negative volume';
-    case 'parameter-modifier':
-      return 'Parameter modifier';
-    case 'support-blocker':
-      return 'Support blocker';
-    case 'support-enforcer':
-      return 'Support enforcer';
-  }
 }
 
 function errorMessage(errorValue: unknown): string {

@@ -61,6 +61,7 @@ import { replayActionPresentation } from "./action-presentation-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
 import { replaySplitSources } from "./split-source-replay.mjs";
 import { replayFilamentAssignment } from "./filament-assignment-replay.mjs";
+import { replayVolumeRoles } from "./volume-role-replay.mjs";
 import { replayPaintTool } from "./paint-tool-replay.mjs";
 import { replayVirtualFilaments } from "./virtual-filament-replay.mjs";
 import { readFileSync } from "node:fs";
@@ -936,6 +937,20 @@ try {
     decodeBytes("stl-binary/cube"),
   );
   assert.equal(settingsChecks, 1363);
+  // The semantic editor's volume roles through the JNI exports: every part's
+  // role choices, the conversion command's decisions, words and refusals.
+  const volumeRoleFixture = await json("testdata/cross-platform/volume-role-vectors.json");
+  const volumeRoles = replayVolumeRoles(projectJniCore(jvm.call), volumeRoleFixture, layout, fixture.generation);
+  assert.deepEqual(volumeRoles.volumeRoleAnswers, [38, 330, 25, 12]);
+  // Then the Kotlin readers over the same replies, and the semantic editor's
+  // volume roles and Set as Negative Part on an imported cube: conversions,
+  // refusals in the browser's words, a stale panel, and undo back to the import.
+  const volumeRoleChecks = jvm.call(
+    "volumeRoleChecks",
+    await readFile(new URL("testdata/cross-platform/volume-role-vectors.json", root), "utf8"),
+    decodeBytes("stl-binary/cube"),
+  );
+  assert.equal(volumeRoleChecks, 846);
   // Capability pages over live sessions, then the Kotlin wrapper.
   const capabilityFixture = JSON.parse(
     await readFile(
@@ -1873,6 +1888,8 @@ try {
     splitSourceChecks,
     modelToolChecks,
     settingsChecks,
+    volumeRoles,
+    volumeRoleChecks,
     ...primitives,
     primitiveChecks,
     ...paintTool,

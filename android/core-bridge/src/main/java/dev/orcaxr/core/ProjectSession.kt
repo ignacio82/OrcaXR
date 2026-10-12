@@ -789,6 +789,14 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
             ),
         )
     }
+    /** Part [volumeId]'s role choices as the semantic editor shows them; null for a part this project lacks. */
+    fun volumeRoleEditor(volumeId: String): VolumeRoleProjection? = read {
+        VolumeRoleEditors.projection(NativeProject.projectVolumeRoleEditor(it, VolumeRoleEditors.projectionRequest(volumeId)))
+    }
+    /** The conversion command's decision for part [volumeId] and [role], any role text (`inspectVolumeRoleConversion`). */
+    fun volumeRoleDecision(volumeId: String, role: String): VolumeRoleDecision = read {
+        VolumeRoleEditors.decision(NativeProject.projectVolumeRoleDecision(it, VolumeRoleEditors.decisionRequest(volumeId, role)))
+    }
     /** The settings editor a panel opens for one node; see [SettingsEditor.intent]. */
     fun settingsEditor(
         request: ProjectIntents.SettingsSessionRequest,

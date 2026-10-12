@@ -88,6 +88,7 @@ export function startProjectJni(profile = "debug") {
   signatures.splitSourceChecks = ["String", "byte[]", "byte[]", "byte[]", "byte[]", "String"];
   signatures.modelToolChecks = ["String", "byte[]"];
   signatures.settingsChecks = ["String", "byte[]"];
+  signatures.volumeRoleChecks = ["String", "byte[]"];
   signatures.primitiveChecks = ["String"];
   signatures.paintToolChecks = ["String"];
   signatures.paintChecks = [];
@@ -818,6 +819,12 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     layer_range_editor(request) {
       return call("projectLayerRangeEditor", this.handle, request);
     }
+    volume_role_editor(request) {
+      return call("projectVolumeRoleEditor", this.handle, request);
+    }
+    volume_role_decision(request) {
+      return call("projectVolumeRoleDecision", this.handle, request);
+    }
     revision() {
       return call("projectRevision", this.handle);
     }
@@ -1494,6 +1501,7 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     layer_range_bounds: (request) => call("layerRangeBounds", request),
     layer_range_split: (request) => call("layerRangeSplit", request),
     layer_range_messages: (request) => call("layerRangeMessages", request),
+    volume_role_messages: (request) => call("volumeRoleMessages", request),
     transform_field_edit: (request) => call("transformFieldEdit", request),
     transform_rotation: (request) => call("transformRotation", request),
     transform_gizmo_attach: (request) => call("transformGizmoAttach", request),

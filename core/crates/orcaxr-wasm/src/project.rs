@@ -1607,6 +1607,18 @@ impl CapturedProject {
         orcaxr_project::layer_range_editor::projection_json(self.inner.state(), request)
             .map_err(error)
     }
+    /// One part's role choices as the semantic editor shows them
+    /// (`volumeRoleEditorExchange`): `{"volumeId"}` in, `{"projection"}` out.
+    pub fn volume_role_editor(&self, request: &str) -> Result<String, JsValue> {
+        orcaxr_project::volume_role_editor::projection_json(self.inner.state(), request)
+            .map_err(error)
+    }
+    /// The conversion command's decision (`inspectVolumeRoleConversion`):
+    /// `{"role","volumeId"}` in, the decision out.
+    pub fn volume_role_decision(&self, request: &str) -> Result<String, JsValue> {
+        orcaxr_project::volume_role_editor::decision_json(self.inner.state(), request)
+            .map_err(error)
+    }
     /// A `SettingsTargetPageRequest`; returns a `SettingsTargetPage`.
     pub fn settings_targets(&self, request: &str) -> Result<String, JsValue> {
         crate::editor::projection(&self.inner, crate::editor::Projection::Targets, request)

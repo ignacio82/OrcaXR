@@ -47,7 +47,7 @@
     },
     {
       "path": "web/src/ui/dom/SemanticObjectEditor.ts",
-      "sha256": "4dd925759a6bd65fd2f6c1cabfe5e243cb031d28b02ab2089c3a62d43075294a"
+      "sha256": "ef5f6e026efb540189f83b5a56a6ef3f72c243385554033050d78228099907b7"
     },
     {
       "path": "web/src/settings/generated/engine-options.schema.json",

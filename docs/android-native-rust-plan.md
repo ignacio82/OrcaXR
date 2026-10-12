@@ -129,8 +129,9 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    (`objects_convert_volume_role`, `set_negative_part`): the role decisions
    the browser's `inspectVolumeRoleConversion` makes, shared through the core
    with a browser corpus, and the editor's Volume role section in the Project
-   inspector. In flight: local branch `roles` (worktree `~/.cache/orcaxr-roles`,
-   from `main` at round 2's end), a sub-agent's. The Workspace's transform
+   inspector. Their shared core, bindings and session workflows are in place
+   (native-core *Volume-role conversion*); the Android inspector section is
+   next. The Workspace's transform
    gizmos and their keys G, R and S are done (the Phase 7 input item's
    status); both emulator suites have yet to run with them.
 2. Phase 7, model tools whose shared-core ports exist but have no Android UI:
@@ -1499,7 +1500,12 @@ and replay coverage for the complete current command inventory.
   - [x] Port `convertVolumeRole`: the browser's refusals (unknown volume,
     last model part, facet paint, local filament) and upstream role order on
     every conversion; the corpus (1,537 steps, 21 new) covers each refusal,
-    re-sorting, no-ops and transactions.
+    re-sorting, no-ops and transactions. Its decision is a public query
+    (`inspect_volume_role_conversion`) and the semantic editor's role choices
+    and words a shared module (`volumeRoleEditor.ts`,
+    `orcaxr_project::volume_role_editor`), replayed by Rust, WASM in Node and
+    Chrome and JNI over `volume-role-vectors.json` (38 projections, 330
+    decisions, 25 messages, 12 refusals; native-core *Volume-role conversion*).
   - [x] Port whole-facet paint strokes (`facetStroke`): the browser's
     preparation is now shared by its commit function and a request-driven
     command, and the native port matches it (guards, range normalization,

@@ -39,6 +39,10 @@ pub use split_objects::{
 pub use split_parts::{SplitPart, VolumeSplitGuard};
 use std::{collections::BTreeSet, fmt, sync::Arc};
 pub use topology::{BooleanGuard, BooleanOp, TopologyGuard};
+pub use volume_roles::{
+    ORDER as VOLUME_ROLE_ORDER, VolumeRoleBlock, VolumeRoleDecision, decide as decide_volume_role,
+    inspect_volume_role_conversion,
+};
 
 #[derive(Clone)]
 pub enum PreparationError {

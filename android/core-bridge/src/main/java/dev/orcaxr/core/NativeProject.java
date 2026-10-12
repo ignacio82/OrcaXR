@@ -209,6 +209,12 @@ final class NativeProject {
     static native String layerRangeBounds(String request);
     static native String layerRangeSplit(String request);
     static native String layerRangeMessages(String request);
+    // The semantic editor's volume roles (orcaxr_project::volume_role_editor,
+    // the browser's volumeRoleEditorExchange): a captured project's role choices
+    // for one part and the conversion command's decision, and a conversion's words.
+    static native String projectVolumeRoleEditor(long handle, String request);
+    static native String projectVolumeRoleDecision(long handle, String request);
+    static native String volumeRoleMessages(String request);
     static native String projectPaintPalette(long handle, String request);
     static native String projectObjectTree(long handle, String request, SearchFolding folder);
     static native long printJobStatusNew();

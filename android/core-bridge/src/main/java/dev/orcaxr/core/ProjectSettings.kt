@@ -53,6 +53,9 @@ class SettingsPanel internal constructor(
 /** One object's height ranges read on a state of the project, with that state's guard for the edits made from them. */
 class LayerRangePanel internal constructor(val projection: LayerRangeProjection, internal val guard: ProjectIntents.SessionGuard)
 
+/** One part's role choices read on a state of the project, with that state's guard for the conversion made from them. */
+class VolumeRolePanel internal constructor(val projection: VolumeRoleProjection, internal val guard: ProjectIntents.SessionGuard)
+
 /**
  * The inspector's settings panels on the project session, as the browser's
  * workspace runs them, through the shared core:
@@ -68,7 +71,12 @@ class LayerRangePanel internal constructor(val projection: LayerRangeProjection,
  * - the semantic editor's height ranges: an object's ranges with the
  *   selection's range, and add, edit, split, merge and delete — each the
  *   browser's intent under the guard of the state the ranges were read on,
- *   one undoable step ("Add layer range", "Edit layer range", …).
+ *   one undoable step ("Add layer range", "Edit layer range", …);
+ * - the semantic editor's volume roles: a part's role with every role it
+ *   could become (the conversion command's decisions, a blocked one in its
+ *   words), and a conversion — the browser's `convertVolumeRole` intent under
+ *   the guard of the state the choices were read on, one undoable step the
+ *   core labels ("Convert volume to negative part", …).
  */
 class ProjectSettings(private val workspace: ProjectWorkspace) {
     companion object {
@@ -226,4 +234,33 @@ class ProjectSettings(private val workspace: ProjectWorkspace) {
     /** "Delete selected range". */
     fun deleteLayerRange(panel: LayerRangePanel, rangeId: String): CompletableFuture<Unit> =
         edit(panel, ProjectIntents.Command.DeleteLayerRange(ProjectIntents.DeleteLayerRange(panel.objectId, units(rangeId))))
+
+    /**
+     * Part [volumeId]'s role choices on the current state (the browser's
+     * `getSemanticObjectEditorSnapshot` for a selected part); null for a part
+     * the project lacks.
+     */
+    fun volumeRoles(volumeId: String): CompletableFuture<VolumeRolePanel?> = workspace.inspect { session ->
+        session.snapshot().use { snapshot ->
+            // A read answers a value: none is an empty list.
+            listOfNotNull(snapshot.volumeRoleEditor(volumeId)?.let { VolumeRolePanel(it, workspace.guardOf(session, snapshot)) })
+        }
+    }.thenApply { it.firstOrNull() }
+
+    /**
+     * Converts the panel's part to [role] (a choice of the browser's "Convert
+     * to"): one undoable step under the guard of the state the choices were
+     * read on, refused as [STALE_RANGE] when the project changed meanwhile. A
+     * choice the editor does not offer is refused before anything is
+     * submitted in the conversion command's words; the part's own role
+     * changes nothing.
+     */
+    fun convertVolumeRole(panel: VolumeRolePanel, role: VolumeRole): CompletableFuture<Unit> {
+        when (val decision = panel.projection.choices.first { it.role == role }.decision) {
+            is VolumeRoleDecision.Blocked -> return CompletableFuture.failedFuture(ProjectFailure(decision.reason))
+            is VolumeRoleDecision.Allowed -> if (decision.noop) return CompletableFuture.completedFuture(Unit)
+        }
+        val command = ProjectIntents.Command.ConvertVolumeRole(ProjectIntents.ConvertVolumeRole(units(panel.projection.volumeId), role.intent))
+        return submit(panel.guard, ProjectIntents.Intent(ProjectIntents.VERSION, command), STALE_RANGE)
+    }
 }

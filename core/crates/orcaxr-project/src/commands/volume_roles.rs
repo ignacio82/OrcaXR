@@ -2,11 +2,13 @@
 //! a negative volume, modifier, support blocker or enforcer (or back), refused
 //! with the browser's reasons when it would leave no model part, strand facet
 //! paint or keep a filament the role cannot carry. Volumes stay in upstream
-//! Orca's role order.
+//! Orca's role order. The decision itself is public
+//! ([`inspect_volume_role_conversion`]), so hosts explain a blocked choice
+//! before anything is submitted, in the same words the command refuses with.
 use super::*;
 
-/// `ORCA_VOLUME_ROLE_ORDER`.
-const ORDER: [VolumeRole; 5] = [
+/// `ORCA_VOLUME_ROLE_ORDER`: Snapmaker Orca v2.3.4's `ModelVolumeType` order.
+pub const ORDER: [VolumeRole; 5] = [
     VolumeRole::Model,
     VolumeRole::NegativeVolume,
     VolumeRole::ParameterModifier,
@@ -38,6 +40,120 @@ fn painted(volume: &ProjectVolume) -> bool {
         || nonempty(a.fuzzy_skin.value())
         || nonempty(a.brim.value())
         || matches!(a.refinement.as_ref().map(JsonObject::value), Some(Value::Object(f)) if !f.is_empty())
+}
+
+/// Why a conversion is refused (`VolumeRoleConversionBlockCode`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VolumeRoleBlock {
+    UnknownVolume,
+    UnsupportedRole,
+    LastModelVolume,
+    FacetAnnotations,
+    FilamentAssignment,
+}
+impl VolumeRoleBlock {
+    /// The browser's code.
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::UnknownVolume => "unknown-volume",
+            Self::UnsupportedRole => "unsupported-role",
+            Self::LastModelVolume => "last-model-volume",
+            Self::FacetAnnotations => "facet-annotations",
+            Self::FilamentAssignment => "filament-assignment",
+        }
+    }
+}
+
+/// `VolumeRoleConversionDecision`: allowed (a no-op when the volume already
+/// has the role), or refused with the browser's code and words.
+#[derive(Debug, Clone, PartialEq)]
+pub enum VolumeRoleDecision {
+    Allowed { noop: bool },
+    Blocked { code: VolumeRoleBlock, reason: Text },
+}
+
+/// `inspectVolumeRoleConversion(state, volumeId, nextRole)` for any role
+/// text: a role Snapmaker Orca lacks is refused before the volume is looked
+/// up, as in the browser.
+pub fn inspect_volume_role_conversion(
+    state: &ProjectState,
+    volume_id: &[u16],
+    role: &[u16],
+) -> VolumeRoleDecision {
+    match ORDER
+        .iter()
+        .find(|r| r.as_str().encode_utf16().eq(role.iter().copied()))
+    {
+        Some(role) => decide(state, volume_id, *role),
+        None => {
+            // `JSON.stringify(nextRole)`.
+            let quoted = crate::js_math::convert::json_stringify(&Value::String(role.to_vec()));
+            VolumeRoleDecision::Blocked {
+                code: VolumeRoleBlock::UnsupportedRole,
+                reason: text_parts(
+                    "Volume role ",
+                    &quoted,
+                    " is not supported by Snapmaker Orca v2.3.4",
+                ),
+            }
+        }
+    }
+}
+
+/// [`inspect_volume_role_conversion`] for a supported role.
+pub fn decide(state: &ProjectState, volume_id: &[u16], role: VolumeRole) -> VolumeRoleDecision {
+    let blocked = |code, reason: &str| VolumeRoleDecision::Blocked {
+        code,
+        reason: Text::from_utf8(reason),
+    };
+    let Some((object, volume)) = state
+        .plates
+        .iter()
+        .flat_map(|plate| plate.objects.iter())
+        .find_map(|object| {
+            object
+                .volumes
+                .iter()
+                .find(|v| v.id.as_utf16() == volume_id)
+                .map(|volume| (object, volume))
+        })
+    else {
+        return VolumeRoleDecision::Blocked {
+            code: VolumeRoleBlock::UnknownVolume,
+            reason: text_parts("Unknown volume ", volume_id, ""),
+        };
+    };
+    if volume.role == role {
+        return VolumeRoleDecision::Allowed { noop: true };
+    }
+    let models = object
+        .volumes
+        .iter()
+        .filter(|v| v.role == VolumeRole::Model)
+        .count();
+    if volume.role == VolumeRole::Model && role != VolumeRole::Model && models == 1 {
+        return blocked(
+            VolumeRoleBlock::LastModelVolume,
+            "The last model part on an object cannot be converted to a non-model role",
+        );
+    }
+    if role != VolumeRole::Model && painted(volume) {
+        return blocked(
+            VolumeRoleBlock::FacetAnnotations,
+            "Clear facet paint annotations before converting this model part to a non-model role",
+        );
+    }
+    let local_filament = matches!(role, VolumeRole::Model | VolumeRole::ParameterModifier);
+    if !local_filament && volume.filament_id.is_some() {
+        return blocked(
+            VolumeRoleBlock::FilamentAssignment,
+            &format!(
+                "Clear the local filament assignment before converting this volume to {}",
+                role.as_str()
+            ),
+        );
+    }
+    VolumeRoleDecision::Allowed { noop: false }
 }
 
 #[derive(Clone)]
@@ -79,37 +195,10 @@ impl ConvertVolumeRole {
     }
     /// `inspectVolumeRoleConversion` + `assertConversionAllowed`: `Ok(noop)`.
     fn inspect<E>(&self, state: &ProjectState) -> Result<bool, CommandError<E>> {
-        let (p, o, v) = self.find(state).ok_or_else(|| {
-            CommandError::Domain(text_parts("Unknown volume ", self.volume.as_utf16(), ""))
-        })?;
-        let object = &state.plates[p].objects[o];
-        let volume = &object.volumes[v];
-        if volume.role == self.role {
-            return Ok(true);
+        match decide(state, self.volume.as_utf16(), self.role) {
+            VolumeRoleDecision::Allowed { noop } => Ok(noop),
+            VolumeRoleDecision::Blocked { reason, .. } => Err(CommandError::Domain(reason)),
         }
-        let models = object
-            .volumes
-            .iter()
-            .filter(|v| v.role == VolumeRole::Model)
-            .count();
-        if volume.role == VolumeRole::Model && self.role != VolumeRole::Model && models == 1 {
-            return Err(CommandError::domain(
-                "The last model part on an object cannot be converted to a non-model role",
-            ));
-        }
-        if self.role != VolumeRole::Model && painted(volume) {
-            return Err(CommandError::domain(
-                "Clear facet paint annotations before converting this model part to a non-model role",
-            ));
-        }
-        let local_filament = matches!(self.role, VolumeRole::Model | VolumeRole::ParameterModifier);
-        if !local_filament && volume.filament_id.is_some() {
-            return Err(CommandError::domain(format!(
-                "Clear the local filament assignment before converting this volume to {}",
-                self.role.as_str()
-            )));
-        }
-        Ok(false)
     }
     pub(super) fn is_noop<E>(&self, state: &ProjectState) -> Result<bool, CommandError<E>> {
         self.inspect(state)

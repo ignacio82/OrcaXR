@@ -115,6 +115,16 @@ export class CapturedProject {
      */
     virtual_filament_mutation(request: string): string;
     /**
+     * The conversion command's decision (`inspectVolumeRoleConversion`):
+     * `{"role","volumeId"}` in, the decision out.
+     */
+    volume_role_decision(request: string): string;
+    /**
+     * One part's role choices as the semantic editor shows them
+     * (`volumeRoleEditorExchange`): `{"volumeId"}` in, `{"projection"}` out.
+     */
+    volume_role_editor(request: string): string;
+    /**
      * The bed the workspace reads from this project and plate `plateId`'s
      * tower keep-out: `{"plateId": string | null}` in, the workspace bed
      * document (`orcaxr_project::placement::bed`) out.
@@ -1951,6 +1961,11 @@ export function virtual_filament_match_search(request: string): string;
 export function virtual_filament_triangle(request: string): string;
 
 /**
+ * What converting a part's role says (`volumeRoleMessagesExchange`).
+ */
+export function volume_role_messages(request: string): string;
+
+/**
  * A project configuration's bed and a plate tower's keep-out
  * (`workspaceBedExchange`): `{"config","wipeTower"}` in,
  * `{"keepOut","printableArea","printableHeightMm","sizeMm"}` out.
@@ -2047,6 +2062,8 @@ export interface InitOutput {
     readonly capturedproject_split_source: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_virtual_filament_library: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_virtual_filament_mutation: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_volume_role_decision: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_volume_role_editor: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_workspace_bed: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedselection_count: (a: number) => number;
     readonly capturedselection_id: (a: number, b: number, c: number, d: number) => [number, number, number, number];
@@ -2437,6 +2454,7 @@ export interface InitOutput {
     readonly virtual_filament_form_defaults: (a: number, b: number) => [number, number, number, number];
     readonly virtual_filament_match_search: (a: number, b: number) => [number, number, number, number];
     readonly virtual_filament_triangle: (a: number, b: number) => [number, number, number, number];
+    readonly volume_role_messages: (a: number, b: number) => [number, number, number, number];
     readonly workspace_bed: (a: number, b: number) => [number, number, number, number];
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

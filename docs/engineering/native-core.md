@@ -2899,6 +2899,76 @@ on a role that cannot carry one. The object's volumes are re-sorted into
 upstream Orca's role order with a stable sort, and undo restores the previous
 list exactly.
 
+The decision is public, so a host explains a blocked choice before anything
+is submitted, in the words the command refuses with:
+`commands::inspect_volume_role_conversion` is `inspectVolumeRoleConversion`
+for any role text (a role Orca lacks is refused before the volume is looked
+up, quoted as `JSON.stringify` quotes it, lone surrogates escaped), returning
+the browser's code (`unknown-volume`, `unsupported-role`,
+`last-model-volume`, `facet-annotations`, `filament-assignment`) and words;
+the command's own check calls the same function. The semantic object
+editor's "Volume role" section kept its words inside its DOM class; they are
+production code of their own now (`volumeRoleEditor.ts`), which
+`SemanticObjectEditor` draws and the controller's snapshot reads, ported as
+`orcaxr_project::volume_role_editor`: a part's role with one choice per role
+in Orca's order, each with its label ("Part", "Negative volume", "Parameter
+modifier", "Support blocker", "Support enforcer" — English in every language,
+as in the browser), whether it is current, the command's decision and, when
+the choice is not offered, why ("This is the current role; no conversion is
+needed." or the refusal); the summary "name — Role"; and a conversion's words
+("Converting name to Role…", "Converted name to Role."). Hosts reach them
+through `volumeRoleEditorExchange.ts`: on a captured project
+`volume_role_editor` (`{"volumeId"}` → `{"projection"}`, null for a part the
+project lacks) and `volume_role_decision` (`{"role","volumeId"}`), and
+`volume_role_messages` (`{"role","volumeName"}`). WASM exports them; JNI adds
+three exports (`projectVolumeRoleEditor`, `projectVolumeRoleDecision`,
+`volumeRoleMessages`), read by Kotlin `VolumeRoleEditors` and
+`ProjectSnapshot.volumeRoleEditor`/`volumeRoleDecision`.
+
+`volume-role-vectors.mjs` records, from the production modules over three
+states derived from the browser fixture — an object holding every role
+(model parts painted on each channel and on refinement roots alone, with and
+without local filaments, a negative volume, modifiers with and without
+filaments, a blocker and an enforcer; empty, non-ASCII, emoji and
+lone-surrogate names), an object whose only model part carries a filament, a
+second plate, and the state after the browser's command converted three
+parts (re-sorted) — 38 projections, 330 decisions (243 refused: 140
+unsupported role texts, 56 facet paint, 20 last model part, 15 unknown
+volumes, 12 local filaments; 35 no-ops and 52 conversions allowed), 25
+conversion messages and 12 malformed requests. Rust replays them on real store
+snapshots; WASM in Node and in Chrome's module worker and JNI (debug and
+release) open each state as a session and match every reply
+(`volume-role-replay.mjs`).
+
+The Android session runs them through [`ProjectSettings`](#android-settings-panels):
+`volumeRoles(volumeId)` reads a part's choices with the guard of the state
+they were read on, and `convertVolumeRole(panel, role)` submits the browser's
+`convertVolumeRole` intent under it — one undoable step the core labels
+("Convert volume to negative part", "Convert volume to modifier", …), a stale
+panel refused as "Semantic object edit was prepared for a stale canonical
+project revision", a choice the editor does not offer refused before anything
+is submitted in the command's words (the session's own refusal carries no
+words), the part's current role changing nothing. `ProjectWorkspace.setNegativePart`
+is the browser's `setNegativePart`: a selected part that is not a negative
+volume is converted (its decision checked first, so a refusal is the
+command's words), otherwise a negative volume is added to the object the
+selection names ("Add negative part to object", the new part selected);
+nothing selected is "Set as Negative Part requires a selected object,
+instance, or volume". `ProjectVolumeRoleChecks` (846 checks over JNI) read
+every corpus reply through the Kotlin readers, then on an imported cube
+refuse Set as Negative Part with nothing selected and the only part's other
+roles (the last model part), add negative volumes from an instance and from a
+negative part, convert one to a modifier and to a part with the core's
+labels and the browser's words, refuse a stale panel, convert the original
+part with Set as Negative Part once a second model part exists, refuse the
+object's last model part, and undo every step back to the import.
+
+The catalogue gates `set_negative_part` on an instance selection
+(`has-instance-selection`, `canonicalUiFacts`), so the browser's registry —
+and the core's capabilities on Android — never invoke it with a part
+selected; its conversion branch is reachable only by calling the workspace
+directly. The semantic editor converts a selected part in both.
+
 ### Facet paint strokes
 
 Whole-facet strokes are native as `facetStroke` intents. The browser's commit

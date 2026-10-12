@@ -1,0 +1,2088 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "path": "tools/cross-platform/volume-role-vectors.mjs",
+      "sha256": "59c6059504a126bdd2b5eddf03d393fa64c379ce6f9712816b72e51d44b8117c"
+    },
+    {
+      "path": "web/src/project/objects/volumeRoleEditor.ts",
+      "sha256": "1479bef2c0112549dfc6a196bb62258c71f2a0a02ea657d33345313945df515a"
+    },
+    {
+      "path": "web/src/project/objects/volumeRoleEditorExchange.ts",
+      "sha256": "5c5d43740019782e587d7d53065cd72ab30073a9da2ba4e01f7041c59e0f2e22"
+    },
+    {
+      "path": "web/src/project/objects/semanticVolumeCommands.ts",
+      "sha256": "5ecc195087b462669b42799af3830798fd95c4fb60292e2d321a5c010a586962"
+    },
+    {
+      "path": "web/src/project/domain/facetRefinement.ts",
+      "sha256": "62e06500e58001bb6954555e1f4baf34f0e51dd88356556dc4d1918b94f6f437"
+    },
+    {
+      "path": "web/src/ui/dom/SemanticObjectEditor.ts",
+      "sha256": "ef5f6e026efb540189f83b5a56a6ef3f72c243385554033050d78228099907b7"
+    }
+  ],
+  "states": [
+    {
+      "name": "fixture",
+      "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+      "revision": 0,
+      "hash": "fnv1a64:4c8be3a3d4a004d2"
+    },
+    {
+      "name": "rich",
+      "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Assemblée\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\",\"name\":\"Arm\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[{\"triangles\":[0],\"value\":\"enforce\"}],\"topologyRevision\":0},\"config\":{},\"id\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\",\"name\":\"\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[{\"triangles\":[0],\"value\":\"avoid\"}],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\",\"name\":\"Seam ✓\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[{\"triangles\":[0],\"value\":true}],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\",\"name\":\"Fuzzy\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[{\"triangles\":[0],\"value\":false}],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"6612ca96-aded-4d62-afc0-d27c35863801\",\"name\":\"Brim\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"refinement\":{\"color\":{\"splits\":[{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"1089f201-ff94-437e-a01f-1aa18f170be0\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":0}],\"triangleCount\":1,\"version\":2}},\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\",\"name\":\"Refined\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"1089f201-ff94-437e-a01f-1aa18f170be0\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"8464af11-ad09-40c1-b192-9eb83889cec0\",\"name\":\"Painted arm\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"78932e9e-e76a-47b1-8d77-0808f931024f\",\"name\":\"Cutter\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\",\"name\":\"Tune \\ud800\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\",\"name\":\"Tune\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\",\"name\":\"Blocker\",\"role\":\"support-blocker\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\",\"name\":\"Enforcer 😀\",\"role\":\"support-enforcer\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"01842b74-7ac2-43f8-b10e-be53677c31ff\",\"instances\":[{\"id\":\"fa5a8bf5-d47e-40bd-8508-ab450eccfb22\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\",\"name\":\"Solo\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\",\"name\":\"Side\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true},{\"config\":{\"layer_height\":0.2},\"id\":\"d5f64900-bd37-4449-9a17-5536c9dac9c1\",\"name\":\"Plate 2\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"c36e4ad8-7445-47bc-b515-f98d0f7aa84c\",\"instances\":[{\"id\":\"53bc2ab5-8ef6-45b9-a2bc-7202c356489d\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Far\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\",\"name\":\"Far part\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\",\"name\":\"Far cutter\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":1,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+      "revision": 0,
+      "hash": "fnv1a64:052f9053ae5b2ccc"
+    },
+    {
+      "name": "converted",
+      "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Assemblée\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[{\"triangles\":[0],\"value\":\"enforce\"}],\"topologyRevision\":0},\"config\":{},\"id\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\",\"name\":\"\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[{\"triangles\":[0],\"value\":\"avoid\"}],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\",\"name\":\"Seam ✓\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[{\"triangles\":[0],\"value\":true}],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\",\"name\":\"Fuzzy\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[{\"triangles\":[0],\"value\":false}],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"6612ca96-aded-4d62-afc0-d27c35863801\",\"name\":\"Brim\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"refinement\":{\"color\":{\"splits\":[{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"1089f201-ff94-437e-a01f-1aa18f170be0\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":0}],\"triangleCount\":1,\"version\":2}},\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\",\"name\":\"Refined\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"1089f201-ff94-437e-a01f-1aa18f170be0\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"8464af11-ad09-40c1-b192-9eb83889cec0\",\"name\":\"Painted arm\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\",\"name\":\"Blocker\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"78932e9e-e76a-47b1-8d77-0808f931024f\",\"name\":\"Cutter\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\",\"name\":\"Arm\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\",\"name\":\"Tune \\ud800\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\",\"name\":\"Tune\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\",\"name\":\"Enforcer 😀\",\"role\":\"support-enforcer\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"01842b74-7ac2-43f8-b10e-be53677c31ff\",\"instances\":[{\"id\":\"fa5a8bf5-d47e-40bd-8508-ab450eccfb22\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\",\"name\":\"Solo\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\",\"name\":\"Side\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true},{\"config\":{\"layer_height\":0.2},\"id\":\"d5f64900-bd37-4449-9a17-5536c9dac9c1\",\"name\":\"Plate 2\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"c36e4ad8-7445-47bc-b515-f98d0f7aa84c\",\"instances\":[{\"id\":\"53bc2ab5-8ef6-45b9-a2bc-7202c356489d\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Far\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\",\"name\":\"Far part\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\",\"name\":\"Far cutter\",\"role\":\"support-blocker\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":1,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+      "revision": 0,
+      "hash": "fnv1a64:53cd68e9287560af"
+    }
+  ],
+  "assets": [
+    {
+      "descriptorJson": "{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}",
+      "bytes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        32,
+        65,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        32,
+        65,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "projections": [
+    {
+      "state": "fixture",
+      "requestJson": "{\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Tiny triangle\",\"role\":\"model\",\"summary\":\"Body — Part\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"volumeName\":\"Body\"}}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"projection\":null}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Body — Part\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"volumeName\":\"Body\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear the local filament assignment before converting this volume to negative-volume\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to negative-volume\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear the local filament assignment before converting this volume to support-blocker\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-blocker\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear the local filament assignment before converting this volume to support-enforcer\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-enforcer\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Arm — Part\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\",\"volumeName\":\"Arm\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\" — Part\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\",\"volumeName\":\"\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Seam ✓ — Part\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\",\"volumeName\":\"Seam ✓\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Fuzzy — Part\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\",\"volumeName\":\"Fuzzy\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Brim — Part\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\",\"volumeName\":\"Brim\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Refined — Part\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\",\"volumeName\":\"Refined\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Painted arm — Part\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\",\"volumeName\":\"Painted arm\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"negative-volume\",\"summary\":\"Cutter — Negative volume\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\",\"volumeName\":\"Cutter\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear the local filament assignment before converting this volume to negative-volume\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to negative-volume\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear the local filament assignment before converting this volume to support-blocker\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-blocker\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear the local filament assignment before converting this volume to support-enforcer\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-enforcer\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"parameter-modifier\",\"summary\":\"Tune \\ud800 — Parameter modifier\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\",\"volumeName\":\"Tune \\ud800\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"parameter-modifier\",\"summary\":\"Tune — Parameter modifier\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\",\"volumeName\":\"Tune\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"support-blocker\",\"summary\":\"Blocker — Support blocker\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\",\"volumeName\":\"Blocker\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"support-enforcer\",\"summary\":\"Enforcer 😀 — Support enforcer\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\",\"volumeName\":\"Enforcer 😀\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"01842b74-7ac2-43f8-b10e-be53677c31ff\",\"objectName\":\"\",\"role\":\"model\",\"summary\":\"Solo — Part\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\",\"volumeName\":\"Solo\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"01842b74-7ac2-43f8-b10e-be53677c31ff\",\"objectName\":\"\",\"role\":\"parameter-modifier\",\"summary\":\"Side — Parameter modifier\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\",\"volumeName\":\"Side\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"c36e4ad8-7445-47bc-b515-f98d0f7aa84c\",\"objectName\":\"Far\",\"role\":\"model\",\"summary\":\"Far part — Part\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\",\"volumeName\":\"Far part\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"c36e4ad8-7445-47bc-b515-f98d0f7aa84c\",\"objectName\":\"Far\",\"role\":\"negative-volume\",\"summary\":\"Far cutter — Negative volume\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\",\"volumeName\":\"Far cutter\"}}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"projection\":null}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Body — Part\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"volumeName\":\"Body\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\" — Part\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\",\"volumeName\":\"\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Seam ✓ — Part\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\",\"volumeName\":\"Seam ✓\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Fuzzy — Part\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\",\"volumeName\":\"Fuzzy\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Brim — Part\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\",\"volumeName\":\"Brim\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Refined — Part\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\",\"volumeName\":\"Refined\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear facet paint annotations before converting this model part to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Painted arm — Part\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\",\"volumeName\":\"Painted arm\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"model\",\"summary\":\"Blocker — Part\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\",\"volumeName\":\"Blocker\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"negative-volume\",\"summary\":\"Cutter — Negative volume\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\",\"volumeName\":\"Cutter\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear the local filament assignment before converting this volume to negative-volume\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to negative-volume\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear the local filament assignment before converting this volume to support-blocker\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-blocker\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear the local filament assignment before converting this volume to support-enforcer\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-enforcer\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"parameter-modifier\",\"summary\":\"Arm — Parameter modifier\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\",\"volumeName\":\"Arm\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"Clear the local filament assignment before converting this volume to negative-volume\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to negative-volume\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"Clear the local filament assignment before converting this volume to support-blocker\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-blocker\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"Clear the local filament assignment before converting this volume to support-enforcer\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-enforcer\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"parameter-modifier\",\"summary\":\"Tune \\ud800 — Parameter modifier\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\",\"volumeName\":\"Tune \\ud800\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"parameter-modifier\",\"summary\":\"Tune — Parameter modifier\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\",\"volumeName\":\"Tune\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"objectName\":\"Assemblée\",\"role\":\"support-enforcer\",\"summary\":\"Enforcer 😀 — Support enforcer\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\",\"volumeName\":\"Enforcer 😀\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"01842b74-7ac2-43f8-b10e-be53677c31ff\",\"objectName\":\"\",\"role\":\"model\",\"summary\":\"Solo — Part\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\",\"volumeName\":\"Solo\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"01842b74-7ac2-43f8-b10e-be53677c31ff\",\"objectName\":\"\",\"role\":\"parameter-modifier\",\"summary\":\"Side — Parameter modifier\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\",\"volumeName\":\"Side\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Part\",\"role\":\"model\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"blockedReason\":\"The last model part on an object cannot be converted to a non-model role\",\"current\":false,\"decision\":{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"c36e4ad8-7445-47bc-b515-f98d0f7aa84c\",\"objectName\":\"Far\",\"role\":\"model\",\"summary\":\"Far part — Part\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\",\"volumeName\":\"Far part\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"projection\":{\"choices\":[{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Part\",\"role\":\"model\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Negative volume\",\"role\":\"negative-volume\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Parameter modifier\",\"role\":\"parameter-modifier\"},{\"blockedReason\":\"This is the current role; no conversion is needed.\",\"current\":true,\"decision\":{\"allowed\":true,\"noop\":true},\"label\":\"Support blocker\",\"role\":\"support-blocker\"},{\"current\":false,\"decision\":{\"allowed\":true,\"noop\":false},\"label\":\"Support enforcer\",\"role\":\"support-enforcer\"}],\"objectId\":\"c36e4ad8-7445-47bc-b515-f98d0f7aa84c\",\"objectName\":\"Far\",\"role\":\"support-blocker\",\"summary\":\"Far cutter — Support blocker\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\",\"volumeName\":\"Far cutter\"}}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"projection\":null}"
+    }
+  ],
+  "decisions": [
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "fixture",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to negative-volume\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-blocker\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-enforcer\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to negative-volume\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-blocker\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-enforcer\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "rich",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"cf6f051f-e6ef-4013-b7c1-33749139288f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"fc1bbc92-563e-4e3e-ad66-d76a8e0e2c80\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"1424bbcd-d78b-4ece-bff0-50b03c36062f\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"6612ca96-aded-4d62-afc0-d27c35863801\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"9d821939-60b4-4eea-b9fd-390a15bb448c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"8464af11-ad09-40c1-b192-9eb83889cec0\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"facet-annotations\",\"reason\":\"Clear facet paint annotations before converting this model part to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"b9ab8550-8f82-40af-84a9-67856f2c5d6a\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"78932e9e-e76a-47b1-8d77-0808f931024f\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to negative-volume\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-blocker\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"cecdb3b9-c4a4-49b6-a856-0ae25ae83756\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-enforcer\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to negative-volume\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-blocker\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"6669b8a0-3c52-4e4e-b54a-cf500fcb08ff\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"filament-assignment\",\"reason\":\"Clear the local filament assignment before converting this volume to support-enforcer\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"8a5bca7a-0bac-41f5-9728-5261610c2a01\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"db5cdc3b-80dd-4c62-b1bb-a724181a4356\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"3ce33b2e-f86a-4f1d-b315-e259b60f7281\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"bfcaaa48-2810-4ed3-888f-4c5c6d3eb179\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"9e56ecb2-bc0b-4b4b-84c5-43afe87a012c\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"last-model-volume\",\"reason\":\"The last model part on an object cannot be converted to a non-model role\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":true}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"008617d3-2e20-4ae4-97bd-cfd1190443c5\"}",
+      "replyJson": "{\"allowed\":true,\"noop\":false}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"model\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unknown-volume\",\"reason\":\"Unknown volume 00000000-0000-4000-8000-0000000000cc\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"auxiliary-volume\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"auxiliary-volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"Model\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"Model\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"negative_volume\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"negative_volume\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\" \\\"quoted\\\" \\\\ \",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\" \\\\\\\"quoted\\\\\\\" \\\\\\\\ \\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"\\ud800x\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"\\\\ud800x\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    },
+    {
+      "state": "converted",
+      "requestJson": "{\"role\":\"modèle\",\"volumeId\":\"00000000-0000-4000-8000-0000000000cc\"}",
+      "replyJson": "{\"allowed\":false,\"code\":\"unsupported-role\",\"reason\":\"Volume role \\\"modèle\\\" is not supported by Snapmaker Orca v2.3.4\"}"
+    }
+  ],
+  "messages": [
+    {
+      "requestJson": "{\"role\":\"model\",\"volumeName\":\"Body\"}",
+      "replyJson": "{\"pending\":\"Converting Body to Part…\",\"success\":\"Converted Body to Part.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"model\",\"volumeName\":\"\"}",
+      "replyJson": "{\"pending\":\"Converting  to Part…\",\"success\":\"Converted  to Part.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"model\",\"volumeName\":\"Pièce été\"}",
+      "replyJson": "{\"pending\":\"Converting Pièce été to Part…\",\"success\":\"Converted Pièce été to Part.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"model\",\"volumeName\":\"Tune \\ud800\"}",
+      "replyJson": "{\"pending\":\"Converting Tune \\ud800 to Part…\",\"success\":\"Converted Tune \\ud800 to Part.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"model\",\"volumeName\":\"Enforcer 😀\"}",
+      "replyJson": "{\"pending\":\"Converting Enforcer 😀 to Part…\",\"success\":\"Converted Enforcer 😀 to Part.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeName\":\"Body\"}",
+      "replyJson": "{\"pending\":\"Converting Body to Negative volume…\",\"success\":\"Converted Body to Negative volume.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeName\":\"\"}",
+      "replyJson": "{\"pending\":\"Converting  to Negative volume…\",\"success\":\"Converted  to Negative volume.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeName\":\"Pièce été\"}",
+      "replyJson": "{\"pending\":\"Converting Pièce été to Negative volume…\",\"success\":\"Converted Pièce été to Negative volume.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeName\":\"Tune \\ud800\"}",
+      "replyJson": "{\"pending\":\"Converting Tune \\ud800 to Negative volume…\",\"success\":\"Converted Tune \\ud800 to Negative volume.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"negative-volume\",\"volumeName\":\"Enforcer 😀\"}",
+      "replyJson": "{\"pending\":\"Converting Enforcer 😀 to Negative volume…\",\"success\":\"Converted Enforcer 😀 to Negative volume.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeName\":\"Body\"}",
+      "replyJson": "{\"pending\":\"Converting Body to Parameter modifier…\",\"success\":\"Converted Body to Parameter modifier.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeName\":\"\"}",
+      "replyJson": "{\"pending\":\"Converting  to Parameter modifier…\",\"success\":\"Converted  to Parameter modifier.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeName\":\"Pièce été\"}",
+      "replyJson": "{\"pending\":\"Converting Pièce été to Parameter modifier…\",\"success\":\"Converted Pièce été to Parameter modifier.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeName\":\"Tune \\ud800\"}",
+      "replyJson": "{\"pending\":\"Converting Tune \\ud800 to Parameter modifier…\",\"success\":\"Converted Tune \\ud800 to Parameter modifier.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"parameter-modifier\",\"volumeName\":\"Enforcer 😀\"}",
+      "replyJson": "{\"pending\":\"Converting Enforcer 😀 to Parameter modifier…\",\"success\":\"Converted Enforcer 😀 to Parameter modifier.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeName\":\"Body\"}",
+      "replyJson": "{\"pending\":\"Converting Body to Support blocker…\",\"success\":\"Converted Body to Support blocker.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeName\":\"\"}",
+      "replyJson": "{\"pending\":\"Converting  to Support blocker…\",\"success\":\"Converted  to Support blocker.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeName\":\"Pièce été\"}",
+      "replyJson": "{\"pending\":\"Converting Pièce été to Support blocker…\",\"success\":\"Converted Pièce été to Support blocker.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeName\":\"Tune \\ud800\"}",
+      "replyJson": "{\"pending\":\"Converting Tune \\ud800 to Support blocker…\",\"success\":\"Converted Tune \\ud800 to Support blocker.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"support-blocker\",\"volumeName\":\"Enforcer 😀\"}",
+      "replyJson": "{\"pending\":\"Converting Enforcer 😀 to Support blocker…\",\"success\":\"Converted Enforcer 😀 to Support blocker.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeName\":\"Body\"}",
+      "replyJson": "{\"pending\":\"Converting Body to Support enforcer…\",\"success\":\"Converted Body to Support enforcer.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeName\":\"\"}",
+      "replyJson": "{\"pending\":\"Converting  to Support enforcer…\",\"success\":\"Converted  to Support enforcer.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeName\":\"Pièce été\"}",
+      "replyJson": "{\"pending\":\"Converting Pièce été to Support enforcer…\",\"success\":\"Converted Pièce été to Support enforcer.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeName\":\"Tune \\ud800\"}",
+      "replyJson": "{\"pending\":\"Converting Tune \\ud800 to Support enforcer…\",\"success\":\"Converted Tune \\ud800 to Support enforcer.\"}"
+    },
+    {
+      "requestJson": "{\"role\":\"support-enforcer\",\"volumeName\":\"Enforcer 😀\"}",
+      "replyJson": "{\"pending\":\"Converting Enforcer 😀 to Support enforcer…\",\"success\":\"Converted Enforcer 😀 to Support enforcer.\"}"
+    }
+  ],
+  "refusals": [
+    {
+      "exchange": "projection",
+      "request": "{\"volumeId\":3}"
+    },
+    {
+      "exchange": "projection",
+      "request": "{\"volumeId\":null}"
+    },
+    {
+      "exchange": "projection",
+      "request": "{}"
+    },
+    {
+      "exchange": "projection",
+      "request": "{\"objectId\":\"x\",\"volumeId\":\"x\"}"
+    },
+    {
+      "exchange": "projection",
+      "request": "[]"
+    },
+    {
+      "exchange": "projection",
+      "request": "not json"
+    },
+    {
+      "exchange": "decision",
+      "request": "{\"volumeId\":\"x\"}"
+    },
+    {
+      "exchange": "decision",
+      "request": "{\"role\":1,\"volumeId\":\"x\"}"
+    },
+    {
+      "exchange": "decision",
+      "request": "{\"role\":\"model\",\"volumeId\":[\"x\"]}"
+    },
+    {
+      "exchange": "messages",
+      "request": "{\"role\":\"auxiliary-volume\",\"volumeName\":\"x\"}"
+    },
+    {
+      "exchange": "messages",
+      "request": "{\"role\":\"model\"}"
+    },
+    {
+      "exchange": "messages",
+      "request": "{\"role\":\"model\",\"volumeName\":7}"
+    }
+  ]
+}

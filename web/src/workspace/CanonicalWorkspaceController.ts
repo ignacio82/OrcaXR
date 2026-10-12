@@ -237,12 +237,8 @@ import {
 import { layerRangeEditorProjection } from '../project/objects/layerRangeEditor';
 import { AdaptiveLayerHeightProfileCommand } from '../project/objects/layerHeightCommands';
 import { projectObjectsTree } from '../project/objects/projection';
-import {
-  ConvertVolumeRoleCommand,
-  inspectVolumeRoleConversion,
-  ORCA_VOLUME_ROLE_ORDER,
-  type VolumeRoleConversionDecision,
-} from '../project/objects/semanticVolumeCommands';
+import { ConvertVolumeRoleCommand, type VolumeRoleConversionDecision } from '../project/objects/semanticVolumeCommands';
+import { volumeRoleEditorProjection } from '../project/objects/volumeRoleEditor';
 import { MagnetOp, MagnetShape, type MagnetSpec } from '../features/MagnetOp';
 import type { PreparedVolumeSplitPart } from '../project/objects/splitCommands';
 import { prepareVolumeSplit, type PreparedVolumeSplit } from '../project/objects/volumeSplitExchange';
@@ -1061,9 +1057,8 @@ export class CanonicalWorkspaceController {
     const context = semanticSelectionContext(project.state, primary);
     if (!context) return undefined;
     const { object, selectedVolumeId, selectedLayerRangeId } = context;
-    const selectedVolume = selectedVolumeId
-      ? object.volumes.find((volume) => volume.id === selectedVolumeId)
-      : undefined;
+    // The role choices are the shared volume-role editor's.
+    const selectedVolume = selectedVolumeId ? volumeRoleEditorProjection(project.state, selectedVolumeId) : undefined;
     // The ranges and merge decisions are the shared height-range editor's.
     const ranges = layerRangeEditorProjection(project.state, object.id, selectedLayerRangeId);
     if (!ranges) return undefined;
@@ -1075,13 +1070,10 @@ export class CanonicalWorkspaceController {
       ...(selectedVolume
         ? {
             selectedVolume: {
-              id: selectedVolume.id,
-              name: selectedVolume.name,
+              id: selectedVolume.volumeId,
+              name: selectedVolume.volumeName,
               role: selectedVolume.role,
-              roleDecisions: ORCA_VOLUME_ROLE_ORDER.map((role) => ({
-                role,
-                decision: inspectVolumeRoleConversion(project.state, selectedVolume.id, role),
-              })),
+              roleDecisions: selectedVolume.choices.map(({ role, decision }) => ({ role, decision })),
             },
           }
         : {}),

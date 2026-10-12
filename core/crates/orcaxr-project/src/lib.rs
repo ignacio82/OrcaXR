@@ -55,3 +55,4 @@ pub mod staging_layout;
 pub mod store;
 pub mod svg;
 pub mod validation;
+pub mod volume_role_editor;

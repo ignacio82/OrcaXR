@@ -83,6 +83,39 @@ pub(super) fn layer_range_messages(env: &mut JNIEnv<'_>, request: JString<'_>) -
         orcaxr_project::layer_range_editor::messages_json,
     )
 }
+/// `{"volumeId"}` → one part's role choices as the semantic editor shows them
+/// (`orcaxr_project::volume_role_editor`).
+pub(super) fn project_volume_role_editor(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let json = with_project(handle, |p| {
+        orcaxr_project::volume_role_editor::projection_json(p.state(), &request)
+    })?;
+    string(env, json)
+}
+/// `{"role","volumeId"}` → the conversion command's decision.
+pub(super) fn project_volume_role_decision(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let json = with_project(handle, |p| {
+        orcaxr_project::volume_role_editor::decision_json(p.state(), &request)
+    })?;
+    string(env, json)
+}
+/// What converting a part's role says while it runs and once it is done.
+pub(super) fn volume_role_messages(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        &request,
+        orcaxr_project::volume_role_editor::messages_json,
+    )
+}
 /// `{"tool","transform"}` → what the tool's three fields show.
 pub(super) fn transform_fields(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
     exchange(env, &request, fields::fields_json)
