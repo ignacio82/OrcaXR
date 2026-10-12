@@ -73,8 +73,10 @@ Application capture/preflight and production native slicing remain unimplemented
 ## Flat renderer experiment
 
 The debug launcher opens a separate Compose/SurfaceView workbench. Release builds
-exclude its Activity, renderer dependencies and compiled materials. Opening the
-normal shell never initializes Filament. The workbench uses generated fixtures
+exclude its Activity. (When it was built, release builds left out Filament, its
+dependencies and compiled materials altogether, and the shell never started it;
+the Workspace and Preview have since drawn with Filament in every build — see
+[Flat renderer selection](#flat-renderer-selection).) The workbench uses generated fixtures
 only; selecting/painting modifies display projections, with no canonical project,
 file import, network, slicer or XR session.
 
@@ -228,8 +230,8 @@ The ignored report binds these APKs and emulator settings to the observations.
 Strict Gradle verification, debug/release builds, lint and all six JVM tests pass.
 Only the pre-existing newer-version lint warnings remain. The debug APK's six
 native libraries and release APK's four pass both-ABI ELF/ZIP 16 KB alignment;
-this remains packaging evidence, not 16 KB-device loading. Release contains no
-Filament library or material asset. Cargo audit, all three npm development audits
+this remains packaging evidence, not 16 KB-device loading. Release then contained
+no Filament library or material asset (it does now). Cargo audit, all three npm development audits
 and the configured redacted 1,582-file UTF-8 source scan pass. CI now runs the renderer suite
 with the foundation checks; a clean hosted-runner result is still unverified.
 
@@ -319,6 +321,76 @@ something, not how long a slow emulator takes to search a long list. A smoke
 that reads what follows a row it found (a group's rows, a row's indicators)
 first lifts that row near the list's top, since the search stops at the first
 screen showing it, perhaps on its last line.
+
+## Flat renderer selection
+
+Recorded 2026-10-12. The flat Android app (phones, tablets, Chromebooks, Android
+XR's Home Space panels) draws with **Filament 1.77.1 on OpenGL ES**, through
+`FilamentScene` (`android/renderer-filament`), in the Workspace and the Preview.
+It is the only flat candidate: it draws production meshes, facet paint with
+colour-only partial uploads and toolpaths, picks on the CPU, survives the
+areas' lifecycle, and loads on 4 KB and 16 KB pages, all on the emulators'
+suites; the earlier workbench measured a 2,000,000-facet fixture
+([above](#emulator-evidence-on-2026-10-05)). The spatial selection is still
+open (see the end of this section).
+
+What it does, and how that compares with the browser's three.js workspace:
+
+- **Lighting.** No lights, no indirect light, no shadows: both materials are
+  unlit (`materials/opaque.mat`, `transparent.mat`, compiled by
+  `tools/renderer/build-materials.py` with Filament's own `matc`). Shading is
+  baked on the CPU per facet (`PacketMesh.kt`): grey = 0.35 + 0.65·max(0,
+  n·L) with L = normalize(−0.4, −0.55, 0.75) in printer millimetres (from the
+  front left), multiplied with the tint and paint in sRGB bytes. The browser
+  lights its surfaces per pixel (`MeshStandardMaterial`, roughness .72,
+  metalness .04) with a hemisphere light (`0xbbbbbb`/`0x888888`, 3) and a
+  directional light (white, 2) from the front right. Chosen for the flat app:
+  baked shading — it costs nothing per frame, keeps paint uploads to colours,
+  and needs no lighting material; the light's side and the shading curve are
+  not the browser's yet.
+- **Colour management.** Colours are drawn as authored: post-processing is off
+  (no tone mapper, colour grading, dithering or FXAA), the swap chain is not
+  sRGB, and every colour — tints, the theme's viewport wash and plate tokens,
+  paint, the projection's toolpath colours — is its sRGB value over 255,
+  written as given. The browser keeps three's colour management on (sRGB
+  output, no tone mapping), so authored colours reach its screen unchanged
+  too; its 3D G-code preview did not until 2026-10-12, when it began converting
+  the projection's colours to three's working space (it had drawn every
+  toolpath lighter). Chosen: authored sRGB, untoned, as the browser's output.
+- **Transparency.** One transparent material (`transparent.mat`: blended,
+  premultiplied, no depth write, double-sided), used for non-printable
+  instances at 0.4; Filament sorts per renderable, not per triangle. The
+  simplify preview, helper volumes and the bed draw opaque, and the paint
+  stroke preview is blended into vertex colours on the CPU (55 %). The browser
+  draws the wipe-tower ghost (.35), its paint preview (.55) and an optional
+  selection outline transparent.
+- **Drawing.** Selection mixes the tint 45 % toward the accent (1, .62, .18).
+  The bed is lines only (a 10 mm grid, coarsened to keep under 1,000 lines,
+  the outline in the plate's major colour); the browser also fills the plate,
+  draws its grid as ten divisions of the larger side at .85 or .7 opacity and
+  marks the origin. Toolpaths are one-pixel lines (Filament has no line
+  width), at most 240,000 segments, as the browser's. Culling is off and
+  materials are double-sided; each draw chunk is its own renderable (no GPU
+  instancing). There is no anti-aliasing (the browser asks for it).
+- **Lifecycle.** A scene exists only while its area is resumed and renders
+  only while dirty; surface loss destroys the swap chain. Context loss is not
+  handled (`DONT_CHECK`), and the Vulkan materials are packaged but never used.
+- **Devices.** Only x86_64 emulators (API 34; API 37 with 16 KB pages) have run
+  it: no ARM64 device, no physical GPU.
+
+Open before the flat exit gate, none of them blocking: the shading's light
+side and curve, the plate's fill, grid and origin, and anti-aliasing, against
+the browser's; frame time, draw calls, memory and paint and pick latency of
+`FilamentScene` itself on the large fixture (the workbench's numbers are not
+the production renderer's); the transparent sort with overlapping
+non-printable instances; context loss; a device run.
+
+The spatial selection (Android XR's Full Space) waits on hardware: the
+SceneCore candidate ([below](#scenecore-candidate)) has rendered nothing
+spatially (the SwiftShader XR image does not boot) and lacks picking,
+clipping and toolpaths. It is chosen if, on a Galaxy XR, it draws the packed
+mesh fixture with per-facet paint updates, selection and toolpaths within
+the frame budget; otherwise the plan's fallback (OpenXR) is prototyped.
 
 ## SceneCore candidate
 

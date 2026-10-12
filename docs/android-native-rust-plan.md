@@ -42,9 +42,11 @@ physical-device gate below is still open.
   renderer draws the Workspace and Preview in every build. The pinned Snapmaker
   engine builds cleanly for both ABIs, is packaged in every app build, loads on
   the 16 KB image, and matches the browser engine on eleven fixtures through
-  its adapter on the x86_64 emulator. Remains: the SceneCore spatial comparison,
-  large-fixture picking and paint measurements, Home/Full Space lifecycle, the
-  written renderer selection, and real-device proof.
+  its adapter on the x86_64 emulator. The flat selection is recorded
+  ([§](engineering/native-core.md#flat-renderer-selection)). Remains: the
+  SceneCore spatial comparison, large-fixture picking and paint measurements,
+  Home/Full Space lifecycle, the flat renderer's open items against the
+  browser, and real-device proof.
 - **Phase 3, G-code computation in Rust: done apart from device measurements.**
   Parser, index, projection, inspection, playback and text search are shared;
   the production browser preview runs on the Rust adapter, and the Android
@@ -164,8 +166,12 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    job; the engine-feature matrix (CC profiles, FullSpectrum modes, seam and
    fuzzy-skin paint, layer events) through `tools/native-engine/emulator-slices.py`;
    the reproducible clean-source engine build.
-6. Phase 2: write down the flat-renderer selection (lighting, colour
-   management, transparency); the SceneCore comparison needs XR hardware.
+6. Phase 2: the flat renderer's open items, recorded with its selection
+   ([§](engineering/native-core.md#flat-renderer-selection)): the baked
+   shading's light side and curve, the plate's fill, grid and origin, and
+   anti-aliasing, against the browser's; `FilamentScene`'s own frame time,
+   draw calls, memory and paint/pick latency on the large fixture; the
+   transparent sort; context loss. The SceneCore comparison needs XR hardware.
 7. Phases 10 and 11 work that needs no hardware: per-target parity tooling
    (web DOM, WebXR, Android flat, Android XR), calibration and Smart Paint
    ports, and the release checklist items that are not device-bound.
@@ -1095,9 +1101,16 @@ Snapmaker NDK build proof, and an explicit renderer decision.
   distribution format, which is not chosen yet (APK or AAB, Phase 11).
 - [ ] Record the flat/spatial renderer selection and any required alternative
   prototype. Resolve blockers before building the full XR interface.
-  The Workspace now uses the Filament candidate in release builds too; the
-  formal selection (lighting, colour management, transparency, devices) is
-  still to be recorded.
+  The Workspace now uses the Filament candidate in release builds too.
+  Status (2026-10-12): the flat selection is recorded
+  ([§](engineering/native-core.md#flat-renderer-selection)): Filament on
+  OpenGL ES, unlit with shading baked per facet, colours drawn as authored
+  sRGB without tone mapping, one blended material for non-printable
+  instances, x86_64 emulators only; its open items against the browser and
+  its unmeasured costs are listed there. Recording it found the browser's 3D
+  preview drawing toolpaths lighter than authored (fixed). The spatial
+  selection waits on XR hardware: SceneCore if it meets the stated test on a
+  Galaxy XR, else the OpenXR fallback.
 
 **Exit gate:** real-device proof of usable mesh/toolpath updates and a valid slice
 from the current engine. A cube render or successful linker invocation alone is
