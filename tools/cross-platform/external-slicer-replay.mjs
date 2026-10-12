@@ -10,6 +10,7 @@ export function replayExternalSlicer(core, fixture) {
     ["polls", core.external_slicer_poll],
     ["cancels", core.external_slicer_cancel],
     ["artifacts", core.external_slicer_artifact],
+    ["downloads", core.external_slicer_download],
   ];
   const expect = (section, i, actual, expected) => {
     if (actual !== expected)

@@ -344,6 +344,25 @@ await test('serializes current plate two and every printable plate as distinct o
   assertOnePlateState(secondArchive.state, plateId, secondObject.id);
 });
 
+await test('slicing every plate passes over a printable plate that holds nothing', async () => {
+  // An empty plate has nothing to slice; sent to the engine it failed the
+  // whole job, so one empty plate beside the others left none sliced.
+  const route = new RecordingRoute();
+  const setup = harness(route);
+  const next = cloneProjectState(setup.project.getSnapshot().state);
+  const ids = new UuidIdSource(seededRandom(0x5152));
+  const empty = ids.next('plate');
+  next.plates.push({ id: empty, name: 'Empty', order: next.plates.length, printable: true, config: {}, objects: [] });
+  setup.project.replaceState(next, { reason: 'add-empty-plate' });
+  const all = await setup.coordinator.startAllPlates().completion;
+  assert.deepEqual(
+    all.plates.map((plate) => plate.plateId),
+    [setup.fixture.ids.plate],
+  );
+  assert.equal(route.requests.length, 1);
+  assert.equal(route.requests[0].plateId, setup.fixture.ids.plate);
+});
+
 await test('rejects stale completion before it can publish or replace the latest result', async () => {
   let pending:
     | {

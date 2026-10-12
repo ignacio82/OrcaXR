@@ -98,6 +98,16 @@ fn external_slicer_answers_as_the_browser_does() {
             short(request)
         );
     }
+    for case in cases(&corpus, "downloads") {
+        let request = text(&case["requestJson"]);
+        let read = wire::decode_external_slicer_download_read(request).unwrap();
+        assert_eq!(
+            wire::encode_external_slicer_download_step(&slicer::download(&read)).unwrap(),
+            text(&case["replyJson"]),
+            "download {}",
+            short(request)
+        );
+    }
     let counts: Vec<usize> = [
         "endpoints",
         "attestations",
@@ -106,11 +116,12 @@ fn external_slicer_answers_as_the_browser_does() {
         "polls",
         "cancels",
         "artifacts",
+        "downloads",
     ]
     .iter()
     .map(|name| cases(&corpus, name).len())
     .collect();
-    assert_eq!(counts, [72, 230, 156, 247, 196, 44, 49]);
+    assert_eq!(counts, [72, 230, 156, 247, 196, 44, 49, 102]);
 }
 
 #[test]

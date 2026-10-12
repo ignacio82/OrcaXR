@@ -10964,12 +10964,12 @@ object ProjectIntents {
             is ExternalSlicerReply.Response -> w.field("response") { writeExternalSlicerResponse(w, v.value) }
         } }
     }
-    enum class ExternalSlicerFailureKind {Failed,Cancelled,AlreadyDone,AlreadyFailed,AlreadyReleased,Unconfirmed}
+    enum class ExternalSlicerFailureKind {Failed,Cancelled,AlreadyDone,AlreadyFailed,AlreadyReleased,Unconfirmed,Retained}
     private fun readExternalSlicerFailureKind(v: Any): ExternalSlicerFailureKind {
-        return when(v) {"failed" -> ExternalSlicerFailureKind.Failed;"cancelled" -> ExternalSlicerFailureKind.Cancelled;"alreadyDone" -> ExternalSlicerFailureKind.AlreadyDone;"alreadyFailed" -> ExternalSlicerFailureKind.AlreadyFailed;"alreadyReleased" -> ExternalSlicerFailureKind.AlreadyReleased;"unconfirmed" -> ExternalSlicerFailureKind.Unconfirmed; else -> throw InvalidProjectIntent()}
+        return when(v) {"failed" -> ExternalSlicerFailureKind.Failed;"cancelled" -> ExternalSlicerFailureKind.Cancelled;"alreadyDone" -> ExternalSlicerFailureKind.AlreadyDone;"alreadyFailed" -> ExternalSlicerFailureKind.AlreadyFailed;"alreadyReleased" -> ExternalSlicerFailureKind.AlreadyReleased;"unconfirmed" -> ExternalSlicerFailureKind.Unconfirmed;"retained" -> ExternalSlicerFailureKind.Retained; else -> throw InvalidProjectIntent()}
     }
     private fun writeExternalSlicerFailureKind(w: ProjectIntentWriter, v: ExternalSlicerFailureKind) {
-        w.literal(when(v) {ExternalSlicerFailureKind.Failed -> "failed";ExternalSlicerFailureKind.Cancelled -> "cancelled";ExternalSlicerFailureKind.AlreadyDone -> "alreadyDone";ExternalSlicerFailureKind.AlreadyFailed -> "alreadyFailed";ExternalSlicerFailureKind.AlreadyReleased -> "alreadyReleased";ExternalSlicerFailureKind.Unconfirmed -> "unconfirmed";})
+        w.literal(when(v) {ExternalSlicerFailureKind.Failed -> "failed";ExternalSlicerFailureKind.Cancelled -> "cancelled";ExternalSlicerFailureKind.AlreadyDone -> "alreadyDone";ExternalSlicerFailureKind.AlreadyFailed -> "alreadyFailed";ExternalSlicerFailureKind.AlreadyReleased -> "alreadyReleased";ExternalSlicerFailureKind.Unconfirmed -> "unconfirmed";ExternalSlicerFailureKind.Retained -> "retained";})
     }
     data class ExternalSlicerFailure(val kind: ExternalSlicerFailureKind, val message: List<Int>)
     private fun readExternalSlicerFailure(v: Any): ExternalSlicerFailure {
@@ -11250,6 +11250,56 @@ object ProjectIntents {
         w.obj { when(v) {
             is ExternalSlicerArtifact.Accepted -> w.field("accepted") { writeExternalSlicerAccepted(w, v.value) }
             is ExternalSlicerArtifact.Failed -> w.field("failed") { writeExternalSlicerFailure(w, v.value) }
+        } }
+    }
+    sealed interface ExternalSlicerDownloadOutcome {
+        data class TransferFailed(val value: List<Int>) : ExternalSlicerDownloadOutcome
+        data class Artifact(val value: ProjectIntents.ExternalSlicerArtifact) : ExternalSlicerDownloadOutcome
+    }
+    private fun readExternalSlicerDownloadOutcome(v: Any): ExternalSlicerDownloadOutcome {
+        val obj = ProjectIntentJson.fields(v, setOf("transferFailed", "artifact"), true)
+        return when(val key = obj.keys().next()) {
+            "transferFailed" -> ExternalSlicerDownloadOutcome.TransferFailed(readEditText(obj.get(key)))
+            "artifact" -> ExternalSlicerDownloadOutcome.Artifact(readExternalSlicerArtifact(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExternalSlicerDownloadOutcome(w: ProjectIntentWriter, v: ExternalSlicerDownloadOutcome) {
+        w.obj { when(v) {
+            is ExternalSlicerDownloadOutcome.TransferFailed -> w.field("transferFailed") { writeEditText(w, v.value) }
+            is ExternalSlicerDownloadOutcome.Artifact -> w.field("artifact") { writeExternalSlicerArtifact(w, v.value) }
+        } }
+    }
+    data class ExternalSlicerDownloadRead(val attempt: Long, val outcome: ExternalSlicerDownloadOutcome)
+    private fun readExternalSlicerDownloadRead(v: Any): ExternalSlicerDownloadRead {
+        val obj = ProjectIntentJson.fields(v, setOf("attempt", "outcome"), false)
+        return ExternalSlicerDownloadRead(readCounter(obj.get("attempt")), readExternalSlicerDownloadOutcome(obj.get("outcome")))
+    }
+    private fun writeExternalSlicerDownloadRead(w: ProjectIntentWriter, v: ExternalSlicerDownloadRead) {
+        w.obj {
+            w.field("attempt") { writeCounter(w, v.attempt) }
+            w.field("outcome") { writeExternalSlicerDownloadOutcome(w, v.outcome) }
+        }
+    }
+    sealed interface ExternalSlicerDownloadStep {
+        data class Accept(val value: ProjectIntents.Empty) : ExternalSlicerDownloadStep
+        data class Refetch(val value: ProjectIntents.Empty) : ExternalSlicerDownloadStep
+        data class Failed(val value: ProjectIntents.ExternalSlicerFailure) : ExternalSlicerDownloadStep
+    }
+    private fun readExternalSlicerDownloadStep(v: Any): ExternalSlicerDownloadStep {
+        val obj = ProjectIntentJson.fields(v, setOf("accept", "refetch", "failed"), true)
+        return when(val key = obj.keys().next()) {
+            "accept" -> ExternalSlicerDownloadStep.Accept(readEmpty(obj.get(key)))
+            "refetch" -> ExternalSlicerDownloadStep.Refetch(readEmpty(obj.get(key)))
+            "failed" -> ExternalSlicerDownloadStep.Failed(readExternalSlicerFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExternalSlicerDownloadStep(w: ProjectIntentWriter, v: ExternalSlicerDownloadStep) {
+        w.obj { when(v) {
+            is ExternalSlicerDownloadStep.Accept -> w.field("accept") { writeEmpty(w, v.value) }
+            is ExternalSlicerDownloadStep.Refetch -> w.field("refetch") { writeEmpty(w, v.value) }
+            is ExternalSlicerDownloadStep.Failed -> w.field("failed") { writeExternalSlicerFailure(w, v.value) }
         } }
     }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
@@ -11748,4 +11798,8 @@ object ProjectIntents {
     fun encodeExternalSlicerArtifactRead(value: ExternalSlicerArtifactRead): String = ProjectIntentWriter(BULK).also { writeExternalSlicerArtifactRead(it, value) }.finish()
     fun decodeExternalSlicerArtifact(text: String): ExternalSlicerArtifact = readExternalSlicerArtifact(ProjectIntentJson.parse(text, BULK))
     fun encodeExternalSlicerArtifact(value: ExternalSlicerArtifact): String = ProjectIntentWriter(BULK).also { writeExternalSlicerArtifact(it, value) }.finish()
+    fun decodeExternalSlicerDownloadRead(text: String): ExternalSlicerDownloadRead = readExternalSlicerDownloadRead(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerDownloadRead(value: ExternalSlicerDownloadRead): String = ProjectIntentWriter(BULK).also { writeExternalSlicerDownloadRead(it, value) }.finish()
+    fun decodeExternalSlicerDownloadStep(text: String): ExternalSlicerDownloadStep = readExternalSlicerDownloadStep(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerDownloadStep(value: ExternalSlicerDownloadStep): String = ProjectIntentWriter(BULK).also { writeExternalSlicerDownloadStep(it, value) }.finish()
 }

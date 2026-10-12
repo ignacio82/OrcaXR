@@ -4,6 +4,7 @@
 pub mod archive_layout;
 pub mod bbs;
 pub mod canonical;
+pub mod image;
 mod index;
 pub mod models;
 pub mod opc;
@@ -13,6 +14,7 @@ pub mod policy;
 mod read;
 pub mod staged;
 pub mod text;
+pub mod thumbnail;
 pub mod write;
 
 pub use read::{Archive, Entry, EntryComparison, EntryReceipt, EntryStream};

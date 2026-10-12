@@ -1500,6 +1500,18 @@ impl CapturedProject {
     pub fn workspace_bed(&self, request: &str) -> Result<String, JsValue> {
         orcaxr_project::placement::bed::state_bed_json(self.inner.state(), request).map_err(error)
     }
+    /// The plates a slice of `scope` (`current-plate` or `all-plates`)
+    /// slices: `{"plateIds"}` in slicing order, or the browser's `{"refusal"}`
+    /// (`orcaxr_project::slicing::plate::slice_plan`).
+    pub fn slice_plan(&self, scope: &str) -> Result<String, JsValue> {
+        use orcaxr_project::slicing::plate::{Scope, plan_reply, slice_plan};
+        let scope = match scope {
+            "current-plate" => Scope::CurrentPlate,
+            "all-plates" => Scope::AllPlates,
+            _ => return Err(error("invalid_request")),
+        };
+        Ok(plan_reply(slice_plan(self.inner.state(), scope)))
+    }
     /// What a split would split (`splitSourceExchange`):
     /// `{"instanceId","target","triangleLimit"}` in, `{"source"}` or
     /// `{"refusal"}` out (`orcaxr_project::split::source`).

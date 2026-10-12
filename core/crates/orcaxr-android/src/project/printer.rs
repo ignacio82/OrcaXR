@@ -1531,6 +1531,16 @@ pub(super) fn external_slicer_artifact(env: &mut JNIEnv<'_>, read: JString<'_>) 
         wire::encode_external_slicer_artifact,
     )
 }
+/// An `ExternalSlicerDownloadRead`; the `ExternalSlicerDownloadStep`.
+pub(super) fn external_slicer_download(env: &mut JNIEnv<'_>, read: JString<'_>) -> Result<jstring> {
+    bulk_exchange(
+        env,
+        read,
+        wire::decode_external_slicer_download_read,
+        slicer::download,
+        wire::encode_external_slicer_download_step,
+    )
+}
 /// Whether the attested engine (`wasm` or `cli`) carries `feature`.
 pub(super) fn external_slicer_supports(
     env: &mut JNIEnv<'_>,

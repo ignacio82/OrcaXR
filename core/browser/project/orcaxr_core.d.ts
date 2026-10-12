@@ -85,6 +85,12 @@ export class CapturedProject {
      */
     settings_targets(request: string): string;
     /**
+     * The plates a slice of `scope` (`current-plate` or `all-plates`)
+     * slices: `{"plateIds"}` in slicing order, or the browser's `{"refusal"}`
+     * (`orcaxr_project::slicing::plate::slice_plan`).
+     */
+    slice_plan(scope: string): string;
+    /**
      * What a split would split (`splitSourceExchange`):
      * `{"instanceId","target","triangleLimit"}` in, `{"source"}` or
      * `{"refusal"}` out (`orcaxr_project::split::source`).
@@ -662,6 +668,14 @@ export class ProjectExport {
      * hash is its archive's `sourceHash`.
      */
     project(): CapturedProject;
+    /**
+     * The pictures this capture's project asks for (its `thumbnails`),
+     * drawn from its active plate — a plate capture's only one — by the
+     * shared core (`orcaxr_archive::thumbnail`), each as the G-code block
+     * that carries it: `{"problems","thumbnails":[{"block","coverage",
+     * "format","height","width"}]}`. Synchronous; run it on a worker.
+     */
+    thumbnails(): string;
     /**
      * Write this frozen capture — a plate's, for an external slicer — as a
      * complete 3MF package. It carries no checkpoint guard: an export is
@@ -1408,6 +1422,13 @@ export function external_slicer_attestation_plan(request: string): string;
 export function external_slicer_cancel(read: string): string;
 
 /**
+ * An `ExternalSlicerDownloadRead` (the attempt, and its transport's
+ * failure or its artifact's verdict); the `ExternalSlicerDownloadStep`:
+ * accept, fetch the retained result again, or fail.
+ */
+export function external_slicer_download(read: string): string;
+
+/**
  * An `ExternalSlicerEndpointRequest`; the `ExternalSlicerEndpoint`: the
  * canonical endpoint a captured address names, or why none can be made.
  */
@@ -1760,6 +1781,36 @@ export function settings_step(step: string): string;
 export function settings_target_text(request: string): string;
 
 /**
+ * The plates a slice slices (`slicePlanExchange`): `{"scope","stateJson"}`
+ * in, `{"plateIds"}` or `{"refusal"}` out.
+ */
+export function slice_plan(request: string): string;
+
+/**
+ * One thumbnail in the engine's wire format (`thumbnailBlockExchange`):
+ * `{"image","request"}` in, the block's text as a JSON string out.
+ */
+export function slice_thumbnail_block(request: string): string;
+
+/**
+ * A G-code with its thumbnail blocks (`thumbnailInjectExchange`):
+ * `{"blocks","gcode"}` in, the G-code as a JSON string out.
+ */
+export function slice_thumbnail_inject(request: string): string;
+
+/**
+ * What a printer's `thumbnails` value asks for (`thumbnailListExchange`):
+ * `{"value"?}` in, `{"problems","requests"}` out.
+ */
+export function slice_thumbnail_list(request: string): string;
+
+/**
+ * The thumbnail camera (`thumbnailViewExchange`): `{"aspect","max","min"}`
+ * in, `{"fovDeg","position","target"}` out.
+ */
+export function slice_thumbnail_view(request: string): string;
+
+/**
  * The one option a typed name means among `options` (`presetMatchExchange`):
  * `{"options","query"}` in, `{"option": option | null}` out.
  */
@@ -1914,6 +1965,7 @@ export interface InitOutput {
     readonly capturedproject_settings_explain: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_settings_snapshot: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_settings_targets: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_slice_plan: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_split_source: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_virtual_filament_library: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_virtual_filament_mutation: (a: number, b: number, c: number) => [number, number, number, number];
@@ -1942,6 +1994,7 @@ export interface InitOutput {
     readonly external_slicer_attestation: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_attestation_plan: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_cancel: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_download: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_endpoint: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_job_plan: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_poll: (a: number, b: number) => [number, number, number, number];
@@ -2140,6 +2193,7 @@ export interface InitOutput {
     readonly projectexport_plate: (a: number, b: number, c: number) => [number, number, number];
     readonly projectexport_preflight: (a: number, b: number, c: number) => [number, number, number];
     readonly projectexport_project: (a: number) => number;
+    readonly projectexport_thumbnails: (a: number) => [number, number, number, number];
     readonly projectexport_write_archive: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectimportbase_prepare_model: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number, number];
     readonly projectimportpreview_blocked: (a: number) => [number, number, number];
@@ -2276,6 +2330,11 @@ export interface InitOutput {
     readonly settingseditor_rows: (a: number, b: number, c: number) => [number, number, number];
     readonly settingseditor_state: (a: number, b: number, c: number) => [number, number, number, number];
     readonly settingseditor_unavailable: (a: number) => number;
+    readonly slice_plan: (a: number, b: number) => [number, number, number, number];
+    readonly slice_thumbnail_block: (a: number, b: number) => [number, number, number, number];
+    readonly slice_thumbnail_inject: (a: number, b: number) => [number, number, number, number];
+    readonly slice_thumbnail_list: (a: number, b: number) => [number, number, number, number];
+    readonly slice_thumbnail_view: (a: number, b: number) => [number, number, number, number];
     readonly slicing_match: (a: number, b: number) => [number, number, number, number];
     readonly slicing_next_state: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly tool_mapping: (a: number, b: number) => [number, number, number, number];

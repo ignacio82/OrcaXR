@@ -445,6 +445,33 @@ export class CapturedProject {
         }
     }
     /**
+     * The plates a slice of `scope` (`current-plate` or `all-plates`)
+     * slices: `{"plateIds"}` in slicing order, or the browser's `{"refusal"}`
+     * (`orcaxr_project::slicing::plate::slice_plan`).
+     * @param {string} scope
+     * @returns {string}
+     */
+    slice_plan(scope) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(scope, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.capturedproject_slice_plan(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
      * What a split would split (`splitSourceExchange`):
      * `{"instanceId","target","triangleLimit"}` in, `{"source"}` or
      * `{"refusal"}` out (`orcaxr_project::split::source`).
@@ -3463,6 +3490,32 @@ export class ProjectExport {
     project() {
         const ret = wasm.projectexport_project(this.__wbg_ptr);
         return CapturedProject.__wrap(ret);
+    }
+    /**
+     * The pictures this capture's project asks for (its `thumbnails`),
+     * drawn from its active plate — a plate capture's only one — by the
+     * shared core (`orcaxr_archive::thumbnail`), each as the G-code block
+     * that carries it: `{"problems","thumbnails":[{"block","coverage",
+     * "format","height","width"}]}`. Synchronous; run it on a worker.
+     * @returns {string}
+     */
+    thumbnails() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.projectexport_thumbnails(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
     }
     /**
      * Write this frozen capture — a plate's, for an external slicer — as a
@@ -6927,6 +6980,34 @@ export function external_slicer_cancel(read) {
 }
 
 /**
+ * An `ExternalSlicerDownloadRead` (the attempt, and its transport's
+ * failure or its artifact's verdict); the `ExternalSlicerDownloadStep`:
+ * accept, fetch the retained result again, or fail.
+ * @param {string} read
+ * @returns {string}
+ */
+export function external_slicer_download(read) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(read, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.external_slicer_download(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * An `ExternalSlicerEndpointRequest`; the `ExternalSlicerEndpoint`: the
  * canonical endpoint a captured address names, or why none can be made.
  * @param {string} request
@@ -8594,6 +8675,141 @@ export function settings_target_text(request) {
         const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.settings_target_text(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * The plates a slice slices (`slicePlanExchange`): `{"scope","stateJson"}`
+ * in, `{"plateIds"}` or `{"refusal"}` out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function slice_plan(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.slice_plan(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * One thumbnail in the engine's wire format (`thumbnailBlockExchange`):
+ * `{"image","request"}` in, the block's text as a JSON string out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function slice_thumbnail_block(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.slice_thumbnail_block(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * A G-code with its thumbnail blocks (`thumbnailInjectExchange`):
+ * `{"blocks","gcode"}` in, the G-code as a JSON string out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function slice_thumbnail_inject(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.slice_thumbnail_inject(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * What a printer's `thumbnails` value asks for (`thumbnailListExchange`):
+ * `{"value"?}` in, `{"problems","requests"}` out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function slice_thumbnail_list(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.slice_thumbnail_list(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * The thumbnail camera (`thumbnailViewExchange`): `{"aspect","max","min"}`
+ * in, `{"fovDeg","position","target"}` out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function slice_thumbnail_view(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.slice_thumbnail_view(ptr0, len0);
         var ptr2 = ret[0];
         var len2 = ret[1];
         if (ret[3]) {

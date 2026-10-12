@@ -1280,6 +1280,18 @@ pub fn external_slicer_artifact(read: &str) -> Result<String, JsValue> {
         wire::encode_external_slicer_artifact,
     )
 }
+/// An `ExternalSlicerDownloadRead` (the attempt, and its transport's
+/// failure or its artifact's verdict); the `ExternalSlicerDownloadStep`:
+/// accept, fetch the retained result again, or fail.
+#[wasm_bindgen]
+pub fn external_slicer_download(read: &str) -> Result<String, JsValue> {
+    bulk_exchange(
+        read,
+        wire::decode_external_slicer_download_read,
+        slicer::download,
+        wire::encode_external_slicer_download_step,
+    )
+}
 /// Whether the attested engine (`wasm` or `cli`) carries `feature`.
 #[wasm_bindgen]
 pub fn external_slicer_supports(engine: &str, feature: &str) -> Result<bool, JsValue> {

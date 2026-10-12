@@ -4,6 +4,7 @@ use jni::{
     sys::{jcharArray, jdouble, jint, jlong, jstring},
 };
 use orcaxr_gcode::{Cancellation, Session, SessionError, artifact::SliceTally, layout};
+use orcaxr_project::slicing::thumbnails::{Anchor, Insertion};
 use std::{
     collections::HashMap,
     panic::{AssertUnwindSafe, catch_unwind},
@@ -497,9 +498,122 @@ pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_tallyClose(
     boundary(&mut env, |_| tally_close(handle));
 }
 
+// --- Thumbnail anchors ----------------------------------------------------------------------
+// Where a G-code's thumbnail blocks go (`orcaxr_project::slicing::thumbnails::Anchor`,
+// the browser's `injectGcodeThumbnails`), found as the host streams the file once.
+// Each anchor keeps a few counters; a few may live at once, handles never reused.
+
+const MAX_ANCHORS: usize = 8;
+static ANCHORS: OnceLock<Mutex<HashMap<i64, Anchor>>> = OnceLock::new();
+static NEXT_ANCHOR: AtomicI64 = AtomicI64::new(1);
+fn anchors() -> &'static Mutex<HashMap<i64, Anchor>> {
+    ANCHORS.get_or_init(Default::default)
+}
+fn anchor_open() -> Result<i64, &'static str> {
+    let mut anchors = anchors().lock().map_err(|_| "invalid_state")?;
+    if anchors.len() >= MAX_ANCHORS {
+        return Err("resource_limit");
+    }
+    let handle = NEXT_ANCHOR
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+        .map_err(|_| "resource_limit")?;
+    anchors.insert(handle, Anchor::new());
+    Ok(handle)
+}
+fn anchor_push(handle: i64, chunk: &[u8]) -> Result<(), &'static str> {
+    anchors()
+        .lock()
+        .map_err(|_| "invalid_state")?
+        .get_mut(&handle)
+        .ok_or("closed")?
+        .push(chunk);
+    Ok(())
+}
+/// The offset `blocks` blocks go before, or -1 for a file that stays as it is.
+fn anchor_finish(handle: i64, blocks: usize) -> Result<i64, &'static str> {
+    let insertion = anchors()
+        .lock()
+        .map_err(|_| "invalid_state")?
+        .get(&handle)
+        .ok_or("closed")?
+        .finish(blocks);
+    Ok(match insertion {
+        Insertion::Unchanged => -1,
+        Insertion::At(offset) => i64::try_from(offset).map_err(|_| "source_length")?,
+    })
+}
+fn anchor_close(handle: i64) -> Result<(), &'static str> {
+    anchors()
+        .lock()
+        .map_err(|_| "invalid_state")?
+        .remove(&handle);
+    Ok(())
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_anchorOpen(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+) -> jlong {
+    boundary(&mut env, |_| anchor_open())
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_anchorPush(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+    handle: jlong,
+    bytes: JByteArray<'_>,
+    length: jint,
+) {
+    boundary(&mut env, |env| {
+        let capacity = env.get_array_length(&bytes).map_err(|_| "invalid_source")?;
+        let length = integer(length)?;
+        if length > MAX_TALLY_CHUNK || length > integer(capacity)? {
+            return Err("source_length");
+        }
+        let mut chunk = vec![0i8; length];
+        env.get_byte_array_region(&bytes, 0, &mut chunk)
+            .map_err(|_| "invalid_source")?;
+        let chunk: Vec<u8> = chunk.into_iter().map(|byte| byte as u8).collect();
+        anchor_push(handle, &chunk)
+    });
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_anchorFinish(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+    handle: jlong,
+    blocks: jint,
+) -> jlong {
+    boundary(&mut env, |_| anchor_finish(handle, integer(blocks)?))
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_anchorClose(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+    handle: jlong,
+) {
+    boundary(&mut env, |_| anchor_close(handle));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn thumbnail_anchors_are_bounded_and_never_reused() {
+        let handles: Vec<_> = (0..MAX_ANCHORS).map(|_| anchor_open().unwrap()).collect();
+        assert_eq!(anchor_open(), Err("resource_limit"));
+        anchor_push(handles[0], b"; HEADER_BLOCK_END\n\nG28\n").unwrap();
+        assert_eq!(anchor_finish(handles[0], 1), Ok(20));
+        assert_eq!(anchor_finish(handles[0], 0), Ok(-1));
+        for handle in &handles {
+            anchor_close(*handle).unwrap();
+        }
+        assert_eq!(anchor_push(handles[0], b"x"), Err("closed"));
+        let next = anchor_open().unwrap();
+        assert!(next > *handles.last().unwrap());
+        anchor_close(next).unwrap();
+    }
     #[test]
     fn slice_tallies_are_bounded_and_never_reused() {
         let handles: Vec<_> = (0..MAX_TALLIES).map(|_| tally_open().unwrap()).collect();

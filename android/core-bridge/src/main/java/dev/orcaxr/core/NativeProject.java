@@ -112,6 +112,18 @@ final class NativeProject {
     // What a split of a captured project would split (orcaxr_project::split::source,
     // the browser's SplitSourceExchange): canonical JSON request and reply.
     static native String projectSplitSource(long handle, String request);
+    // A slice's outputs (orcaxr_project::slicing::{thumbnails, plate}, the
+    // browser's GcodeThumbnailsExchange, PlateThumbnailExchange and
+    // SlicePlanExchange): canonical JSON requests and replies; which plates a
+    // captured project's slice slices; and an export capture's pictures,
+    // drawn from its plate by the shared core (orcaxr_archive::thumbnail).
+    static native String sliceThumbnailList(String request);
+    static native String sliceThumbnailBlock(String request);
+    static native String sliceThumbnailInject(String request);
+    static native String sliceThumbnailView(String request);
+    static native String slicePlan(String request);
+    static native String projectSlicePlan(long handle, String scope);
+    static native String exportThumbnails(long handle);
     static native String transformFields(String request);
     static native String transformFieldEdit(String request);
     static native String transformRotation(String request);
@@ -337,6 +349,7 @@ final class NativeProject {
     static native String externalSlicerPoll(String read);
     static native String externalSlicerCancel(String read);
     static native String externalSlicerArtifact(String read);
+    static native String externalSlicerDownload(String read);
     static native boolean externalSlicerSupports(String engine, String feature);
     // One plate for an external slicer: a state document's plate projected and
     // its print overrides (IDs as JSON text, answers canonical JSON).

@@ -22,4 +22,9 @@ final class NativeGcode {
     static native void tallyPush(long handle, byte[] bytes, int length);
     static native String tallyFigures(long handle);
     static native void tallyClose(long handle);
+    // Where a G-code's thumbnail blocks go, found as it streams through (GcodeThumbnails).
+    static native long anchorOpen();
+    static native void anchorPush(long handle, byte[] bytes, int length);
+    static native long anchorFinish(long handle, int blocks);
+    static native void anchorClose(long handle);
 }

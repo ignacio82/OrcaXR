@@ -36,6 +36,14 @@ export type SubmissionStep =
   | { readonly kind: 'artifact' }
   | { readonly kind: 'failed'; readonly error: Error };
 
+/** How one artifact download ended: accepted, its reply never arriving whole, or the artifact refused. */
+export type DownloadOutcome =
+  { readonly accepted: true } | { readonly transferFailed: Error } | { readonly refused: Error };
+
+/** One download attempt read: the artifact accepted, the job's artifact fetched again, or the download failed. */
+export type DownloadStep =
+  { readonly kind: 'accept' } | { readonly kind: 'refetch' } | { readonly kind: 'failed'; readonly error: Error };
+
 /** Where a project is submitted, after the captured endpoint. */
 export const SUBMISSION_PATH = '/slice?async=1';
 export const NOT_UTF8 = 'External slicer returned an artifact that is not valid UTF-8 text.';
@@ -44,6 +52,30 @@ export const MAX_POLL_FAILURES = 5;
 export const CANCELLATION_TIMED_OUT = 'External slice cancellation confirmation timed out.';
 /** A reply that is not JSON reads the same in every engine, not as its parser's message. */
 export const UNREADABLE_REPLY = 'The server returned an unreadable reply.';
+/**
+ * How many times a finished job's artifact is fetched before its download
+ * fails. The server keeps a result until it is released or expires and serves
+ * it as often as it is asked (a transfer in progress holds it, so neither a
+ * release nor its expiry cuts one short), so a transfer that dropped, came up
+ * short or did not match its checksum is fetched again, not sliced again.
+ */
+export const MAX_DOWNLOAD_ATTEMPTS = 3;
+
+/** An artifact the server still holds: the transfer was incomplete or did not match its checksum. */
+export class RetainedResultError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RetainedResultError';
+  }
+}
+
+/** The artifact's reply did not arrive whole: [cause] is the transport's own failure. */
+class TransferError extends Error {
+  constructor(readonly failure: unknown) {
+    super(message(failure));
+    this.name = 'TransferError';
+  }
+}
 
 const POLL_STATES = ['queued', 'running', 'cancelling', 'done', 'error', 'cancelled'];
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
@@ -96,6 +128,18 @@ export function readJobPoll(failures: number, reply: ExternalReply): JobPollStep
   // Progress is a number and a sentence, whatever else a server sends.
   const percent = typeof status.percent === 'number' && Number.isFinite(status.percent) ? status.percent : 0;
   return { kind: 'wait', failures: 0, progress: { percent, message: said(status.message) ?? 'Slicing externally...' } };
+}
+
+/**
+ * The [attempt]th download of a finished job's artifact, read: accepted,
+ * fetched again — after a transfer that failed, or an artifact the server
+ * retained — while attempts remain, or failed with its own error.
+ */
+export function readDownload(attempt: number, outcome: DownloadOutcome): DownloadStep {
+  if ('accepted' in outcome) return { kind: 'accept' };
+  const repeatable = 'transferFailed' in outcome || outcome.refused instanceof RetainedResultError;
+  if (repeatable && attempt < MAX_DOWNLOAD_ATTEMPTS) return { kind: 'refetch' };
+  return { kind: 'failed', error: 'transferFailed' in outcome ? outcome.transferFailed : outcome.refused };
 }
 
 /** One reply while confirming a cancellation (the DELETE's, then each status poll's). */
@@ -226,13 +270,7 @@ export async function pollExternalJob(context: ExternalJobContext): Promise<stri
       }
       const step = readJobPoll(failures, reply);
       if (step.kind === 'failed') throw step.error;
-      if (step.kind === 'download') {
-        const response = await fetcher(`${url}/gcode`, {
-          headers: context.headers,
-          signal: context.signal,
-        });
-        return await readExternalResult(response, context);
-      }
+      if (step.kind === 'download') return await downloadExternalResult(context, `${url}/gcode`);
       failures = step.failures;
       if (step.progress) context.onProgress?.(step.progress);
     }
@@ -247,8 +285,52 @@ export async function pollExternalJob(context: ExternalJobContext): Promise<stri
   }
 }
 
+/**
+ * A finished job's artifact, fetched as often as [readDownload] allows: a
+ * transfer that fails, or an artifact the server retained, is fetched again
+ * after the poll interval, with the same length and checksum checks each
+ * time. A cancel stops it where it stands.
+ */
+async function downloadExternalResult(context: ExternalJobContext, url: string): Promise<string> {
+  const fetcher = context.fetcher ?? fetchLocalNetwork;
+  for (let attempt = 1; ; attempt += 1) {
+    let outcome: DownloadOutcome;
+    try {
+      let response: Response;
+      try {
+        response = await fetcher(url, { headers: context.headers, signal: context.signal });
+      } catch (error) {
+        throw new TransferError(error);
+      }
+      return await judgeExternalResult(response, context);
+    } catch (error) {
+      if (context.signal?.aborted) throw error instanceof TransferError ? error.failure : error;
+      outcome =
+        error instanceof TransferError
+          ? { transferFailed: error.failure instanceof Error ? error.failure : new Error(message(error.failure)) }
+          : { refused: error instanceof Error ? error : new Error(message(error)) };
+    }
+    const step = readDownload(attempt, outcome);
+    if (step.kind === 'failed') throw step.error;
+    await delay(context.pollIntervalMs, context.signal);
+  }
+}
+
 /** Keep older servers compatible; only release a result whose transfer identity was verified. */
 export async function readExternalResult(
+  response: Response,
+  context: Omit<ExternalJobContext, 'jobId'> & { readonly jobId?: string },
+): Promise<string> {
+  try {
+    return await judgeExternalResult(response, context);
+  } catch (error) {
+    // A synchronous reply cannot be fetched again: its transport's failure is the slice's.
+    throw error instanceof TransferError ? error.failure : error;
+  }
+}
+
+/** An artifact reply judged; a body that never arrived whole fails as a [TransferError]. */
+async function judgeExternalResult(
   response: Response,
   context: Omit<ExternalJobContext, 'jobId'> & { readonly jobId?: string },
 ): Promise<string> {
@@ -258,13 +340,18 @@ export async function readExternalResult(
     throw new Error('External slicer returned a different job artifact. The result was retained.');
   const jobId = context.jobId ?? headerId;
   const expectedHash = response.headers.get('x-orcaxr-gcode-sha256');
-  const bytes = new Uint8Array(await response.arrayBuffer());
+  let bytes: Uint8Array<ArrayBuffer>;
+  try {
+    bytes = new Uint8Array(await response.arrayBuffer());
+  } catch (error) {
+    throw new TransferError(error);
+  }
   context.signal?.throwIfAborted();
   // Content-Length can describe a proxy's compressed representation. This
   // header describes the artifact bytes the browser actually validates.
   const length = response.headers.get('x-orcaxr-gcode-bytes');
   if (!bytes.length || (length !== null && (!/^\d+$/.test(length) || Number(length) !== bytes.length)))
-    throw new Error('External slice download was incomplete. The result was retained for retry.');
+    throw new RetainedResultError('External slice download was incomplete. The result was retained for retry.');
   if (expectedHash !== null) {
     if (!/^[a-f0-9]{64}$/.test(expectedHash)) throw new Error('External slicer returned an invalid artifact checksum.');
     const digest = globalThis.crypto?.subtle
@@ -273,7 +360,9 @@ export async function readExternalResult(
           .join('')
       : sha256Bytes(bytes).slice(7);
     if (digest !== expectedHash)
-      throw new Error('External slice download checksum did not match. The result was retained for retry.');
+      throw new RetainedResultError(
+        'External slice download checksum did not match. The result was retained for retry.',
+      );
   }
   let gcode: string;
   try {

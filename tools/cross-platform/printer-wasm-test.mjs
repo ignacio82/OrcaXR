@@ -119,7 +119,7 @@ assert.deepEqual(result.printerConsoleAnswers, [408, 44, 284, 51, 76, 33, 34, 28
 assert.deepEqual(result.printerCameraAnswers, [62, 12, 462, 462, 616, 308, 154, 154]);
 assert.deepEqual(result.printerDirectoryAnswers, [37, 25, 160, 60, 44, 41, 15]);
 assert.deepEqual(result.rememberedCredentialsAnswers, [79, 63]);
-assert.deepEqual(result.externalSlicerAnswers, [72, 230, 156, 247, 196, 44, 49]);
+assert.deepEqual(result.externalSlicerAnswers, [72, 230, 156, 247, 196, 44, 49, 102]);
 console.log(
   JSON.stringify({ ...result, wasmBytes: bytes.length, wasmSha256: sha256 }),
 );

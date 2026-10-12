@@ -42,6 +42,10 @@ impl ExportCapture {
         let id = &self.project.state().source_assets.get(index)?.id;
         self.assets.peek(id)
     }
+    /// The frozen payload of asset `id`, when this capture holds it.
+    pub fn asset_by_id(&self, id: &crate::ids::AssetId) -> Option<AssetLease> {
+        self.assets.peek(id)
+    }
     /// Live slice preflight of exactly this frozen project and its assets.
     /// Synchronous; run it on the export worker with a cancellation check.
     pub fn preflight(

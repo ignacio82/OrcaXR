@@ -375,6 +375,13 @@ export function external_slicer_attestation_plan(request: string): string;
 export function external_slicer_cancel(read: string): string;
 
 /**
+ * An `ExternalSlicerDownloadRead` (the attempt, and its transport's
+ * failure or its artifact's verdict); the `ExternalSlicerDownloadStep`:
+ * accept, fetch the retained result again, or fail.
+ */
+export function external_slicer_download(read: string): string;
+
+/**
  * An `ExternalSlicerEndpointRequest`; the `ExternalSlicerEndpoint`: the
  * canonical endpoint a captured address names, or why none can be made.
  */
@@ -677,6 +684,7 @@ export interface InitOutput {
     readonly external_slicer_attestation: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_attestation_plan: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_cancel: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_download: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_endpoint: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_job_plan: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_poll: (a: number, b: number) => [number, number, number, number];

@@ -328,3 +328,109 @@ pub fn overrides_json(overrides: &BTreeMap<Vec<u16>, Vec<u16>>) -> String {
             .collect(),
     ))
 }
+
+// --- Which plates a slice slices -------------------------------------------------------------
+
+/// What a slice covers (`SliceJobScope`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    /// "Slice": the active plate.
+    CurrentPlate,
+    /// "Slice All Plates": every printable plate that holds a model.
+    AllPlates,
+}
+
+/// The plates a slice of `scope` slices, in slicing order, or the browser's
+/// words for why it slices none: the workspace's own refusal when nothing it
+/// would slice holds a model (`sliceNow`: "No models to slice.";
+/// `sliceAllPlates`: "No printable plate has models to slice."), then the
+/// coordinator's `selectPlateIds` — the active plate, which must be
+/// printable, or every printable plate holding a model by plate order, then
+/// UTF-16 ID.
+pub fn slice_plan(state: &ProjectState, scope: Scope) -> Result<Vec<PlateId>, Vec<u16>> {
+    let instances = |plate: &crate::model::ProjectPlate| {
+        plate
+            .objects
+            .iter()
+            .map(|object| object.instances.len())
+            .sum::<usize>()
+    };
+    let words = |text: &str| text.encode_utf16().collect::<Vec<u16>>();
+    let active = state
+        .plates
+        .iter()
+        .find(|plate| plate.id == state.active_plate_id);
+    match scope {
+        Scope::CurrentPlate => {
+            let Some(active) = active.filter(|plate| instances(plate) > 0) else {
+                return Err(words("No models to slice."));
+            };
+            if !active.printable {
+                let mut message = words("Active plate ");
+                message.extend_from_slice(active.id.as_utf16());
+                message.extend(words(" is not printable"));
+                return Err(message);
+            }
+            Ok(vec![active.id.clone()])
+        }
+        Scope::AllPlates => {
+            let mut plates: Vec<_> = state
+                .plates
+                .iter()
+                .filter(|plate| plate.printable && instances(plate) > 0)
+                .collect();
+            if plates.is_empty() {
+                return Err(words("No printable plate has models to slice."));
+            }
+            // `left.order - right.order || compareCanonicalText(left.id, right.id)`.
+            plates.sort_by(|a, b| {
+                (a.order.get() - b.order.get())
+                    .partial_cmp(&0.0)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| a.id.as_utf16().cmp(b.id.as_utf16()))
+            });
+            Ok(plates.into_iter().map(|plate| plate.id.clone()).collect())
+        }
+    }
+}
+
+/// `{"scope": "current-plate" | "all-plates", "stateJson"}` →
+/// `{"plateIds": [...]}` in slicing order, or `{"refusal": text}`.
+pub fn plan_json(request: &str) -> Result<String, &'static str> {
+    let Value::Object(mut fields) = read(request)? else {
+        return Err(INVALID_REQUEST);
+    };
+    let key = |name: &str| name.encode_utf16().collect::<Vec<u16>>();
+    if fields.len() != 2 {
+        return Err(INVALID_REQUEST);
+    }
+    let scope = match fields.remove(&key("scope")) {
+        Some(Value::String(text)) if text == key("current-plate") => Scope::CurrentPlate,
+        Some(Value::String(text)) if text == key("all-plates") => Scope::AllPlates,
+        _ => return Err(INVALID_REQUEST),
+    };
+    let Some(Value::String(state)) = fields.remove(&key("stateJson")) else {
+        return Err(INVALID_REQUEST);
+    };
+    let state = String::from_utf16(&state).map_err(|_| INVALID_REQUEST)?;
+    Ok(plan_reply(slice_plan(&read_state(&state)?, scope)))
+}
+
+/// A plan as its reply document.
+pub fn plan_reply(plan: Result<Vec<PlateId>, Vec<u16>>) -> String {
+    let (name, value) = match plan {
+        Ok(ids) => (
+            "plateIds",
+            Value::Array(
+                ids.iter()
+                    .map(|id| Value::String(id.as_utf16().to_vec()))
+                    .collect(),
+            ),
+        ),
+        Err(refusal) => ("refusal", Value::String(refusal)),
+    };
+    canonical(&Value::Object(BTreeMap::from([(
+        name.encode_utf16().collect(),
+        value,
+    )])))
+}

@@ -30,15 +30,49 @@
  * substitutes the XR camera for the one it is given while a session presents,
  * so without this the thumbnail would be a picture of whatever the headset
  * happened to be looking at.
+ *
+ * **The target stores sRGB.** three.js writes linear light into any render
+ * target but an XR one (tone mapping and the output colour space apply only
+ * to the screen), so a plain 8-bit target read back as PNG bytes held linear
+ * values, and every thumbnail came out darker and harsher than the model the
+ * operator saw. An sRGB target has the GPU encode what the shader writes, as
+ * the screen's framebuffer does.
+ *
+ * The native app draws the same plate the same way — the same parts, the
+ * same three-quarter framing, the same lights — in the shared core
+ * (`orcaxr_archive::thumbnail`), which rasterises it in software; a GPU's
+ * pixels are its own, so the two are alike rather than identical.
  */
 import * as THREE from 'three';
+import type { PlateId } from '../project/domain/ids';
+import { getThreeProjectEntity } from '../project/surfaces/ThreeProjectSurface';
 import type { GcodeThumbnailRequest } from '../slicer/GcodeThumbnails';
 
 /** What the renderer needs from the workspace, and nothing else. */
 export interface PlateThumbnailSource {
-  /** The display meshes of every printable model on the plate being sliced. */
-  meshes(): readonly THREE.Mesh[];
+  /** The display meshes of what plate [plateId] prints ([plateThumbnailMeshes]). */
+  meshes(plateId: PlateId): readonly THREE.Mesh[];
   readonly renderer: THREE.WebGLRenderer;
+}
+
+/**
+ * What a plate prints, as the project scene shows it: every model part of
+ * the plate's printable instances. Modifiers, negative volumes and support
+ * painters print nothing of their own, and an unprintable instance is not
+ * sliced, so none of them is in the picture — as the desktop's G-code
+ * thumbnail leaves them out. Every part counts, not only an object's first.
+ */
+export function plateThumbnailMeshes(root: THREE.Object3D, plateId: PlateId): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = [];
+  for (const viewer of root.children) {
+    const instance = getThreeProjectEntity(viewer);
+    if (instance?.kind !== 'instance' || instance.plateId !== plateId || !instance.printable) continue;
+    for (const child of viewer.children) {
+      const volume = getThreeProjectEntity(child);
+      if (child instanceof THREE.Mesh && volume?.kind === 'volume' && volume.role === 'model') meshes.push(child);
+    }
+  }
+  return meshes;
 }
 
 /** Framing, in the same spirit as the desktop's three-quarter plate view. */
@@ -57,8 +91,8 @@ export class PlateThumbnailRenderer {
    * thumbnail block shows the firmware's own placeholder, which is a better
    * answer than a deliberate rectangle of nothing.
    */
-  async render(request: GcodeThumbnailRequest): Promise<Uint8Array | null> {
-    const meshes = this.source.meshes();
+  async render(request: GcodeThumbnailRequest, plateId: PlateId): Promise<Uint8Array | null> {
+    const meshes = this.source.meshes(plateId);
     if (meshes.length === 0) return null;
 
     const renderer = this.source.renderer;
@@ -87,6 +121,7 @@ export class PlateThumbnailRenderer {
     const target = new THREE.WebGLRenderTarget(request.width, request.height, {
       depthBuffer: true,
       stencilBuffer: false,
+      colorSpace: THREE.SRGBColorSpace,
     });
 
     const previousTarget = renderer.getRenderTarget();
@@ -117,7 +152,7 @@ export class PlateThumbnailRenderer {
 }
 
 /** A three-quarter view that fits `bounds`, whatever its proportions. */
-function frameCamera(bounds: THREE.Box3, aspect: number): THREE.PerspectiveCamera {
+export function frameCamera(bounds: THREE.Box3, aspect: number): THREE.PerspectiveCamera {
   const centre = bounds.getCenter(new THREE.Vector3());
   const sphere = bounds.getBoundingSphere(new THREE.Sphere());
   const fovDeg = 30;

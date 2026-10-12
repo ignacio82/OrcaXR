@@ -90,7 +90,7 @@ import {
 } from '../project/objects/wipeTowerPlacement';
 import { parseThumbnailList } from '../slicer/GcodeThumbnails';
 import type { SliceThumbnailPort } from '../slicer/CanonicalSlicerClientRoute';
-import { PlateThumbnailRenderer } from './PlateThumbnailRenderer';
+import { PlateThumbnailRenderer, plateThumbnailMeshes } from './PlateThumbnailRenderer';
 import { rotateVector } from '../project/objects/transformOperations';
 import { summarizeGcodeArtifact, type GcodeArtifactSummary } from '../slicer/GcodeArtifactSummary';
 import { describeSliceStatus, sliceStatusFigures } from '../slicer/SliceStatus';
@@ -9960,9 +9960,11 @@ export class OrcaWorkspace extends xb.Script {
    * they were looking at.
    */
   private thumbnailPort(): SliceThumbnailPort {
+    // The plate being sliced, which is not the active one when every plate is:
+    // each plate's file shows that plate, not whichever one is on screen.
     const renderer = new PlateThumbnailRenderer({
       renderer: xb.core.renderer,
-      meshes: () => this.models.map((entry) => entry.display),
+      meshes: (plateId) => plateThumbnailMeshes(this.canonicalProject.surface.root, plateId),
     });
     return {
       requests: () => {
@@ -9973,7 +9975,7 @@ export class OrcaWorkspace extends xb.Script {
         }
         return requests;
       },
-      render: (request) => renderer.render(request),
+      render: (request, plateId) => renderer.render(request, plateId),
     };
   }
 

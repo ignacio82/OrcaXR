@@ -9,7 +9,7 @@
     "maxNodes": 4194304,
     "maxDepth": 12
   },
-  "bulkRoots": ["PrinterStorageResult", "PrintHistoryResult", "PrintHistoryJob", "PrintHistoryJobView", "GcodeAssessment", "ConsolePlan", "ConsoleResult", "MacroInvocation", "CameraListResult", "PrinterCamera", "CameraSnapshotRequest", "CameraSnapshotPlan", "CameraSnapshotFinish", "CameraFailure", "CameraMechanismsRequest", "CameraDescribeRequest", "CameraFrameRequest", "OptionalPrinterReplyText", "RememberedCredentials", "ExternalSlicerAttestationPlan", "ExternalSlicerReply", "ExternalSlicerAttestation", "ExternalSlicerPlan", "ExternalSlicerSubmitRead", "ExternalSlicerSubmission", "ExternalSlicerPollRead", "ExternalSlicerPollStep", "ExternalSlicerCancelRead", "ExternalSlicerCancelStep", "ExternalSlicerArtifactRead", "ExternalSlicerArtifact"],
+  "bulkRoots": ["PrinterStorageResult", "PrintHistoryResult", "PrintHistoryJob", "PrintHistoryJobView", "GcodeAssessment", "ConsolePlan", "ConsoleResult", "MacroInvocation", "CameraListResult", "PrinterCamera", "CameraSnapshotRequest", "CameraSnapshotPlan", "CameraSnapshotFinish", "CameraFailure", "CameraMechanismsRequest", "CameraDescribeRequest", "CameraFrameRequest", "OptionalPrinterReplyText", "RememberedCredentials", "ExternalSlicerAttestationPlan", "ExternalSlicerReply", "ExternalSlicerAttestation", "ExternalSlicerPlan", "ExternalSlicerSubmitRead", "ExternalSlicerSubmission", "ExternalSlicerPollRead", "ExternalSlicerPollStep", "ExternalSlicerCancelRead", "ExternalSlicerCancelStep", "ExternalSlicerArtifactRead", "ExternalSlicerArtifact", "ExternalSlicerDownloadRead", "ExternalSlicerDownloadStep"],
   "description": "Prepared project commands, session messages and slice preflight exchanges. Text is lossless UTF-16 units. Project transport, command format and persisted schema versions are distinct.",
   "definitions": {
     "Unit": {
@@ -7075,7 +7075,8 @@
         "alreadyDone",
         "alreadyFailed",
         "alreadyReleased",
-        "unconfirmed"
+        "unconfirmed",
+        "retained"
       ]
     },
     "ExternalSlicerFailure": {
@@ -7222,6 +7223,28 @@
       "kind": "union",
       "variants": {
         "accepted": "ExternalSlicerAccepted",
+        "failed": "ExternalSlicerFailure"
+      }
+    },
+    "ExternalSlicerDownloadOutcome": {
+      "kind": "union",
+      "variants": {
+        "transferFailed": "EditText",
+        "artifact": "ExternalSlicerArtifact"
+      }
+    },
+    "ExternalSlicerDownloadRead": {
+      "kind": "object",
+      "fields": {
+        "attempt": "Counter",
+        "outcome": "ExternalSlicerDownloadOutcome"
+      }
+    },
+    "ExternalSlicerDownloadStep": {
+      "kind": "union",
+      "variants": {
+        "accept": "Empty",
+        "refetch": "Empty",
         "failed": "ExternalSlicerFailure"
       }
     }
@@ -7474,7 +7497,9 @@
     "ExternalSlicerCancelRead",
     "ExternalSlicerCancelStep",
     "ExternalSlicerArtifactRead",
-    "ExternalSlicerArtifact"
+    "ExternalSlicerArtifact",
+    "ExternalSlicerDownloadRead",
+    "ExternalSlicerDownloadStep"
   ],
   "sessionVersion": 1
 }

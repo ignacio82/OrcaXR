@@ -300,6 +300,8 @@ assert.deepEqual(schema.roots, [
   "ExternalSlicerCancelStep",
   "ExternalSlicerArtifactRead",
   "ExternalSlicerArtifact",
+  "ExternalSlicerDownloadRead",
+  "ExternalSlicerDownloadStep",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

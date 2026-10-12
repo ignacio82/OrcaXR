@@ -15055,6 +15055,7 @@ pub enum ExternalSlicerFailureKind {
     AlreadyFailed,
     AlreadyReleased,
     Unconfirmed,
+    Retained,
 }
 fn read_external_slicer_failure_kind(
     v: &Value,
@@ -15066,6 +15067,7 @@ fn read_external_slicer_failure_kind(
         Some("alreadyFailed") => Ok(ExternalSlicerFailureKind::AlreadyFailed),
         Some("alreadyReleased") => Ok(ExternalSlicerFailureKind::AlreadyReleased),
         Some("unconfirmed") => Ok(ExternalSlicerFailureKind::Unconfirmed),
+        Some("retained") => Ok(ExternalSlicerFailureKind::Retained),
         _ => Err(InvalidIntent),
     }
 }
@@ -15403,6 +15405,63 @@ fn read_external_slicer_artifact(v: &Value) -> Result<ExternalSlicerArtifact, In
             read_external_slicer_accepted(value)?,
         )),
         "failed" => Ok(ExternalSlicerArtifact::Failed(
+            read_external_slicer_failure(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerDownloadOutcome {
+    TransferFailed(EditText),
+    Artifact(ExternalSlicerArtifact),
+}
+fn read_external_slicer_download_outcome(
+    v: &Value,
+) -> Result<ExternalSlicerDownloadOutcome, InvalidIntent> {
+    let object = fields(v, &["transferFailed", "artifact"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "transferFailed" => Ok(ExternalSlicerDownloadOutcome::TransferFailed(
+            read_edit_text(value)?,
+        )),
+        "artifact" => Ok(ExternalSlicerDownloadOutcome::Artifact(
+            read_external_slicer_artifact(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerDownloadRead {
+    pub attempt: Counter,
+    pub outcome: ExternalSlicerDownloadOutcome,
+}
+fn read_external_slicer_download_read(
+    v: &Value,
+) -> Result<ExternalSlicerDownloadRead, InvalidIntent> {
+    let object = fields(v, &["attempt", "outcome"], false)?;
+    Ok(ExternalSlicerDownloadRead {
+        attempt: read_counter(&object["attempt"])?,
+        outcome: read_external_slicer_download_outcome(&object["outcome"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerDownloadStep {
+    Accept(Empty),
+    Refetch(Empty),
+    Failed(ExternalSlicerFailure),
+}
+fn read_external_slicer_download_step(
+    v: &Value,
+) -> Result<ExternalSlicerDownloadStep, InvalidIntent> {
+    let object = fields(v, &["accept", "refetch", "failed"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "accept" => Ok(ExternalSlicerDownloadStep::Accept(read_empty(value)?)),
+        "refetch" => Ok(ExternalSlicerDownloadStep::Refetch(read_empty(value)?)),
+        "failed" => Ok(ExternalSlicerDownloadStep::Failed(
             read_external_slicer_failure(value)?,
         )),
         _ => Err(InvalidIntent),
@@ -17728,5 +17787,29 @@ pub fn encode_external_slicer_artifact(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode_bounded(value, &BULK)?;
     decode_external_slicer_artifact(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_download_read(
+    text: &str,
+) -> Result<ExternalSlicerDownloadRead, InvalidIntent> {
+    read_external_slicer_download_read(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_download_read(
+    value: &ExternalSlicerDownloadRead,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_download_read(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_download_step(
+    text: &str,
+) -> Result<ExternalSlicerDownloadStep, InvalidIntent> {
+    read_external_slicer_download_step(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_download_step(
+    value: &ExternalSlicerDownloadStep,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_download_step(&text)?;
     Ok(text)
 }

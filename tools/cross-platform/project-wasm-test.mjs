@@ -44,6 +44,7 @@ import { replayExternalSlicer } from "./external-slicer-replay.mjs";
 import { plateProjectionCases, replayPlateProjection } from "./plate-projection-replay.mjs";
 import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
+import { replaySliceOutputs } from "./slice-output-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
 import { replayActionPresentation } from "./action-presentation-replay.mjs";
 import { replayPaintTool } from "./paint-tool-replay.mjs";
@@ -328,8 +329,8 @@ if (isMainThread) {
     // Remembered credentials: stored records loaded and records saved.
     assert.deepEqual(result.rememberedCredentialsAnswers, [79, 63]);
     // The external slicer: endpoints, attestations, job plans, submissions,
-    // polls, cancellations and artifacts.
-    assert.deepEqual(result.externalSlicerAnswers, [72, 230, 156, 247, 196, 44, 49]);
+    // polls, cancellations, artifacts and whether a download is fetched again.
+    assert.deepEqual(result.externalSlicerAnswers, [72, 230, 156, 247, 196, 44, 49, 102]);
     // One plate for an external slicer: projected, refused, and its overrides.
     assert.deepEqual(result.plateProjectionAnswers, [16, 3, 19]);
     // Catalog profiles chosen and turned into the project's slicing
@@ -346,6 +347,9 @@ if (isMainThread) {
     assert.deepEqual(result.virtualFilamentAnswers, [6, 27, 197, 12, 12, 51, 13, 20]);
     // The workspace bed: configurations, refusals and opened projects' plates.
     assert.deepEqual([result.beds, result.bedRefusals, result.projectBeds], [85, 14, 12]);
+    // A slice's outputs: thumbnail lists, blocks, injections, cameras, slice
+    // plans, refusals, and a session's plate drawn with Rust's own bytes.
+    assert.deepEqual(result.sliceOutputAnswers, [68, 19, 100, 132, 40, 26, 3]);
     // The transform inspector's fields: reads, rotations, edits and refusals.
     assert.deepEqual(
       [result.fieldReads, result.rotations, result.fieldEdits, result.fieldRefusals],
@@ -895,6 +899,12 @@ if (isMainThread) {
     JSON.parse(await readFile(new URL("testdata/cross-platform/workspace-bed-vectors.json", root))),
     layout,
   );
+  const sliceOutputs = replaySliceOutputs(
+    core,
+    JSON.parse(await readFile(new URL("testdata/cross-platform/slice-output-vectors.json", root))),
+    JSON.parse(await readFile(new URL("testdata/cross-platform/placement-vectors.json", root))),
+    layout,
+  );
   const transformFields = replayTransformFields(
     core,
     JSON.parse(await readFile(new URL("testdata/cross-platform/transform-field-vectors.json", root))),
@@ -985,6 +995,7 @@ if (isMainThread) {
       ...plateProjection,
       ...slicingConfiguration,
       ...workspaceBeds,
+      ...sliceOutputs,
       ...transformFields,
       ...actionPresentation,
       ...settingsPanel,

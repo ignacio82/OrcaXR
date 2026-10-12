@@ -279,6 +279,86 @@ try {
     assert.equal(calls.length, 0);
   });
 
+  // The server keeps a finished result until it is released or expires: a
+  // transfer that fails is fetched again, never sliced again. The client used
+  // to say "retained for retry" and then never fetched it.
+  const sliced = new TextEncoder().encode('; sliced\nG28\n');
+  const identity = {
+    'x-orcaxr-job-id': 'job-1',
+    'x-orcaxr-gcode-sha256': sha256Bytes(sliced).slice(7),
+    'x-orcaxr-gcode-bytes': String(sliced.length),
+  };
+  const artifact = (bytes: Uint8Array = sliced) => new Response(bytes.slice(), { headers: identity });
+  const cut = () =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(sliced.subarray(0, 4));
+          controller.error(new TypeError('network error'));
+        },
+      }),
+      { headers: identity },
+    );
+  const route = (request: Request) => `${request.method} ${new URL(request.url).pathname}`;
+
+  await test('a download cut off is fetched again from the result the server keeps, then released', async () => {
+    let downloads = 0;
+    implementation = async (request) => {
+      if (request.url.endsWith('/gcode')) return ++downloads === 1 ? cut() : artifact();
+      return json('done');
+    };
+    assert.equal(await pollExternalJob(context), '; sliced\nG28\n');
+    assert.deepEqual(calls.map(route), [
+      'GET /jobs/job-1',
+      'GET /jobs/job-1/gcode',
+      'GET /jobs/job-1/gcode',
+      'DELETE /jobs/job-1',
+    ]);
+  });
+
+  await test('a download that does not match its checksum is fetched again, with the same checks', async () => {
+    let downloads = 0;
+    const damaged = sliced.slice();
+    damaged[0] ^= 1;
+    implementation = async (request) => {
+      if (request.url.endsWith('/gcode')) return ++downloads < 3 ? artifact(damaged) : artifact();
+      return json('done');
+    };
+    assert.equal(await pollExternalJob(context), '; sliced\nG28\n');
+    assert.equal(downloads, 3);
+    assert.equal(calls.filter((request) => request.method === 'DELETE').length, 1);
+  });
+
+  await test('a download that keeps failing ends as its transfer did, after three attempts, unreleased', async () => {
+    implementation = async (request) => (request.url.endsWith('/gcode') ? cut() : json('done'));
+    await assert.rejects(pollExternalJob(context), (error: unknown) => error instanceof TypeError);
+    assert.equal(calls.filter((request) => request.url.endsWith('/gcode')).length, 3);
+    assert.equal(calls.filter((request) => request.method === 'DELETE').length, 0);
+  });
+
+  await test('a refusal is the server’s answer and is never fetched again', async () => {
+    implementation = async (request) =>
+      request.url.endsWith('/gcode') ? new Response('{"error":"expired"}', { status: 410 }) : json('done');
+    await assert.rejects(pollExternalJob(context), { message: 'External Slicer Failed: {"error":"expired"}' });
+    assert.equal(calls.filter((request) => request.url.endsWith('/gcode')).length, 1);
+  });
+
+  await test('a cancel while a download is fetched again ends as already done, not cancelled', async () => {
+    const slice = new AbortController();
+    implementation = async (request) => {
+      if (request.url.endsWith('/gcode')) {
+        slice.abort(new Error('Cancelled by user'));
+        return cut();
+      }
+      return json('done');
+    };
+    await assert.rejects(
+      pollExternalJob({ ...context, signal: slice.signal }),
+      (error: unknown) => error instanceof SlicerClientCancellationError && error.outcome === 'already-terminal',
+    );
+    assert.equal(calls.filter((request) => request.url.endsWith('/gcode')).length, 1);
+  });
+
   await test('a job ID no URL can carry fails at once, not as unanswered polls', async () => {
     implementation = async () => json('running');
     const started = performance.now();

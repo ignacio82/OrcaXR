@@ -6,7 +6,7 @@
 // turn, malformed and hostile payloads, prototype names, duplicate keys);
 // what each job step sends for job IDs of every shape; and how submission,
 // status, cancellation and artifact replies read, including the facts a host
-// computes of a downloaded artifact. Also writes the pinned engine provenance
+// computes of a downloaded artifact, and whether a download is fetched again. Also writes the pinned engine provenance
 // every host checks attestations against (`contracts/pinned-engine-provenance.json`,
 // from `pinnedEngineProvenance.ts`). Replayed by Rust.
 import assert from "node:assert/strict";
@@ -17,6 +17,7 @@ import {
   answerAttestation,
   answerAttestationPlan,
   answerCancel,
+  answerDownload,
   answerEndpoint,
   answerJobPlan,
   answerPoll,
@@ -33,6 +34,8 @@ import {
   encodeProjectExternalSlicerAttestationPlan,
   encodeProjectExternalSlicerCancelRead,
   encodeProjectExternalSlicerCancelStep,
+  encodeProjectExternalSlicerDownloadRead,
+  encodeProjectExternalSlicerDownloadStep,
   encodeProjectExternalSlicerEndpoint,
   encodeProjectExternalSlicerEndpointRequest,
   encodeProjectExternalSlicerJobRequest,
@@ -734,6 +737,27 @@ for (const {
   });
 }
 
+// --- Downloads --------------------------------------------------------------------------------
+// Each attempt at a finished job's artifact: its transport's failure, or
+// every distinct verdict the artifact reads above — accepted, refused, or
+// retained by the server for another fetch.
+const verdicts = [...new Set(artifacts.map((each) => each.replyJson))].map((json) => JSON.parse(json));
+const outcomes = [
+  ...["The external slicer could not be reached.", "network error", "", "\ud800 lone"].map((text) => ({
+    transferFailed: units(text),
+  })),
+  ...verdicts.map((artifact) => ({ artifact })),
+];
+const downloads = [];
+for (const outcome of outcomes)
+  for (const attempt of [0, 1, 2, 3, 4, 9007199254740991]) {
+    const request = { attempt, outcome };
+    downloads.push({
+      requestJson: encodeProjectExternalSlicerDownloadRead(request),
+      replyJson: encodeProjectExternalSlicerDownloadStep(answerDownload(request)),
+    });
+  }
+
 const sources = [
   "tools/cross-platform/external-slicer-vectors.mjs",
   "web/src/slicer/ExternalSlicerExchange.ts",
@@ -751,6 +775,7 @@ const corpus = {
   polls,
   cancels,
   artifacts,
+  downloads,
 };
 const output =
   JSON.stringify({

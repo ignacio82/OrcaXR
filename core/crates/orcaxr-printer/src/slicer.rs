@@ -22,6 +22,12 @@ pub const SUBMISSION_PATH: &str = "/slice?async=1";
 pub const MAX_POLL_FAILURES: u64 = 5;
 /// How long releasing a validated result may take before the server is left to expire it.
 pub const RELEASE_TIMEOUT_MS: f64 = 1000.0;
+/// How many times a finished job's artifact is fetched before its download
+/// fails. The server keeps a result until it is released or expires and
+/// serves it as often as it is asked (a transfer in progress holds it), so a
+/// transfer that dropped, came up short or did not match its checksum is
+/// fetched again, not sliced again.
+pub const MAX_DOWNLOAD_ATTEMPTS: u64 = 3;
 
 const INVALID_ENDPOINT: &str = "The captured external slicer endpoint is invalid.";
 const NOT_CANONICAL: &str =
@@ -690,8 +696,10 @@ pub fn artifact(read: &wire::ExternalSlicerArtifactRead) -> wire::ExternalSlicer
             && text.iter().all(|&u| (0x30..=0x39).contains(&u))
             && lossy(text).trim_start_matches('0') == facts.length.to_string()
     };
+    // The server still holds a result whose transfer came up short or did not match: it can be fetched again.
+    let retained = |message: &str| Artifact::Failed(failure(Kind::Retained, units(message)));
     if facts.length == 0 || read_optional(&facts.bytes_header).is_some_and(|l| !length_matches(l)) {
-        return refuse(
+        return retained(
             "External slice download was incomplete. The result was retained for retry.",
         );
     }
@@ -700,7 +708,7 @@ pub fn artifact(read: &wire::ExternalSlicerArtifactRead) -> wire::ExternalSlicer
             return refuse("External slicer returned an invalid artifact checksum.");
         }
         if *digest != facts.sha256 {
-            return refuse(
+            return retained(
                 "External slice download checksum did not match. The result was retained for retry.",
             );
         }
@@ -719,4 +727,33 @@ pub fn artifact(read: &wire::ExternalSlicerArtifactRead) -> wire::ExternalSlicer
             None => wire::OptionalText::Absent(wire::Empty {}),
         },
     })
+}
+
+/// `readDownload`: the `attempt`th download of a finished job's artifact —
+/// accepted; fetched again, while attempts remain, after a transfer that
+/// failed (the host's sentence) or an artifact the server retained; or failed
+/// with the transfer's or the verdict's own words.
+pub fn download(read: &wire::ExternalSlicerDownloadRead) -> wire::ExternalSlicerDownloadStep {
+    use wire::ExternalSlicerDownloadStep as Step;
+    let again = read.attempt < MAX_DOWNLOAD_ATTEMPTS;
+    match &read.outcome {
+        wire::ExternalSlicerDownloadOutcome::Artifact(wire::ExternalSlicerArtifact::Accepted(
+            _,
+        )) => Step::Accept(wire::Empty {}),
+        wire::ExternalSlicerDownloadOutcome::TransferFailed(_) if again => {
+            Step::Refetch(wire::Empty {})
+        }
+        wire::ExternalSlicerDownloadOutcome::TransferFailed(detail) => {
+            Step::Failed(failure(Kind::Failed, detail.clone()))
+        }
+        wire::ExternalSlicerDownloadOutcome::Artifact(wire::ExternalSlicerArtifact::Failed(
+            refused,
+        )) => {
+            if again && refused.kind == Kind::Retained {
+                Step::Refetch(wire::Empty {})
+            } else {
+                Step::Failed(refused.clone())
+            }
+        }
+    }
 }

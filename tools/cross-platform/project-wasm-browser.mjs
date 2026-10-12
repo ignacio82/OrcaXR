@@ -1003,7 +1003,7 @@ try {
   assert.deepEqual(result.printerCameraAnswers, [62, 12, 462, 462, 616, 308, 154, 154]);
   assert.deepEqual(result.printerDirectoryAnswers, [37, 25, 160, 60, 44, 41, 15]);
   assert.deepEqual(result.rememberedCredentialsAnswers, [79, 63]);
-  assert.deepEqual(result.externalSlicerAnswers, [72, 230, 156, 247, 196, 44, 49]);
+  assert.deepEqual(result.externalSlicerAnswers, [72, 230, 156, 247, 196, 44, 49, 102]);
   assert.deepEqual(result.plateProjectionAnswers, [16, 3, 19]);
   // Catalog profiles chosen and turned into the project's slicing configuration,
   // filament slot edits and the slots captured projects describe.

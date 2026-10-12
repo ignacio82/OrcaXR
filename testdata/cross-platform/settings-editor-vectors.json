@@ -31,7 +31,7 @@
   },
   {
    "path": "contracts/project-intents.json",
-   "sha256": "05903db367fa9d2d9257e2a5cb48613c39601a4f8574dd1522e76618154322fd"
+   "sha256": "35158e43516b2424e5eab247daa8e81692736bcf6d961d449b1e2ca64d148c19"
   },
   {
    "path": "web/src/settings/generated/engine-options.schema.json",

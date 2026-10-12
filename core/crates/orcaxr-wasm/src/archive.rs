@@ -194,6 +194,14 @@ impl ProjectSession {
 
 #[wasm_bindgen]
 impl ProjectExport {
+    /// The pictures this capture's project asks for (its `thumbnails`),
+    /// drawn from its active plate — a plate capture's only one — by the
+    /// shared core (`orcaxr_archive::thumbnail`), each as the G-code block
+    /// that carries it: `{"problems","thumbnails":[{"block","coverage",
+    /// "format","height","width"}]}`. Synchronous; run it on a worker.
+    pub fn thumbnails(&self) -> Result<String, JsValue> {
+        orcaxr_archive::thumbnail::capture_json(&self.inner).map_err(|e| error(e.code()))
+    }
     /// Write this frozen capture — a plate's, for an external slicer — as a
     /// complete 3MF package. It carries no checkpoint guard: an export is
     /// never a save.

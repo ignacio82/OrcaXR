@@ -448,6 +448,42 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sliceThumbnailList, slice_thumbnail_list, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_sliceThumbnailBlock, slice_thumbnail_block, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_sliceThumbnailInject, slice_thumbnail_inject, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_sliceThumbnailView, slice_thumbnail_view, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_slicePlan, slice_plan, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectSlicePlan, project_slice_plan, jstring,
+    handle: jlong,
+    scope: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_exportThumbnails, export_thumbnails, jstring,
+    handle: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_transformFields, transform_fields, jstring,
     request: JString<'local>,
 }
@@ -1524,6 +1560,11 @@ export! {
 
 export! {
     Java_dev_orcaxr_core_NativeProject_externalSlicerArtifact, external_slicer_artifact, jstring,
+    read: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_externalSlicerDownload, external_slicer_download, jstring,
     read: JString<'local>,
 }
 

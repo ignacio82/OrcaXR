@@ -581,9 +581,20 @@ export class CanonicalSliceJobCoordinator {
   }
 }
 
-function selectPlateIds(
+/**
+ * The plates a job of [scope] slices, in order: the active plate (which must
+ * be printable), or every printable plate that holds a model, by plate order.
+ * An empty plate has nothing to slice: sent to the engine it failed the whole
+ * job, so one empty plate beside the others left no plate sliced at all.
+ */
+export function selectPlateIds(
   activePlateId: PlateId,
-  plates: readonly { id: PlateId; order: number; printable: boolean }[],
+  plates: readonly {
+    id: PlateId;
+    order: number;
+    printable: boolean;
+    objects: readonly { instances: readonly unknown[] }[];
+  }[],
   scope: SliceJobScope,
 ): PlateId[] {
   if (scope === 'current-plate') {
@@ -593,7 +604,7 @@ function selectPlateIds(
     return [active.id];
   }
   const printable = [...plates]
-    .filter((plate) => plate.printable)
+    .filter((plate) => plate.printable && plate.objects.some((object) => object.instances.length > 0))
     .sort((left, right) => left.order - right.order || compareCanonicalText(left.id, right.id))
     .map((plate) => plate.id);
   if (printable.length === 0) throw new Error('Project has no printable plates');

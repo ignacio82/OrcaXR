@@ -21,6 +21,7 @@ mod fresh;
 mod json_sink;
 mod library;
 mod model;
+mod outputs;
 mod painting;
 mod placement;
 mod plate;
@@ -62,6 +63,7 @@ use orcaxr_project::{
     staging_layout as staging,
     store::ProjectSnapshot,
 };
+use outputs::*;
 use painting::*;
 use placement::*;
 use plate::*;

@@ -97,6 +97,28 @@ await test('the sliced file carries the plate’s picture, in the printer’s ow
   assert.equal(response.statistics.gcodeBytes, response.gcode.byteLength);
 });
 
+await test('each plate’s file shows that plate, not the one on screen', async () => {
+  // Slicing every plate runs the route once per plate while one plate stays
+  // active; the picture used to be drawn from the active plate's models, so
+  // every other plate's file showed the active plate.
+  const drawn: string[] = [];
+  const adapter = new CanonicalSlicerClientRoute({
+    client: new RecordingClient(),
+    route: { kind: 'browser-wasm' },
+    thumbnails: {
+      requests: () => [{ width: 48, height: 48, format: 'PNG' }],
+      render: async (_request, plateId) => {
+        drawn.push(plateId);
+        return new Uint8Array([1]);
+      },
+    },
+  });
+  for (const plateId of ['plate-a', 'plate-b'] as PlateId[]) {
+    await adapter.execute({ ...requestFor(adapter.metadata.engine), plateId }, new AbortController().signal);
+  }
+  assert.deepEqual(drawn, ['plate-a', 'plate-b']);
+});
+
 await test('an empty plate and a broken renderer both leave the slice intact', async () => {
   const client = new RecordingClient();
   const empty = new CanonicalSlicerClientRoute({

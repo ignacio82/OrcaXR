@@ -74,3 +74,38 @@ pub fn command_palette(request: &str) -> Result<String, JsValue> {
 pub fn action_groups(request: &str) -> Result<String, JsValue> {
     orcaxr_project::action_presentation::groups_json(request).map_err(error)
 }
+
+/// What a printer's `thumbnails` value asks for (`thumbnailListExchange`):
+/// `{"value"?}` in, `{"problems","requests"}` out.
+#[wasm_bindgen]
+pub fn slice_thumbnail_list(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::slicing::thumbnails::list_json(request).map_err(error)
+}
+
+/// One thumbnail in the engine's wire format (`thumbnailBlockExchange`):
+/// `{"image","request"}` in, the block's text as a JSON string out.
+#[wasm_bindgen]
+pub fn slice_thumbnail_block(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::slicing::thumbnails::block_json(request).map_err(error)
+}
+
+/// A G-code with its thumbnail blocks (`thumbnailInjectExchange`):
+/// `{"blocks","gcode"}` in, the G-code as a JSON string out.
+#[wasm_bindgen]
+pub fn slice_thumbnail_inject(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::slicing::thumbnails::inject_json(request).map_err(error)
+}
+
+/// The thumbnail camera (`thumbnailViewExchange`): `{"aspect","max","min"}`
+/// in, `{"fovDeg","position","target"}` out.
+#[wasm_bindgen]
+pub fn slice_thumbnail_view(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::slicing::thumbnails::view_json(request).map_err(error)
+}
+
+/// The plates a slice slices (`slicePlanExchange`): `{"scope","stateJson"}`
+/// in, `{"plateIds"}` or `{"refusal"}` out.
+#[wasm_bindgen]
+pub fn slice_plan(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::slicing::plate::plan_json(request).map_err(error)
+}

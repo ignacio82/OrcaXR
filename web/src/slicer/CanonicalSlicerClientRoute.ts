@@ -52,8 +52,12 @@ export interface CanonicalProjectSlicerClientPort {
 export interface SliceThumbnailPort {
   /** The sizes and formats the active printer's `thumbnails` value asks for. */
   requests(): readonly GcodeThumbnailRequest[];
-  /** `null` when there is nothing on the plate worth a picture. */
-  render(request: GcodeThumbnailRequest): Promise<Uint8Array | null>;
+  /**
+   * The picture of plate [plateId] — the plate this slice is of, which is
+   * not the active one when every plate is sliced; `null` when there is
+   * nothing on it worth a picture.
+   */
+  render(request: GcodeThumbnailRequest, plateId: SliceRouteRequest['plateId']): Promise<Uint8Array | null>;
 }
 
 export interface CanonicalSlicerClientRouteOptions {
@@ -109,13 +113,13 @@ export class CanonicalSlicerClientRoute implements SliceRouteAdapterPort {
    * finished slice into a failed one. A failure leaves the G-code exactly as
    * the engine wrote it, which is the behaviour every build had until now.
    */
-  private async withThumbnails(gcodeText: string): Promise<string> {
+  private async withThumbnails(gcodeText: string, plateId: SliceRouteRequest['plateId']): Promise<string> {
     const port = this.options.thumbnails;
     if (!port) return gcodeText;
     try {
       const blocks: string[] = [];
       for (const request of port.requests()) {
-        const image = await port.render(request);
+        const image = await port.render(request, plateId);
         if (image && image.byteLength > 0) blocks.push(encodeThumbnailBlock(request, image));
       }
       return injectGcodeThumbnails(gcodeText, blocks);
@@ -169,7 +173,7 @@ export class CanonicalSlicerClientRoute implements SliceRouteAdapterPort {
         const reason = signalReason(signal);
         throw new SliceRouteCancellationError('Canonical slice route cancelled after engine completion', false, reason);
       }
-      const gcode = encoder.encode(await this.withThumbnails(gcodeText));
+      const gcode = encoder.encode(await this.withThumbnails(gcodeText, request.plateId));
       return {
         protocolVersion: SLICE_PROTOCOL_VERSION,
         jobId: request.jobId,

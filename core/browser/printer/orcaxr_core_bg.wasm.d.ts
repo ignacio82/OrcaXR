@@ -33,6 +33,7 @@ export const external_slicer_artifact: (a: number, b: number) => [number, number
 export const external_slicer_attestation: (a: number, b: number) => [number, number, number, number];
 export const external_slicer_attestation_plan: (a: number, b: number) => [number, number, number, number];
 export const external_slicer_cancel: (a: number, b: number) => [number, number, number, number];
+export const external_slicer_download: (a: number, b: number) => [number, number, number, number];
 export const external_slicer_endpoint: (a: number, b: number) => [number, number, number, number];
 export const external_slicer_job_plan: (a: number, b: number) => [number, number, number, number];
 export const external_slicer_poll: (a: number, b: number) => [number, number, number, number];

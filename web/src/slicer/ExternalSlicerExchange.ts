@@ -8,6 +8,8 @@
  * core answers the same requests (`orcaxr_printer::slicer`).
  */
 import type {
+  ProjectExternalSlicerDownloadReadWire,
+  ProjectExternalSlicerDownloadStepWire,
   ProjectExternalSlicerArtifactFactsWire,
   ProjectExternalSlicerArtifactReadWire,
   ProjectExternalSlicerArtifactWire,
@@ -38,8 +40,11 @@ import {
   pollExternalJob,
   readCancelReply,
   readExternalResult,
+  readDownload,
   readJobPoll,
   readSubmission,
+  RetainedResultError,
+  type DownloadOutcome,
   type ExternalJobContext,
   type ExternalReply,
 } from './ExternalSlicerJobs';
@@ -52,7 +57,7 @@ const optional = (value: string | null) => (value === null ? absent : { value: u
 /** A failure as the browser raises it: its sentence and what it means for the job. */
 export function failureWire(error: unknown): ProjectExternalSlicerFailureWire {
   const message = error instanceof Error ? error.message : String(error);
-  let kind: ProjectExternalSlicerFailureWire['kind'] = 'failed';
+  let kind: ProjectExternalSlicerFailureWire['kind'] = error instanceof RetainedResultError ? 'retained' : 'failed';
   if (error instanceof SlicerClientCancellationError) {
     kind = error.cancellationConfirmed
       ? 'cancelled'
@@ -292,4 +297,34 @@ export async function answerArtifact(
     return { failed: failureWire(error) };
   }
   return { accepted: { release: released.length ? { value: units(released[0]) } : absent } };
+}
+
+/** The failure an artifact verdict stands for, as the browser raises it. */
+function verdictError(failure: ProjectExternalSlicerFailureWire): Error {
+  const text = fromUnits(failure.message);
+  if (failure.kind === 'retained') return new RetainedResultError(text);
+  if (failure.kind === 'failed') return new Error(text);
+  const terminal = { alreadyDone: 'done', alreadyFailed: 'error', alreadyReleased: 'released' } as const;
+  return new SlicerClientCancellationError(
+    text,
+    failure.kind === 'cancelled',
+    failure.kind in terminal ? terminal[failure.kind as keyof typeof terminal] : undefined,
+  );
+}
+
+/**
+ * The [attempt]th download of a job's artifact read by the production
+ * `readDownload`: its transport failed (the host's sentence), or its artifact
+ * was judged (`answerArtifact`) — accepted, refused, or retained by the server.
+ */
+export function answerDownload(request: ProjectExternalSlicerDownloadReadWire): ProjectExternalSlicerDownloadStepWire {
+  const outcome = request.outcome;
+  let read: DownloadOutcome;
+  if ('transferFailed' in outcome) read = { transferFailed: new TypeError(fromUnits(outcome.transferFailed)) };
+  else if ('accepted' in outcome.artifact) read = { accepted: true };
+  else read = { refused: verdictError(outcome.artifact.failed) };
+  const step = readDownload(request.attempt, read);
+  if (step.kind === 'accept') return { accept: {} };
+  if (step.kind === 'refetch') return { refetch: {} };
+  return { failed: failureWire(step.error) };
 }
