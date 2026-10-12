@@ -6618,6 +6618,43 @@ real session, take the same selection and edit (matching its replies) and
 match the pages, with 183 refusals; 15 Kotlin checks cover the wrapper,
 including a selection the session, not the host, reports.
 
+### Action presentation
+
+`orcaxr_project::action_presentation` ports how the browser's shells
+arrange catalogue actions (`web/src/ui/ActionPresentation.ts`, which
+the DOM and XR command palettes, the context menus and the DOM model toolbar
+now share — the XR palette had a copy of the DOM palette's matcher): the
+palette's search, which keeps an action whose label, id or hint (as the
+shell shows them, in its language) contains the query trimmed with
+ECMAScript's whitespace, every text lowercased as `toLowerCase` does
+(`js_math::case::lower`: Unicode 16, Final_Sigma, lone surrogates kept),
+compared as UTF-16 code units, in the order given — no ranking beyond the
+catalogue's order; a context menu's sections, the catalogue groups in
+`GROUPS`' declared order (the generated catalogue now carries each group's
+label and that order: `Group::label`, `Group::ORDER`); and the model
+toolbar's runs, consecutive actions of one group. The exchange
+(`ActionPresentationExchange.ts`) is canonical JSON: `palette_json` reads
+`{"actions":[{"hint"?,"id","label"}],"query"}` and answers
+`{"matches":[index]}`; `groups_json` reads `{"actions":[id],"layout":"context"|"toolbar"}`
+and answers `{"groups":[{"actions":[index],"group","label"}]}`; malformed
+requests and actions the catalogue lacks are `invalid_request`. Bindings:
+WASM `command_palette`/`action_groups`, JNI `NativeProject.commandPalette`/
+`actionGroups`, Kotlin `ActionPresentation`.
+
+`action-presentation-vectors.mjs` records the browser's answers over the
+whole catalogue in every language it ships (21 catalogues: the registry's own
+text source over each `web/public/l10n` catalogue, plus one of case-mapping
+edge cases — final sigma, dotted capital I, ß and ẞ, Cherokee, Georgian,
+titlecase, lone and astral surrogates, ECMAScript whitespace): 1,827 searches
+(1,502 matching; fixed queries and 60 seeded substrings per catalogue of
+labels, hints and ids, case-changed, padded, some splitting a surrogate
+pair), 92 sections and runs over the catalogue's menus and seeded selections
+of it, and 23 malformed requests. Rust (`tests/action_presentation.rs`), WASM
+in Node (`project-wasm-test.mjs`) and JNI (`project-jni-test.mjs`) answer
+them byte for byte; the Kotlin wrapper replays them in
+`ProjectCommandPaletteChecks`. The corpus requires Node's Unicode 16, the
+core's pinned casing.
+
 ### Renderer deltas
 
 `render` in the project crate (`renderProjection.ts` in the browser) is the

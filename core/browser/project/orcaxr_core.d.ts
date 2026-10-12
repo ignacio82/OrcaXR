@@ -1205,6 +1205,12 @@ export class ToolUsageScanner {
 }
 
 /**
+ * A context menu's sections or the model toolbar's runs (`actionGroupsExchange`):
+ * `{"actions":[id],"layout"}` in, `{"groups":[{"actions","group","label"}]}` out.
+ */
+export function action_groups(request: string): string;
+
+/**
  * The instance transform one pinned alignment produces: an
  * `AssemblyAlignmentRequest`; returns an `AssemblyAlignmentReply`.
  */
@@ -1273,6 +1279,12 @@ export function camera_snapshot_plan(request: string): string;
  * `coerceOverrideValue`: a `LibraryCoerceRequest` to a `LibraryCoercedValue`.
  */
 export function coerce_override_value(request: string): string;
+
+/**
+ * The command palette's search (`commandPaletteExchange`):
+ * `{"actions":[{"hint"?,"id","label"}],"query"}` in, `{"matches":[index]}` out.
+ */
+export function command_palette(request: string): string;
 
 /**
  * A `GcodeAssessRequest`; the `GcodeAssessment`: what sending the script at
@@ -1813,6 +1825,7 @@ export interface InitOutput {
     readonly __wbg_projectvolumesplit_free: (a: number, b: number) => void;
     readonly __wbg_settingseditor_free: (a: number, b: number) => void;
     readonly __wbg_toolusagescanner_free: (a: number, b: number) => void;
+    readonly action_groups: (a: number, b: number) => [number, number, number, number];
     readonly assembly_alignment: (a: number, b: number) => [number, number, number, number];
     readonly assembly_availability: (a: number, b: number) => [number, number, number, number];
     readonly assembly_explosion: (a: number, b: number) => [number, number, number, number];
@@ -1857,6 +1870,7 @@ export interface InitOutput {
     readonly capturedselection_kind: (a: number, b: number) => [number, number, number];
     readonly capturedselection_primary_index: (a: number) => number;
     readonly coerce_override_value: (a: number, b: number) => [number, number, number, number];
+    readonly command_palette: (a: number, b: number) => [number, number, number, number];
     readonly console_assess: (a: number, b: number) => [number, number, number, number];
     readonly console_finish: (a: number, b: number) => [number, number, number, number];
     readonly console_invocation: (a: number, b: number) => [number, number, number, number];

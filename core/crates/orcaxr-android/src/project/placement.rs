@@ -1,10 +1,12 @@
-//! The workspace's bed, the transform inspector's fields, new geometry and
-//! what a split would split (`orcaxr_project::placement::{bed, fields}`,
-//! `orcaxr_project::primitives`, `orcaxr_project::split::source`): canonical
-//! JSON requests and replies over a configuration, a captured project, a
-//! session or three field texts.
+//! The workspace's bed, the transform inspector's fields, new geometry, what
+//! a split would split and how the shells arrange catalogue actions
+//! (`orcaxr_project::placement::{bed, fields}`, `orcaxr_project::primitives`,
+//! `orcaxr_project::split::source`, `orcaxr_project::action_presentation`):
+//! canonical JSON requests and replies over a configuration, a captured
+//! project, a session, three field texts or the actions a shell shows.
 use super::*;
 use orcaxr_contracts::generated::MAX_INPUT_BYTES;
+use orcaxr_project::action_presentation;
 use orcaxr_project::placement::{bed, fields};
 use orcaxr_project::primitives;
 
@@ -55,6 +57,14 @@ pub(super) fn transform_field_edit(env: &mut JNIEnv<'_>, request: JString<'_>) -
 /// `{"rotation"}` ↔ `{"eulerRadians"}`, as three converts them.
 pub(super) fn transform_rotation(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
     exchange(env, &request, fields::rotation_json)
+}
+/// `{"actions":[{"hint"?,"id","label"}],"query"}` → the command palette's matches.
+pub(super) fn command_palette(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(env, &request, action_presentation::palette_json)
+}
+/// `{"actions":[id],"layout"}` → a context menu's sections or the toolbar's runs.
+pub(super) fn action_groups(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(env, &request, action_presentation::groups_json)
 }
 /// `{"kind","sizeMm"}` → a primitive's or the helper cube's canonical mesh payload.
 pub(super) fn primitive_payload(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jbyteArray> {

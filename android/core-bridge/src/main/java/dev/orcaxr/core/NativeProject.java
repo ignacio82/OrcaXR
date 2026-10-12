@@ -115,6 +115,11 @@ final class NativeProject {
     static native String transformFields(String request);
     static native String transformFieldEdit(String request);
     static native String transformRotation(String request);
+    // How the shells arrange catalogue actions (orcaxr_project::action_presentation,
+    // the browser's ActionPresentationExchange): the command palette's search and a
+    // context menu's sections or the model toolbar's runs, as canonical JSON.
+    static native String commandPalette(String request);
+    static native String actionGroups(String request);
     // New geometry (orcaxr_project::primitives): a primitive's or the helper
     // cube's mesh payload, and what a primitive or a helper volume becomes in
     // a session's project, as canonical JSON.

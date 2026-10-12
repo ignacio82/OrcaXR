@@ -16,7 +16,8 @@
  * rule that a disabled item still says why.
  */
 
-import { GROUPS, type Action, type ActionRegistry, type ContextTarget } from '../../actions/ActionRegistry';
+import type { Action, ActionRegistry, ContextTarget } from '../../actions/ActionRegistry';
+import { catalogGroups } from '../ActionPresentation';
 import type { UiStateShape } from '../../actions/UiState';
 
 /**
@@ -34,23 +35,24 @@ export function contextMenuGroups(
   state: Readonly<UiStateShape>,
   invoke: (action: Action) => void,
 ): ContextMenuGroup[] {
-  const byGroup = new Map<string, ContextMenuItem[]>();
+  const entries: { readonly group: Action['group']; readonly item: ContextMenuItem }[] = [];
   for (const action of registry.forContext(target, 'dom-context')) {
     const availability = registry.availability(action, 'dom-context', state);
     if (availability.state === 'hidden') continue;
-    const items = byGroup.get(action.group) ?? [];
-    items.push({
-      id: action.id,
-      label: action.label,
-      ...(action.hint ? { hint: action.hint } : {}),
-      ...(availability.state === 'disabled' ? { disabled: true, reason: availability.reason } : {}),
-      onSelect: () => invoke(action),
+    entries.push({
+      group: action.group,
+      item: {
+        id: action.id,
+        label: action.label,
+        ...(action.hint ? { hint: action.hint } : {}),
+        ...(availability.state === 'disabled' ? { disabled: true, reason: availability.reason } : {}),
+        onSelect: () => invoke(action),
+      },
     });
-    byGroup.set(action.group, items);
   }
-  return GROUPS.filter((group) => byGroup.has(group.id)).map((group) => ({
+  return catalogGroups(entries).map(({ group, actions }) => ({
     label: group.label,
-    items: byGroup.get(group.id) ?? [],
+    items: actions.map((entry) => entry.item),
   }));
 }
 

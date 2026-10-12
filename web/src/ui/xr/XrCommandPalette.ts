@@ -18,6 +18,7 @@
  * app.
  */
 import type { Action, ActionRegistry } from '../../actions/ActionRegistry';
+import { paletteMatches } from '../ActionPresentation';
 import type { UiStateShape } from '../../actions/UiState';
 import { t } from '../../l10n/t';
 import { tokens } from '../tokens';
@@ -58,16 +59,7 @@ export function xrPaletteMatches(
   const visible = registry
     .forSurface('command-palette')
     .filter((action) => registry.availability(action, 'command-palette', state).state !== 'hidden');
-  const q = query.trim().toLowerCase();
-  const matches = q
-    ? visible.filter(
-        (action) =>
-          action.label.toLowerCase().includes(q) ||
-          action.id.toLowerCase().includes(q) ||
-          (action.hint ?? '').toLowerCase().includes(q),
-      )
-    : visible;
-  return { matches, total: visible.length };
+  return { matches: paletteMatches(visible, query), total: visible.length };
 }
 
 /** How many results a 0.46 m tall palette can show without scrolling. */

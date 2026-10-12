@@ -1,7 +1,8 @@
 // Generate the native action catalog from the production registry
 // (`web/src/actions/`): every action in catalog order with the capability the
 // registry resolved for it, the prerequisite rules, the surface, group and
-// state vocabularies, and each enablement rule translated into Rust. A rule
+// state vocabularies (with each group's label and `GROUPS` order), and each
+// enablement rule translated into Rust. A rule
 // outside the small boolean grammar the registry uses, or one that reads a
 // workspace field the native state does not model, fails generation instead
 // of being approximated.
@@ -12,6 +13,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import ts from "../../web/node_modules/typescript/lib/typescript.js";
 import { buildRegistry } from "../../web/src/actions/catalog.ts";
+import { GROUPS } from "../../web/src/actions/ActionRegistry.ts";
 
 const root = new URL("../../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
@@ -60,6 +62,11 @@ const vocabularies = {
 };
 for (const [name, values] of Object.entries(vocabularies))
   assert.equal(new Set(values).size, values.length, `${name} is unique`);
+assert.deepEqual(
+  GROUPS.map((group) => group.id).sort(),
+  [...vocabularies.Group].sort(),
+  "GROUPS names every GroupId once",
+);
 
 // The workspace fields a rule may read, as the native state models them.
 // Optional flags read as false when absent, so only their truthiness (or an
@@ -326,6 +333,13 @@ let rust =
     vocabularies.Group,
     "An action's catalog group (`GroupId`).",
   ) +
+  // `GROUPS`: each group's label and the declared order menus section by.
+  "impl Group {\n" +
+  `    /// The browser's groups in \`GROUPS\`' declared order, which grouped menus follow.\n` +
+  `    pub const ORDER: [Self; ${GROUPS.length}] = [${GROUPS.map((g) => `Self::${pascal(g.id)}`).join(", ")}];\n` +
+  "    /// The browser's label for the group (`GROUPS`).\n    pub fn label(self) -> &'static str {\n        match self {\n" +
+  GROUPS.map((g) => `            Self::${pascal(g.id)} => ${str(g.label)},\n`).join("") +
+  "        }\n    }\n}\n" +
   enumeration(
     "ContextTarget",
     vocabularies.ContextTarget,

@@ -44,6 +44,7 @@ import { plateProjectionCases, replayPlateProjection } from "./plate-projection-
 import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
+import { replayActionPresentation } from "./action-presentation-replay.mjs";
 import { replayPaintTool } from "./paint-tool-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
 import { replaySplitSources } from "./split-source-replay.mjs";
@@ -331,6 +332,11 @@ if (isMainThread) {
     assert.deepEqual(
       [result.fieldReads, result.rotations, result.fieldEdits, result.fieldRefusals],
       [101, 1720, 94, 19],
+    );
+    // How the shells arrange actions: palette searches, menu sections and toolbar runs, refusals.
+    assert.deepEqual(
+      [result.paletteSearches, result.actionArrangements, result.presentationRefusals],
+      [1827, 92, 23],
     );
     // The painter's settings and paint colours: samples and refusals, malformed requests, colour sets.
     assert.deepEqual(
@@ -859,6 +865,10 @@ if (isMainThread) {
     core,
     JSON.parse(await readFile(new URL("testdata/cross-platform/transform-field-vectors.json", root))),
   );
+  const actionPresentation = replayActionPresentation(
+    core,
+    JSON.parse(await readFile(new URL("testdata/cross-platform/action-presentation-vectors.json", root))),
+  );
   const paintTool = replayPaintTool(
     core,
     JSON.parse(await readFile(new URL("testdata/cross-platform/paint-tool-vectors.json", root))),
@@ -942,6 +952,7 @@ if (isMainThread) {
       ...slicingConfiguration,
       ...workspaceBeds,
       ...transformFields,
+      ...actionPresentation,
       ...paintTool,
       ...primitives,
       ...splitSources,

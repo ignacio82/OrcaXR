@@ -463,6 +463,16 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_commandPalette, command_palette, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_actionGroups, action_groups, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_primitivePayload, primitive_payload, jbyteArray,
     request: JString<'local>,
 }

@@ -1,7 +1,9 @@
-//! The workspace's bed and the transform inspector's fields
-//! (`orcaxr_project::placement::{bed, fields}`): canonical JSON requests and
-//! replies, as `WorkspaceBedExchange.ts` and `TransformFieldsExchange.ts`
-//! answer them. A malformed request throws `invalid_request`.
+//! The workspace's bed, the transform inspector's fields and how the shells
+//! arrange catalogue actions (`orcaxr_project::placement::{bed, fields}`,
+//! `orcaxr_project::action_presentation`): canonical JSON requests and replies,
+//! as `WorkspaceBedExchange.ts`, `TransformFieldsExchange.ts` and
+//! `ActionPresentationExchange.ts` answer them. A malformed request throws
+//! `invalid_request`.
 use crate::project::error;
 use orcaxr_project::placement::{bed, fields};
 use wasm_bindgen::prelude::*;
@@ -57,4 +59,18 @@ pub fn paint_tool_sample(request: &str) -> Result<String, JsValue> {
 #[wasm_bindgen]
 pub fn paint_facet_colors(request: &str) -> Result<String, JsValue> {
     orcaxr_project::facets::paint_facets::colors_json(request).map_err(error)
+}
+
+/// The command palette's search (`commandPaletteExchange`):
+/// `{"actions":[{"hint"?,"id","label"}],"query"}` in, `{"matches":[index]}` out.
+#[wasm_bindgen]
+pub fn command_palette(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::action_presentation::palette_json(request).map_err(error)
+}
+
+/// A context menu's sections or the model toolbar's runs (`actionGroupsExchange`):
+/// `{"actions":[id],"layout"}` in, `{"groups":[{"actions","group","label"}]}` out.
+#[wasm_bindgen]
+pub fn action_groups(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::action_presentation::groups_json(request).map_err(error)
 }

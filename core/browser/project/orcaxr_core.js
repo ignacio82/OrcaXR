@@ -5952,6 +5952,33 @@ export class ToolUsageScanner {
 if (Symbol.dispose) ToolUsageScanner.prototype[Symbol.dispose] = ToolUsageScanner.prototype.free;
 
 /**
+ * A context menu's sections or the model toolbar's runs (`actionGroupsExchange`):
+ * `{"actions":[id],"layout"}` in, `{"groups":[{"actions","group","label"}]}` out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function action_groups(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.action_groups(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * The instance transform one pinned alignment produces: an
  * `AssemblyAlignmentRequest`; returns an `AssemblyAlignmentReply`.
  * @param {string} request
@@ -6269,6 +6296,33 @@ export function coerce_override_value(request) {
         const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.coerce_override_value(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * The command palette's search (`commandPaletteExchange`):
+ * `{"actions":[{"hint"?,"id","label"}],"query"}` in, `{"matches":[index]}` out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function command_palette(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.command_palette(ptr0, len0);
         var ptr2 = ret[0];
         var len2 = ret[1];
         if (ret[3]) {

@@ -114,6 +114,40 @@ impl Group {
         Self::ALL.into_iter().find(|v| v.id() == id)
     }
 }
+impl Group {
+    /// The browser's groups in `GROUPS`' declared order, which grouped menus follow.
+    pub const ORDER: [Self; 12] = [
+        Self::File,
+        Self::Edit,
+        Self::View,
+        Self::Scene,
+        Self::Paint,
+        Self::Slice,
+        Self::Filament,
+        Self::Output,
+        Self::Calibration,
+        Self::Advanced,
+        Self::Help,
+        Self::System,
+    ];
+    /// The browser's label for the group (`GROUPS`).
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::File => "File",
+            Self::Edit => "Edit",
+            Self::View => "View",
+            Self::Scene => "Scene",
+            Self::Paint => "Paint",
+            Self::Slice => "Slice",
+            Self::Filament => "Filament",
+            Self::Output => "Output",
+            Self::Calibration => "Calibration",
+            Self::Advanced => "Advanced",
+            Self::Help => "Help",
+            Self::System => "System",
+        }
+    }
+}
 /// What a context menu was opened on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ContextTarget {

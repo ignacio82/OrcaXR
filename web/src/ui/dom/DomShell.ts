@@ -31,6 +31,7 @@
 import type { Action, ActionRegistry, ActionSurface } from '../../actions/ActionRegistry';
 import { MENU_SECTIONS } from '../../actions/ActionRegistry';
 import type { ActionContext } from '../../actions/ActionContext';
+import { toolbarRuns } from '../ActionPresentation';
 import { ariaShortcutValue } from '../../actions/ShortcutCatalog';
 import type { UiState, UiStateShape } from '../../actions/UiState';
 import { applyIcon } from '../icons';
@@ -60,9 +61,10 @@ interface Bound {
 
 /**
  * The first binding of an `aria-keyshortcuts` list, spelled the way a menu
- * spells it. Presentation only — matching still runs off the catalog.
+ * spells it. Presentation only — matching still runs off the catalog. The
+ * native shell's menus show the same text (`tools/cross-platform/android-tokens.mjs`).
  */
-function shortcutHint(shortcuts: string): string {
+export function shortcutHint(shortcuts: string): string {
   const [first = ''] = shortcuts.split(' ');
   return first
     .split('+')
@@ -117,16 +119,14 @@ export class DomShell {
     // operations from the painting tools — twenty undifferentiated icons is a
     // strip nobody can aim at.
     hosts.toolbar.innerHTML = '';
-    let previousGroup: string | null = null;
-    for (const a of this.registry.forSurface('dom-toolbar')) {
-      if (previousGroup !== null && a.group !== previousGroup) {
+    for (const [index, run] of toolbarRuns(this.registry.forSurface('dom-toolbar')).entries()) {
+      if (index > 0) {
         const separator = document.createElement('span');
         separator.className = 'tool-sep';
         separator.setAttribute('aria-hidden', 'true');
         hosts.toolbar.appendChild(separator);
       }
-      previousGroup = a.group;
-      hosts.toolbar.appendChild(this.toolButton(a));
+      for (const a of run.actions) hosts.toolbar.appendChild(this.toolButton(a));
     }
 
     // Primary bar. Existing children are kept — the hidden file input the Load

@@ -7,6 +7,7 @@
  */
 import type { Action, ActionRegistry } from '../../actions/ActionRegistry';
 import type { ActionContext } from '../../actions/ActionContext';
+import { paletteMatches } from '../ActionPresentation';
 import type { UiState } from '../../actions/UiState';
 import { applyIcon } from '../icons';
 import { t } from '../../l10n/t';
@@ -97,19 +98,13 @@ export class CommandPalette {
   }
 
   private render(): void {
-    const q = this.input.value.trim().toLowerCase();
     const state = this.ui.get();
-    this.matches = this.registry
-      .forSurface('command-palette')
-      .filter((a) => this.registry.availability(a, 'command-palette', state).state !== 'hidden')
-      .filter((a) => {
-        if (!q) return true;
-        return (
-          a.label.toLowerCase().includes(q) ||
-          a.id.toLowerCase().includes(q) ||
-          (a.hint ?? '').toLowerCase().includes(q)
-        );
-      });
+    this.matches = paletteMatches(
+      this.registry
+        .forSurface('command-palette')
+        .filter((a) => this.registry.availability(a, 'command-palette', state).state !== 'hidden'),
+      this.input.value,
+    );
     this.sel = 0;
     this.paint();
   }
