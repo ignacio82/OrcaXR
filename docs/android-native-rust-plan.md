@@ -141,7 +141,9 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    card (settings the core already resolves) need the browser's computation
    checked first; Cut (`tool_cut`), the face detector and hollow have no core
    port yet. Each one follows the exchange pattern below and gets an emulator
-   smoke.
+   smoke. In flight: brim ears and wipe-tower auto-placement on local branch
+   `bedtools` (worktree `~/.cache/orcaxr-bedtools`, from `main` at the
+   gizmo), a sub-agent's.
 3. Phase 7, other surfaces: a Save/export action for slice output
    (`save_gcode_to_downloads`, `file_export_gcode`), model and project exports
    (STL, OBJ, 3MF, configuration), geometry-only 3MF import, the View menu's
