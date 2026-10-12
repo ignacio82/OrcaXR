@@ -117,18 +117,21 @@ server = subprocess.Popen(
 
 
 def delete_slicer():
-    """Taps the external slicer's own Delete: the first "Delete" below its section's heading,
-    scrolling the section up until it shows."""
+    """Taps the external slicer's own Delete: the one beside its Connect, on the same row (a project's
+    virtual filaments have Delete buttons too, but no Connect). The section runs taller than what
+    shows of the list below Prepare's bar on a phone, so its heading and its buttons need not show
+    together: the list is scrolled until that row does."""
     top = lambda node: int(re.findall(r"\d+", node.get("bounds"))[1])
     for _ in range(8):
         current = screen.nodes()
-        heading = next((n for n in current if (n.get("text") or "") == "External slicer"), None)
-        if heading is not None:
-            below = sorted((n for n in current if (n.get("text") or "") == "Delete" and top(n) > top(heading)), key=top)
-            if below:
-                x, y = screen.center(below[0])
+        connect = next((n for n in current if (n.get("text") or "") == "Connect"), None)
+        if connect is not None:
+            beside = [n for n in current if (n.get("text") or "") == "Delete" and abs(top(n) - top(connect)) < 8]
+            if beside:
+                x, y = screen.center(beside[0])
                 adb("shell", "input", "tap", str(x), str(y))
                 return
+        # Below the heading the find left on screen: the content moves up a third of the list at a time.
         x, upper, lower = screen.scroll_band(current)
         adb("shell", "input", "swipe", str(x), str(lower), str(x), str((upper + lower) // 2), "300")
         time.sleep(0.6)

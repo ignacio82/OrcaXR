@@ -5,7 +5,8 @@ This document records Stage A and the shared computation/project foundations of 
 current C++ engine remain authoritative. The Android application is a development
 shell: it checks the JNI handshake and explicitly reports that editing is not
 available. Debug builds additionally expose a flat viewport experiment with
-synthetic fixtures. The shared Rust library now executes prepared plate, entity-name, instance-printability and
+synthetic fixtures, reached from the launcher icon's shortcut (a long press) so that
+nothing over the Workspace covers its controls. The shared Rust library now executes prepared plate, entity-name, instance-printability and
 transform commands with history through a guarded string endpoint. An optional WASM binding replays
 it in a Node worker, but the Android app has no native project
 editing, slicing service, printer
@@ -307,6 +308,17 @@ process takes the one `uiautomator dump` needs, so the smoke grants the
 advertiser's permission with `pm grant` instead. The smokes now share
 `smoke_ui.py`, whose launch retries while `pm clear` still tears down the
 app's task and collapses a notification shade a home-screen swipe opened.
+Its search for what is off screen drags a list down to its end and back up
+to its start a screen at a time, without a fling (each touch event its own
+`input` command, the finger at rest before it lifts): a swipe's fling carried
+rows past the screen's edge and out of every dump, and flinging back to the
+start left what lay just above the screen, such as a panel's status line, to
+a search down the whole list. It sweeps the list once, down and back, before
+it gives up, so a step's short timeout bounds how long the app takes to show
+something, not how long a slow emulator takes to search a long list. A smoke
+that reads what follows a row it found (a group's rows, a row's indicators)
+first lifts that row near the list's top, since the search stops at the first
+screen showing it, perhaps on its last line.
 
 ## SceneCore candidate
 
@@ -5073,7 +5085,10 @@ untouched; the copy stays until the operator discards it. The app also
 captures at once whenever it leaves the screen with unsaved changes — sent
 home, its window closed, swiped from Recents — since the system may end it
 there and a closed window or removed task finishes it without asking; only
-the very state the operator just chose to discard is not kept. It lists
+the very state the operator just chose to discard is not kept. The stopping
+activity waits for that capture, up to 2 s, as Android waits for pending
+preference writes when an activity stops: a removed task's process can be
+ended moments after `onStop` returns. It lists
 earlier sessions' copies with Restore and Discard.
 `ProjectRecoveryChecks` (24 checks over real JNI) cover an interrupted
 capture keeping the previous copy, the budget, damage, session names, the

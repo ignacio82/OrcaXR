@@ -51,10 +51,14 @@ class Screen:
 
     def find(self, text, timeout=120, exact=True):
         """The node showing [text]. Not on screen, the list is searched on down to its end a screen
-        at a time, then flung quickly back to its start and searched down again, until the time is
-        up. Where a list ends is told by the words shown, not the bounds, which Android's stretch
-        overscroll keeps moving. (Searching down first spares the system picker's pull to refresh.)
-        Lists such as Prepare's run to many screens, so a search takes a while."""
+        at a time, then back up to its start the same way, until the time is up — and in any case
+        once down and back, so that [timeout] bounds how long the app may take to show [text], not
+        how long a search of a long list takes on a slow emulator. Each screen is dragged (`drag`),
+        not flung, so no row is passed over, and what lies just above the screen (a panel's status
+        line over the row just acted on) is reached in a few screens rather than after a search down
+        from the list's start. Where a list ends is told by the words shown, not the bounds, which
+        Android's stretch overscroll keeps moving. (Searching down first spares the system picker's
+        pull to refresh.) Lists such as Prepare's run to many screens, so a search takes a while."""
         deadline = time.monotonic() + timeout
         seen = []
 
@@ -82,35 +86,31 @@ class Screen:
             # A menu or dialog may still be opening: a swipe now would land outside it and close it.
             time.sleep(1.5)
             found, current = look()
-        while found is None and time.monotonic() < deadline:
-            # On down to the end, a screen at a time.
-            while found is None and time.monotonic() < deadline:
-                x, top, bottom = self.scroll_band(current)
-                self.adb("shell", "input", "swipe", str(x), str(bottom), str(x), str(top), "300")
-                time.sleep(0.6)
-                before = words(current)
-                found, current = look()
-                if found is None and words(current) == before:
-                    break
-            # Back to the start: quick flings until what shows no longer changes.
-            while found is None and time.monotonic() < deadline:
-                x, top, bottom = self.scroll_band(current)
-                self.adb("shell", "input", "swipe", str(x), str(top), str(x), str(bottom), "100")
-                time.sleep(0.6)
-                before = words(current)
-                found, current = look()
-                if found is None and words(current) == before:
-                    break
+        swept = False
+        searching = lambda: found is None and (time.monotonic() < deadline or not swept)
+        while searching():
+            # On down to the end, then back up to the start, a screen at a time, until what shows no
+            # longer changes. A drag leaves nothing moving, so the screen is read again at once.
+            for down in (True, False):
+                while searching():
+                    x, top, bottom = self.scroll_band(current, inset=12)
+                    self.drag(x, *((bottom, top) if down else (top, bottom)))
+                    time.sleep(0.2)
+                    before = words(current)
+                    found, current = look()
+                    if found is None and words(current) == before:
+                        break
+            swept = True
         if found is not None:
             return found
         (self.output / f"{self.name}-smoke-failed.xml").write_text(self.adb("shell", "cat", self.dump))
         (self.output / f"{self.name}-smoke-seen.txt").write_text("\n".join(seen) + "\n")
         raise AssertionError(f"'{text}' never appeared")
 
-    def scroll_band(self, nodes):
+    def scroll_band(self, nodes, inset=6):
         """Where to swipe: inside the largest scrolling container shown (a dialog's own list, or
         the part of a screen that scrolls — never a view beside it that a swipe would turn), as its
-        centre x and a top and bottom y inset from its edges."""
+        centre x and a top and bottom y inset from its edges by 1/[inset] of its height."""
         containers = []
         for node in nodes:
             if node.get("scrollable") == "true":
@@ -119,8 +119,42 @@ class Screen:
         if not containers:
             return 360, *self.scroll
         _, x, top, bottom = max(containers)
-        inset = (bottom - top) // 6
-        return x, top + inset, bottom - inset
+        margin = (bottom - top) // inset
+        return x, top + margin, bottom - margin
+
+    def lift(self, node, nodes=None):
+        """Drags the list holding [node] (the largest scrolling container around it) until [node]
+        sits near the list's top, so that what follows it shows — a group's rows, a row's second
+        line: `find` stops at the first screen showing its text, which may be the list's last line.
+        Without a fling the list moves just that far, or as far as its end allows. Answers the
+        screen's nodes afterwards."""
+        nodes = self.nodes() if nodes is None else nodes
+        bounds = lambda n: tuple(map(int, re.findall(r"\d+", n.get("bounds"))))
+        left, top, right, bottom = bounds(node)
+        x, y = (left + right) // 2, (top + bottom) // 2
+        holders = [b for b in (bounds(n) for n in nodes if n.get("scrollable") == "true")
+                   if b[0] <= x <= b[2] and b[1] <= y <= b[3]]
+        if not holders:
+            return nodes
+        list_left, list_top, list_right, list_bottom = max(holders, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]))
+        target = list_top + (list_bottom - list_top) // 12
+        if top <= list_top + (list_bottom - list_top) // 3:
+            return nodes
+        self.drag((list_left + list_right) // 2, top, target)
+        time.sleep(0.2)
+        return self.nodes()
+
+    def drag(self, x, start, end):
+        """Drags the screen at [x] from y [start] to [end] and lets go without a fling, so the list
+        moves by just that much (less the touch slop). A swipe's release flings it further — a
+        quarter as far again for a 300 ms swipe on a phone emulator — and a fling can carry a row
+        past the edge of the next screen and out of every dump. Here each touch event is its own
+        `input` command, paced (injected unpaced they can arrive out of order and scroll nothing),
+        and the finger rests at the end before it lifts, longer than the 100 ms over which a
+        velocity is measured, so the list reads it as stopped."""
+        events = [f"input motionevent DOWN {x} {start}", f"input motionevent MOVE {x} {(start + end) // 2}",
+                  f"input motionevent MOVE {x} {end}", "sleep 0.15", f"input motionevent UP {x} {end}"]
+        self.adb("shell", "; sleep 0.05; ".join(events))
 
     def enabled(self, text, **kwargs):
         """Whether the control showing [text] is enabled: a Compose button reports it on its

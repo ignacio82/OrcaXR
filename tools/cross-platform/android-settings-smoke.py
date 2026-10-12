@@ -87,14 +87,23 @@ def edit_text(description):
     """The EditText a setting's field is: Compose reports its content description on an inner node
     with the EditText's bounds, and the setting's name shows the same words beside it."""
     find(description, timeout=60)
-    nodes = screen.nodes()
-    fields = [node for node in nodes if node.get("class") == "android.widget.EditText"]
-    for node in nodes:
-        if node.get("content-desc") != description:
-            continue
-        for field in fields:
-            if field is node or bounds(field) == bounds(node):
-                return field
+    # A field at the list's edge is clipped, and the dump clips the field and the node inside it
+    # differently: the list is moved a little until they agree.
+    for attempt in range(6):
+        nodes = screen.nodes()
+        fields = [node for node in nodes if node.get("class") == "android.widget.EditText"]
+        for node in nodes:
+            if node.get("content-desc") != description:
+                continue
+            for field in fields:
+                if field is node or bounds(field) == bounds(node):
+                    return field
+        x, top, bottom = screen.scroll_band(nodes)
+        # Alternately up and down a quarter screen, so a field near either edge comes clear.
+        shift = (bottom - top) // 4 * (1 if attempt % 2 == 0 else -1)
+        middle = (top + bottom) // 2
+        adb("shell", "input", "swipe", str(x), str(middle + shift // 2), str(x), str(middle - shift // 2), "400")
+        time.sleep(0.8)
     raise AssertionError(f"No text field is described as '{description}'")
 
 

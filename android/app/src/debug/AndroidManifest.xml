@@ -1,5 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
-        <activity android:name=".ViewportExperimentActivity" android:exported="false" android:resizeableActivity="true" />
+        <!-- Debug builds only, reached from the launcher icon's shortcut (a long press) or
+             `adb shell am start -n dev.orcaxr.nativeapp/.ViewportExperimentActivity`. -->
+        <activity android:name=".ViewportExperimentActivity" android:exported="true" android:resizeableActivity="true"
+            android:label="@string/viewport_experiment" />
+        <activity android:name=".MainActivity">
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/viewport_shortcuts" />
+        </activity>
     </application>
 </manifest>

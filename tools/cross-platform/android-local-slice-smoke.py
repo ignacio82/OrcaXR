@@ -75,13 +75,20 @@ def slice_ready():
 def running_progress(timeout=120):
     """The engine's own progress: a step it named while slicing, with a percent bar."""
     deadline = time.monotonic() + timeout
+    shown = []
     while time.monotonic() < deadline:
-        for node in screen.nodes():
+        nodes = screen.nodes()
+        for node in nodes:
             text = node.get("text") or ""
             if text.startswith("Slicing: ") and text not in ("Slicing: preflighting", "Slicing: serializing"):
                 return text
+        # What the pinned bar said instead, for the failure's message.
+        for node in nodes[:40]:
+            text = node.get("text") or ""
+            if text and text not in shown:
+                shown.append(text)
         time.sleep(0.3)
-    raise AssertionError("The engine's progress never showed")
+    raise AssertionError(f"The engine's progress never showed; the screen showed {shown[-25:]}")
 
 
 assert adb("shell", "getprop", "sys.boot_completed") == "1", "Emulator is not ready"

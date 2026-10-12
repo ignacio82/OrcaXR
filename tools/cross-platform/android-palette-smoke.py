@@ -197,8 +197,18 @@ until_enabled("Delete", enabled=False)
 delete = find("Delete")
 before = screen.screenshot()
 dx, dy = screen.center(delete)
-adb("shell", "input", "mouse", "tap", str(dx), str(dy))
-assert tooltip(NEEDS_INSTANCE, delete, before), "Hovering the toolbar's Delete showed no tooltip"
+# adb's mouse cannot hover, only tap, and Compose takes the tap as the pointer entering; the first
+# tap after the keyboard's Escape was seen not to show the tooltip on a loaded emulator (a real mouse
+# goes on sending hover moves), so the mouse leaves and taps again.
+for attempt in range(3):
+    if attempt:
+        adb("shell", "input", "mouse", "motionevent", "MOVE", str(width // 2), str(height * 3 // 4))
+        time.sleep(1)
+    adb("shell", "input", "mouse", "tap", str(dx), str(dy))
+    if tooltip(NEEDS_INSTANCE, delete, before, timeout=8):
+        break
+else:
+    raise AssertionError("Hovering the toolbar's Delete showed no tooltip")
 
 # The palette's Slice, enabled as Prepare's Slice is: Enter slices the plate on this device's engine, as that button does.
 palette("slice the plated")

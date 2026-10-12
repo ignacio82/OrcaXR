@@ -72,6 +72,7 @@ import java.util.concurrent.CompletionException
 import java.util.concurrent.ExecutionException
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 import org.json.JSONObject
 
 /** A prepared import as the dialog shows it: the objects the project will have and every change the operator must accept. */
@@ -327,11 +328,24 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         publishRecoveries()
     }
 
-    /** Keeps the unsaved work now, as the app leaves the screen: the system may end it there. */
-    fun captureNow() {
+    /**
+     * Keeps the unsaved work now, as the app leaves the screen: the system may end it there.
+     * Answers the capture, settled once it is written or has failed, for the leaving activity
+     * to wait on; null when there is nothing to keep.
+     */
+    fun captureNow(): Future<Unit>? {
         // Not the very state the operator chose to discard: that is gone on purpose. Any
         // other way of leaving — a closed window, the app swiped away — keeps the work.
-        if (view.dirty && view != discarded && ::workspace.isInitialized) work { workspace.captureRecovery().await() }
+        if (!view.dirty || view == discarded || !::workspace.isInitialized) return null
+        val captured = CompletableFuture<Unit>()
+        work {
+            try {
+                workspace.captureRecovery().await()
+            } finally {
+                captured.complete(Unit)
+            }
+        }
+        return captured
     }
 
     fun answerDiscard(answer: DiscardAnswer) {

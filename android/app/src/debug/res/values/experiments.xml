@@ -1,3 +1,5 @@
 <resources>
-    <bool name="viewport_experiment_enabled">true</bool>
+    <!-- A developer's way into the debug build's viewport experiment, never shown to an operator:
+         a shortcut on the launcher icon (a long press), so nothing covers the Workspace's controls. -->
+    <string name="viewport_experiment" translatable="false">Viewport experiment</string>
 </resources>

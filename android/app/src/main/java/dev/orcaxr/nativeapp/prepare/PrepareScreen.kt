@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.pluralMessage
 import dev.orcaxr.nativeapp.project.FilamentList
@@ -153,7 +154,10 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
         // profiles, filaments and the virtual library run to several screens before the slice's own words.
         // While the keyboard is up the bar steps aside, so the field being typed in keeps the room above it
         // (in landscape the keyboard leaves little).
-        if (!WindowInsets.isImeVisible) Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Above the list in z as well: a list item scrolled partly under the bar (a text field's
+        // bounds are not clipped to the list) otherwise covers the bar's progress and status lines
+        // for accessibility services, which leave out what they take to be covered.
+        if (!WindowInsets.isImeVisible) Column(Modifier.fillMaxWidth().zIndex(1f).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             // Slice and Cancel Slice as the browser's toolbar has them, Slice All Plates (its menu's) beside them.
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = slice, enabled = canSlice) { Text(stringResource(R.string.prepare_slice)) }

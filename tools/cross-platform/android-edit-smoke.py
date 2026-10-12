@@ -59,9 +59,9 @@ def until_checked(description, expected, timeout=20):
 def instance_boxes():
     """The expanded object's instance rows' check boxes, in tree order: those between its "Instances (n)"
     group row and the next row of another kind. An imported instance is named after its file, as its
-    object is, so rows are told apart by place rather than by name."""
-    find("Instances (", exact=False)
-    nodes = screen.nodes()
+    object is, so rows are told apart by place rather than by name. The group row is brought near the
+    top of the list first: found on the list's last line, its rows would be off screen."""
+    nodes = screen.lift(find("Instances (", exact=False))
     def top(node):
         return int(re.findall(r"\d+", node.get("bounds"))[1])
     group = next(n for n in nodes if re.fullmatch(r"Instances \(\d+\)", n.get("text") or ""))

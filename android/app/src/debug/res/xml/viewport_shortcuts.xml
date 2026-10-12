@@ -1,0 +1,6 @@
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="viewport_experiment" android:shortcutShortLabel="@string/viewport_experiment">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="dev.orcaxr.nativeapp"
+            android:targetClass="dev.orcaxr.nativeapp.ViewportExperimentActivity" />
+    </shortcut>
+</shortcuts>

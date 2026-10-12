@@ -37,7 +37,6 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -99,6 +98,9 @@ import dev.orcaxr.nativeapp.theme.ThemeSwitchState
 import dev.orcaxr.nativeapp.workspace.WorkspaceScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 /** The shell. Product areas are added only with complete shared workflows: the
  * workspace preview, Prepare's slicing of the active plate on the external
@@ -247,7 +249,16 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         // The system may end the app once it is out of sight, and a window closed or swiped
         // away finishes it without asking: keep unsaved work now (not what was just discarded).
-        project.captureNow()
+        // A swiped-away task's process can be ended moments after this returns, before a capture
+        // left running finishes, so the capture is waited for, briefly, as Android itself waits
+        // for pending preference writes when an activity stops. A capture still behind longer
+        // work goes on; the timed capture has kept all but the last few seconds.
+        val capture = project.captureNow() ?: return
+        try {
+            capture.get(LEAVE_CAPTURE_WAIT_MS, TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+        } catch (_: ExecutionException) {
+        }
     }
 
     /**
@@ -475,17 +486,7 @@ class MainActivity : ComponentActivity() {
                 R.string.nav_project -> ProjectScreen(project, modifier)
                 R.string.nav_prepare -> PrepareScreen(prepare, project, device, modifier)
                 R.string.nav_preview -> PreviewScreen(preview, modifier, bed = project.view.bed)
-                else -> Box(modifier) {
-                    WorkspaceScreen(project, Modifier.fillMaxSize())
-                    if (resources.getBoolean(R.bool.viewport_experiment_enabled)) {
-                        // Debug builds only: under the Workspace's header strip, clear of the tools'
-                        // statuses (Lay flat's and its Done), which take the bottom as the browser's do.
-                        TextButton(
-                            onClick = { startActivity(Intent().setClassName(this@MainActivity, "$packageName.ViewportExperimentActivity")) },
-                            modifier = Modifier.align(Alignment.TopEnd).padding(top = 56.dp),
-                        ) { Text(stringResource(R.string.open_viewport_experiment)) }
-                    }
-                }
+                else -> WorkspaceScreen(project, modifier)
             }
         }
     }
@@ -544,3 +545,7 @@ private const val TRANSPARENT = android.graphics.Color.TRANSPARENT
 
 private const val AREA = "area"
 private const val ANDROID_13 = 33
+
+/** How long a stopping activity waits for its unsaved work to be captured; a capture still
+ * running then (behind longer work, or a large project) is left to finish on its own. */
+private const val LEAVE_CAPTURE_WAIT_MS = 2_000L
