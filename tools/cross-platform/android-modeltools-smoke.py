@@ -221,10 +221,11 @@ adb("shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_
 screen.launch(PACKAGE)
 find("Import a model in the Project area to see it here.")
 width, height = screen.screenshot()[:2]
-area = (0, 260, width, height - 220)
 tap("Workspace")
 time.sleep(4)
 empty = screen.screenshot()
+# The 3D view's pixels below the model toolbar, whose buttons change with the selection.
+area = (0, screen.below_toolbar(260), width, height - 220)
 
 # Two bodies in one mesh: the import selects nothing, Select All selects it.
 tap("Project")

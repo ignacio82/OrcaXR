@@ -1,0 +1,153 @@
+package dev.orcaxr.nativeapp.shell
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import dev.orcaxr.core.ProjectActionState
+import dev.orcaxr.nativeapp.R
+
+/**
+ * The words the app shows for a catalogue action: the browser's label and
+ * hint for it (`action.<id>.label` and `.hint`, as `ActionRegistry`'s text
+ * source localizes them), as string resources in the app's language. The
+ * hint is the browser's tooltip and the command palette's second column.
+ */
+object ActionTexts {
+    /** Each action the app performs, by catalogue id, with its label. */
+    val LABELS: Map<String, Int> = mapOf(
+        "file_new_project" to R.string.project_new,
+        "file_open_project" to R.string.project_open,
+        "file_import_model" to R.string.project_import,
+        "file_save_project" to R.string.project_save,
+        "file_save_project_as" to R.string.project_save_as,
+        "edit_undo" to R.string.project_undo,
+        "edit_redo" to R.string.project_redo,
+        "edit_cut" to R.string.project_edit_cut,
+        "edit_copy" to R.string.project_edit_copy,
+        "edit_paste" to R.string.project_edit_paste,
+        "edit_duplicate" to R.string.project_edit_duplicate,
+        "edit_delete_selected" to R.string.project_edit_delete_selected,
+        "edit_delete_all" to R.string.project_edit_delete_all,
+        "edit_select_all" to R.string.project_edit_select_all,
+        "edit_deselect_all" to R.string.project_edit_deselect_all,
+        "view_camera_default" to R.string.view_camera_default,
+        "view_camera_top" to R.string.view_camera_top,
+        "view_camera_front" to R.string.view_camera_front,
+        "view_camera_left" to R.string.view_camera_left,
+        "view_camera_right" to R.string.view_camera_right,
+        "view_camera_rear" to R.string.view_camera_rear,
+        "view_camera_bottom" to R.string.view_camera_bottom,
+        "tool_lay_on_face" to R.string.project_lay_flat,
+        "tool_paint" to R.string.workspace_paint,
+        "add_instance" to R.string.project_add_instance,
+        "instance_to_object" to R.string.project_instance_to_object,
+        "fill_bed_with_instances" to R.string.project_fill_bed,
+        "mirror_x" to R.string.project_mirror_x,
+        "mirror_y" to R.string.project_mirror_y,
+        "mirror_z" to R.string.project_mirror_z,
+        "reset_rotation" to R.string.project_reset_rotation,
+        "reset_scale" to R.string.project_reset_scale,
+        "center_on_plate" to R.string.project_center_on_plate,
+        "toggle_printable" to R.string.project_toggle_printable,
+        "scale_to_fit_volume" to R.string.project_scale_to_fit_volume,
+        "drop_to_bed" to R.string.project_drop_to_bed,
+        "delete_models" to R.string.action_delete_models,
+        "add_primitive_cube" to R.string.project_add_cube,
+        "add_primitive_cylinder" to R.string.project_add_cylinder,
+        "add_primitive_sphere" to R.string.project_add_sphere,
+        "add_primitive_cone" to R.string.project_add_cone,
+        "add_primitive_disc" to R.string.project_add_disc,
+        "add_primitive_torus" to R.string.project_add_torus,
+        "simplify_model" to R.string.project_simplify_model,
+        "add_plate" to R.string.project_add_plate,
+        "delete_plate" to R.string.project_delete_plate,
+        "arrange_all" to R.string.project_arrange_all,
+        "duplicate_plate" to R.string.project_duplicate_plate,
+        "split_to_objects" to R.string.project_split_to_objects,
+        "split_to_parts" to R.string.project_split_to_parts,
+        "tool_support_paint" to R.string.action_tool_support_paint,
+        "tool_seam_paint" to R.string.action_tool_seam_paint,
+        "tool_fuzzy_skin" to R.string.action_tool_fuzzy_skin,
+        "tool_measure" to R.string.project_measure,
+        "add_modifier" to R.string.project_add_modifier,
+        "add_support_enforcer" to R.string.project_add_support_enforcer,
+        "add_support_blocker" to R.string.project_add_support_blocker,
+    )
+
+    /** Each action the app performs, by catalogue id, with its hint. */
+    val HINTS: Map<String, Int> = mapOf(
+        "file_new_project" to R.string.action_hint_file_new_project,
+        "file_open_project" to R.string.action_hint_file_open_project,
+        "file_import_model" to R.string.action_hint_file_import_model,
+        "file_save_project" to R.string.action_hint_file_save_project,
+        "file_save_project_as" to R.string.action_hint_file_save_project_as,
+        "edit_undo" to R.string.action_hint_edit_undo,
+        "edit_redo" to R.string.action_hint_edit_redo,
+        "edit_cut" to R.string.action_hint_edit_cut,
+        "edit_copy" to R.string.action_hint_edit_copy,
+        "edit_paste" to R.string.action_hint_edit_paste,
+        "edit_duplicate" to R.string.action_hint_edit_duplicate,
+        "edit_delete_selected" to R.string.action_hint_edit_delete_selected,
+        "edit_delete_all" to R.string.action_hint_edit_delete_all,
+        "edit_select_all" to R.string.action_hint_edit_select_all,
+        "edit_deselect_all" to R.string.action_hint_edit_deselect_all,
+        "view_camera_default" to R.string.action_hint_view_camera_default,
+        "view_camera_top" to R.string.action_hint_view_camera_top,
+        "view_camera_front" to R.string.action_hint_view_camera_front,
+        "view_camera_left" to R.string.action_hint_view_camera_left,
+        "view_camera_right" to R.string.action_hint_view_camera_right,
+        "view_camera_rear" to R.string.action_hint_view_camera_rear,
+        "view_camera_bottom" to R.string.action_hint_view_camera_bottom,
+        "tool_lay_on_face" to R.string.action_hint_tool_lay_on_face,
+        "tool_paint" to R.string.action_hint_tool_paint,
+        "add_instance" to R.string.action_hint_add_instance,
+        "instance_to_object" to R.string.action_hint_instance_to_object,
+        "fill_bed_with_instances" to R.string.action_hint_fill_bed_with_instances,
+        "mirror_x" to R.string.action_hint_mirror_x,
+        "mirror_y" to R.string.action_hint_mirror_y,
+        "mirror_z" to R.string.action_hint_mirror_z,
+        "reset_rotation" to R.string.action_hint_reset_rotation,
+        "reset_scale" to R.string.action_hint_reset_scale,
+        "center_on_plate" to R.string.action_hint_center_on_plate,
+        "toggle_printable" to R.string.action_hint_toggle_printable,
+        "scale_to_fit_volume" to R.string.action_hint_scale_to_fit_volume,
+        "drop_to_bed" to R.string.action_hint_drop_to_bed,
+        "delete_models" to R.string.action_hint_delete_models,
+        "add_primitive_cube" to R.string.action_hint_add_primitive_cube,
+        "add_primitive_cylinder" to R.string.action_hint_add_primitive_cylinder,
+        "add_primitive_sphere" to R.string.action_hint_add_primitive_sphere,
+        "add_primitive_cone" to R.string.action_hint_add_primitive_cone,
+        "add_primitive_disc" to R.string.action_hint_add_primitive_disc,
+        "add_primitive_torus" to R.string.action_hint_add_primitive_torus,
+        "simplify_model" to R.string.action_hint_simplify_model,
+        "add_plate" to R.string.action_hint_add_plate,
+        "delete_plate" to R.string.action_hint_delete_plate,
+        "arrange_all" to R.string.action_hint_arrange_all,
+        "duplicate_plate" to R.string.action_hint_duplicate_plate,
+        "split_to_objects" to R.string.action_hint_split_to_objects,
+        "split_to_parts" to R.string.action_hint_split_to_parts,
+        "tool_support_paint" to R.string.action_hint_tool_support_paint,
+        "tool_seam_paint" to R.string.action_hint_tool_seam_paint,
+        "tool_fuzzy_skin" to R.string.action_hint_tool_fuzzy_skin,
+        "tool_measure" to R.string.action_hint_tool_measure,
+        "add_modifier" to R.string.action_hint_add_modifier,
+        "add_support_enforcer" to R.string.action_hint_add_support_enforcer,
+        "add_support_blocker" to R.string.action_hint_add_support_blocker,
+    )
+
+    /** [action]'s label in the app's language; the core's English one for an action the app has no words for. */
+    @Composable
+    fun label(action: ProjectActionState): String = LABELS[action.id]?.let { stringResource(it) } ?: action.label
+
+    /** [id]'s hint in the app's language, if it has one. */
+    @Composable
+    fun hint(id: String): String? = HINTS[id]?.let { stringResource(it) }
+
+    /**
+     * What a control for [action] says when pointed at, as the browser's
+     * `title` does: why it cannot run when the core does not enable it,
+     * otherwise its hint (or, without one, its label).
+     */
+    @Composable
+    fun tooltip(action: ProjectActionState): String =
+        if (!action.enabled && action.reason != null) action.reason!! else hint(action.id) ?: label(action)
+}

@@ -6,6 +6,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.SurfaceView
+import android.view.ViewConfiguration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -23,7 +24,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -46,12 +46,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -63,6 +65,8 @@ import dev.orcaxr.core.PaintToolKind
 import dev.orcaxr.core.ProjectSceneSummary
 import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.project.ProjectModel
+import dev.orcaxr.nativeapp.shell.ShellLayout
+import dev.orcaxr.nativeapp.shell.WidthClass
 import dev.orcaxr.nativeapp.shell.focusRing
 import dev.orcaxr.nativeapp.theme.LocalOrcaTheme
 import dev.orcaxr.nativeapp.theme.OrcaThemeTokens
@@ -70,6 +74,7 @@ import dev.orcaxr.nativeapp.theme.ThemeSwitch
 import dev.orcaxr.renderer.CameraView
 import dev.orcaxr.renderer.CameraViews
 import dev.orcaxr.renderer.OrbitCamera
+import dev.orcaxr.renderer.OrbitGestures
 import dev.orcaxr.renderer.PreviewFraming
 import dev.orcaxr.renderer.ProjectScene
 import dev.orcaxr.renderer.SceneSync
@@ -83,17 +88,28 @@ import kotlin.math.abs
  * the flat renderer from the session's own render deltas and mesh packets
  * (never a second copy of the project), on the bed the project's own
  * configuration states, each part in its filament's colour and its paint.
- * Drag orbits, pinch zooms; a tap selects the instance under the finger in
- * the project (Shift, Ctrl or Meta held toggles it, a tap on nothing
- * deselects all), as a click on a model does in the browser, and the scene
- * highlights the project's selection. One tool at a time owns the touch, as
- * the browser's `setTool` allows one: while the Lay flat tool is on (the
- * Edit menu's), a tap lays the tapped facet on the bed instead; while the
- * Measure tool is on (the Edit menu's), a tap picks the feature under it,
+ * The camera moves as the browser's OrbitControls move it ([ViewNavigation]):
+ * a drag orbits, two fingers pinch to zoom, a mouse's right button pans and
+ * its middle button zooms, a wheel, a trackpad's scroll or a touchpad's
+ * two-finger swipe zooms. A tap selects the instance under the finger in the
+ * project (Shift, Ctrl or Meta held toggles it, a tap on nothing deselects
+ * all), as a click on a model does in the browser, and the scene highlights
+ * the project's selection; a secondary click (the mouse's right button, a
+ * touchpad's two-finger click, a pen's button) or a long press opens the
+ * browser's scene context menu where it was ([SceneMenu]). The strip at the
+ * top carries the browser's quick actions, the command palette's search and
+ * the theme switch; the model toolbar ([ModelToolbar]) floats under it over
+ * the view's top edge, as the browser's does — across a phone's width, where
+ * the tools' panels keep the foot (the browser's phone layout puts it at the
+ * foot instead, where the app's bottom bar already is). One tool at a time owns the
+ * touch, as the browser's `setTool` allows one: while the Lay flat tool is on
+ * (the toolbar's or the Edit menu's), a tap lays the tapped facet on the bed
+ * instead; while the Measure tool is on, a tap picks the feature under it,
  * the readout shows in the browser's Measure panel and the measured line is
- * drawn on the model; while the paint tool is on (the toolbar's Paint), a
- * drag that starts on a model paints it, as the browser's painter does, and
- * its panel chooses the channel, palette row, tool and brush. The tool's
+ * drawn on the model; while a paint tool is on (the toolbar's Paint or a
+ * channel's painting), a drag that starts on a model paints it, as the
+ * browser's painter does, and its panel chooses the channel, palette row,
+ * tool and brush. The tool's
  * panel — the paint panel, the Measure panel or the Lay flat card — takes
  * the view's foot. A simplify preview draws the decimated parts in place of
  * the model's, with the Simplify panel's Apply and Cancel beneath the strip
@@ -148,6 +164,25 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     val cameras = ViewDescription.cameraActions(renderer::show)
     // The palette follows the project's filaments while painting.
     LaunchedEffect(view.revision, paint.state.active) { if (paint.state.active) paint.refreshPalette() }
+    // A camera view chosen elsewhere (the command palette's View menu entries).
+    val camera = model.cameraRequest
+    LaunchedEffect(camera) {
+        camera ?: return@LaunchedEffect
+        renderer.show(camera.view)
+        model.cameraShown(camera)
+    }
+    // A secondary press, a pen's button or a long press on the view: the scene's context menu.
+    var sceneMenu by remember { mutableStateOf<SceneMenuRequest?>(null) }
+    SideEffect {
+        renderer.onMenu = { request ->
+            // As the browser's right-click: a model not yet selected is selected alone first, so the menu's
+            // entries act on the model pressed; a press on nothing opens the plate's menu and keeps the selection.
+            request.instanceId?.takeIf { it !in model.view.selection.instances }?.let { model.selectInstance(it, extend = false) }
+            sceneMenu = request
+        }
+    }
+    val width = LocalWindowInfo.current.containerDpSize.width.value.toInt()
+    val compact = WidthClass.of(width) == WidthClass.Compact
     Box(modifier) {
         AndroidView(
             factory = { context -> WorkspaceSurface(context).also(renderer::attach) },
@@ -165,39 +200,39 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                     Modifier.weight(1f).padding(vertical = 16.dp),
                     color = MaterialTheme.colorScheme.onBackground,
                     style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                if (!paint.state.active) {
-                    // The browser's toolbar Paint (`tool_paint`), enabled as the core enables it.
-                    FilledTonalButton(
-                        onClick = model::startPaint,
-                        enabled = paint.enabled(PaintChannel.COLOR.toolAction),
-                        modifier = Modifier.focusRing(MaterialTheme.colorScheme.primary),
-                    ) { Text(stringResource(R.string.workspace_paint)) }
-                }
-                // The browser's theme switch, which it keeps in the strip above its viewport.
+                // The browser's menu strip: Save, Undo, Redo and the command palette's search, then its theme switch.
+                StripActions(model, wide = width > ShellLayout.NARROW_SIDEBAR_UP_TO_DP, compact = compact)
                 ThemeSwitch()
             }
+            // The model toolbar over the view's top edge, as the browser's: centred, or across a phone's width.
+            ModelToolbar(model, if (compact) Modifier.fillMaxWidth() else Modifier.align(Alignment.CenterHorizontally))
             // A simplify preview's Apply and Cancel, beneath the strip: clear of the tools' panels at the foot.
             model.simplifyPreview?.let { SimplifyCard(model, it, Modifier.align(Alignment.CenterHorizontally)) }
         }
-        // The active tool's panel takes the view's foot: one tool at a time, as the browser's `setTool`.
-        if (paint.state.active) {
-            PaintPanel(paint, Modifier.align(Alignment.BottomCenter).padding(8.dp))
-        } else if (model.measuring) {
-            MeasureCard(model, Modifier.align(Alignment.BottomCenter))
-        } else if (model.layingFlat) {
-            // The Lay flat tool's status (the browser's), and the way out of it.
-            Card(Modifier.align(Alignment.BottomCenter).padding(16.dp)) {
-                Row(Modifier.padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(model.layFlatNote),
-                        Modifier.weight(1f, fill = false).semantics { liveRegion = LiveRegionMode.Polite },
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    TextButton(onClick = { model.layFlat(false) }) { Text(stringResource(R.string.workspace_lay_flat_done)) }
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            // The active tool's panel takes the view's foot: one tool at a time, as the browser's `setTool`.
+            if (paint.state.active) {
+                PaintPanel(paint, Modifier.padding(8.dp))
+            } else if (model.measuring) {
+                MeasureCard(model)
+            } else if (model.layingFlat) {
+                // The Lay flat tool's status (the browser's), and the way out of it.
+                Card(Modifier.padding(16.dp)) {
+                    Row(Modifier.padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(model.layFlatNote),
+                            Modifier.weight(1f, fill = false).semantics { liveRegion = LiveRegionMode.Polite },
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        TextButton(onClick = { model.layFlat(false) }) { Text(stringResource(R.string.workspace_lay_flat_done)) }
+                    }
                 }
             }
         }
+        sceneMenu?.let { request -> SceneMenu(model, request) { sceneMenu = null } }
     }
 }
 
@@ -433,9 +468,16 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         renderer.setBedColors(tokens.plate.gridMajor.toInt(), tokens.plate.gridMinor.toInt())
     }
 
-    /** Puts the camera on the browser's [view] of the project's bed. */
+    /** A camera view asked for before the scene existed, taken once it does. */
+    private var pendingView: CameraView? = null
+
+    /** Opens the scene's context menu for a press: set by the screen. */
+    var onMenu: (SceneMenuRequest) -> Unit = {}
+
+    /** Puts the camera on the browser's [view] of the project's bed (as soon as there is a scene). */
     fun show(view: CameraView) {
-        scene?.let { move(it, CameraViews.of(view, bed.first, bed.second)) }
+        val renderer = scene
+        if (renderer == null) pendingView = view else move(renderer, CameraViews.of(view, bed.first, bed.second))
     }
 
     fun attach(view: WorkspaceSurface) {
@@ -479,6 +521,8 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         renderer.setBed(bed.first, bed.second)
         renderer.frame(bed.first, bed.second)
         camera = renderer.cameraState()
+        pendingView?.let { move(renderer, CameraViews.of(it, bed.first, bed.second)) }
+        pendingView = null
         renderer.setActive(true)
         renderer.select(highlighted)
         previewed.forEach { (volumeId, mesh) -> renderer.setMesh(previewKey(volumeId), mesh) }
@@ -508,6 +552,12 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         return PaintModel.Touch(hit.key, hit.volumeId, draw?.role, hit.facet, local, eye, draw?.placement)
     }
 
+    /** The scene's context menu at ([x], [y]), on the model under it or the plate. */
+    private fun menuAt(renderer: FilamentScene, x: Float, y: Float) {
+        val hit = (met(renderer.pick(x.toDouble(), y.toDouble())) as? ToolPick.Part)?.pick
+        onMenu(SceneMenuRequest(x, y, hit?.instanceId))
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     private fun installTouch(view: WorkspaceSurface) {
         var downX = 0f
@@ -517,53 +567,79 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         var dragged = false
         var scaling = false
         var stroking = false
+        var drag = ViewNavigation.Drag.ROTATE
+        // A press asking for the context menu (the right button, a pen's button), and a long press that opened it.
+        var context = false
+        var menuShown = false
+        val navigation = ViewNavigation(view, LIMITS, { scene?.cameraState() }) { next -> scene?.let { move(it, next) } }
+        val longPress = Runnable {
+            val renderer = scene
+            if (renderer != null && !dragged && !scaling && !stroking) {
+                menuShown = true
+                menuAt(renderer, downX, downY)
+            }
+        }
         val pinch = ScaleGestureDetector(view.context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(detector: ScaleGestureDetector): Boolean {
-                val renderer = scene ?: return false
-                move(renderer, renderer.cameraState().let { old ->
-                    old.copy(distance = (old.distance / detector.scaleFactor).coerceIn(.05, 4.5))
-                })
+                if (scene == null) return false
+                navigation.pinch(detector.scaleFactor)
                 return true
             }
         })
+        // A wheel or a trackpad's scroll zooms, as the browser's wheel does.
+        view.setOnGenericMotionListener { _, event -> scene != null && navigation.scroll(event) }
         view.setOnTouchListener { _, event ->
             val renderer = scene ?: return@setOnTouchListener false
             val paint = model.paint
+            // A touchpad's two-finger swipe zooms; it never orbits, selects or paints.
+            if (navigation.swipe(event)) return@setOnTouchListener true
             pinch.onTouchEvent(event)
             if (event.pointerCount > 1) {
                 scaling = true
+                view.removeCallbacks(longPress)
                 // A second finger zooms: the stroke in flight is dropped, as a cancelled pointer drops the browser's.
                 if (stroking) { paint.cancel(); stroking = false }
             }
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = event.x; downY = event.y; lastX = downX; lastY = downY
-                    dragged = false; scaling = false; stroking = false
-                    // The paint tool owns a touch that starts on a model; one that starts on nothing, or on
-                    // a part a simplify preview draws (refused, as the browser's painter refuses it), orbits.
-                    if (paint.state.active) {
+                    dragged = false; scaling = false; stroking = false; menuShown = false
+                    context = ViewNavigation.isContextPress(event)
+                    drag = navigation.dragFor(event)
+                    // The paint tool owns a touch (or a left press) that starts on a model; one that starts on nothing,
+                    // or on a part a simplify preview draws (refused, as the browser's painter refuses it), orbits.
+                    if (paint.state.active && !context && drag == ViewNavigation.Drag.ROTATE) {
                         val pick = renderer.pick(event.x.toDouble(), event.y.toDouble())
                         if (met(pick) == ToolPick.Previewed) model.refusePreviewedPick()
                         else touch(pick)?.let { stroking = paint.begin(it) }
+                    }
+                    // A finger or pen held still opens the scene's menu, as a long press does the tree's;
+                    // a mouse has its right button for that.
+                    if (!stroking && !context && !ViewNavigation.isMouse(event)) {
+                        view.postDelayed(longPress, ViewConfiguration.getLongPressTimeout().toLong())
                     }
                 }
                 MotionEvent.ACTION_MOVE -> if (stroking) {
                     // The stroke samples its own part alone, as the browser's painter intersects its display.
                     paint.painting?.let { key -> touch(renderer.pick(event.x.toDouble(), event.y.toDouble(), key))?.let(paint::move) }
-                } else if (!scaling) {
-                    if (abs(event.x - downX) + abs(event.y - downY) > TOUCH_SLOP) dragged = true
-                    if (dragged) move(renderer, renderer.cameraState().let { old ->
-                        old.copy(
-                            yaw = old.yaw - (event.x - lastX) * ORBIT_RADIANS_PER_PIXEL,
-                            pitch = (old.pitch + (event.y - lastY) * ORBIT_RADIANS_PER_PIXEL).coerceIn(.05, 1.5),
-                        )
-                    })
+                } else if (!scaling && !menuShown) {
+                    if (abs(event.x - downX) + abs(event.y - downY) > TOUCH_SLOP) {
+                        dragged = true
+                        view.removeCallbacks(longPress)
+                    }
+                    if (dragged) navigation.drag(drag, event.x - lastX, event.y - lastY)
                     lastX = event.x; lastY = event.y
                 }
                 MotionEvent.ACTION_UP -> {
+                    view.removeCallbacks(longPress)
                     if (stroking) {
                         stroking = false
                         paint.end()
+                    } else if (menuShown) {
+                        // The long press opened the menu: lifting the finger chooses nothing.
+                    } else if (context) {
+                        // A secondary click opens the scene's menu where it was; a drag with it panned instead.
+                        if (!dragged && !scaling) menuAt(renderer, event.x, event.y)
                     } else if (!dragged && !scaling && !paint.state.active) {
                         val hit = renderer.pick(event.x.toDouble(), event.y.toDouble())
                         // A tool's facet is the project's: a tap on a simplify preview's is refused.
@@ -584,9 +660,12 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
                     }
                     view.performClick()
                 }
-                MotionEvent.ACTION_CANCEL -> if (stroking) {
-                    stroking = false
-                    paint.cancel()
+                MotionEvent.ACTION_CANCEL -> {
+                    view.removeCallbacks(longPress)
+                    if (stroking) {
+                        stroking = false
+                        paint.cancel()
+                    }
                 }
             }
             true
@@ -595,6 +674,7 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
 
     companion object {
         private const val TOUCH_SLOP = 8f
-        private const val ORBIT_RADIANS_PER_PIXEL = .006
+        /** The Workspace camera's bounds: short of the poles, between 5 cm and 4.5 m from its target. */
+        private val LIMITS = OrbitGestures.Limits(minPitch = .05, maxPitch = 1.5, minDistance = .05, maxDistance = 4.5)
     }
 }

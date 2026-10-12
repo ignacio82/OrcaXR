@@ -50,4 +50,6 @@
     <string name="simplify_apply">套用</string>
     <string name="workspace_paint">繪製</string>
     <string name="paint_tool_sphere">球體</string>
+    <string name="action_delete_models">刪除</string>
+    <string name="action_tool_support_paint">支撐筆刷</string>
 </resources>

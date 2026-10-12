@@ -251,9 +251,10 @@ try:
         assert viewport >= panel_end - 2, f"The Workspace does not leave {area}'s panel its 356 dp: it starts at {viewport}"
         assert heading[2] <= viewport, f"{area}'s panel is not at the start beside the Workspace: {heading}, {viewport}"
         report[f"expanded{area}ViewportStart"] = viewport
-    # Tab crosses from the rail into the panel and round again; in the Workspace only its theme switch takes the focus.
+    # Tab crosses from the rail into the panel and round again; in the Workspace its strip (Save Project, the
+    # palette's search, the theme switch) and the model toolbar's enabled tools take the focus too.
     tab_to("Project")
-    seen = traverse(26)
+    seen = traverse(40)
     cycle(seen, ("New Project", "Open Project…", "Import Model…", *AREAS))
     report["expandedProjectTabOrder"] = seen[:len(set(seen))]
     tap("Device")

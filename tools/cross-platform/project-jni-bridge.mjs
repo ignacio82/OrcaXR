@@ -76,6 +76,7 @@ export function startProjectJni(profile = "debug") {
   signatures.sliceStatusChecks = ["String"];
   signatures.workspaceBedChecks = ["String"];
   signatures.transformFieldChecks = ["String"];
+  signatures.commandPaletteChecks = ["String"];
   signatures.placementEditChecks = ["String", "byte[]"];
   signatures.buildVolumeChecks = ["String", "byte[]", "byte[]"];
   signatures.transformEditChecks = ["byte[]", "String"];
@@ -1441,6 +1442,8 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     transform_fields: (request) => call("transformFields", request),
     transform_field_edit: (request) => call("transformFieldEdit", request),
     transform_rotation: (request) => call("transformRotation", request),
+    command_palette: (request) => call("commandPalette", request),
+    action_groups: (request) => call("actionGroups", request),
     primitive_payload: (request) => call("primitivePayload", request),
     paint_tool_sample: (request) => call("paintToolSample", request),
     paint_facet_colors: (request) => call("paintFacetColors", request),

@@ -147,6 +147,15 @@ class Screen:
     def key(self, code):
         self.adb("shell", "input", "keyevent", str(code))
 
+    def below_toolbar(self, top):
+        """[top], or the first row below the Workspace's model toolbar when the toolbar reaches lower (a
+        phone's, under the strip): its buttons change as the core enables them, so a pixel comparison of
+        the 3D view leaves the toolbar out. Read while the Workspace shows."""
+        for node in self.nodes():
+            if (node.get("content-desc") or "") == "Model tools":
+                return max(top, int(re.findall(r"\d+", node.get("bounds"))[3]) + 12)
+        return top
+
     def to_top(self):
         """Flings the screen's list back to its first item, inside the list (a bar above it, such as
         Prepare's pinned Slice, takes no swipe), and lets it come to rest: a tap on a list still

@@ -48,4 +48,6 @@
     <string name="simplify_apply">Toepassen</string>
     <string name="workspace_paint">Tekenen</string>
     <string name="paint_tool_sphere">Bol</string>
+    <string name="action_delete_models">Verwijderen</string>
+    <string name="action_tool_support_paint">Ondersteuning (Support) tekenen</string>
 </resources>

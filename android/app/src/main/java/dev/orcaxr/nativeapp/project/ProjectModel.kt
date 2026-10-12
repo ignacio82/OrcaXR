@@ -14,6 +14,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import dev.orcaxr.core.ActionArrangement
+import dev.orcaxr.core.ActionPresentation
 import dev.orcaxr.core.ContentProjectDocument
 import dev.orcaxr.core.DigestingDocument
 import dev.orcaxr.core.DocumentOwners
@@ -24,6 +26,7 @@ import dev.orcaxr.core.MeasureReadout
 import dev.orcaxr.core.ModelToolStatus
 import dev.orcaxr.core.PaintChannel
 import dev.orcaxr.core.PrimitiveShape
+import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.core.ProjectActorImport
 import dev.orcaxr.core.ProjectArchiveFormat
 import dev.orcaxr.core.ProjectDocumentOutput
@@ -55,7 +58,9 @@ import dev.orcaxr.core.VirtualFilaments
 import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.device.PreferencesTextStore
 import dev.orcaxr.nativeapp.prepare.PlateSource
+import dev.orcaxr.nativeapp.shell.AppActions
 import dev.orcaxr.nativeapp.workspace.PaintModel
+import dev.orcaxr.renderer.CameraView
 import dev.orcaxr.renderer.PacketMeshes
 import dev.orcaxr.renderer.SceneSync
 import dev.orcaxr.renderer.TriangleMesh
@@ -88,6 +93,9 @@ class PendingConflict(val name: String, internal val uri: Uri, internal val then
 
 /** How the operator answers [PendingConflict]: replace the outside changes, save a copy elsewhere, or stay. */
 enum class ConflictAnswer { Overwrite, SaveAs, Cancel }
+
+/** A camera view asked of the Workspace's 3D view; [serial] tells one choice from the next of the same view. */
+data class CameraRequest(val view: CameraView, val serial: Int)
 
 /**
  * The Project area's host adapter: it owns the [ProjectWorkspace], runs
@@ -169,14 +177,6 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         override fun view(): ProjectView = view
     })
 
-    /** The Workspace toolbar's Paint (`tool_paint`), when the core enables it: Lay flat and Measure go off, one tool at a time as the browser's `setTool`. */
-    fun startPaint() {
-        if (!paint.enabled(PaintChannel.COLOR.toolAction)) return
-        layFlat(false)
-        if (measuring) measure(false)
-        paint.start(PaintChannel.COLOR)
-    }
-
     init {
         work {
             workspace = ProjectWorkspace(recovery = recovery)
@@ -185,6 +185,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             subscription = workspace.subscribe {
                 main.post { view = workspace.view }
                 sync.request()
+                refreshToolbar()
                 // The Prepare pickers follow the project's filaments through edits, undo and redo.
                 val slots = workspace.view.filamentSlots
                 if (slots != followed) {
@@ -828,6 +829,96 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "split_to_parts" -> splitToParts()
             "simplify_model" -> simplifyNow()
             "tool_measure" -> measure(!measuring)
+            // The toolbar's, the command palette's and the menus' other actions: one call for all of them.
+            "delete_models" -> work { workspace.deleteSelected().await() }
+            "edit_undo" -> if (view.undo != null) undo()
+            "edit_redo" -> if (view.redo != null) redo()
+            in AppActions.DOCUMENT -> documentRequest = id
+            else -> {
+                CameraView.entries.firstOrNull { "view_camera_${it.id}" == id }?.let { cameraRequest = CameraRequest(it, ++cameraSerial) }
+                PaintChannel.entries.firstOrNull { it.toolAction == id }?.let(::paintTool)
+            }
+        }
+    }
+
+    /**
+     * A paint channel's toolbar tool (`tool_paint`, `tool_support_paint`, …):
+     * chosen, it starts painting that channel — Lay flat and Measure go off,
+     * one tool at a time as the browser's `setTool` — or switches the painter
+     * to it; chosen again while it paints, it ends, as the Lay flat and
+     * Measure tools do.
+     */
+    private fun paintTool(channel: PaintChannel) {
+        val state = paint.state
+        when {
+            state.active && state.channel == channel -> paint.stop()
+            state.active -> paint.chooseChannel(channel)
+            paint.enabled(channel.toolAction) -> {
+                layFlat(false)
+                if (measuring) measure(false)
+                paint.start(channel)
+            }
+        }
+    }
+
+    /** Whether toolbar tool [id] is the Workspace's tool now: Lay flat, Measure, or the paint channel being painted. */
+    fun toolActive(id: String): Boolean = when (id) {
+        "tool_lay_on_face" -> layingFlat
+        "tool_measure" -> measuring
+        else -> paint.state.active && PaintChannel.entries.any { it.toolAction == id && it == paint.state.channel }
+    }
+
+    /** A document action (New, Open, Save, Save As, Import) for the Project area's pickers and dialogs to carry out. */
+    var documentRequest by mutableStateOf<String?>(null)
+        private set
+
+    /** The Project area took [documentRequest] in hand. */
+    fun documentShown() {
+        documentRequest = null
+    }
+
+    /** A camera view (the View menu's, from the palette) for the Workspace's 3D view to take. */
+    var cameraRequest by mutableStateOf<CameraRequest?>(null)
+        private set
+    private var cameraSerial = 0
+
+    /** The Workspace's view took [request]. */
+    fun cameraShown(request: CameraRequest) {
+        if (cameraRequest == request) cameraRequest = null
+    }
+
+    /** The actions [surface] offers now, in catalogue order, as the core enables them (the command palette's and the toolbar's lists). */
+    fun surfaceActions(surface: ProjectIntents.ActionSurface): CompletableFuture<List<ProjectActionState>> =
+        started.thenCompose { it.surfaceActions(surface) }
+
+    /**
+     * The Workspace's model toolbar: the `dom-toolbar` actions the app
+     * performs, in the browser's runs (a separator wherever the catalogue
+     * group changes), as the core enables them; read again after every change
+     * of the project, its selection or its actions.
+     */
+    var toolbar by mutableStateOf<List<List<ProjectActionState>>>(emptyList())
+        private set
+    /** The menu strip's quick actions, as the browser's: Save, Undo and Redo (`dom-menu`), as the core enables them. */
+    var quickActions by mutableStateOf<List<ProjectActionState>>(emptyList())
+        private set
+    private val toolbarQueued = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    private fun refreshToolbar() {
+        if (!toolbarQueued.compareAndSet(false, true)) return
+        started.thenCompose { workspace ->
+            toolbarQueued.set(false)
+            workspace.surfaceActions(ProjectIntents.ActionSurface.DomToolbar).thenCombine(
+                workspace.surfaceActions(ProjectIntents.ActionSurface.DomMenu),
+            ) { tools, menu -> tools to menu }
+        }.thenApply { (tools, menu) ->
+            val runs = ActionPresentation.arrange(AppActions.performed(tools), ActionArrangement.TOOLBAR) { it.id }.map { it.second }
+            runs to AppActions.QUICK.mapNotNull { id -> menu.firstOrNull { it.id == id } }
+        }.whenComplete { read, failure ->
+            if (failure != null) toolbarQueued.set(false) else main.post {
+                toolbar = read.first
+                quickActions = read.second
+            }
         }
     }
 

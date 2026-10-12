@@ -202,6 +202,8 @@ box = (0, 260, width, height - 220)
 tap("Workspace")
 time.sleep(4)
 empty = screen.screenshot()
+# The 3D view's pixels below the model toolbar, whose buttons change with the selection.
+box = (0, screen.below_toolbar(260), width, height - 220)
 
 # A cube: the import selects nothing, so no inspector; Select All shows its fields.
 tap("Project")

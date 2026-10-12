@@ -50,4 +50,6 @@
     <string name="simplify_apply">Aplicar</string>
     <string name="workspace_paint">Pintar</string>
     <string name="paint_tool_sphere">Esfera</string>
+    <string name="action_delete_models">Esborrar</string>
+    <string name="action_tool_support_paint">Pintar suports</string>
 </resources>

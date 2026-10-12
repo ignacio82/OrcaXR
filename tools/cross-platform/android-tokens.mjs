@@ -2,8 +2,10 @@
 // shell's two themes (web/src/ui/tokens.ts `domThemes`), its shared spacing,
 // families and motion (`tokens`), the role pairs it holds to WCAG AA
 // (`domContrastPairs`), its type ramp as the stylesheet sets it (web/index.html)
-// and the theme switch's icon (web/public/icons/material). Check mode by
-// default; `--write` regenerates.
+// the theme switch's icon (web/public/icons/material), and the glyphs of the
+// catalogue actions the app shows (web/src/actions through web/src/ui/icons.ts:
+// each action's Material symbol and the shortcut the browser's menus show).
+// Check mode by default; `--write` regenerates.
 //
 // tokens.ts is imported, never parsed, so nothing here has a second idea of the
 // tokens. The type ramp has no token of its own in the browser — the DOM
@@ -19,7 +21,13 @@
 //   android/app/src/main/res/values{,-night}/orca_colors.xml
 //     the window's background before Compose draws, per system theme;
 //   android/app/src/main/res/drawable/ic_theme_dark.xml
-//     the browser's theme switch icon (its `dark_mode` Material symbol).
+//     the browser's theme switch icon (its `dark_mode` Material symbol);
+//   android/app/src/main/java/dev/orcaxr/nativeapp/theme/OrcaActionGlyphs.kt
+//   android/app/src/main/res/drawable/ic_symbol_*.xml
+//     the actions the app shows (its toolbar, menus and command palette):
+//     each one's symbol as the browser's shells draw it (`icon(a.icon).xr`) and
+//     the shortcut its menus print (DomShell's `shortcutHint`), and the
+//     palette trigger's search symbol.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import {
   CONTRAST_MINIMUM,
@@ -27,6 +35,10 @@ import {
   domThemes,
   tokens,
 } from "../../web/src/ui/tokens.ts";
+import { buildRegistry } from "../../web/src/actions/catalog.ts";
+import { ariaShortcutValue } from "../../web/src/actions/ShortcutCatalog.ts";
+import { hasIcon, icon } from "../../web/src/ui/icons.ts";
+import { shortcutHint } from "../../web/src/ui/dom/DomShell.ts";
 
 const root = new URL("../../", import.meta.url);
 const at = (relative) => new URL(relative, root);
@@ -43,6 +55,27 @@ const KOTLIN =
   "android/app/src/main/java/dev/orcaxr/nativeapp/theme/OrcaTokens.kt";
 const RES = "android/app/src/main/res";
 const ICON = "web/public/icons/material/dark_mode.svg";
+const GLYPHS =
+  "android/app/src/main/java/dev/orcaxr/nativeapp/theme/OrcaActionGlyphs.kt";
+const SYMBOLS = "web/public/icons/material";
+
+// The catalogue actions the app performs and shows with a glyph (generated in
+// catalogue order). `AppActionsTest` holds the app's own list to this one.
+const APP_ACTIONS = [
+  "file_new_project", "file_open_project", "file_save_project", "file_save_project_as", "file_import_model",
+  "edit_undo", "edit_redo", "edit_cut", "edit_copy", "edit_paste", "edit_duplicate", "edit_delete_selected",
+  "edit_delete_all", "edit_select_all", "edit_deselect_all",
+  "view_camera_default", "view_camera_top", "view_camera_front", "view_camera_left", "view_camera_right",
+  "view_camera_rear", "view_camera_bottom",
+  "tool_lay_on_face", "tool_paint", "add_instance", "instance_to_object", "fill_bed_with_instances",
+  "mirror_x", "mirror_y", "mirror_z", "reset_rotation", "reset_scale", "center_on_plate", "toggle_printable",
+  "scale_to_fit_volume", "drop_to_bed", "delete_models",
+  "add_primitive_cube", "add_primitive_cylinder", "add_primitive_sphere", "add_primitive_cone",
+  "add_primitive_disc", "add_primitive_torus",
+  "simplify_model", "add_plate", "delete_plate", "arrange_all", "duplicate_plate", "split_to_objects",
+  "split_to_parts", "tool_support_paint", "tool_seam_paint", "tool_fuzzy_skin", "tool_measure",
+  "add_modifier", "add_support_enforcer", "add_support_blocker",
+];
 
 const problems = [];
 const problem = (message) => problems.push(message);
@@ -325,6 +358,57 @@ function vectorDrawable(path) {
 `;
 }
 
+/** Each action the app shows, in catalogue order, with its symbol and menu shortcut. */
+function actionGlyphs() {
+  const catalogue = buildRegistry().allSource();
+  const known = new Set(catalogue.map((action) => action.id));
+  for (const id of APP_ACTIONS)
+    if (!known.has(id)) problem(`${id} is not a catalogue action`);
+  if (new Set(APP_ACTIONS).size !== APP_ACTIONS.length)
+    problem("APP_ACTIONS repeats an action");
+  return catalogue
+    .filter((action) => APP_ACTIONS.includes(action.id))
+    .map((action) => {
+      if (!hasIcon(action.icon))
+        problem(`${action.id}'s icon ${action.icon} has no glyph`);
+      const shortcuts = ariaShortcutValue(action.shortcuts);
+      return {
+        id: action.id,
+        symbol: icon(action.icon).xr,
+        shortcut: shortcuts ? shortcutHint(shortcuts) : undefined,
+      };
+    });
+}
+
+const resource = (symbol) => `ic_symbol_${symbol}`;
+
+function renderGlyphs(glyphs) {
+  const entries = glyphs
+    .map(
+      (g) =>
+        `        "${g.id}" to OrcaActionGlyph(R.drawable.${resource(g.symbol)}${g.shortcut ? `, ${JSON.stringify(g.shortcut)}` : ""}),`,
+    )
+    .join("\n");
+  return `// Generated by ${GENERATOR} from web/src/actions, web/src/ui/icons.ts and web/src/ui/dom/DomShell.ts. Do not edit.
+package dev.orcaxr.nativeapp.theme
+
+import dev.orcaxr.nativeapp.R
+
+/** An action as the browser's shells draw it: its Material symbol, and the shortcut its menus print. */
+data class OrcaActionGlyph(val icon: Int, val shortcut: String? = null)
+
+object OrcaActionGlyphs {
+    /** The catalogue actions the app shows, in catalogue order. */
+    val actions: Map<String, OrcaActionGlyph> = linkedMapOf(
+${entries}
+    )
+
+    /** The browser's search symbol, on the command palette's trigger. */
+    val search: Int = R.drawable.${resource(icon("search").xr)}
+}
+`;
+}
+
 // ---- Kotlin ----------------------------------------------------------------
 
 const float = (value) => {
@@ -481,11 +565,20 @@ function renderColours(name) {
 
 // ---- write or check --------------------------------------------------------
 
+const glyphs = actionGlyphs();
+const symbols = [
+  ...new Set([...glyphs.map((g) => g.symbol), icon("search").xr]),
+].sort();
 const outputs = new Map([
   [KOTLIN, renderKotlin()],
   [`${RES}/values/orca_colors.xml`, renderColours("light")],
   [`${RES}/values-night/orca_colors.xml`, renderColours("dark")],
   [`${RES}/drawable/ic_theme_dark.xml`, vectorDrawable(ICON)],
+  [GLYPHS, renderGlyphs(glyphs)],
+  ...symbols.map((symbol) => [
+    `${RES}/drawable/${resource(symbol)}.xml`,
+    vectorDrawable(`${SYMBOLS}/${symbol}.svg`),
+  ]),
 ]);
 if (problems.length > 0) {
   console.error(
@@ -513,5 +606,6 @@ if (write) {
 }
 console.log(
   `Android tokens: ${ROLES.length} colour roles in ${Object.keys(domThemes).length} themes, ` +
-    `${TEXT_ROLES.length} text roles, ${domContrastPairs.length} contrast pairs.`,
+    `${TEXT_ROLES.length} text roles, ${domContrastPairs.length} contrast pairs, ` +
+    `${glyphs.length} action glyphs in ${symbols.length} symbols.`,
 );

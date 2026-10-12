@@ -6333,8 +6333,128 @@ Shift+Tab, Space and Enter, the focused button's pixels, a dialog keeping
 and returning the focus and Escape, then resizes the display (`wm density`,
 `wm size`, always restored) for the medium rail and the expanded panels and
 crosses them with Tab. adb cannot drive a drag and drop. The smoke passes on
-both emulators; hover, context menus, trackpad and stylus input,
-and keyboard control of the 3D views remain.
+both emulators. The command palette, the toolbar, the context menus, hover,
+trackpad and stylus input follow ([below](#android-command-palette-toolbar-and-context-menus));
+keyboard control of the 3D views remains.
+
+### Android command palette, toolbar and context menus
+
+The app reaches the catalogue's actions as the browser's flat shell does —
+its command palette, its model toolbar and menu strip, its scene and Objects
+context menus — and every one of them runs the call the menus make
+(`ProjectModel.perform`), through the shell's runner, which first shows the
+area the action needs: the Project area for New, Open, Save, Save As and
+Import Model (its pickers and dialogs carry them out, from a
+`documentRequest`), the Workspace for a camera view or a tool that takes its
+touch. What the app performs is one list (`AppActions.PERFORMED`, 57
+actions: the document actions, Undo and Redo, the View menu's seven camera
+views, the Edit, Add and placement menus, the model tools, the plates, and
+the toolbar's Delete and paint channels); nothing else is ever listed.
+Their words are the browser's labels and hints (`action.<id>.label` and
+`.hint`, `ActionTexts`, mapped in `contracts/android-strings.json`), their
+symbols the browser's Material symbols and their menu shortcuts its menus'
+(`OrcaActionGlyphs`: `android-tokens.mjs` writes each action's
+`icon(a.icon).xr` symbol as a vector drawable, `ic_symbol_*`, and DomShell's
+`shortcutHint` — Ctrl+Z, Ctrl+⇧+Z, Delete, Escape — for the actions the app
+shows; `AppActionsTest` holds the app's list to the generated one).
+
+The palette is `CommandPalette.ts`: Ctrl/⌘ K from anywhere (unless a
+focused view takes the key; the open palette's own field passes it back to
+close it), the Workspace's search button (the browser's `#cmd-search-btn`:
+the search symbol, "Search actions & settings" on windows wider than its
+1180 px, ⌘K, its title as the tooltip) and the Project area's. It lists the
+core's `command-palette` surface in catalogue order with its enablement
+(`ProjectWorkspace.surfaceActions`, paged on the authority with the shell's
+host facts, hidden actions left out, read again as the project, the
+selection or the enablement change) limited to what the app performs; the
+search is the browser's, through the shared core ([action presentation](#action-presentation)):
+label, id or hint (in the app's language) containing the trimmed query, case
+ignored. A row shows the symbol, the label and the hint — or the core's
+reason when it is disabled, dimmed. ArrowDown/ArrowUp move the highlight, a
+new search starts at the first row, the mouse highlights the row it rests
+on; Enter or a click runs it and closes the palette, while one the core does
+not enable leaves it open with the browser's status ("label: reason");
+Escape, Ctrl/⌘ K, Back or a press outside close it; "No matching actions"
+when nothing matches. The placeholder is the XR palette's message ("Search
+every action"). The Prepare area's Slice and Send stay out: the Android
+shell's capability host facts carry no slicing, G-code or preflight state
+yet, so the core could not gate them as the browser does.
+
+The Workspace wears the browser's strip and model toolbar: its title, then
+the strip's quick actions (Save Project, Undo, Redo — bare symbols enabled
+as the core enables them on `dom-menu`, DomShell's `QUICK_ACTIONS`), the
+palette's button and the theme switch; under it the model toolbar
+(`dom-toolbar` in catalogue order, the app's eight: Lay flat | Paint | Drop
+to bed, Delete | Support, Seam and Fuzzy-skin Painting | Measure), each run
+of one catalogue group between hairlines (the browser's separators, from the
+core's toolbar runs), each button its symbol named by its label, its tooltip
+the hint or the core's reason, the Workspace's current tool shown pressed
+(the browser's `.active`) and pressed again to end it, as the Edit menu's
+Lay flat and Measure do; a paint channel's button starts painting that
+channel or switches the painter to it. The toolbar floats centred over the
+view's top edge from 600 dp and spans a phone's width beneath the strip,
+scrolling sideways when narrower than its tools; the search button shows its
+words only above 1180 dp. (The browser's phone layout moves the toolbar to
+the viewport's foot; on Android the bottom bar and the tools' panels are
+there, so it stays under the strip.)
+
+The context menus are the browser's (`ContextMenu.ts`): sections per
+catalogue group in `GROUPS` order with the group's label as a small
+heading (English, as the browser's headings are), each entry the symbol,
+label and menu shortcut, enabled as the core enables it (its reason as the
+tooltip). A long press (finger or pen) or a secondary click (the mouse's
+right button, a touchpad's two-finger click, a pen's button) on the
+Workspace opens the scene's menu where it was: on a model, the object menu,
+selecting that model alone first when it is not selected (the browser's
+right-click), on nothing the plate's, the selection kept — limited to what
+the app performs, named "Actions for the selected model" or "Actions for
+this plate". An Objects-tree row's menu (Rename, then the same catalogue
+menu for the row's kind, now in its sections) opens on a long press, a
+secondary click, the keyboard's menu key or Shift+F10, as the browser's
+Objects panel. The Edit and Add menus show the actions' symbols and
+shortcuts.
+
+Pointer and hover: buttons, menu entries and palette rows show the hand
+pointer where the browser's `cursor: pointer` does, and tooltips appear on
+mouse hover (Material's, persistent while the pointer stays; a long press by
+touch or pen shows them too). The 3D views move as the
+browser's OrbitControls move its camera (`OrbitGestures`, renderer-api,
+platform-free; `ViewNavigation` maps Android's input to it, shared by the
+Workspace and Preview): a drag orbits by 2π times the drag over the view's
+height (the app turned 0.006 rad per pixel before), the right button — or
+Ctrl/Meta/Shift with the left — pans in screen space, the middle button
+dollies, two fingers pinch by their spread, and a wheel or trackpad scroll
+(`ACTION_SCROLL`) or a touchpad's two-finger swipe (Android 14's
+`CLASSIFICATION_TWO_FINGER_SWIPE`) zooms by `0.95^(|deltaY|·0.01)` with
+Chrome's deltas (the platform's scroll factor in dp per notch, Ctrl + wheel
+as a pinch ×10); a touchpad's pinch arrives as two fingers. Only the
+camera's pitch and distance bounds differ from OrbitControls'. Preview's
+camera had zoomed to 1 cm, below the 3 cm `OrbitCamera` accepts, which threw
+on a deep pinch; it now stops at 3 cm. A stylus is a finger: it orbits, taps,
+long-presses and paints alike; its button held as it touches is a secondary
+click; its hover shows no tooltip (Material shows them for a mouse).
+
+`ProjectCommandPaletteChecks` (1,949 checks over JNI) replay the action
+presentation corpus through the Kotlin wrapper (`ActionPresentation`) and
+run a real session: the palette lists the whole catalogue (226) in its order
+with the core's reasons, a search finds the cube the Add menu's call adds as
+"Add cube.stl", the toolbar's runs and its Delete enabled by the selection,
+the object menu's sections (Edit, Scene) and the plate's (File, Edit, Scene,
+Slice, System), Clone Selected and the toolbar's Delete each one step, and
+Delete disabled with the browser's reason once nothing is selected.
+`AppActionsTest` (6) and `OrbitGesturesTest` (4, renderer-api) cover the
+platform-free parts. `android-palette-smoke.py` (in `emulator-smoke.py`
+before the accessibility smoke) opens the palette with Ctrl+K, finds nothing
+for "zzzz", closes it with Escape, adds the cube with "cube" and Enter (its
+undo label), opens the scene's menu with a long press on the cube (its EDIT
+and SCENE sections) and clones, deletes the copy with the toolbar's Delete,
+opens the plate's menu on the bare plate, turns the camera to Top View from
+the palette, then deselects and hovers the disabled Delete with
+`input mouse tap` (Compose takes a mouse's first event as the pointer
+entering) for its tooltip, read from a dump of every window or from its
+pixels. adb cannot press a right button or drive a touchpad, so secondary
+clicks and trackpad gestures are covered by the code paths the long press
+and the JVM tests share. The emulator smoke has not run for this change.
 
 ### Android localization
 

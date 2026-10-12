@@ -47,4 +47,6 @@
     <string name="simplify_apply">Applicera</string>
     <string name="workspace_paint">Färglägga</string>
     <string name="paint_tool_sphere">Sfär</string>
+    <string name="action_delete_models">Radera</string>
+    <string name="action_tool_support_paint">Färgläggning av Support</string>
 </resources>

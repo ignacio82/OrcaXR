@@ -29,6 +29,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -51,7 +52,13 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
@@ -59,6 +66,7 @@ import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -67,6 +75,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import dev.orcaxr.core.ActionArrangement
+import dev.orcaxr.core.ActionPresentation
 import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.core.ProjectIntents
 import dev.orcaxr.core.ProjectNames
@@ -77,6 +87,12 @@ import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
 import dev.orcaxr.core.TransformTool
 import dev.orcaxr.nativeapp.R
+import dev.orcaxr.nativeapp.shell.ActionMenuItem
+import dev.orcaxr.nativeapp.shell.ActionSections
+import dev.orcaxr.nativeapp.shell.ActionTooltip
+import dev.orcaxr.nativeapp.shell.AppActions
+import dev.orcaxr.nativeapp.shell.LocalCommandPalette
+import dev.orcaxr.nativeapp.theme.OrcaActionGlyphs
 import java.text.DateFormat
 import java.util.Date
 
@@ -98,6 +114,18 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
         model.shareRequest?.let { context.startActivity(it); model.shareShown() }
     }
     LaunchedEffect(model.saveAsRequested) { if (model.saveAsRequested) saveBeforeGoingOn.launch(suggested) }
+    // A document action asked from elsewhere (the command palette, the Workspace's Save): this area's pickers and dialogs carry it out.
+    LaunchedEffect(model.documentRequest) {
+        val request = model.documentRequest ?: return@LaunchedEffect
+        model.documentShown()
+        when (request) {
+            "file_new_project" -> model.newProject()
+            "file_open_project" -> open.launch(arrayOf("*/*"))
+            "file_import_model" -> import.launch(arrayOf("*/*"))
+            "file_save_project" -> if (!model.save()) saveAs.launch(suggested)
+            "file_save_project_as" -> saveAs.launch(suggested)
+        }
+    }
     var renaming by remember { mutableStateOf<Renaming?>(null) }
 
     LazyColumn(
@@ -122,6 +150,14 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                 OutlinedButton(onClick = { saveAs.launch(suggested) }, enabled = enabled) { Text(stringResource(R.string.project_save_as)) }
                 OutlinedButton(onClick = { import.launch(arrayOf("*/*")) }, enabled = enabled) { Text(stringResource(R.string.project_import)) }
                 OutlinedButton(onClick = model::share, enabled = enabled) { Text(stringResource(R.string.project_share)) }
+                // The browser's command palette, from this page too (its strip's search button).
+                val openPalette = LocalCommandPalette.current
+                ActionTooltip(stringResource(R.string.palette_open_hint)) {
+                    OutlinedButton(onClick = openPalette, modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)) {
+                        Icon(painterResource(OrcaActionGlyphs.search), contentDescription = null, modifier = Modifier.size(16.dp))
+                        Text(stringResource(R.string.palette_open), Modifier.padding(start = 6.dp))
+                    }
+                }
             }
         }
         item {
@@ -264,50 +300,6 @@ private sealed interface Renaming {
     data class Plate(val id: String, override val name: String) : Renaming
 }
 
-/** The label a catalogue action shows here: the browser's message for it, in the app's language. */
-@Composable
-private fun actionLabel(action: ProjectActionState): String = when (action.id) {
-    "edit_select_all" -> stringResource(R.string.project_edit_select_all)
-    "edit_deselect_all" -> stringResource(R.string.project_edit_deselect_all)
-    "edit_cut" -> stringResource(R.string.project_edit_cut)
-    "edit_copy" -> stringResource(R.string.project_edit_copy)
-    "edit_paste" -> stringResource(R.string.project_edit_paste)
-    "fill_bed_with_instances" -> stringResource(R.string.project_fill_bed)
-    "add_primitive_cube" -> stringResource(R.string.project_add_cube)
-    "add_primitive_cylinder" -> stringResource(R.string.project_add_cylinder)
-    "add_primitive_sphere" -> stringResource(R.string.project_add_sphere)
-    "add_primitive_cone" -> stringResource(R.string.project_add_cone)
-    "add_primitive_disc" -> stringResource(R.string.project_add_disc)
-    "add_primitive_torus" -> stringResource(R.string.project_add_torus)
-    "add_modifier" -> stringResource(R.string.project_add_modifier)
-    "add_support_enforcer" -> stringResource(R.string.project_add_support_enforcer)
-    "add_support_blocker" -> stringResource(R.string.project_add_support_blocker)
-    "edit_duplicate" -> stringResource(R.string.project_edit_duplicate)
-    "add_instance" -> stringResource(R.string.project_add_instance)
-    "edit_delete_selected" -> stringResource(R.string.project_edit_delete_selected)
-    "edit_delete_all" -> stringResource(R.string.project_edit_delete_all)
-    "toggle_printable" -> stringResource(R.string.project_toggle_printable)
-    "instance_to_object" -> stringResource(R.string.project_instance_to_object)
-    "add_plate" -> stringResource(R.string.project_add_plate)
-    "duplicate_plate" -> stringResource(R.string.project_duplicate_plate)
-    "delete_plate" -> stringResource(R.string.project_delete_plate)
-    "tool_lay_on_face" -> stringResource(R.string.project_lay_flat)
-    "mirror_x" -> stringResource(R.string.project_mirror_x)
-    "mirror_y" -> stringResource(R.string.project_mirror_y)
-    "mirror_z" -> stringResource(R.string.project_mirror_z)
-    "reset_rotation" -> stringResource(R.string.project_reset_rotation)
-    "reset_scale" -> stringResource(R.string.project_reset_scale)
-    "center_on_plate" -> stringResource(R.string.project_center_on_plate)
-    "scale_to_fit_volume" -> stringResource(R.string.project_scale_to_fit_volume)
-    "drop_to_bed" -> stringResource(R.string.project_drop_to_bed)
-    "arrange_all" -> stringResource(R.string.project_arrange_all)
-    "split_to_objects" -> stringResource(R.string.project_split_to_objects)
-    "split_to_parts" -> stringResource(R.string.project_split_to_parts)
-    "simplify_model" -> stringResource(R.string.project_simplify_model)
-    "tool_measure" -> stringResource(R.string.project_measure)
-    else -> action.label
-}
-
 /** The browser's Edit menu: its selection and object edits, enabled as the core enables them. */
 @Composable
 private fun EditMenu(view: ProjectView, model: ProjectModel) {
@@ -315,48 +307,28 @@ private fun EditMenu(view: ProjectView, model: ProjectModel) {
     Box {
         OutlinedButton(onClick = { open = true }, enabled = view.ready && !model.busy) { Text(stringResource(R.string.project_edit_menu)) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            for (action in ProjectEditing.editMenu(view)) {
-                DropdownMenuItem(
-                    text = { Text(actionLabel(action)) },
-                    onClick = {
-                        open = false
-                        model.perform(action.id)
-                    },
-                    enabled = action.enabled,
-                )
+            fun choose(action: ProjectActionState) {
+                open = false
+                model.perform(action.id)
             }
+            for (action in ProjectEditing.editMenu(view)) ActionMenuItem(action, onClick = { choose(action) })
             HorizontalDivider()
             // Placement: on the selection (centre and scale to fit the active plate's models when
             // none is selected), Lay flat a tool that stays on until it is chosen again.
-            for (action in ProjectEditing.placementMenu(view)) {
-                val on = action.id == "tool_lay_on_face" && model.layingFlat
-                DropdownMenuItem(
-                    text = { Text(actionLabel(action)) },
-                    onClick = {
-                        open = false
-                        model.perform(action.id)
-                    },
-                    enabled = action.enabled || on,
-                    trailingIcon = if (on) ({ Text("✓") }) else null,
-                    modifier = if (action.id == "tool_lay_on_face") Modifier.semantics { selected = on } else Modifier,
-                )
-            }
+            for (action in ProjectEditing.placementMenu(view)) ToolMenuItem(action, model) { choose(action) }
             HorizontalDivider()
             // The model tools: split and simplify on the selection, Measure a tool that stays on until it is chosen again.
-            for (action in ProjectEditing.toolsMenu(view)) {
-                val on = action.id == "tool_measure" && model.measuring
-                DropdownMenuItem(
-                    text = { Text(actionLabel(action)) },
-                    onClick = {
-                        open = false
-                        model.perform(action.id)
-                    },
-                    enabled = action.enabled || on,
-                    trailingIcon = if (on) ({ Text("✓") }) else null,
-                    modifier = if (action.id == "tool_measure") Modifier.semantics { selected = on } else Modifier,
-                )
-            }
+            for (action in ProjectEditing.toolsMenu(view)) ToolMenuItem(action, model) { choose(action) }
         }
+    }
+}
+
+/** A menu entry that may be a Workspace tool (Lay flat, Measure): checked while it is on, and choosable then to end it. */
+@Composable
+private fun ToolMenuItem(action: ProjectActionState, model: ProjectModel, onClick: () -> Unit) {
+    val on = model.toolActive(action.id)
+    Box(if (action.id in AppActions.TOOLS) Modifier.semantics { selected = on } else Modifier) {
+        ActionMenuItem(action, enabled = action.enabled || on, trailing = if (on) "✓" else null, onClick = onClick)
     }
 }
 
@@ -445,14 +417,10 @@ private fun AddMenu(view: ProjectView, model: ProjectModel) {
         OutlinedButton(onClick = { open = true }, enabled = view.ready && !model.busy) { Text(stringResource(R.string.project_add_menu)) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             for (action in ProjectEditing.addMenu(view)) {
-                DropdownMenuItem(
-                    text = { Text(actionLabel(action)) },
-                    onClick = {
-                        open = false
-                        model.perform(action.id)
-                    },
-                    enabled = action.enabled,
-                )
+                ActionMenuItem(action) {
+                    open = false
+                    model.perform(action.id)
+                }
             }
         }
     }
@@ -518,9 +486,11 @@ private fun PlateRow(plate: ProjectPlateState, index: Int, view: ProjectView, mo
  * shows it: indented by level, opened and closed by its disclosure,
  * highlighted when its entity is selected. A tap selects it (Ctrl/Meta
  * toggles, Shift extends a range, from a hardware keyboard), its check box
- * toggles it, and a long-press opens its menu — Rename for an object or part,
- * then the catalogue's actions, which act on the selection — without
- * changing the selection, as the browser's Objects panel does.
+ * toggles it, and a long-press — or a secondary click, the keyboard's menu
+ * key or Shift+F10 — opens its menu: Rename for an object or part, then the
+ * catalogue's actions in their sections (the scene's menu for the row's
+ * kind), which act on the selection — without changing the selection, as the
+ * browser's Objects panel does.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -537,10 +507,24 @@ private fun TreeRow(row: ProjectIntents.ObjectTreeRow, view: ProjectView, model:
             Modifier.fillMaxWidth()
                 .background(if (row.selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
                 .pointerInput(Unit) {
-                    // The keyboard's modifiers as the pointer goes down: what a click activates with.
+                    // The keyboard's modifiers as the pointer goes down: what a click activates with. A secondary
+                    // click (the mouse's right button) opens the row's menu, as the browser's `contextmenu` does.
                     awaitPointerEventScope {
-                        while (true) modifiers = awaitPointerEvent(PointerEventPass.Initial).keyboardModifiers
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            modifiers = event.keyboardModifiers
+                            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                                event.changes.forEach { it.consume() }
+                                menu = true
+                            }
+                        }
                     }
+                }
+                // The keyboard's menu key, or Shift+F10, opens it too, as the browser's Objects panel lets them.
+                .onKeyEvent { event ->
+                    val opens = event.key == Key.Menu || (event.key == Key.F10 && event.isShiftPressed)
+                    if (opens && event.type == KeyEventType.KeyUp && selectable) menu = true
+                    opens
                 }
                 .combinedClickable(
                     enabled = selectable,
@@ -579,22 +563,24 @@ private fun TreeRow(row: ProjectIntents.ObjectTreeRow, view: ProjectView, model:
             }
         }
         DropdownMenu(expanded = menu && choices.isNotEmpty(), onDismissRequest = { menu = false }) {
-            for (choice in choices) when (choice) {
-                is ProjectEditing.Choice.Rename -> DropdownMenuItem(
+            // The Objects panel's own Rename first, then the catalogue's menu for the row in its sections.
+            for (choice in choices) if (choice is ProjectEditing.Choice.Rename) {
+                DropdownMenuItem(
                     text = { Text(stringResource(R.string.project_rename)) },
                     onClick = {
                         menu = false
                         onRename(choice)
                     },
+                    modifier = Modifier.pointerHoverIcon(PointerIcon.Hand),
                 )
-                is ProjectEditing.Choice.Action -> DropdownMenuItem(
-                    text = { Text(actionLabel(choice.state)) },
-                    onClick = {
-                        menu = false
-                        model.perform(choice.state.id)
-                    },
-                    enabled = choice.state.enabled && !model.busy,
-                )
+            }
+            val actions = choices.filterIsInstance<ProjectEditing.Choice.Action>().map { it.state }
+            val sections = remember(actions) {
+                ActionPresentation.arrange(actions, ActionArrangement.CONTEXT) { it.id }.map { (section, members) -> section.label to members }
+            }
+            ActionSections(sections, enabled = { !model.busy && (it.enabled || model.toolActive(it.id)) }) { action ->
+                menu = false
+                model.perform(action.id)
             }
         }
     }

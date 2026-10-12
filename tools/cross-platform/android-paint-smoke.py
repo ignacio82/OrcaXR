@@ -88,6 +88,8 @@ width, height = screen.screenshot()[:2]
 tap("Workspace")
 time.sleep(4)
 empty = screen.screenshot()
+# The 3D view's pixels below the model toolbar, whose buttons change with the selection.
+top_row = screen.below_toolbar(260)
 
 # A cube on the bed, selected.
 tap("Project")
@@ -98,7 +100,7 @@ menu("Edit", "Select All")
 tap("Workspace")
 time.sleep(4)
 drawn = screen.screenshot()
-cube = changed_pixels(empty, drawn, 0, 260, width, height - 220)
+cube = changed_pixels(empty, drawn, 0, top_row, width, height - 220)
 assert len(cube) > 300, "The cube was not drawn on the bed"
 left, right = min(x for x, _ in cube), max(x for x, _ in cube)
 top, bottom = min(y for _, y in cube), max(y for _, y in cube)
@@ -131,7 +133,7 @@ tap("Workspace")
 find("Colour painting", timeout=20)
 time.sleep(4)
 assigned = screen.screenshot()
-recoloured = changed_pixels(before, assigned, 0, 260, width, band)
+recoloured = changed_pixels(before, assigned, 0, top_row, width, band)
 assert len(recoloured) > len(shown) // 2, f"Assigning a filament recoloured {len(recoloured)} of {len(shown)} pixels"
 print(f"Assigned: {len(recoloured)} pixels now {colour(assigned, recoloured)}, were {colour(before, recoloured)}")
 tap("Project")
@@ -140,7 +142,7 @@ find("Redo Assign filament", timeout=30)
 tap("Workspace")
 find("Colour painting", timeout=20)
 time.sleep(4)
-restored = changed_pixels(before, screen.screenshot(), 0, 260, width, band)
+restored = changed_pixels(before, screen.screenshot(), 0, top_row, width, band)
 assert len(restored) < max(10, len(recoloured) // 5), f"Undo left {len(restored)} of {len(recoloured)} recoloured pixels"
 
 # A drag across the cube paints it.
@@ -150,7 +152,7 @@ adb("shell", "input", "swipe", str(start), str(y), str(end), str(y), "1200")
 find("Painted colour facets.", timeout=30)
 time.sleep(3)
 after = screen.screenshot()
-painted = changed_pixels(before, after, 0, 260, width, band)
+painted = changed_pixels(before, after, 0, top_row, width, band)
 assert len(painted) > 40, f"Painting changed only {len(painted)} pixels"
 gained = colour(after, painted)
 print(f"Painted {len(painted)} pixels; their colour is now {gained}, was {colour(before, painted)}")
@@ -167,7 +169,7 @@ tap("Workspace")
 find("Colour painting", timeout=20)
 time.sleep(4)
 undone = screen.screenshot()
-left_over = changed_pixels(before, undone, 0, 260, width, band)
+left_over = changed_pixels(before, undone, 0, top_row, width, band)
 assert len(left_over) < max(10, len(painted) // 5), f"Undo left {len(left_over)} of {len(painted)} painted pixels"
 
 # Done leaves the paint tool: the toolbar's Paint is back.

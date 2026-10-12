@@ -67,11 +67,13 @@ import dev.orcaxr.renderer.CameraViews
 import dev.orcaxr.core.GcodePreviewModes
 import dev.orcaxr.core.WorkspaceBed
 import dev.orcaxr.nativeapp.R
+import dev.orcaxr.nativeapp.workspace.ViewNavigation
 import dev.orcaxr.nativeapp.prepare.PrepareWords
 import dev.orcaxr.nativeapp.shell.focusRing
 import dev.orcaxr.renderer.GcodeMoveFilter
 import dev.orcaxr.renderer.GcodePreviewPlan
 import dev.orcaxr.renderer.OrbitCamera
+import dev.orcaxr.renderer.OrbitGestures
 import dev.orcaxr.renderer.PreviewFraming
 import dev.orcaxr.renderer.ToolpathGeometry
 import dev.orcaxr.renderer.filament.FilamentScene
@@ -436,6 +438,12 @@ private class PreviewRenderer {
         }
     }
 
+    /**
+     * The browser's OrbitControls over the toolpaths ([ViewNavigation]): a drag
+     * orbits, two fingers pinch to zoom, a mouse's right button pans and its
+     * middle button zooms, a wheel, a trackpad's scroll or a touchpad's
+     * two-finger swipe zooms.
+     */
     @SuppressLint("ClickableViewAccessibility")
     private fun installTouch(view: PreviewSurface) {
         var downX = 0f
@@ -444,32 +452,30 @@ private class PreviewRenderer {
         var lastY = 0f
         var dragged = false
         var scaling = false
+        var drag = ViewNavigation.Drag.ROTATE
+        val navigation = ViewNavigation(view, LIMITS, { scene?.cameraState() }) { next -> scene?.setCamera(next) }
         val pinch = ScaleGestureDetector(view.context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(detector: ScaleGestureDetector): Boolean {
-                val renderer = scene ?: return false
-                renderer.setCamera(renderer.cameraState().let { old ->
-                    old.copy(distance = (old.distance / detector.scaleFactor).coerceIn(.01, 4.5))
-                })
+                if (scene == null) return false
+                navigation.pinch(detector.scaleFactor)
                 return true
             }
         })
+        view.setOnGenericMotionListener { _, event -> scene != null && navigation.scroll(event) }
         view.setOnTouchListener { _, event ->
-            val renderer = scene ?: return@setOnTouchListener false
+            if (scene == null) return@setOnTouchListener false
+            if (navigation.swipe(event)) return@setOnTouchListener true
             pinch.onTouchEvent(event)
             if (event.pointerCount > 1) scaling = true
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = event.x; downY = event.y; lastX = downX; lastY = downY
                     dragged = false; scaling = false
+                    drag = navigation.dragFor(event)
                 }
                 MotionEvent.ACTION_MOVE -> if (!scaling) {
                     if (abs(event.x - downX) + abs(event.y - downY) > TOUCH_SLOP) dragged = true
-                    if (dragged) renderer.setCamera(renderer.cameraState().let { old ->
-                        old.copy(
-                            yaw = old.yaw - (event.x - lastX) * ORBIT_RADIANS_PER_PIXEL,
-                            pitch = (old.pitch + (event.y - lastY) * ORBIT_RADIANS_PER_PIXEL).coerceIn(.05, 1.5),
-                        )
-                    })
+                    if (dragged) navigation.drag(drag, event.x - lastX, event.y - lastY)
                     lastX = event.x; lastY = event.y
                 }
                 MotionEvent.ACTION_UP -> view.performClick()
@@ -480,7 +486,12 @@ private class PreviewRenderer {
 
     companion object {
         private const val TOUCH_SLOP = 8f
-        private const val ORBIT_RADIANS_PER_PIXEL = .006
+        /**
+         * The toolpath camera's bounds: short of the poles, and between 3 cm (the
+         * closest a camera can be; it zoomed to 1 cm before, which the camera refuses)
+         * and 4.5 m from its target.
+         */
+        private val LIMITS = OrbitGestures.Limits(minPitch = .05, maxPitch = 1.5, minDistance = .03, maxDistance = 4.5)
     }
 }
 

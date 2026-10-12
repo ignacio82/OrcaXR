@@ -53,6 +53,7 @@ import { plateProjectionCases, plateProjectionCode, replayPlateProjection } from
 import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
+import { replayActionPresentation } from "./action-presentation-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
 import { replaySplitSources } from "./split-source-replay.mjs";
 import { replayFilamentAssignment } from "./filament-assignment-replay.mjs";
@@ -449,6 +450,20 @@ try {
     ].join("\n"),
   );
   assert.equal(transformFieldChecks, 1936);
+  // How the shells arrange actions through the JNI exports, then the Kotlin wrapper and a real session.
+  const presentationFixture = await json("testdata/cross-platform/action-presentation-vectors.json");
+  const actionPresentation = replayActionPresentation(projectJniCore(jvm.call), presentationFixture);
+  assert.deepEqual(Object.values(actionPresentation), [1827, 92, 23]);
+  const commandPaletteChecks = jvm.call(
+    "commandPaletteChecks",
+    [
+      ...presentationFixture.catalogues.map((c) => `C\t${c.actions}`),
+      ...presentationFixture.palette.map((c) => `P\t${c.catalogue}\t${c.query}\t${c.reply}`),
+      ...presentationFixture.groups.map((c) => `G\t${c.request}\t${c.reply}`),
+      ...presentationFixture.refusals.map((r) => `X\t${r.exchange}\t${r.request}`),
+    ].join("\n"),
+  );
+  assert.equal(commandPaletteChecks, 1949);
   // The painter's settings and paint colours through the JNI exports, then the Kotlin wrapper.
   const paintToolFixture = await json("testdata/cross-platform/paint-tool-vectors.json");
   const paintTool = replayPaintTool(projectJniCore(jvm.call), paintToolFixture);
@@ -1710,6 +1725,8 @@ try {
     workspaceBedChecks,
     transformFields,
     transformFieldChecks,
+    ...actionPresentation,
+    commandPaletteChecks,
     placementEditChecks,
     buildVolumeChecks,
     transformEditChecks,

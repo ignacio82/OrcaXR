@@ -50,4 +50,6 @@
     <string name="simplify_apply">Применить</string>
     <string name="workspace_paint">Рисовать</string>
     <string name="paint_tool_sphere">Сфера</string>
+    <string name="action_delete_models">Удалить</string>
+    <string name="action_tool_support_paint">Рисование поддержек</string>
 </resources>

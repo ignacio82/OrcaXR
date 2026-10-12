@@ -48,4 +48,6 @@
     <string name="simplify_apply">Použít</string>
     <string name="workspace_paint">Malovat</string>
     <string name="paint_tool_sphere">Koule</string>
+    <string name="action_delete_models">Smazat</string>
+    <string name="action_tool_support_paint">Malování podpěr</string>
 </resources>

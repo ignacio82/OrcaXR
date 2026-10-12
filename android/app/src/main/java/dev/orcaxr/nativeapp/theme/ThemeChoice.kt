@@ -7,12 +7,15 @@ import androidx.compose.material3.IconToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.orcaxr.nativeapp.R
+import dev.orcaxr.nativeapp.shell.ActionTooltip
 
 /**
  * Which theme is shown: the browser's switch (`btn-theme`, web/src/main.ts) on a
@@ -63,13 +66,21 @@ val LocalThemeSwitch = compositionLocalOf<ThemeSwitchState?> { null }
 /**
  * The browser's theme switch: its `dark_mode` icon, named by what pressing it
  * does ("Switch to dark mode" / "Switch to light mode", the browser's title
- * and label) and pressed while the dark theme shows (its `aria-pressed`).
+ * and label, its title shown as a tooltip under a mouse) and pressed while
+ * the dark theme shows (its `aria-pressed`).
  */
 @Composable
 fun ThemeSwitch(modifier: Modifier = Modifier) {
     val state = LocalThemeSwitch.current ?: return
     val label = stringResource(if (state.dark) R.string.theme_switch_light else R.string.theme_switch_dark)
-    IconToggleButton(checked = state.dark, onCheckedChange = { state.toggle() }, modifier = modifier.semantics { contentDescription = label }) {
-        Icon(painterResource(R.drawable.ic_theme_dark), contentDescription = null, modifier = Modifier.size(20.dp))
+    // Its title as a tooltip under a mouse, as the browser's.
+    ActionTooltip(label, modifier) {
+        IconToggleButton(
+            checked = state.dark,
+            onCheckedChange = { state.toggle() },
+            modifier = Modifier.pointerHoverIcon(PointerIcon.Hand).semantics { contentDescription = label },
+        ) {
+            Icon(painterResource(R.drawable.ic_theme_dark), contentDescription = null, modifier = Modifier.size(20.dp))
+        }
     }
 }

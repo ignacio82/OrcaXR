@@ -50,4 +50,6 @@
     <string name="simplify_apply">Appliquer</string>
     <string name="workspace_paint">Peindre</string>
     <string name="paint_tool_sphere">Sphère</string>
+    <string name="action_delete_models">Supprimer</string>
+    <string name="action_tool_support_paint">Peindre les supports</string>
 </resources>

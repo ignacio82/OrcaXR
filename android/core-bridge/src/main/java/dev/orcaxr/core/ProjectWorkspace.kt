@@ -476,6 +476,35 @@ class ProjectWorkspace(
         }
     }
 
+    /**
+     * Every action [surface] offers now, in catalogue order, as the core
+     * enables it for the Android shell (`ProjectSession.capabilities`, paged
+     * on the authority with the shell's host facts): what the command palette
+     * lists (`command-palette`) and the model toolbar draws (`dom-toolbar`).
+     * Hidden actions are left out, as the browser's palette and toolbar leave
+     * them out.
+     */
+    fun surfaceActions(surface: ProjectIntents.ActionSurface): CompletableFuture<List<ProjectActionState>> = inspect { session ->
+        val listed = ArrayList<ProjectActionState>()
+        var start = 0L
+        do {
+            val page = session.capabilities(
+                ProjectIntents.CapabilityRequest(
+                    surface, host(clipboard != null, simplifyPreview != null),
+                    ProjectIntents.CapabilityQuery.Page(ProjectIntents.SettingsTargetPageRequest(start, TREE_PAGE)),
+                ),
+            )
+            for (action in page.actions) {
+                val availability = action.availability
+                if (availability is ProjectIntents.ActionAvailability.Hidden) continue
+                val reason = (availability as? ProjectIntents.ActionAvailability.Disabled)?.value?.text
+                listed += ProjectActionState(text(action.id), text(action.label), availability is ProjectIntents.ActionAvailability.Enabled, reason?.let(::text))
+            }
+            start += page.actions.size
+        } while (page.actions.isNotEmpty() && start < page.total)
+        listed
+    }
+
     val actor: ProjectActor = ProjectActor.open({ scope, nonce ->
         val bytes = NewProjects.empty(words(), NewProjects.timestamp(clock()))
         val options = hostOptions(bytes.size.toLong())

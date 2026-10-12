@@ -73,6 +73,10 @@ import dev.orcaxr.nativeapp.project.DropIntake
 import dev.orcaxr.nativeapp.project.ProjectModel
 import dev.orcaxr.nativeapp.project.ProjectScreen
 import dev.orcaxr.nativeapp.send.SendDialog
+import dev.orcaxr.nativeapp.shell.AppActions
+import dev.orcaxr.nativeapp.shell.CommandPalette
+import dev.orcaxr.nativeapp.shell.LocalActionRunner
+import dev.orcaxr.nativeapp.shell.LocalCommandPalette
 import dev.orcaxr.nativeapp.shell.FocusVisibleTheme
 import dev.orcaxr.nativeapp.shell.Navigation
 import dev.orcaxr.nativeapp.shell.ShellArea
@@ -108,7 +112,10 @@ import kotlinx.coroutines.withContext
  * viewport. Every control is reached with Tab and Shift+Tab and operated with
  * Enter or Space, with its focus shown ([FocusVisibleTheme]); a dialog is a
  * window of its own, so the focus stays in it and wraps. Files dropped on the
- * window load as the browser's drop does ([DropIntake]).
+ * window load as the browser's drop does ([DropIntake]). Ctrl/⌘ K, from
+ * anywhere, opens the browser's command palette ([CommandPalette]) over the
+ * area shown; it, the Workspace's toolbar and the context menus run the
+ * catalogue's actions as the menus do ([runAction]).
  *
  * It wears the browser's design tokens ([OrcaTheme]): light or dark as the
  * system is, unless the browser's theme switch (in the Workspace) chose one
@@ -125,6 +132,22 @@ class MainActivity : ComponentActivity() {
     private val themePreference by lazy { ThemePreference(this) }
     /** The theme chosen with the switch on this device, if any (otherwise the system's decides). */
     private var themeChoice by mutableStateOf<String?>(null)
+    /** Whether the command palette is open (Ctrl/⌘ K, or a search button). */
+    private var palette by mutableStateOf(false)
+    /** Whether the window's arrangement shows the Workspace's 3D view now. */
+    private var workspaceShown = true
+
+    /**
+     * Runs catalogue action [id] as the menus run it (`ProjectModel.perform`),
+     * showing first the area it needs: the Project area for a document action
+     * (its pickers and dialogs carry it out), the Workspace for a camera view
+     * or a tool that takes its touch.
+     */
+    private fun runAction(id: String) {
+        if (AppActions.needsProject(id)) area = R.string.nav_project
+        if (AppActions.needsWorkspace(id) && !workspaceShown) area = R.string.nav_workspace
+        project.perform(id)
+    }
 
     /** A document another app opened or shared with OrcaXR, if [intent] carries one. */
     private fun incoming(intent: Intent?): Uri? = when (intent?.action) {
@@ -215,6 +238,11 @@ class MainActivity : ComponentActivity() {
         val command = event.isCtrlPressed || event.isMetaPressed
         val plain = !command && !event.isShiftPressed && !event.isAltPressed
         val handled = event.repeatCount == 0 && when {
+            // The browser's Ctrl/⌘ K: the command palette, from anywhere (while it is open, its own keys close it).
+            command && !event.isShiftPressed && !event.isAltPressed && keyCode == KeyEvent.KEYCODE_K -> {
+                palette = !palette
+                true
+            }
             command && keyCode == KeyEvent.KEYCODE_Z && !event.isShiftPressed -> project.undoShortcut()
             command && keyCode == KeyEvent.KEYCODE_Z && event.isShiftPressed -> project.redoShortcut()
             event.isCtrlPressed && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_Y -> project.redoShortcut()
@@ -292,9 +320,14 @@ class MainActivity : ComponentActivity() {
                     themeChoice = chosen
                 }
             }
-            OrcaTheme(dark) { CompositionLocalProvider(LocalThemeSwitch provides switch) { FocusVisibleTheme {
+            OrcaTheme(dark) { CompositionLocalProvider(
+                LocalThemeSwitch provides switch,
+                LocalCommandPalette provides { palette = true },
+                LocalActionRunner provides ::runAction,
+            ) { FocusVisibleTheme {
                 val ready = state == R.string.workspace_development
                 val layout = ShellLayout.of(LocalWindowInfo.current.containerDpSize.width.value.toInt(), shellArea(area))
+                workspaceShown = area == R.string.nav_workspace || layout.viewport == Viewport.Workspace
                 val snackbar = remember { SnackbarHostState() }
                 // A drop's refusals: each drop's own, so the same words dropped again show again.
                 var refused by remember { mutableStateOf<Refusal?>(null) }
@@ -357,6 +390,8 @@ class MainActivity : ComponentActivity() {
                 }
                 // A send's confirmation waits above whichever area is shown: the operator may have moved on.
                 device.sendConfirmation?.let { pending -> SendDialog(pending.view, device::answerSend) }
+                // The command palette, over whichever area is shown, once the app is ready.
+                if (palette && ready) CommandPalette(project, onDismiss = { palette = false }, run = ::runAction)
             } } }
         }
     }

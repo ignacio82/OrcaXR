@@ -50,4 +50,6 @@
     <string name="simplify_apply">적용</string>
     <string name="workspace_paint">칠하기</string>
     <string name="paint_tool_sphere">구체</string>
+    <string name="action_delete_models">삭제</string>
+    <string name="action_tool_support_paint">서포트 칠하기</string>
 </resources>
