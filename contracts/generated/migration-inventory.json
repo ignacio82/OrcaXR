@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceCommit": "8da63b8cba51612e1ce8f5e4b68dee1f77085640",
+  "sourceCommit": "744cb21a5dd8fd1764567e2b0d492e5db8d443a5",
   "sources": {
     "docs/parity/release-report.json": "6da865e5720fb9cbb2ccf36fc310c97dffed94b2c279aedd7df8f58b1fafc49a",
     "web/public/profiles/catalog.json": "19cfbf414f4b2c770b047da152b9b9e2e2101909d92f8fae3166685e7bf58fda",
@@ -27,7 +27,7 @@
     "web/src/actions/groups/view.ts": "28bb16722b6fa0205d6fc79ee57ba21e8938e435bba524b2e1998d510902e15a",
     "web/src/actions/helpContent.ts": "44007cd49fa446d016805cbc29ac2c0d34ecf5ec86033e5f58790ca33b72d1fd",
     "web/src/actions/upstreamSurfaces.ts": "0f4acdfefe6412436c12ed70326a8682eeece89b7b0e836db6f3f8a7d14b0949",
-    "web/src/l10n/generated/catalog-manifest.json": "6c52cbf39e293285ffa17b02431e2aba6bd9ce73d7b31aa76c960a8498b0a61c",
+    "web/src/l10n/generated/catalog-manifest.json": "79c523c7f802ad602bdc6434d879ee769ec9f35b06dc2ed33564e264f9db420f",
     "web/src/settings/generated/engine-options.schema.json": "d7f762afd27ec3981618e70ff79cf859381adb936482ae99ecba92724762e743"
   },
   "policy": "Metadata inventory only. Existing partial web and hardware gates remain open; this does not establish native support.",
