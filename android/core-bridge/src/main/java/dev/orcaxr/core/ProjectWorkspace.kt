@@ -201,12 +201,13 @@ class ProjectWorkspace(
         val PAINT_INSPECTOR_ACTIONS = listOf("paint_erase_all") + (1..9).map { "paint_select_filament_$it" }
         /**
          * The model tools the Project area offers where the browser does: its
-         * menu's split and simplify (`dom-menu`; split and simplify are also
-         * an object's context actions), its toolbar's Measure and Brim Ears
+         * menu's split, simplify and wipe-tower placement (`dom-menu`; split
+         * and simplify are also an object's context actions), its toolbar's
+         * Measure and Brim Ears
          * (`dom-toolbar`) and the Simplify, Measure and Brim ears panels'
          * controls (`dom-inspector`).
          */
-        val MODEL_TOOL_MENU_ACTIONS = listOf("split_to_objects", "split_to_parts", "simplify_model")
+        val MODEL_TOOL_MENU_ACTIONS = listOf("split_to_objects", "split_to_parts", "simplify_model", "auto_place_wipe")
         val MODEL_TOOL_TOOLBAR_ACTIONS = listOf("tool_measure", "tool_brim_ears")
         val MODEL_TOOL_INSPECTOR_ACTIONS = listOf(
             "simplify_preview", "simplify_apply", "simplify_cancel", "measure_clear",
@@ -2663,6 +2664,49 @@ class ProjectWorkspace(
     fun removeBrimEar(index: Long): CompletableFuture<Boolean> = answer { session, snapshot ->
         val target = brimEarTarget(session, snapshot) ?: return@answer Answer(false)
         Answer(true, ProjectIntents.Command.RemoveBrimEar(ProjectIntents.RemoveBrimEar(units(target), index)))
+    }
+
+    // ---- The wipe tower: the browser workspace's auto-placement over the shared core ----
+
+    /**
+     * "Auto-place Wipe Tower" (`auto_place_wipe`, the workspace's
+     * `autoPlaceWipeTower`): the active plate's tower moved to the corner or
+     * edge of its printable rectangle with the most room around its whole
+     * printed footprint (`placement::wipe_tower`), enabled, keeping its
+     * rotation and filament, as one "Auto-place wipe tower" step — nothing
+     * when it is already there. The bed is the workspace's
+     * ([ProjectSnapshot.workspaceBed]): its size always, and its printable
+     * rectangle when [fromProfile] (a chosen catalog profile states it, which
+     * the browser hands over from its profile); otherwise the planner reads
+     * the plate's, then the project's, `printable_area`. Answers the pick;
+     * a plate the planner refuses fails in its words.
+     */
+    fun autoPlaceWipeTower(fromProfile: Boolean): CompletableFuture<ProjectIntents.WipeTowerPick?> = answer { session, snapshot ->
+        val plate = snapshot.query().use { root -> ProjectFacts.plates(root).firstOrNull { it.active } } ?: return@answer Answer(null)
+        val bed = snapshot.workspaceBed(plate.id)
+        val rectangle = bed.printableArea?.takeIf { fromProfile }?.let { ProjectIntents.WipeTowerRect(it.xMin, it.yMin, it.xMax, it.yMax) }
+        val absent = ProjectIntents.OptionalFinite.Absent(ProjectIntents.Empty)
+        val request = ProjectIntents.WipeTowerRequest(
+            units(plate.id),
+            rectangle?.let { ProjectIntents.OptionalWipeTowerRect.Value(it) } ?: ProjectIntents.OptionalWipeTowerRect.Absent(ProjectIntents.Empty),
+            ProjectIntents.OptionalPlanarPosition.Value(listOf(bed.widthMm, bed.depthMm)),
+            absent, absent, absent, absent,
+            ProjectIntents.OptionalWipeTowerBias.Absent(ProjectIntents.Empty),
+            ProjectIntents.OptionalVolumeRoleNames.Absent(ProjectIntents.Empty),
+        )
+        when (val reply = session.planWipeTower(request)) {
+            is ProjectIntents.WipeTowerReply.Refused -> throw ProjectFailure(text(reply.value.message))
+            is ProjectIntents.WipeTowerReply.Plan -> Answer(
+                reply.value.pick,
+                ProjectIntents.Command.SetPlateWipeTower(
+                    ProjectIntents.SetPlateWipeTower(
+                        units(plate.id),
+                        ProjectIntents.OptionalWipeTower.Value(reply.value.wipeTower),
+                        ProjectIntents.OptionalText.Absent(ProjectIntents.Empty),
+                    ),
+                ),
+            )
+        }
     }
 
     override fun close() {

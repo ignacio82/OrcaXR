@@ -46,6 +46,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -53,6 +55,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.orcaxr.nativeapp.R
+import dev.orcaxr.nativeapp.shell.ActionTooltip
 import dev.orcaxr.nativeapp.pluralMessage
 import dev.orcaxr.nativeapp.project.FilamentList
 import dev.orcaxr.nativeapp.project.ProjectModel
@@ -250,6 +253,8 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                     onFilament = project::chooseFilament,
                 )
             }
+            // The browser's Process card's "Auto-position wipe tower" (its title the action's hint).
+            item(key = "wipe-tower-auto") { WipeTowerAuto(project) }
             item {
                 FilamentList(
                     view,
@@ -421,3 +426,30 @@ private const val ANDROID_17 = 37
 private const val ANDROID_13 = 33
 private const val NOTIFICATIONS = Manifest.permission.POST_NOTIFICATIONS
 private const val LOCAL_NETWORK = Manifest.permission.ACCESS_LOCAL_NETWORK
+
+/**
+ * The browser's Process card switch "Auto-position wipe tower"
+ * (`#chk-wipe-tower-auto`): switched on, the active plate's tower is placed
+ * where it has the most room at once, as one undoable step; the whole row is
+ * the switch, named by its words, with the browser's title as its tooltip and
+ * the last status beneath it. Enabled as the core enables `auto_place_wipe`.
+ */
+@Composable
+private fun WipeTowerAuto(project: ProjectModel) {
+    val enabled = !project.busy && project.view.actions["auto_place_wipe"]?.enabled == true
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        ActionTooltip(stringResource(R.string.action_hint_auto_place_wipe)) {
+            Row(
+                Modifier.fillMaxWidth().toggleable(value = project.wipeTowerAuto, enabled = enabled, role = Role.Switch, onValueChange = project::switchWipeTowerAuto),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Switch(checked = project.wipeTowerAuto, onCheckedChange = null, enabled = enabled)
+                Text(stringResource(R.string.prepare_wipe_tower_auto))
+            }
+        }
+        project.wipeTowerStatus?.let {
+            Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}

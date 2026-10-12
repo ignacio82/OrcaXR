@@ -88,6 +88,7 @@ export function startProjectJni(profile = "debug") {
   signatures.splitSourceChecks = ["String", "byte[]", "byte[]", "byte[]", "byte[]", "String"];
   signatures.modelToolChecks = ["String", "byte[]"];
   signatures.brimEarEditChecks = ["String", "byte[]"];
+  signatures.wipeTowerEditChecks = ["String", "byte[]"];
   signatures.settingsChecks = ["String", "byte[]"];
   signatures.volumeRoleChecks = ["String", "byte[]"];
   signatures.primitiveChecks = ["String"];

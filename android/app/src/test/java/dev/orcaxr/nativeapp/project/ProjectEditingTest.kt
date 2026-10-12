@@ -157,8 +157,12 @@ class ProjectEditingTest {
 
     @Test
     fun modelToolsFollowPlacementAndObjectsOfferSplitAndSimplify() {
-        // The browser's Tools menu split and simplify, then its toolbar's Measure and Brim Ears: performed, with the core's enablement.
-        assertEquals(listOf("split_to_objects", "split_to_parts", "simplify_model", "tool_measure", "tool_brim_ears"), ProjectEditing.TOOLS_MENU)
+        // The browser's Tools menu split and simplify, its toolbar's Measure and Brim Ears, then its Tools menu's
+        // wipe-tower placement: performed, with the core's enablement.
+        assertEquals(
+            listOf("split_to_objects", "split_to_parts", "simplify_model", "tool_measure", "tool_brim_ears", "auto_place_wipe"),
+            ProjectEditing.TOOLS_MENU,
+        )
         assertTrue(ProjectEditing.PERFORMED.containsAll(ProjectEditing.TOOLS_MENU))
         val tooled = view.copy(
             actions = mapOf("split_to_parts" to action("split_to_parts"), "tool_measure" to action("tool_measure", false)),

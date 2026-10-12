@@ -39,10 +39,11 @@ object ProjectEditing {
 
     /**
      * The model tools, after the placement actions: the browser's split and
-     * simplify (its Tools menu, also an object's context actions) and its
-     * toolbar's Measure and Brim Ears, Workspace tap tools as Lay flat is.
+     * simplify (its Tools menu, also an object's context actions), its
+     * toolbar's Measure and Brim Ears, Workspace tap tools as Lay flat is,
+     * and its Tools menu's Auto-place Wipe Tower, on the active plate.
      */
-    val TOOLS_MENU = listOf("split_to_objects", "split_to_parts", "simplify_model", "tool_measure", "tool_brim_ears")
+    val TOOLS_MENU = listOf("split_to_objects", "split_to_parts", "simplify_model", "tool_measure", "tool_brim_ears", "auto_place_wipe")
 
     /** The catalogue actions the app performs, by ID. */
     val PERFORMED = setOf(

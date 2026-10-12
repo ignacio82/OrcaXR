@@ -77,6 +77,7 @@ object OrcaActionGlyphs {
         "slice_all_plates" to OrcaActionGlyph(R.drawable.ic_symbol_play_circle),
         "slice_cancel" to OrcaActionGlyph(R.drawable.ic_symbol_play_circle),
         "send_to_printer" to OrcaActionGlyph(R.drawable.ic_symbol_send),
+        "auto_place_wipe" to OrcaActionGlyph(R.drawable.ic_symbol_cleaning_services),
     )
 
     /** The browser's search symbol, on the command palette's trigger. */

@@ -421,6 +421,14 @@
     <string name="brim_ears_cleared">Cleared the brim ears; undo restores them.</string>
     <string name="brim_ears_removed">Removed a brim ear.</string>
     <string name="brim_ears_missed">Click the selected model to place a brim ear.</string>
+    <!-- The browser's wipe-tower auto-placement (web/src/actions/groups/advanced.ts), its Process card switch
+         (web/index.html #chk-wipe-tower-auto) and the workspace's statuses. -->
+    <string name="project_auto_place_wipe">Auto-place Wipe Tower</string>
+    <string name="prepare_wipe_tower_auto">Auto-position wipe tower</string>
+    <string name="wipe_tower_placed">Auto-placed wipe tower.</string>
+    <string name="wipe_tower_failed">Auto-place wipe tower failed.</string>
+    <string name="wipe_tower_auto_on">Auto-position wipe tower enabled.</string>
+    <string name="wipe_tower_auto_off">Auto-position wipe tower disabled.</string>
     <!-- The browser's drop overlay (app.main.dropA3MFSTLOBJ in web/src/main.ts), shown while a file is dragged over the window. -->
     <string name="drop_prompt">Drop a 3MF, STL, OBJ, AMF, ZIP, or G-code file to load it</string>
     <!-- The Workspace's paint tool: the browser's Paint action (scene.ts), its paint panel (web/src/ui/dom/PaintPanel.ts) and its painter's statuses (OrcaWorkspace). -->
@@ -545,6 +553,7 @@
     <string name="action_hint_tool_brim_ears">Click the selected part to place brim \"mouse ears\" that reach the slicer</string>
     <string name="action_hint_brim_ears_auto">Find the corners of the first layer that would peel, and put an ear on each</string>
     <string name="action_hint_brim_ears_clear">Remove every brim ear from the selected part as one undoable command</string>
+    <string name="action_hint_auto_place_wipe">Automatically position the wipe tower</string>
     <string name="action_hint_add_modifier">Add a modifier volume with per-region settings</string>
     <string name="action_hint_add_support_enforcer">Add a volume that forces supports inside it</string>
     <string name="action_hint_add_support_blocker">Add a volume that blocks supports inside it</string>

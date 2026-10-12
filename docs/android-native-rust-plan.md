@@ -76,14 +76,15 @@ physical-device gate below is still open.
 - **Phase 7, the adaptive Android application: largely done.** Workspace,
   Prepare, Preview, Device and Project areas; selection and object edits,
   creation, placement and the transform inspector, filaments and the virtual
-  filament library, painting, split, simplify, measure and brim ears, settings
-  panels and height ranges, the command palette, toolbar and context menus, generated
-  localization (19 languages) and design tokens, accessibility, adaptive
-  layouts, file drop, recovery and multi-window document ownership, and the
-  Workspace's transform gizmo with its keys G, R and S, and the semantic
-  editor's volume roles with Set as Negative Part (the gizmo's and the roles'
-  emulator suites pending). Remains: *Resume here* items 1 to 4, and physical devices for the
-  exit gate.
+  filament library, painting, split, simplify, measure, brim ears and
+  wipe-tower auto-placement, settings panels and height ranges, the command
+  palette, toolbar and context menus, generated localization (19 languages)
+  and design tokens, accessibility, adaptive layouts, file drop, recovery
+  and multi-window document ownership, the Workspace's transform gizmo with
+  its keys G, R and S, and the semantic editor's volume roles with Set as
+  Negative Part (the emulator suites for the gizmo, the roles, brim ears and
+  the wipe tower pending). Remains: *Resume here* items 1 to 4, and physical
+  devices for the exit gate.
 - **Phase 8, Android XR: not started.** Only Phase 2's SceneCore candidate
   (`android/renderer-scenecore`, `android/xr-experiment`) exists. Verification
   needs the user's Galaxy XR.
@@ -128,25 +129,29 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
 
 1. Both emulator suites on `main` with the smokes added since round 2:
    `android-gizmo-smoke.py` and `android-roles-smoke.py` (the Phase 7 input
-   item, otherwise done) and `android-brimears-smoke.py` (item 2) have
-   passed only on iteration emulators. Run `emulator-smoke.py` and then
+   item, otherwise done), `android-brimears-smoke.py` and
+   `android-wipetower-smoke.py` (item 2) have passed only on iteration
+   emulators. Run `emulator-smoke.py` and then
    `emulator-smoke.py --api 37 --pages 16` on a quiet host (no builds, no
    other suite), and record the result here and in the Phase 7 statuses.
 2. Phase 7, model tools whose shared-core ports exist but have no Android UI:
    emboss text (`orcaxr_project::emboss`, `add_emboss`), SVG parts (`svg`,
    `tool_svg`), assembly (`assembly`,
-   `tool_assembly`), variable layer height (`layer_heights`,
-   `variable_layer_height`) and wipe-tower auto-placement
-   (`placement::wipe_tower`, `auto_place_wipe`); layer events belong with
+   `tool_assembly`) and variable layer height (`layer_heights`,
+   `variable_layer_height`); layer events belong with
    Preview (`layer_event_mutate`). Magnets (`add_magnet`) and the wave-overhang
    card (settings the core already resolves) need the browser's computation
    checked first; Cut (`tool_cut`), the face detector and hollow have no core
    port yet. Each one follows the exchange pattern below and gets an emulator
-   smoke. Brim ears are done ([§](engineering/native-core.md#android-brim-ears)):
-   the Workspace's Brim Ears tool, its panel and discs, with
-   `android-brimears-smoke.py` passing on an API 34 iteration emulator;
-   neither emulator suite has run it yet (*Resume here* item 1). In flight:
-   wipe-tower auto-placement (local branch `bedtools`).
+   smoke. Brim ears and wipe-tower auto-placement are done
+   ([§](engineering/native-core.md#android-brim-ears),
+   [§](engineering/native-core.md#android-wipe-tower-auto-placement)): the
+   Workspace's Brim Ears tool, its panel and discs, and Auto-place Wipe
+   Tower in the Edit menu, the palette and Prepare's switch, with
+   `android-brimears-smoke.py` and `android-wipetower-smoke.py` passing on
+   an API 34 iteration emulator; neither emulator suite has run them yet
+   (*Resume here* item 1). The Workspace does not draw the wipe tower yet
+   (the browser's ghost).
 3. Phase 7, other surfaces: a Save/export action for slice output
    (`save_gcode_to_downloads`, `file_export_gcode`), model and project exports
    (STL, OBJ, 3MF, configuration), geometry-only 3MF import, the View menu's
@@ -2508,13 +2513,19 @@ storage journeys on phone, tablet, and desktop-sized windows.
   cube got no ears; Place on corners' status was overwritten). A 134-check
   JNI journey matches the browser controller's hash, label and view after
   all 20 steps and undoes them; `android-brimears-smoke.py` passes on an
-  API 34 emulator.
+  API 34 emulator. Auto-place Wipe Tower places the active plate's tower
+  as the browser's does ([§](engineering/native-core.md#android-wipe-tower-auto-placement)),
+  from the Edit menu, the palette and Prepare's "Auto-position wipe tower"
+  switch, one step with the browser's statuses; a 65-check JNI journey
+  matches the browser controller's pick, hash and label after all 10 steps,
+  and `android-wipetower-smoke.py` passes on an API 34 emulator.
   Status (2026-10-12): remains: lighting and preview controls; Repair (Phase
   5's kernel routing), with mesh Booleans; and the model tools with no
   Android UI yet — emboss text, SVG parts, assembly, variable layer
-  height, wipe-tower auto-placement, magnets and the wave-overhang card, with
+  height, magnets and the wave-overhang card, with
   Cut, the face detector and hollow still to port (*Resume here* items 2
-  and 4); the brim-ear smoke on the API 37 suite.
+  and 4); the wipe tower's ghost in the Workspace; both emulator suites'
+  runs of the brim-ear and wipe-tower smokes (*Resume here* item 1).
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
   large-file streaming. Validate incoming open/share intents as untrusted input.

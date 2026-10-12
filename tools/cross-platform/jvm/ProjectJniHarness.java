@@ -191,6 +191,9 @@ public final class ProjectJniHarness {
     public static long splitSourceChecks(String state, byte[] cube, byte[] pair, byte[] quad, byte[] big, String script) {
         return ProjectModelToolChecks.splitSources(state, java.util.List.of(cube, pair, quad, big), script);
     }
+    public static long wipeTowerEditChecks(String corpus, byte[] archive) {
+        return ProjectWipeTowerEditChecks.journey(corpus, archive);
+    }
     public static long brimEarEditChecks(String corpus, byte[] archive) {
         return ProjectBrimEarEditChecks.journey(corpus, archive);
     }
@@ -477,6 +480,7 @@ public final class ProjectJniHarness {
             if (name.equals("splitSourceChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class, byte[].class, String.class);
             if (name.equals("modelToolChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("brimEarEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
+            if (name.equals("wipeTowerEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("settingsChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("volumeRoleChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("primitiveChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);

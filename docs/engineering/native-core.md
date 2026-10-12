@@ -3979,7 +3979,9 @@ string, garbage, string, array and zero tower widths, a ribbed wall and a null
 brim — over the picking scene's parts, an empty plate and a plate with an
 existing tower, under every bias and request override: 27 requests (3
 refusals). Rust, WASM in Node and Chrome and JNI answer all 27 byte for byte;
-55 Kotlin checks cover the wrapper.
+55 Kotlin checks cover the wrapper. It also records the workspace's
+auto-placement through the production controller, which
+[the Android app](#android-wipe-tower-auto-placement) replays.
 
 ### Workspace bed
 
@@ -6144,6 +6146,58 @@ taps the cube for one more, has 50 mm refused, removes one and clears them,
 each by its undo label, and ends the tool, its discs going with it. It passes
 on a suite-sized API 34 emulator (720 × 1280 at 240 dpi, two cores); the API 37
 suite has yet to run it.
+
+### Android wipe-tower auto-placement
+
+The app auto-places the active plate's wipe tower as the browser's
+workspace does (`OrcaWorkspace.autoPlaceWipeTower`), through the shared core
+([wipe-tower auto-placement](#wipe-tower-auto-placement)).
+`ProjectWorkspace.autoPlaceWipeTower` plans on the authority from the state
+the guard names: the workspace's bed ([§](#workspace-bed)) — its size always,
+and its printable rectangle when a chosen catalog profile states it, as the
+browser hands over its profile's (with the project slicing as authored, the
+planner reads the plate's, then the project's, `printable_area`) — and
+commits the plan's tower as one `setPlateWipeTower`, "Auto-place wipe
+tower", keeping its rotation and filament; a tower already where the plan
+puts it changes nothing and records nothing.
+
+It is offered where the browser offers it: Auto-place Wipe Tower
+(`auto_place_wipe`) in the Edit menu's model tools (the browser's Tools
+menu) and the command palette, with the browser's "Auto-placed wipe tower."
+or "Auto-place wipe tower failed." as the Project area's message; and the
+browser's Process card switch "Auto-position wipe tower" beneath Prepare's
+printer, process and filament pickers — off when the app starts, as the
+browser's — which places
+the tower when switched on and says "Auto-position wipe tower enabled." or
+"… disabled." beneath it (and in the Project area). The whole row is the
+switch, named by its words, with the browser's title as its tooltip, and
+enabled as the core enables the action. The switch only records the choice,
+as the browser's does: nothing places the tower again by itself.
+
+The Workspace does not draw the tower yet (the browser's
+`rebuildWipeTowerGhost`: its body, edges and the brim's footprint): the
+placement shows in the undo label, the slice and the preflight until the
+ghost is ported.
+
+`wipe-tower-vectors.mjs` also records a journey through the production
+`CanonicalWorkspaceController` on its project as a canonical 3MF (with a
+project printable area, which a 3MF of several plates needs), 10 steps and
+9 undo entries: the U1
+plate placed twice (the second time changing nothing) and again after a
+model moved, the ribbed plate whose disabled tower keeps its rotation and
+filament, the plate whose area cannot be read (from the bed's size alone),
+and the empty plate (no clearance) — each with and without the profile's
+rectangle — recording the pick, the semantic hash and the undo label after
+every step, then undoing them all. `ProjectWipeTowerEditChecks` (65 checks over
+JNI on the host, via `project-jni-test.mjs`) takes the same steps through
+`ProjectWorkspace` and matches the browser's pick, hash and label after
+each, then undoes back to the opened project. `AppActionsTest` and
+`ProjectEditingTest` cover the action and the menu. `android-wipetower-smoke.py`,
+added to `emulator-smoke.py` after the brim-ear smoke, places the tower from
+the Edit menu and from the palette (each "Auto-place wipe tower", undone),
+then switches Prepare's switch on (placed, "enabled") and off ("disabled",
+the tower left where it is). It passes on a suite-sized API 34 emulator; the
+API 37 suite has yet to run it.
 
 ### Android filaments
 

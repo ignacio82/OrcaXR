@@ -883,6 +883,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "tool_brim_ears" -> brimEars(!brimEaring)
             "brim_ears_auto" -> autoPlaceBrimEars()
             "brim_ears_clear" -> clearBrimEars()
+            "auto_place_wipe" -> autoPlaceWipeTower()
             // The toolbar's, the command palette's and the menus' other actions: one call for all of them.
             "delete_models" -> work { workspace.deleteSelected().await() }
             "edit_undo" -> if (view.undo != null) undo()
@@ -1483,6 +1484,58 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             ProjectBrimEars.failed(cause(failure).message)
         }
         status?.let(::brimStatus)
+    }
+
+    // ---- The wipe tower ----
+
+    /** The Process section's "Auto-position wipe tower" (the browser's `wipeTowerAuto`): off until switched on. */
+    var wipeTowerAuto by mutableStateOf(false)
+        private set
+    /** The last wipe-tower status, shown under that switch as well as in the Project area. */
+    var wipeTowerStatus by mutableStateOf<String?>(null)
+        private set
+
+    private fun towerStatus(text: String) {
+        main.post {
+            wipeTowerStatus = text
+            message = text
+        }
+    }
+
+    /**
+     * Places the active plate's tower (the workspace's `autoPlaceWipeTower`)
+     * on the worker; [fromProfile]: whether a chosen catalog profile states
+     * the printable rectangle, which the browser hands over from its profile.
+     * Answers the browser's status.
+     */
+    private fun placeTower(fromProfile: Boolean): String = try {
+        if (workspace.autoPlaceWipeTower(fromProfile).await() != null) words(R.string.wipe_tower_placed) else words(R.string.wipe_tower_failed)
+    } catch (_: Throwable) {
+        words(R.string.wipe_tower_failed)
+    }
+
+    /**
+     * "Auto-place Wipe Tower" (`auto_place_wipe`): the active plate's tower
+     * moved where it has the most room around its printed footprint, as one
+     * undoable step, with the browser's status.
+     */
+    fun autoPlaceWipeTower() {
+        val fromProfile = !profilesView.authored
+        work { towerStatus(placeTower(fromProfile)) }
+    }
+
+    /**
+     * The Process section's switch (`auto_place_wipe` with `enabled`, the
+     * workspace's `setWipeTowerAuto`): switched on, it places the tower at
+     * once; either way it says so in the browser's words.
+     */
+    fun switchWipeTowerAuto(on: Boolean) {
+        val fromProfile = !profilesView.authored
+        wipeTowerAuto = on
+        work {
+            if (on) placeTower(fromProfile)
+            towerStatus(words(if (on) R.string.wipe_tower_auto_on else R.string.wipe_tower_auto_off))
+        }
     }
 
     /** Renames an object or part (the Objects panel's Rename). */

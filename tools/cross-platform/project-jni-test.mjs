@@ -1138,6 +1138,18 @@ try {
     towerFixture.cases.map((c) => `${c.request}\t${c.reply}`).join("\n"),
   );
   assert.equal(wipeTowerChecks, 55);
+  // Auto-place Wipe Tower as the Android app runs it, step by step against the
+  // browser's journey through its production controller.
+  const wipeTowerEditChecks = jvm.call(
+    "wipeTowerEditChecks",
+    JSON.stringify({
+      opened: towerFixture.journey.opened,
+      steps: towerFixture.journey.steps,
+      undo: towerFixture.journey.undo,
+    }),
+    Buffer.from(towerFixture.journey.archive, "base64"),
+  );
+  assert.equal(wipeTowerEditChecks, 65);
   // Volume splits over a live session, staged and executed, then the Kotlin
   // wrapper.
   const splitFixture = JSON.parse(
@@ -1907,6 +1919,7 @@ try {
     splitSourceChecks,
     modelToolChecks,
     brimEarEditChecks,
+    wipeTowerEditChecks,
     settingsChecks,
     volumeRoles,
     volumeRoleChecks,
