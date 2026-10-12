@@ -165,6 +165,10 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    the device (`SystemFonts`, which the browser cannot read), and the
    recipe's `useSurface` projection onto the model and `boldnessMm` and
    `perGlyph`, which the browser's cut ignores too.
+   In flight: assembly (`tool_assembly`, `assembly_align`,
+   `assembly_explode`) and the wipe tower's ghost on local branch
+   `assembly` (worktree `~/.cache/orcaxr-assembly`, from `main` after emboss
+   and SVG), a sub-agent's.
 3. Phase 7, other surfaces: a Save/export action for slice output
    (`save_gcode_to_downloads`, `file_export_gcode`), model and project exports
    (STL, OBJ, 3MF, configuration), geometry-only 3MF import, the View menu's
