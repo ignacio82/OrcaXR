@@ -156,6 +156,11 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    `core/crates/orcaxr-contracts/src/capabilities/generated.rs`; some catalogue
    actions are carried out outside the palette (the Device area's printer
    actions, the plate bar, the filament bar, the settings panels).
+   In flight: the exports (slice output to a chosen document, Export as one
+   STL, all STLs as a ZIP, generic 3MF, configuration, toolpaths as OBJ, then
+   diagnostics), byte-identical to the browser's, on local branch `exports`
+   (worktree `~/.cache/orcaxr-exports`, from `main` after the volume roles),
+   a sub-agent's.
 4. Phase 5 and 7: Repair and mesh Booleans, which the browser computes with
    libslic3r in its slicing engine (`OrcaWorkspace.booleanModels` calls
    `slicer.boolean`), through the `:engine` job service with the slicing job's
