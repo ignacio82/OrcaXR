@@ -53,7 +53,7 @@ import { replayExternalSlicer } from "./external-slicer-replay.mjs";
 import { plateProjectionCases, plateProjectionCode, replayPlateProjection } from "./plate-projection-replay.mjs";
 import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
-import { replaySliceOutputs } from "./slice-output-replay.mjs";
+import { SLICE_SIDECAR_ANSWERS, replaySliceOutputs } from "./slice-output-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
 import { replayActionPresentation } from "./action-presentation-replay.mjs";
 import { replayPrimitives } from "./primitive-replay.mjs";
@@ -398,8 +398,18 @@ try {
   // plate's own pictures in its archive and in its G-code, on both routes.
   const outputFixture = await json("testdata/cross-platform/slice-output-vectors.json");
   const placementState = await json("testdata/cross-platform/placement-vectors.json");
-  const sliceOutputs = replaySliceOutputs(projectJniCore(jvm.call), outputFixture, placementState, layout);
+  const sidecarFixture = await json("testdata/cross-platform/slice-sidecar-vectors.json");
+  const sliceOutputs = await replaySliceOutputs(
+    projectJniCore(jvm.call),
+    outputFixture,
+    sidecarFixture,
+    placementState,
+    layout,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    (text) => Buffer.from(text, "base64"),
+  );
   assert.deepEqual(sliceOutputs.sliceOutputAnswers, [68, 19, 100, 132, 44, 26, 3]);
+  assert.deepEqual(sliceOutputs.sliceSidecarAnswers, SLICE_SIDECAR_ANSWERS);
   const thumbnailState = JSON.parse(placementState.stateJson);
   thumbnailState.config.thumbnails = "48x48/PNG, 300x300/PNG, 144x144/JPG, 5000x5000";
   const outputChecks = jvm.call(
@@ -416,7 +426,7 @@ try {
     JSON.stringify(thumbnailState),
     ...placementState.assets.map((a) => Uint8Array.from(a.bytes)),
   );
-  assert.equal(outputChecks, 581);
+  assert.equal(outputChecks, 585);
   // What the status line says of a finished slice (the browser's
   // `SliceStatus.ts`), streamed through the core's tally over JNI in several
   // chunkings and worded by the Kotlin owner, for every artifact of the corpus.
@@ -452,6 +462,39 @@ try {
       .join("\n"),
   );
   assert.equal(sliceStatusChecks, 563);
+  // What binds a slice's output through the JNI exports and the Kotlin
+  // owners — every plate's profiles, output bindings and external routes of
+  // the browser's corpus, refusals, this device's route and sidecars — and the
+  // engine's totals of every artifact of the browser's summary corpus,
+  // streamed through the core's tally in several chunkings.
+  const summaryFixture = await json("testdata/cross-platform/gcode-summary-vectors.json");
+  const summaryBytes = (parts) =>
+    Buffer.concat(
+      parts.map((part) =>
+        part.text !== undefined
+          ? Buffer.from(part.text, "utf8")
+          : part.repeat !== undefined
+            ? Buffer.from(part.repeat.repeat(part.times), "utf8")
+            : part.repeatBytes !== undefined
+              ? Buffer.concat(Array.from({ length: part.times }, () => Buffer.from(part.repeatBytes)))
+              : Buffer.from(part.bytes),
+      ),
+    );
+  const sliceSidecarChecks = jvm.call(
+    "sliceSidecarChecks",
+    [
+      ...["profiles", "bindings", "routes"].flatMap((section) =>
+        sidecarFixture[section].map((c) => [section, c.request, c.reply].join("\t")),
+      ),
+      ...["profileRefusals", "bindingRefusals", "routeRefusals"].flatMap((section) =>
+        sidecarFixture[section].map((c) => ["R", section, c.request].join("\t")),
+      ),
+    ].join("\n"),
+    summaryFixture.cases
+      .map((c) => [c.name, summaryBytes(c.parts).toString("base64"), JSON.stringify(c.summary)].join("\t"))
+      .join("\n"),
+  );
+  assert.equal(sliceSidecarChecks, 809);
   // The workspace bed through the JNI exports, then the Kotlin wrapper.
   const bedFixture = await json("testdata/cross-platform/workspace-bed-vectors.json");
   const workspaceBeds = replayWorkspaceBeds(projectJniCore(jvm.call), bedFixture, layout);
@@ -1772,6 +1815,7 @@ try {
     sliceOutputs,
     outputChecks,
     sliceStatusChecks,
+    sliceSidecarChecks,
     workspaceBeds,
     workspaceBedChecks,
     transformFields,

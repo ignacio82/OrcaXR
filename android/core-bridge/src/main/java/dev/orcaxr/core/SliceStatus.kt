@@ -57,14 +57,16 @@ object SliceStatus {
  * Counts what a G-code artifact tells the status line as it passes through to
  * [out] (a download being written, or a file being verified) — in the shared
  * core, a chunk at a time, so a file of any size is never held. [figures]
- * reads them at any point; closing releases the core's tally (the figures it
- * had then stay readable).
+ * reads them at any point, and [summaryJson] the totals the engine wrote into
+ * it (the browser's `GcodeArtifactSummary`); closing releases the core's
+ * tally (what it had then stays readable).
  */
 class SliceStatusTally(out: OutputStream? = null) : FilterOutputStream(out ?: Discard) {
     private val handle = NativeGcode.tallyOpen()
     private val buffer = ByteArray(CHUNK)
     private var used = 0
     private var closed: SliceFigures? = null
+    private var closedSummary: String? = null
     private var released = false
 
     override fun write(b: Int) {
@@ -98,10 +100,19 @@ class SliceStatusTally(out: OutputStream? = null) : FilterOutputStream(out ?: Di
         SliceStatus.figures(NativeGcode.tallyFigures(handle))
     }
 
+    /** The engine's totals in the artifact as the core read them (`ArtifactSummary`
+     * as JSON), or `null` when a colour or material statement was past the
+     * metadata bound — read, never recomputed. */
+    fun summaryJson(): String = closedSummary ?: run {
+        drain()
+        NativeGcode.tallySummary(handle)
+    }
+
     override fun close() {
         if (released) return
         try {
             closed = figures()
+            closedSummary = summaryJson()
             super.close()
         } finally {
             released = true

@@ -29,13 +29,15 @@ const patches = [];
 for (const name of (await readdir(patchDirectory)).filter((n) => n.endsWith(".patch")).sort())
   patches.push({ name, sha256: sha256(await readFile(new URL(name, patchDirectory))) });
 const manifest = path.join(scratch, "engine-provenance.json");
+/** The stand-in engine's digest: what the server attests as its build (`artifactHash`). */
+const engineSha256 = sha256(await readFile(binary));
 await writeFile(
   manifest,
   JSON.stringify({
     schemaVersion: 1,
     engine: { name: "snapmaker-orca", version: pinned.cliVersion, commit: pinned.commit },
     patches,
-    binary: { path: binary, sha256: sha256(await readFile(binary)) },
+    binary: { path: binary, sha256: engineSha256 },
   }),
 );
 // Read once, when the server module loads.
@@ -120,7 +122,7 @@ server.on("request", (req, res) => {
 parentPort.postMessage(`http://127.0.0.1:${server.address().port}`);
 parentPort.on("message", async (message) => {
   if (message === "summary") {
-    parentPort.postMessage({ jobs, requests, authorizations: [...new Set(authorizations)], patches });
+    parentPort.postMessage({ jobs, requests, authorizations: [...new Set(authorizations)], patches, engineSha256 });
   } else if (message === "hold" || message === "release") {
     holding = message === "hold";
     parentPort.postMessage(holding ? "holding" : "released");

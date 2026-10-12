@@ -6383,6 +6383,64 @@ through an `Anchor` in seven chunk sizes), as do WASM in Node and JNI
 session and checks its plate's pictures against Rust's digests and its
 captured plans against the state-document exchange).
 
+#### The slice sidecar
+
+What the browser binds a slice's output to lives in its coordinator: each
+plate's result (`SlicePlateResult` in `CanonicalSliceJobResult`) carries the
+job, the project's revision, store and asset-bundle fingerprints, the hash of
+the archive the engine read and of the G-code it wrote, the profile snapshot
+the plate was sliced with (`CanonicalStateProfileResolver`), the route's
+metadata and engine (`CanonicalSlicerClientRoute`), the route's statistics and
+the warnings; and `GcodeStatisticsModel` states which identities a statistics
+sidecar must carry and how each is spelled (`GcodeStatisticsBinding`). Its
+authoritative statistics artifact has no producer (P7.6: the engine does not
+export its planner values), so what the browser reads after a slice is the
+engine's own totals in the artifact (`GcodeArtifactSummary`).
+
+The shared core computes each part as the browser does
+(`orcaxr_project::slicing::sidecar`, through `SliceSidecarExchange.ts`): the
+profile snapshot (`profiles`: one SHA-256 over the canonical effective
+configuration; a printer, a process and a filament reference per engine slot,
+an explicit canonical hash kept and any other hashed over its effective
+profile), the binding's rules (`validate_binding`, first refusal first, in the
+browser's words) and the route (`orcaxr_printer::slicer::route`: the endpoint
+parsed and refused as `normalizedRoute` refuses it, the engine as
+`validatedExternalEngine` names it, the ID from the endpoint's origin and
+path; this device's engine is `Route::android_native`,
+`slicer-client:android-native:<artifactHash>`, the counterpart of the
+browser's `browser-wasm`). `SliceTally::summary` reads the engine's totals as
+`summarize` reads the whole file while the bytes stream past (the first
+colour and material statements kept as their lines pass, up to the metadata
+bound; past it the summary is null). `sidecar` assembles the
+`orcaxr.slice-output` document (version 1: `binding`, `profiles`, `route`,
+`statistics` {`route`, `gcodeBytes`, `summary`}, `warnings`) and refuses it
+unless the binding names the profiles' configuration and the route's engine.
+
+Both Android routes publish it as `<file>.json` beside each plate's G-code,
+written whole or not at all (`SliceOutputs.writeSidecar`): the job's ID (one
+per job, shared by a set's plates), the plate, the state the archive was
+written from (`ProjectRevision`), the SHA-256 of the archive the engine read
+and of the published bytes (pictures included), the profiles of the capture
+the archive was written from (`ProjectPlateArchive.profiles`), and the engine
+— the external server's attested build named from its endpoint, or the
+packaged engine's commit and its ABI's verified adapter-export manifest
+digest (`LocalEngineState.packageSha256`, which names every library and
+resource). Output that cannot be bound is not published. Preview and Send
+keep refusing stale output by the browser's guard (`PreviewCurrency`,
+`SendGuard`, above).
+
+`slice-sidecar-vectors.mjs` records 57 profile snapshots (every plate of the
+project model corpus and an unknown one; explicit, legacy, padded and blank
+profile hashes and IDs, process IDs of every shape, mixed filaments on and
+off), 66 routes (the external slicer corpus's endpoints, engines of every
+shape) and 73 bindings (a valid one and each field broken in turn), with 21
+malformed requests. Rust, WASM in Node and Chrome and JNI answer all of them
+byte for byte (`slice-output-replay.mjs`, which also checks a captured
+project's snapshots against the state document's and assembles sidecars on
+this device's route); the printer core's package replays the routes
+(`printer-wasm-test.mjs`). The tally's summary matches the browser's 101
+summary cases in five chunkings in Rust and four over JNI.
+
 Slice All Plates. The browser's `slice_all_plates` ("Slice All Plates", in
 its menu) beside Slice and Cancel Slice in Prepare's bar. Its enablement is
 the core's capability (`ProjectWorkspace.sliceActions`, with the two host
@@ -6426,28 +6484,39 @@ loop). `ExternalSlicerClient` writes each attempt into a fresh
 while a result is fetched again is confirmed against a done job ("already
 done"), never reported as cancelled.
 
-Verified: `ProjectOutputChecks` (581 host JNI checks: the corpus through the
+Verified: `ProjectOutputChecks` (585 host JNI checks: the corpus through the
 Kotlin owners, every injection streamed from a file, the placement scene's
 pictures with Rust's bytes, and the Prepare journey on the default profile —
 Slice All Plates enabled as the browser enables it, two plates with a model
 and an empty one passed over, each plate's archive carrying its own two
 pictures at the U1's 48 × 48 and 300 × 300, the G-code carrying them after its
 header, a file with its own left alone, the local route's job publishing them,
-an unprintable plate left out, and each plate's archive mesh — the cube's
-and the cylinder's added on the second plate — one closed surface); the
-external slicer's client against the real
+an unprintable plate left out, each plate's archive mesh — the cube's
+and the cylinder's added on the second plate — one closed surface, and the
+local route's sidecar binding the published bytes, the archive, the state and
+the plate's own profiles); `ProjectSliceSidecarChecks` (809 host JNI checks:
+the sidecar corpus through the exchanges and the typed owners, this device's
+route, sidecars bound and refused, and the summary corpus streamed through
+the tally); the external slicer's client against the real
 server cutting one download off halfway and corrupting another (35 checks,
 the server recording two downloads and the release); the external slicer
 policy's 102 download cases in Rust, WASM, JNI and Kotlin (1,098 Kotlin
-checks); `SliceAllTest` (6 JVM tests); Rust tests (`slice_outputs`,
-`thumbnail`, `slicer`); web tests. `android-outputs-smoke.py` (in
+checks); `SliceAllTest` (6 JVM tests); `SliceOutputsTest` (6 JVM tests: the
+sidecar's place and atomic write, the job ID, the packaged engine's identity,
+hashing as written and as read, the binding's canonical JSON); Rust tests
+(`slice_outputs`, `slice_sidecar`, `artifact_summary`, `thumbnail`,
+`slicer`); web tests. `android-outputs-smoke.py` (in
 `emulator-smoke.py` before the accessibility smoke) drives Slice All Plates
 on the device's engine with a cube on Plate 1 and a cylinder on Plate 2,
 Preview on Plate 1, both results listed, both published files read back with
 their two pictures right after the engine's header (PNGs of a model on
 transparency, each plate its own), then on the external slicer a download cut
 off and fetched again (the server's record) with the pictures at the top of a
-file without a header, and Slice All Plates there; it has not run yet. The
+file without a header, and Slice All Plates there; beside every published
+file it reads the sidecar and checks it binds that file's SHA-256 and length,
+its plate, one job per set, the profiles' configuration and the engine — the
+APK's engine manifest commit and ABI package digest locally, the attested
+stand-in build on the external slicer; it has not run yet. The
 send smoke now reads the published file's size from the device, since the
 file carries the plate's pictures.
 

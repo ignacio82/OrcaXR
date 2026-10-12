@@ -75,6 +75,7 @@ export function startProjectJni(profile = "debug") {
   signatures.staleSliceChecks = ["byte[]", "byte[]"];
   signatures.outputChecks = ["String", "byte[]", "String", "byte[]", "byte[]", "byte[]"];
   signatures.sliceStatusChecks = ["String"];
+  signatures.sliceSidecarChecks = ["String", "String"];
   signatures.workspaceBedChecks = ["String"];
   signatures.transformFieldChecks = ["String"];
   signatures.commandPaletteChecks = ["String"];
@@ -826,6 +827,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     slice_plan(scope) {
       return call("projectSlicePlan", this.handle, scope);
     }
+    slice_profiles(plateId) {
+      return call("projectSliceProfiles", this.handle, plateId);
+    }
     split_source(request) {
       return call("projectSplitSource", this.handle, request);
     }
@@ -1460,6 +1464,7 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     external_slicer_cancel: (read) => call("externalSlicerCancel", read),
     external_slicer_artifact: (read) => call("externalSlicerArtifact", read),
     external_slicer_download: (read) => call("externalSlicerDownload", read),
+    external_slicer_route: (request) => call("externalSlicerRoute", request),
     external_slicer_supports: (engine, feature) => call("externalSlicerSupports", engine, feature),
     plate_projection: (state, plateId, omitted) => call("plateProjection", state, plateId, omitted, zone, profile),
     plate_print_overrides: (state, plateId) => call("platePrintOverridesJson", state, plateId),
@@ -1470,6 +1475,10 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     slice_thumbnail_inject: (request) => call("sliceThumbnailInject", request),
     slice_thumbnail_view: (request) => call("sliceThumbnailView", request),
     slice_plan: (request) => call("slicePlan", request),
+    slice_profiles: (request) => call("sliceProfiles", request),
+    slice_binding: (request) => call("sliceBinding", request),
+    slice_native_route: (request) => call("sliceNativeRoute", request),
+    slice_sidecar: (request) => call("sliceSidecar", request),
     virtual_filament_form_defaults: (request) => call("virtualFilamentFormDefaults", request),
     virtual_filament_form: (request) => call("virtualFilamentForm", request),
     virtual_filament_triangle: (request) => call("virtualFilamentTriangle", request),

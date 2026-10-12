@@ -23,17 +23,27 @@ the job and publishes it with the plate's pictures at its top (the server
 records the two downloads and the release); Slice All Plates on it submits
 both plates.
 
+Beside each published file lies its sidecar (`<file>.json`, `orcaxr.slice-output`),
+read back too: it binds the file's own SHA-256 and length to the job, its plate,
+the project's revision and fingerprints, the archive the engine read, the plate's
+effective configuration and the engine — on this device, the packaged engine's
+commit and its ABI's verified package digest from the APK's engine manifest; on
+the external slicer, the route named from its endpoint and the attested build —
+and states the engine's own totals. A set's plates share one job.
+
 Lessons kept from the earlier smokes: an action waits until the core enables
 it, rows are found by text, and Prepare's Slice buttons stay in the bar above
 its list.
 """
 import argparse
 import base64
+import hashlib
 import json
 import math
 import re
 import subprocess
 import time
+import zipfile
 from artifacts import ROOT, sha256
 from smoke_ui import Screen, decode_png, saturated_pixels
 
@@ -86,6 +96,34 @@ def published(name):
     """A published G-code, read back from the app's cache."""
     return subprocess.check_output(["adb", "-s", args.serial, "exec-out", "run-as", PACKAGE, "cat",
                                     f"cache/prepare/gcode/{name}"], timeout=60)
+
+
+PIN = json.loads((ROOT / "contracts/pinned-engine-provenance.json").read_text())["commit"]
+SHA256 = re.compile(r"sha256:[0-9a-f]{64}")
+FNV = re.compile(r"fnv1a64:[0-9a-f]{16}")
+
+
+def sidecar(name, gcode, route):
+    """The sidecar published beside [name] ([gcode] its bytes), on [route]
+    (`{"kind","id","artifactHash"}`): what binds the file, checked."""
+    document = json.loads(published(name + ".json"))
+    assert (document["schema"], document["version"]) == ("orcaxr.slice-output", 1), f"{name}: {document.get('schema')}"
+    binding, profiles, statistics = document["binding"], document["profiles"], document["statistics"]
+    assert binding["gcodeOutputHash"] == "sha256:" + hashlib.sha256(gcode).hexdigest(), f"{name}: the sidecar binds other bytes"
+    assert statistics["gcodeBytes"] == len(gcode), f"{name}: {statistics['gcodeBytes']} bytes stated, {len(gcode)} published"
+    assert all(SHA256.fullmatch(binding[key]) for key in ("projectInputHash", "effectiveConfigHash", "engineArtifactHash")), binding
+    assert FNV.fullmatch(binding["sourceHash"]) and FNV.fullmatch(binding["sourceAssetHash"]), binding
+    assert isinstance(binding["sourceRevision"], int) and binding["sourceRevision"] > 0, binding
+    assert binding["effectiveConfigHash"] == profiles["effectiveConfigHash"], f"{name}: bound to another configuration"
+    kinds = [reference["kind"] for reference in profiles["references"]]
+    assert kinds[:2] == ["printer", "process"] and kinds.count("filament") >= 1, kinds
+    assert document["route"]["kind"] == statistics["route"] == route["kind"], document["route"]
+    assert document["route"]["id"] == route["id"], document["route"]["id"]
+    assert document["route"]["engine"] == {"artifactHash": route["artifactHash"], "commit": PIN}, document["route"]["engine"]
+    assert (binding["engineCommit"], binding["engineArtifactHash"]) == (PIN, route["artifactHash"]), binding
+    summary = statistics["summary"]
+    assert summary is not None and isinstance(summary["perTool"], list), f"{name}: no summary of the engine's totals"
+    return document
 
 
 def pictures(gcode, where):
@@ -168,6 +206,17 @@ try:
     tap("Prepare")
     status = find("SLICED 2 plate(s) in", exact=False, timeout=30).get("text")
     first, second = published(FIRST), published(SECOND)
+    # Each file's sidecar: one job, two plates, each bound to its own bytes and configuration, on this device's engine.
+    with zipfile.ZipFile(app_apk) as apk:
+        manifest = json.loads(apk.read("assets/engine/manifest.json"))
+    package = "sha256:" + manifest["abis"][adb("shell", "getprop", "ro.product.cpu.abi")]["manifestSha256"]
+    native = {"kind": "android-native", "id": f"slicer-client:android-native:{package}", "artifactHash": package}
+    bound = [sidecar(FIRST, first, native), sidecar(SECOND, second, native)]
+    assert bound[0]["binding"]["jobId"] == bound[1]["binding"]["jobId"], "A set's plates were bound to two jobs"
+    assert bound[0]["binding"]["plateId"] != bound[1]["binding"]["plateId"], "Both files bound to one plate"
+    assert bound[0]["binding"]["effectiveConfigHash"] != bound[1]["binding"]["effectiveConfigHash"], "Both plates bound to one configuration"
+    assert all(b["binding"][key] == bound[0]["binding"][key] for b in bound for key in ("sourceRevision", "sourceHash", "sourceAssetHash"))
+    assert all(b["statistics"]["summary"].get("layerCount") for b in bound), "The engine's layer total is missing from a sidecar"
     total = re.search(r"SLICED 2 plate\(s\) in \d+ ms\s+(\d+) KB total", status)
     assert total and int(total.group(1)) == math.floor((len(first) + len(second)) / 1024 + 0.5), (status, len(first), len(second))
     find("Plate 1: ", exact=False)
@@ -202,6 +251,12 @@ try:
     find(f"Sliced on {endpoint}", timeout=30)
     find("SLICED in", exact=False, timeout=30)
     fetched = published(FIRST)
+    # On the external slicer: the route named from its endpoint and the build it attested.
+    attested = json.loads(ask("summary"))["engineSha256"]
+    external_route = {"kind": "external-server", "id": f"slicer-client:external-server:{endpoint}",
+                      "artifactHash": "sha256:" + attested}
+    alone = sidecar(FIRST, fetched, external_route)
+    assert alone["binding"]["jobId"] != bound[0]["binding"]["jobId"], "Two slices bound to one job"
     expected = reference.read_bytes()
     assert fetched.endswith(expected), "The external slicer's G-code was not published whole"
     external = pictures(fetched, 0)
@@ -222,6 +277,8 @@ try:
     received = json.loads(ask("summary"))
     assert len(received["jobs"]) == 3 and all(job["outcome"] == "done" for job in received["jobs"]), received["jobs"]
     assert received["authorizations"] == [f"Bearer {TOKEN}"], received["authorizations"]
+    both = [sidecar(FIRST, published(FIRST), external_route), sidecar(SECOND, published(SECOND), external_route)]
+    assert both[0]["binding"]["jobId"] == both[1]["binding"]["jobId"] != alone["binding"]["jobId"], "The external set's job"
 finally:
     try:
         ask("close")
@@ -240,6 +297,8 @@ report = {
     "toolpathPixels": toolpaths,
     "externalBytes": len(fetched),
     "externalRequests": len(requests),
+    "sidecars": {"jobs": len({b["binding"]["jobId"] for b in bound + [alone] + both}),
+                 "localEngine": package, "externalEngine": external_route["artifactHash"]},
 }
 (output / "android-outputs-smoke.json").write_text(json.dumps(report, indent=2) + "\n")
 print(f"Outputs passed on API {report['api']} {report['abi']} emulator (two plates, {len(first)} and {len(second)} bytes)")

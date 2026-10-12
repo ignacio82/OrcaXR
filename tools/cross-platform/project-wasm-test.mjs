@@ -44,7 +44,7 @@ import { replayExternalSlicer } from "./external-slicer-replay.mjs";
 import { plateProjectionCases, replayPlateProjection } from "./plate-projection-replay.mjs";
 import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
-import { replaySliceOutputs } from "./slice-output-replay.mjs";
+import { SLICE_SIDECAR_ANSWERS, replaySliceOutputs } from "./slice-output-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
 import { replayActionPresentation } from "./action-presentation-replay.mjs";
 import { replayPaintTool } from "./paint-tool-replay.mjs";
@@ -350,6 +350,10 @@ if (isMainThread) {
     // A slice's outputs: thumbnail lists, blocks, injections, cameras, slice
     // plans, refusals, and a session's plate drawn with Rust's own bytes.
     assert.deepEqual(result.sliceOutputAnswers, [68, 19, 100, 132, 44, 26, 3]);
+    // What binds a slice's output: every plate's profile snapshot, output
+    // bindings, external routes, refusals, a captured project's snapshots
+    // and sidecars bound to them on this device's route.
+    assert.deepEqual(result.sliceSidecarAnswers, SLICE_SIDECAR_ANSWERS);
     // The transform inspector's fields: reads, rotations, edits and refusals.
     assert.deepEqual(
       [result.fieldReads, result.rotations, result.fieldEdits, result.fieldRefusals],
@@ -899,11 +903,14 @@ if (isMainThread) {
     JSON.parse(await readFile(new URL("testdata/cross-platform/workspace-bed-vectors.json", root))),
     layout,
   );
-  const sliceOutputs = replaySliceOutputs(
+  const sliceOutputs = await replaySliceOutputs(
     core,
     JSON.parse(await readFile(new URL("testdata/cross-platform/slice-output-vectors.json", root))),
+    JSON.parse(await readFile(new URL("testdata/cross-platform/slice-sidecar-vectors.json", root))),
     JSON.parse(await readFile(new URL("testdata/cross-platform/placement-vectors.json", root))),
     layout,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    (text) => Buffer.from(text, "base64"),
   );
   const transformFields = replayTransformFields(
     core,

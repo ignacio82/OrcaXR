@@ -838,7 +838,7 @@ class ProjectWorkspace(
             }
         }) { result ->
             // The export was guarded by the state just read, so the archive is that state's.
-            if (result is ProjectOutcome.Exported) archive?.let { ProjectPlateArchive(it.sourceHash, it.overrides, it.warnings, from, it.thumbnails) } else null
+            if (result is ProjectOutcome.Exported) archive?.let { ProjectPlateArchive(it.sourceHash, it.overrides, it.warnings, from, it.thumbnails, it.profiles) } else null
         }
             // The export reads a failed callback as uncertain; a refused projection wrote nothing.
             .handle { value, error -> if (error == null) value else throw (refusal ?: error) }

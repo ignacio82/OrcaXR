@@ -1,7 +1,9 @@
 //! The engine's own totals in a finished artifact, against the production
 //! browser (`gcode-summary-vectors.json`, from `GcodeArtifactSummary.ts`):
 //! every artifact summarized and worded exactly, and durations formatted.
-use orcaxr_gcode::artifact::{ArtifactSummary, ToolUsage, describe, format_duration, summarize};
+use orcaxr_gcode::artifact::{
+    ArtifactSummary, SliceTally, ToolUsage, describe, format_duration, summarize,
+};
 use orcaxr_gcode::{
     Cancellation, Session, SessionError,
     layout::{MAX_CHUNK_UNITS, MAX_METADATA_BYTES},
@@ -129,6 +131,29 @@ fn artifacts_summarize_and_read_as_the_browser_does() {
                 "{name}"
             );
             assert_eq!(line.text, expected["text"].as_str().unwrap(), "{name}");
+        }
+    }
+}
+
+/// Streamed through a tally as a host writes it, in chunks of every size,
+/// every artifact summarizes exactly as the browser summarizes the whole file
+/// (`SliceTally::summary`, what an Android slice's sidecar states).
+#[test]
+fn streamed_artifacts_summarize_as_the_browser_does() {
+    let corpus = fixture();
+    for case in corpus["cases"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let file = bytes(case["parts"].as_array().unwrap());
+        for size in [1, 3, 4_096, 65_536, file.len().max(1)] {
+            let mut tally = SliceTally::new();
+            for chunk in file.chunks(size) {
+                tally.push(chunk);
+            }
+            assert_eq!(
+                json(&tally.summary().unwrap()),
+                case["summary"],
+                "{name} in chunks of {size}"
+            );
         }
     }
 }

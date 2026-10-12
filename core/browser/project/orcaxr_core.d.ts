@@ -91,6 +91,12 @@ export class CapturedProject {
      */
     slice_plan(scope: string): string;
     /**
+     * The profile snapshot the plate (`plateId` as JSON text) is sliced
+     * with, or the browser's `{"error"}`
+     * (`orcaxr_project::slicing::sidecar::profiles`).
+     */
+    slice_profiles(plate_id: string): string;
+    /**
      * What a split would split (`splitSourceExchange`):
      * `{"instanceId","target","triangleLimit"}` in, `{"source"}` or
      * `{"refusal"}` out (`orcaxr_project::split::source`).
@@ -1445,6 +1451,13 @@ export function external_slicer_job_plan(request: string): string;
 export function external_slicer_poll(read: string): string;
 
 /**
+ * The external route's metadata (`sliceRouteExchange`):
+ * `{"endpoint","engine":{"artifactHash","commit"}}` in,
+ * `{"engine","id","kind","protocolVersion"}` or `{"error"}` out.
+ */
+export function external_slicer_route(request: string): string;
+
+/**
  * An `ExternalSlicerSubmitRead`; the `ExternalSlicerSubmission`: a job to
  * poll or cancel, an artifact to read, or a failure.
  */
@@ -1781,10 +1794,37 @@ export function settings_step(step: string): string;
 export function settings_target_text(request: string): string;
 
 /**
+ * An output binding checked (`sliceBindingExchange`): `{"binding"}` in,
+ * `{"valid":true}` or `{"error"}` out.
+ */
+export function slice_binding(request: string): string;
+
+/**
+ * This device's route (`orcaxr_project::slicing::sidecar::Route::android_native`):
+ * `{"engine":{"artifactHash","commit"}}` in, the route's metadata or
+ * `{"error"}` out.
+ */
+export function slice_native_route(request: string): string;
+
+/**
  * The plates a slice slices (`slicePlanExchange`): `{"scope","stateJson"}`
  * in, `{"plateIds"}` or `{"refusal"}` out.
  */
 export function slice_plan(request: string): string;
+
+/**
+ * The profile snapshot a plate is sliced with (`sliceProfilesExchange`):
+ * `{"plateId","stateJson"}` in, `{"effectiveConfigHash","references"}` or
+ * `{"error"}` out.
+ */
+export function slice_profiles(request: string): string;
+
+/**
+ * The sidecar published beside a plate's G-code:
+ * `{"binding","gcodeBytes","profiles","route","summary","warnings"}` in, the
+ * `orcaxr.slice-output` document or `{"error"}` out.
+ */
+export function slice_sidecar(request: string): string;
 
 /**
  * One thumbnail in the engine's wire format (`thumbnailBlockExchange`):
@@ -1966,6 +2006,7 @@ export interface InitOutput {
     readonly capturedproject_settings_snapshot: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_settings_targets: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_slice_plan: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_slice_profiles: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_split_source: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_virtual_filament_library: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_virtual_filament_mutation: (a: number, b: number, c: number) => [number, number, number, number];
@@ -1998,6 +2039,7 @@ export interface InitOutput {
     readonly external_slicer_endpoint: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_job_plan: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_poll: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_route: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_submission: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_submit_plan: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_supports: (a: number, b: number, c: number, d: number) => [number, number, number];
@@ -2330,7 +2372,11 @@ export interface InitOutput {
     readonly settingseditor_rows: (a: number, b: number, c: number) => [number, number, number];
     readonly settingseditor_state: (a: number, b: number, c: number) => [number, number, number, number];
     readonly settingseditor_unavailable: (a: number) => number;
+    readonly slice_binding: (a: number, b: number) => [number, number, number, number];
+    readonly slice_native_route: (a: number, b: number) => [number, number, number, number];
     readonly slice_plan: (a: number, b: number) => [number, number, number, number];
+    readonly slice_profiles: (a: number, b: number) => [number, number, number, number];
+    readonly slice_sidecar: (a: number, b: number) => [number, number, number, number];
     readonly slice_thumbnail_block: (a: number, b: number) => [number, number, number, number];
     readonly slice_thumbnail_inject: (a: number, b: number) => [number, number, number, number];
     readonly slice_thumbnail_list: (a: number, b: number) => [number, number, number, number];

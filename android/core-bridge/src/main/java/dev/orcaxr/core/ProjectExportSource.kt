@@ -11,6 +11,7 @@ data class ProjectExportLimits(val jsonBytes: Long, val assets: Long, val assetB
  * projected project's fingerprint (the browser's archive `sourceHash`), the
  * print overrides a submission carries with it, the Save warnings, the
  * plate's pictures the slice's G-code is to carry (drawn from the same
+ * capture), the profile snapshot the plate is sliced with (of the same
  * capture), and — from [ProjectWorkspace.projectPlate] — the state of the
  * project it was written from. */
 class ProjectPlateArchive(
@@ -19,6 +20,7 @@ class ProjectPlateArchive(
     val warnings: List<CharArray>,
     val revision: ProjectRevision? = null,
     val thumbnails: PlateThumbnails = PlateThumbnails.NONE,
+    val profiles: SliceProfiles? = null,
 )
 
 /** Borrowed on one export worker. Streams canonical JSON and assets in declaration
@@ -108,6 +110,7 @@ class ProjectExportSource internal constructor(
         return capture.plate(plateId, resolver, profile).use { plate ->
             val sourceHash = plate.project().use { it.hash() }
             val overrides = project.platePrintOverrides(plateId)
+            val profiles = project.sliceProfiles(plateId)
             val warnings = plate.writeArchive(options).use { output -> copy(output, destination) }
             checkActive()
             // The plate's pictures, from the capture the archive was written from: as in the
@@ -118,7 +121,7 @@ class ProjectExportSource internal constructor(
                 PlateThumbnails.NONE
             }
             checkActive(); plateWritten = true
-            ProjectPlateArchive(sourceHash, overrides, warnings, thumbnails = thumbnails)
+            ProjectPlateArchive(sourceHash, overrides, warnings, thumbnails = thumbnails, profiles = profiles)
         }
     }
     private fun copy(output: ProjectArchiveOutput, destination: OutputStream): List<CharArray> {

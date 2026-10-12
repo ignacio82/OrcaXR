@@ -37,6 +37,7 @@ export const external_slicer_download: (a: number, b: number) => [number, number
 export const external_slicer_endpoint: (a: number, b: number) => [number, number, number, number];
 export const external_slicer_job_plan: (a: number, b: number) => [number, number, number, number];
 export const external_slicer_poll: (a: number, b: number) => [number, number, number, number];
+export const external_slicer_route: (a: number, b: number) => [number, number, number, number];
 export const external_slicer_submission: (a: number, b: number) => [number, number, number, number];
 export const external_slicer_submit_plan: (a: number, b: number) => [number, number, number, number];
 export const external_slicer_supports: (a: number, b: number, c: number, d: number) => [number, number, number];

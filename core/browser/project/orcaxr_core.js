@@ -472,6 +472,33 @@ export class CapturedProject {
         }
     }
     /**
+     * The profile snapshot the plate (`plateId` as JSON text) is sliced
+     * with, or the browser's `{"error"}`
+     * (`orcaxr_project::slicing::sidecar::profiles`).
+     * @param {string} plate_id
+     * @returns {string}
+     */
+    slice_profiles(plate_id) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(plate_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.capturedproject_slice_profiles(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
      * What a split would split (`splitSourceExchange`):
      * `{"instanceId","target","triangleLimit"}` in, `{"source"}` or
      * `{"refusal"}` out (`orcaxr_project::split::source`).
@@ -7087,6 +7114,34 @@ export function external_slicer_poll(read) {
 }
 
 /**
+ * The external route's metadata (`sliceRouteExchange`):
+ * `{"endpoint","engine":{"artifactHash","commit"}}` in,
+ * `{"engine","id","kind","protocolVersion"}` or `{"error"}` out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function external_slicer_route(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.external_slicer_route(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * An `ExternalSlicerSubmitRead`; the `ExternalSlicerSubmission`: a job to
  * poll or cancel, an artifact to read, or a failure.
  * @param {string} read
@@ -8690,6 +8745,61 @@ export function settings_target_text(request) {
 }
 
 /**
+ * An output binding checked (`sliceBindingExchange`): `{"binding"}` in,
+ * `{"valid":true}` or `{"error"}` out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function slice_binding(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.slice_binding(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * This device's route (`orcaxr_project::slicing::sidecar::Route::android_native`):
+ * `{"engine":{"artifactHash","commit"}}` in, the route's metadata or
+ * `{"error"}` out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function slice_native_route(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.slice_native_route(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * The plates a slice slices (`slicePlanExchange`): `{"scope","stateJson"}`
  * in, `{"plateIds"}` or `{"refusal"}` out.
  * @param {string} request
@@ -8702,6 +8812,62 @@ export function slice_plan(request) {
         const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.slice_plan(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * The profile snapshot a plate is sliced with (`sliceProfilesExchange`):
+ * `{"plateId","stateJson"}` in, `{"effectiveConfigHash","references"}` or
+ * `{"error"}` out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function slice_profiles(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.slice_profiles(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * The sidecar published beside a plate's G-code:
+ * `{"binding","gcodeBytes","profiles","route","summary","warnings"}` in, the
+ * `orcaxr.slice-output` document or `{"error"}` out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function slice_sidecar(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.slice_sidecar(ptr0, len0);
         var ptr2 = ret[0];
         var len2 = ret[1];
         if (ret[3]) {

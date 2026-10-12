@@ -124,6 +124,15 @@ final class NativeProject {
     static native String slicePlan(String request);
     static native String projectSlicePlan(long handle, String scope);
     static native String exportThumbnails(long handle);
+    // What binds a slice's output (orcaxr_project::slicing::sidecar, the
+    // browser's SliceSidecarExchange): a plate's profile snapshot (of a state
+    // document, or of a captured project with plateId as JSON text), an output
+    // binding checked, this device's route, and the sidecar assembled.
+    static native String sliceProfiles(String request);
+    static native String projectSliceProfiles(long handle, String plateId);
+    static native String sliceBinding(String request);
+    static native String sliceNativeRoute(String request);
+    static native String sliceSidecar(String request);
     static native String transformFields(String request);
     static native String transformFieldEdit(String request);
     static native String transformRotation(String request);
@@ -350,6 +359,7 @@ final class NativeProject {
     static native String externalSlicerCancel(String read);
     static native String externalSlicerArtifact(String read);
     static native String externalSlicerDownload(String read);
+    static native String externalSlicerRoute(String request);
     static native boolean externalSlicerSupports(String engine, String feature);
     // One plate for an external slicer: a state document's plate projected and
     // its print overrides (IDs as JSON text, answers canonical JSON).

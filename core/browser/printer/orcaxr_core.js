@@ -2209,6 +2209,34 @@ export function external_slicer_poll(read) {
 }
 
 /**
+ * The external route's metadata (`sliceRouteExchange`):
+ * `{"endpoint","engine":{"artifactHash","commit"}}` in,
+ * `{"engine","id","kind","protocolVersion"}` or `{"error"}` out.
+ * @param {string} request
+ * @returns {string}
+ */
+export function external_slicer_route(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.external_slicer_route(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * An `ExternalSlicerSubmitRead`; the `ExternalSlicerSubmission`: a job to
  * poll or cancel, an artifact to read, or a failure.
  * @param {string} read

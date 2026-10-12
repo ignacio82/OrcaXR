@@ -16,6 +16,8 @@ data class LocalEngineState(
     val totalMemory: Long = 0,
     val availableMemory: Long = 0,
     val lowMemory: Boolean = false,
+    /** The SHA-256 of [abi]'s verified adapter export manifest (every library and resource the engine loads). */
+    val packageSha256: String? = null,
 ) {
     /** Whether a plate can be sliced here now (each plate's own size is checked when it is staged). */
     val available: Boolean

@@ -21,7 +21,7 @@ import { replayPrinterConsole } from "./printer-console-replay.mjs";
 import { replayPrinterCamera } from "./printer-camera-replay.mjs";
 import { replayPrinterDirectory } from "./printer-directory-replay.mjs";
 import { replayRememberedCredentials } from "./printer-credentials-replay.mjs";
-import { replayExternalSlicer } from "./external-slicer-replay.mjs";
+import { replayExternalSlicer, replayExternalSlicerRoutes } from "./external-slicer-replay.mjs";
 
 const root = new URL("../../", import.meta.url);
 const asset = await readFile(
@@ -64,6 +64,7 @@ const result = {
   ...replayPrinterDirectory(core, await fixture("printer-directory-vectors")),
   ...replayRememberedCredentials(core, await fixture("printer-credentials-vectors")),
   ...replayExternalSlicer(core, await fixture("external-slicer-vectors")),
+  ...replayExternalSlicerRoutes(core, await fixture("slice-sidecar-vectors")),
 };
 assert.deepEqual(
   [result.printJobSnapshots, result.printJobIgnored, result.printJobRefusals],
@@ -120,6 +121,8 @@ assert.deepEqual(result.printerCameraAnswers, [62, 12, 462, 462, 616, 308, 154, 
 assert.deepEqual(result.printerDirectoryAnswers, [37, 25, 160, 60, 44, 41, 15]);
 assert.deepEqual(result.rememberedCredentialsAnswers, [79, 63]);
 assert.deepEqual(result.externalSlicerAnswers, [72, 230, 156, 247, 196, 44, 49, 102]);
+// The external route's metadata: every endpoint and engine shape, and refusals.
+assert.deepEqual(result.externalSlicerRoutes, [66, 8]);
 console.log(
   JSON.stringify({ ...result, wasmBytes: bytes.length, wasmSha256: sha256 }),
 );

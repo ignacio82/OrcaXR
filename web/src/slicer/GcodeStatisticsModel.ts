@@ -443,6 +443,17 @@ export async function createVerifiedRichGcodeStatisticsSource(
   }
 }
 
+/**
+ * Check one plate's output binding — the identities a statistics sidecar is
+ * bound to — as every sidecar's binding is checked: exact fields, bounded
+ * canonical text, canonical FNV-1a source identities, SHA-256 content and
+ * engine identities, and a full engine commit. Throws the
+ * `invalid-artifact` error naming the first field that fails.
+ */
+export function validateGcodeStatisticsBinding(binding: unknown): asserts binding is GcodeStatisticsBinding {
+  validateBinding(binding as GcodeStatisticsBinding, 'binding');
+}
+
 /** Project one plate's bound engine sidecar without estimating planner values from G-code. */
 export function projectGcodeStatistics(
   source: VerifiedRichGcodeStatisticsSource,

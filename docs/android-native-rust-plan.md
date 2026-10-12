@@ -1868,7 +1868,23 @@ external slice routes, and verified output publication.
   anchor) before the figures are counted and the output is published. The
   port fixed three browser defects (every plate's file showed the active
   plate; only an object's first part was drawn; linear light in an 8-bit
-  target darkened every picture). The statistics sidecar remains.
+  target darkened every picture).
+  Sidecar ([native-core](engineering/native-core.md#the-slice-sidecar)): the
+  browser binds each plate's result in its coordinator and states the
+  identities a statistics sidecar carries (`GcodeStatisticsBinding`); its full
+  statistics artifact still has no producer (P7.6: the engine's planner values
+  are not exported), so what it reads after a slice is the engine's own
+  artifact totals. Both Android routes publish `<file>.json` beside each
+  plate's G-code (`orcaxr.slice-output`, assembled and checked by the shared
+  core): the binding — job, plate, revision, store and asset fingerprints, the
+  archive's and the published file's SHA-256, the effective configuration
+  (`CanonicalStateProfileResolver`, ported) and the engine (the attested
+  external build, or the packaged engine's commit and ABI package digest) —
+  the profiles, the route (`CanonicalSlicerClientRoute`'s metadata, ported),
+  the published length and the engine's totals streamed through the tally.
+  Preview and Send already refuse stale output by the browser's guard
+  (`PreviewCurrency`, `SendGuard`); saving a slice's output is not an Android
+  action yet.
 - [ ] Implement the native external-slicer client with explicit credentials,
   connection-generation capture, existing attestation, result digest/length
   validation, repeatable download, leases, and cancellation outcomes.

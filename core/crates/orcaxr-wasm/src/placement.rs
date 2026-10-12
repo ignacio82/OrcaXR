@@ -109,3 +109,34 @@ pub fn slice_thumbnail_view(request: &str) -> Result<String, JsValue> {
 pub fn slice_plan(request: &str) -> Result<String, JsValue> {
     orcaxr_project::slicing::plate::plan_json(request).map_err(error)
 }
+
+/// The profile snapshot a plate is sliced with (`sliceProfilesExchange`):
+/// `{"plateId","stateJson"}` in, `{"effectiveConfigHash","references"}` or
+/// `{"error"}` out.
+#[wasm_bindgen]
+pub fn slice_profiles(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::slicing::sidecar::profiles_json(request).map_err(error)
+}
+
+/// An output binding checked (`sliceBindingExchange`): `{"binding"}` in,
+/// `{"valid":true}` or `{"error"}` out.
+#[wasm_bindgen]
+pub fn slice_binding(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::slicing::sidecar::binding_json(request).map_err(error)
+}
+
+/// This device's route (`orcaxr_project::slicing::sidecar::Route::android_native`):
+/// `{"engine":{"artifactHash","commit"}}` in, the route's metadata or
+/// `{"error"}` out.
+#[wasm_bindgen]
+pub fn slice_native_route(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::slicing::sidecar::native_route_json(request).map_err(error)
+}
+
+/// The sidecar published beside a plate's G-code:
+/// `{"binding","gcodeBytes","profiles","route","summary","warnings"}` in, the
+/// `orcaxr.slice-output` document or `{"error"}` out.
+#[wasm_bindgen]
+pub fn slice_sidecar(request: &str) -> Result<String, JsValue> {
+    orcaxr_project::slicing::sidecar::sidecar_json(request).map_err(error)
+}

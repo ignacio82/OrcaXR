@@ -484,6 +484,32 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sliceProfiles, slice_profiles, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectSliceProfiles, project_slice_profiles, jstring,
+    handle: jlong,
+    plate_id: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_sliceBinding, slice_binding, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_sliceNativeRoute, slice_native_route, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_sliceSidecar, slice_sidecar, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_transformFields, transform_fields, jstring,
     request: JString<'local>,
 }
@@ -1566,6 +1592,11 @@ export! {
 export! {
     Java_dev_orcaxr_core_NativeProject_externalSlicerDownload, external_slicer_download, jstring,
     read: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_externalSlicerRoute, external_slicer_route, jstring,
+    request: JString<'local>,
 }
 
 export! {

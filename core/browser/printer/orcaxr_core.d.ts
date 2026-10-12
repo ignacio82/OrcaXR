@@ -398,6 +398,13 @@ export function external_slicer_job_plan(request: string): string;
 export function external_slicer_poll(read: string): string;
 
 /**
+ * The external route's metadata (`sliceRouteExchange`):
+ * `{"endpoint","engine":{"artifactHash","commit"}}` in,
+ * `{"engine","id","kind","protocolVersion"}` or `{"error"}` out.
+ */
+export function external_slicer_route(request: string): string;
+
+/**
  * An `ExternalSlicerSubmitRead`; the `ExternalSlicerSubmission`: a job to
  * poll or cancel, an artifact to read, or a failure.
  */
@@ -688,6 +695,7 @@ export interface InitOutput {
     readonly external_slicer_endpoint: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_job_plan: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_poll: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_route: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_submission: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_submit_plan: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_supports: (a: number, b: number, c: number, d: number) => [number, number, number];

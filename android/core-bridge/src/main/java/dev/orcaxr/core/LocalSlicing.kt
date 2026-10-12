@@ -44,6 +44,8 @@ class LocalSliceJob internal constructor(
     val thumbnails: PlateThumbnails = PlateThumbnails.NONE,
     /** The archive's Save warnings themselves, as the browser's coordinator collects them. */
     val warningTexts: List<String> = emptyList(),
+    /** The profile snapshot the plate is sliced with, of the capture the archive was written from. */
+    val profiles: SliceProfiles? = null,
 )
 
 /** What the engine reported of one job ([LocalSlicing.result]): its own result document, read strictly. */
@@ -168,7 +170,8 @@ object LocalSlicing {
             SyncedOutput(FileOutputStream(overridesFile)).use { it.write(text) }
             val overridesInput = sealed(overridesFile, MAX_OVERRIDES_BYTES)
             return LocalSliceJob(id, directory, archiveInput, overridesInput, File(directory, "output.gcode"),
-                archive.sourceHash, archive.revision, archive.warnings.size, archive.thumbnails, archive.warnings.map { String(it) })
+                archive.sourceHash, archive.revision, archive.warnings.size, archive.thumbnails, archive.warnings.map { String(it) },
+                archive.profiles)
         } catch (failure: Throwable) {
             deleteTree(directory.toPath())
             throw failure

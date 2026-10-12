@@ -8,4 +8,5 @@ pub mod plate;
 pub mod preflight;
 pub mod profile;
 pub mod report;
+pub mod sidecar;
 pub mod thumbnails;

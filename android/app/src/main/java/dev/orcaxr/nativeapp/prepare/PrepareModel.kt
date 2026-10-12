@@ -29,9 +29,14 @@ import dev.orcaxr.core.ProjectPlatePreflight
 import dev.orcaxr.core.ProjectRevision
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.SharedCredentials
+import dev.orcaxr.core.SliceBinding
+import dev.orcaxr.core.SliceEngine
 import dev.orcaxr.core.SliceFigures
 import dev.orcaxr.core.SlicePlan
+import dev.orcaxr.core.SliceProfiles
+import dev.orcaxr.core.SliceRoute
 import dev.orcaxr.core.SliceScope
+import dev.orcaxr.core.SliceSidecars
 import dev.orcaxr.core.SliceStatus
 import dev.orcaxr.core.SliceStatusTally
 import dev.orcaxr.nativeapp.engine.LocalEngineClient
@@ -95,6 +100,8 @@ class SlicedPlate(
     val local: Boolean = false,
     /** What a results list says of this plate's file ([SliceAll.row]). */
     val row: String = "",
+    /** The sidecar published beside [file] ([SliceOutputs]): what the file is bound to, and the engine's totals. */
+    val sidecar: File? = null,
 )
 
 /** What the Prepare area shows. */
@@ -423,8 +430,8 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
                 }
                 start(scope, endpoint)
             }
-            SliceRouteKind.Local -> launch(scope, { true }) { project, plateId, plateName, staged ->
-                runLocal(project, plateId, plateName, staged)
+            SliceRouteKind.Local -> launch(scope, { true }) { project, plateId, plateName, staged, jobId ->
+                runLocal(project, plateId, plateName, staged, jobId)
             }
             SliceRouteKind.None -> Unit
         }
@@ -471,7 +478,7 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         var generation = 0L
         var held = ""
         // The route is attested once for the job, as the browser resolves its route before the coordinator runs.
-        var attest = true
+        var route: SliceRoute? = null
         launch(scope, {
             // The route is captured once; a different one is refused, never re-decided mid-job.
             if (!connection.enabled || connection.endpoint != endpoint) {
@@ -481,8 +488,8 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
                 held = token
                 true
             }
-        }) { project, plateId, plateName, staged ->
-            run(project, endpoint, generation, held, plateId, plateName, staged, attest).also { attest = false }
+        }) { project, plateId, plateName, staged, jobId ->
+            run(project, endpoint, generation, held, plateId, plateName, staged, jobId, route).also { route = it.route }
         }
     }
 
@@ -494,7 +501,7 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
      * coordinator, which discards every plate's result on any change. The
      * outcome is shown: the published slice, or the status line.
      */
-    private fun launch(scope: SliceScope, admit: () -> Boolean, body: (PlateSource, String, String, File) -> PlateOutput) {
+    private fun launch(scope: SliceScope, admit: () -> Boolean, body: (PlateSource, String, String, File, String) -> PlateOutput) {
         val project = source ?: return
         val view = project.view
         val plate = view.activePlate
@@ -509,6 +516,8 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         }
         // A new slice withdraws the previous output, as the browser's does.
         published = null
+        // One job, one ID: every plate's sidecar names it.
+        val jobId = SliceOutputs.jobId(UUID.randomUUID())
         state = state.copy(job = SliceJob("preflighting"), result = null, plates = emptyList(), status = null)
         refreshActions()
         slicer.execute {
@@ -526,7 +535,7 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
                 for ((index, plateId) in ids.withIndex()) {
                     completed = index to ids.size
                     progress("preflighting")
-                    outputs += body(project, plateId, names[plateId] ?: "Plate ${index + 1}", File(staging, "$index.gcode"))
+                    outputs += body(project, plateId, names[plateId] ?: "Plate ${index + 1}", File(staging, "$index.gcode"), jobId)
                 }
                 completed = null
                 Outcome.Done(publish(project, scope, revision, outputs, view.name.ifBlank { "Untitled project" }, started))
@@ -578,10 +587,12 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             val target = if (names.add(name)) File(directory, name) else File(File(directory, "$index"), name)
             // Output for a project that has since changed is discarded, never shown.
             val file = output.publish(target, project.view.revision) ?: throw Refusal(PrepareWords.failed(stale))
+            val sidecar = SliceOutputs.writeSidecar(file, output.sidecar)
             val warnings = output.warnings.size
             SlicedPlate(
                 file, name, output.plateId, output.plateName, revision, output.endpoint,
                 SliceStatus.describe(elapsed, output.figures, warnings), output.endpoint.isEmpty(), SliceAll.row(output.plateName, output.figures, warnings),
+                sidecar,
             )
         }
         val chosen = SliceAll.published(plates, { it.plateId }, project.view.activePlate?.id) ?: throw Refusal(PrepareWords.failed(stale))
@@ -637,9 +648,10 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
      * One plate's G-code, staged and not yet published: its figures (counted
      * over the bytes published, its pictures included), its warnings, the
      * state of the project its archive was written from, the external
-     * slicer's [endpoint] (none on this device's engine), and how it is
+     * slicer's [endpoint] (none on this device's engine), how it is
      * published — moved under its send name only while the project is still
-     * that state.
+     * that state — the [sidecar] published beside it, and the [route] it was
+     * sliced on.
      */
     private class PlateOutput(
         val plateId: String,
@@ -648,8 +660,36 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         val warnings: Set<String>,
         val revision: ProjectRevision?,
         val endpoint: String,
+        val sidecar: String,
+        val route: SliceRoute,
         val publish: (File, ProjectRevision?) -> File?,
     )
+
+    /**
+     * One plate's sidecar, assembled by the shared core: the output bound to
+     * [jobId], the plate, the state [revision] its archive was written from,
+     * the archive's and the published G-code's SHA-256, the plate's profiles
+     * and the route's engine; with the published length, the engine's totals
+     * and the plate's warnings. Output that cannot be bound is not published.
+     */
+    private fun sidecar(
+        jobId: String,
+        plateId: String,
+        revision: ProjectRevision?,
+        profiles: SliceProfiles?,
+        route: SliceRoute,
+        inputSha256: String,
+        outputSha256: String,
+        outputBytes: Long,
+        summaryJson: String,
+        warnings: Set<String>,
+    ): String {
+        // An archive with no state to bind to is stale, as publishing it would be.
+        val from = revision ?: throw Refusal(PrepareWords.failed(PrepareWords.STALE))
+        val snapshot = profiles ?: throw IllegalStateException("The plate's archive carries no profile snapshot.")
+        val binding = SliceBinding.of(jobId, plateId, from, inputSha256, outputSha256, snapshot, route)
+        return SliceSidecars.sidecar(binding, snapshot, route, outputBytes, summaryJson, warnings.toList())
+    }
 
     private class Published(val published: SlicedPlate, val plates: List<SlicedPlate>, val status: String)
 
@@ -702,7 +742,12 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         return preflight
     }
 
-    /** One plate on the external slicer, on the slicing thread: route, preflight, archive, upload, artifact, pictures. */
+    /**
+     * One plate on the external slicer, on the slicing thread: route,
+     * preflight, archive, upload, artifact, pictures, sidecar. The job's
+     * first plate attests the route ([attested] is null) and names it from
+     * the engine attested; later plates are bound to that route.
+     */
     private fun run(
         project: PlateSource,
         endpoint: String,
@@ -711,21 +756,11 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         plateId: String,
         plateName: String,
         staged: File,
-        attest: Boolean,
+        jobId: String,
+        attested: SliceRoute?,
     ): PlateOutput {
         val bearer = held.ifEmpty { null }
-        if (attest) {
-            // The route, attested now: a remembered proof is informational only.
-            val route = try {
-                client.attest(endpoint, bearer).get(PROBE_TIMEOUT_S, TimeUnit.SECONDS)
-            } catch (_: TimeoutException) {
-                throw Refusal(PrepareWords.unattested("The external slicer engine check timed out."))
-            }
-            synchronized(lock) {
-                if (connection.generation != generation) throw Refusal(PrepareWords.failed(PrepareWords.CHANGED_WHILE_CHECKING))
-            }
-            if (route is ProjectIntents.ExternalSlicerAttestation.Unattested) throw Refusal(PrepareWords.unattested(text(route.value)))
-        }
+        val route = attested ?: attestRoute(endpoint, bearer, generation)
         checkpoint(generation, endpoint)
 
         val preflight = preflighted(project, plateId)
@@ -756,12 +791,18 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             }
             if (cancelled) inFlight.cancel()
             inFlight.result.get()
-            // The plate's pictures where the engine puts them; the status line counts what is published.
-            val figures = SliceStatusTally(FileOutputStream(staged).buffered()).use { tally ->
+            // The plate's pictures where the engine puts them; the status line counts what is
+            // published, and the sidecar binds its SHA-256.
+            val hashed = SliceOutputs.HashedFile(staged)
+            val (figures, summary) = SliceStatusTally(hashed.output.buffered()).use { tally ->
                 GcodeThumbnails.embed(part, archive.thumbnails.blocks, tally)
-                tally.figures()
+                tally.figures() to tally.summaryJson()
             }
-            return PlateOutput(plateId, plateName, figures, SliceAll.plateWarnings(archive.warnings.map { String(it) }, preflight.issues), archive.revision, endpoint) { destination, current ->
+            val warnings = SliceAll.plateWarnings(archive.warnings.map { String(it) }, preflight.issues)
+            val sidecar = sidecar(
+                jobId, plateId, archive.revision, archive.profiles, route, SliceOutputs.sha256(archiveFile), hashed.hex(), figures.bytes, summary, warnings,
+            )
+            return PlateOutput(plateId, plateName, figures, warnings, archive.revision, endpoint, sidecar, route) { destination, current ->
                 if (current != archive.revision) {
                     staged.delete()
                     null
@@ -774,6 +815,26 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         } finally {
             archiveFile.delete()
             part.delete()
+        }
+    }
+
+    /**
+     * The route attested now — a remembered proof is informational only — and
+     * named from the engine it attested (`CanonicalSlicerClientRoute`).
+     */
+    private fun attestRoute(endpoint: String, bearer: String?, generation: Long): SliceRoute {
+        val answer = try {
+            client.attest(endpoint, bearer).get(PROBE_TIMEOUT_S, TimeUnit.SECONDS)
+        } catch (_: TimeoutException) {
+            throw Refusal(PrepareWords.unattested("The external slicer engine check timed out."))
+        }
+        synchronized(lock) {
+            if (connection.generation != generation) throw Refusal(PrepareWords.failed(PrepareWords.CHANGED_WHILE_CHECKING))
+        }
+        return when (answer) {
+            is ProjectIntents.ExternalSlicerAttestation.Unattested -> throw Refusal(PrepareWords.unattested(text(answer.value)))
+            is ProjectIntents.ExternalSlicerAttestation.Attested ->
+                SliceSidecars.externalRoute(endpoint, SliceEngine(text(answer.value.commit), text(answer.value.artifactHash)))
         }
     }
 
@@ -791,7 +852,7 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
      * pictures added, and published only while the project is still the
      * state it was sliced from.
      */
-    private fun runLocal(project: PlateSource, plateId: String, plateName: String, staged: File): PlateOutput {
+    private fun runLocal(project: PlateSource, plateId: String, plateName: String, staged: File, jobId: String): PlateOutput {
         val preflight = preflighted(project, plateId)
         cancelledHere()
 
@@ -807,6 +868,9 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             if (!LocalSliceBudget.fits(job.archive.bytes, measured)) {
                 throw Refusal(PrepareWords.failed(measured.reason ?: LocalEngineWords.tooLarge(job.archive.bytes, measured)))
             }
+            val packaged = SliceOutputs.packagedEngine(measured.commit, measured.packageSha256)
+                ?: throw Refusal(PrepareWords.failed(SliceOutputs.UNIDENTIFIED_ENGINE))
+            val route = SliceSidecars.nativeRoute(packaged)
             cancelledHere()
 
             progress(LocalEngineWords.STARTING)
@@ -827,11 +891,17 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             } catch (refusal: LocalSliceRefusal) {
                 throw Refusal(PrepareWords.failed(refusal.message ?: LocalSlicing.MISMATCH))
             }
-            // The plate's pictures where the engine puts them; the status line counts what is published.
-            val (pictured, figures) = SliceStatusTally().use { tally ->
-                LocalSlicing.withThumbnails(verified, job, staged, tally) to tally.figures()
+            // The plate's pictures where the engine puts them; the status line counts what is
+            // published, and the sidecar binds what was verified on the disk.
+            val (pictured, figures, summary) = SliceStatusTally().use { tally ->
+                val pictured = LocalSlicing.withThumbnails(verified, job, staged, tally)
+                Triple(pictured, tally.figures(), tally.summaryJson())
             }
-            return PlateOutput(plateId, plateName, figures, SliceAll.plateWarnings(job.warningTexts, preflight.issues), job.revision, "") { destination, current ->
+            val warnings = SliceAll.plateWarnings(job.warningTexts, preflight.issues)
+            val sidecar = sidecar(
+                jobId, plateId, job.revision, job.profiles, route, job.archive.sha256, pictured.sha256, pictured.bytes, summary, warnings,
+            )
+            return PlateOutput(plateId, plateName, figures, warnings, job.revision, "", sidecar, route) { destination, current ->
                 LocalSlicing.publish(pictured, job, current, destination)
             }
         } finally {

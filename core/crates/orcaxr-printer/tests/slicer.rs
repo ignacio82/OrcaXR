@@ -124,6 +124,37 @@ fn external_slicer_answers_as_the_browser_does() {
     assert_eq!(counts, [72, 230, 156, 247, 196, 44, 49, 102]);
 }
 
+/// The external route's metadata against the browser's
+/// (`slice-sidecar-vectors.json`): every captured endpoint of the corpus,
+/// engines of every shape, and each malformed request refused.
+#[test]
+fn the_route_is_named_as_the_browser_names_it() {
+    let corpus: Json = serde_json::from_str(include_str!(
+        "../../../../testdata/cross-platform/slice-sidecar-vectors.json"
+    ))
+    .unwrap();
+    let routes = cases(&corpus, "routes");
+    assert_eq!(routes.len(), 66);
+    for case in routes {
+        let request = text(&case["request"]);
+        assert_eq!(
+            slicer::route_json(request).unwrap(),
+            text(&case["reply"]),
+            "route {request}"
+        );
+    }
+    let refusals = cases(&corpus, "routeRefusals");
+    assert_eq!(refusals.len(), 8);
+    for case in refusals {
+        assert_eq!(
+            slicer::route_json(text(&case["request"])),
+            Err("invalid_request"),
+            "{}",
+            case["request"]
+        );
+    }
+}
+
 #[test]
 fn the_pinned_build_is_the_browsers() {
     let pinned: Json = serde_json::from_str(include_str!(

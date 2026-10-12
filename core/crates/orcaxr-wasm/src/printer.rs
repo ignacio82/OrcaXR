@@ -1292,6 +1292,13 @@ pub fn external_slicer_download(read: &str) -> Result<String, JsValue> {
         wire::encode_external_slicer_download_step,
     )
 }
+/// The external route's metadata (`sliceRouteExchange`):
+/// `{"endpoint","engine":{"artifactHash","commit"}}` in,
+/// `{"engine","id","kind","protocolVersion"}` or `{"error"}` out.
+#[wasm_bindgen]
+pub fn external_slicer_route(request: &str) -> Result<String, JsValue> {
+    slicer::route_json(request).map_err(error)
+}
 /// Whether the attested engine (`wasm` or `cli`) carries `feature`.
 #[wasm_bindgen]
 pub fn external_slicer_supports(engine: &str, feature: &str) -> Result<bool, JsValue> {

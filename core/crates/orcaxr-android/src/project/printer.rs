@@ -1541,6 +1541,13 @@ pub(super) fn external_slicer_download(env: &mut JNIEnv<'_>, read: JString<'_>) 
         wire::encode_external_slicer_download_step,
     )
 }
+/// `{"endpoint","engine"}` → the external route's metadata
+/// (`slicer::route_json`), or `{"error"}`.
+pub(super) fn external_slicer_route(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    let request = intent_text(env, &request)?;
+    let json = slicer::route_json(&request)?;
+    string(env, json)
+}
 /// Whether the attested engine (`wasm` or `cli`) carries `feature`.
 pub(super) fn external_slicer_supports(
     env: &mut JNIEnv<'_>,

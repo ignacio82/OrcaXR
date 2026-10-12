@@ -3,10 +3,13 @@
 //! for, a block in the engine's wire format, where blocks go in a G-code, the
 //! thumbnail camera, which plates a slice slices — canonical JSON requests and
 //! replies, as the browser's exchanges answer them — and a capture's pictures,
-//! rendered from its plate by the shared core.
+//! rendered from its plate by the shared core; and what binds a slice's
+//! output (`orcaxr_project::slicing::sidecar`): the plate's profile snapshot,
+//! the output binding, this device's route and the sidecar published beside
+//! the G-code.
 use super::*;
 use orcaxr_contracts::generated::MAX_INPUT_BYTES;
-use orcaxr_project::slicing::{plate as slice_plate, thumbnails};
+use orcaxr_project::slicing::{plate as slice_plate, sidecar, thumbnails};
 
 fn exchange(
     env: &mut JNIEnv<'_>,
@@ -57,6 +60,36 @@ pub(super) fn project_slice_plan(
             p.state(),
             scope,
         )))
+    })?;
+    string(env, json)
+}
+/// `{"plateId","stateJson"}` → the plate's profile snapshot, or `{"error"}`.
+pub(super) fn slice_profiles(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(env, &request, sidecar::profiles_json)
+}
+/// `{"binding"}` → `{"valid":true}`, or `{"error"}` naming the first refusal.
+pub(super) fn slice_binding(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(env, &request, sidecar::binding_json)
+}
+/// `{"engine"}` → this device's route metadata, or `{"error"}`.
+pub(super) fn slice_native_route(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(env, &request, sidecar::native_route_json)
+}
+/// `{"binding","gcodeBytes","profiles","route","summary","warnings"}` → the
+/// sidecar document, or `{"error"}`.
+pub(super) fn slice_sidecar(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(env, &request, sidecar::sidecar_json)
+}
+/// The profile snapshot a captured project's plate (`plateId` as JSON text)
+/// is sliced with, as [`slice_profiles`] answers.
+pub(super) fn project_slice_profiles(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    plate_id: JString<'_>,
+) -> Result<jstring> {
+    let plate_id = slice_plate::read_plate(&bounded_text(env, &plate_id, MAX_INPUT_BYTES)?)?;
+    let json = with_project(handle, |p| {
+        sidecar::profiles_reply(sidecar::profiles(p.state(), &plate_id))
     })?;
     string(env, json)
 }

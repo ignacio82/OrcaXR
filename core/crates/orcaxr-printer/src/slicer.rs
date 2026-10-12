@@ -11,7 +11,7 @@
 //! the core.
 use crate::reply::{LIMITS, Value, field, joined, units};
 use orcaxr_contracts::{canonical::parse_javascript, project_intent_types as wire};
-use orcaxr_project::js_math::convert::trim_utf16;
+use orcaxr_project::{js_math::convert::trim_utf16, slicing::sidecar};
 use std::sync::OnceLock;
 use url::Url;
 use wire::ExternalSlicerFailureKind as Kind;
@@ -756,4 +756,80 @@ pub fn download(read: &wire::ExternalSlicerDownloadRead) -> wire::ExternalSlicer
             }
         }
     }
+}
+
+// --- The route's metadata ----------------------------------------------------------------------
+
+const ROUTE_ENDPOINT: &str = "Canonical external slice route requires a valid absolute endpoint.";
+const ROUTE_SCHEME: &str = "Canonical external slice route supports only HTTP or HTTPS.";
+const ROUTE_NOT_CANONICAL: &str =
+    "Canonical external slice routes cannot contain credentials, query parameters, or fragments.";
+
+/// The external server's route metadata (`CanonicalSlicerClientRoute.metadata`)
+/// for a captured endpoint and the engine it attested, or the browser's words
+/// for why it cannot be a canonical route: the endpoint parsed
+/// (`normalizedRoute`: HTTP(S) only, no credentials, query or fragment, kept
+/// as the parser serializes it without trailing slashes), the engine named
+/// (`validatedExternalEngine`), and the route's ID from the endpoint's origin
+/// and path (`routeId`). The engine is kept exactly as attested.
+pub fn route(endpoint: &[u16], engine: sidecar::Engine) -> Result<sidecar::Route, &'static str> {
+    // `new URL` reads a scalar-value string: a lone surrogate is U+FFFD.
+    let parsed = Url::parse(&lossy(endpoint)).map_err(|_| ROUTE_ENDPOINT)?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err(ROUTE_SCHEME);
+    }
+    let has = |part: Option<&str>| part.is_some_and(|p| !p.is_empty());
+    if !parsed.username().is_empty()
+        || has(parsed.password())
+        || has(parsed.query())
+        || has(parsed.fragment())
+        || endpoint
+            .iter()
+            .any(|&u| u == u16::from(b'?') || u == u16::from(b'#'))
+    {
+        return Err(ROUTE_NOT_CANONICAL);
+    }
+    if trim_utf16(&engine.commit).is_empty() || trim_utf16(&engine.artifact_hash).is_empty() {
+        return Err(sidecar::UNATTESTED_ENGINE);
+    }
+    // `endpoint.href.replace(/\/+$/, '')`, then read again for its origin and path.
+    let href = parsed.as_str().trim_end_matches('/');
+    let normalized = Url::parse(href).map_err(|_| ROUTE_ENDPOINT)?;
+    let path = normalized.path();
+    let path = path.strip_suffix('/').unwrap_or(path);
+    let id = format!(
+        "slicer-client:external-server:{}{path}",
+        normalized.origin().ascii_serialization()
+    );
+    Ok(sidecar::Route {
+        id: units(&id),
+        kind: sidecar::RouteKind::ExternalServer,
+        engine,
+    })
+}
+
+/// `{"endpoint","engine":{"artifactHash","commit"}}` → the external route's
+/// metadata, or `{"error"}`; a malformed request is `invalid_request`.
+pub fn route_json(request: &str) -> Result<String, &'static str> {
+    const INVALID: &str = sidecar::INVALID_REQUEST;
+    let Ok(Value::Object(mut fields)) = parse_javascript(request, LIMITS) else {
+        return Err(INVALID);
+    };
+    let keys = [units("endpoint"), units("engine")];
+    if fields.len() != 2 || !keys.iter().all(|k| fields.contains_key(k)) {
+        return Err(INVALID);
+    }
+    let Some(Value::String(endpoint)) = fields.remove(&keys[0]) else {
+        return Err(INVALID);
+    };
+    let engine = sidecar::read_engine(fields.remove(&keys[1]).ok_or(INVALID)?)?;
+    let answer = match route(&endpoint, engine) {
+        Ok(route) => route.to_value(),
+        Err(message) => Value::Object([(units("error"), Value::String(units(message)))].into()),
+    };
+    let mut bytes = Vec::new();
+    answer
+        .write_canonical(&mut bytes)
+        .map_err(|_| "output_limit")?;
+    String::from_utf8(bytes).map_err(|_| "output_limit")
 }

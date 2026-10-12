@@ -307,9 +307,11 @@ pub struct SliceFigures {
     pub layer_markers: u64,
 }
 
-/// [`SliceFigures`] of an artifact streamed through in chunks of any size, as
-/// a host writes or reads it: line breaks and markers are counted as they
-/// pass, and only the bytes that can hold the trailer are kept.
+/// [`SliceFigures`] and the [`ArtifactSummary`] of an artifact streamed
+/// through in chunks of any size, as a host writes or reads it: line breaks
+/// and markers are counted as they pass, the first colour and material
+/// statements are kept as their lines pass, and only the bytes that can hold
+/// the trailer are kept.
 #[derive(Debug, Default)]
 pub struct SliceTally {
     bytes: u64,
@@ -317,6 +319,123 @@ pub struct SliceTally {
     markers: u64,
     matched: [usize; 2],
     tail: Vec<u8>,
+    statements: Statements,
+}
+
+/// The whole-file statements a summary reads before its trailer
+/// (`byte_line` over [`COLOURS`] and [`MATERIALS`]), found as lines pass: a
+/// line ends at LF, CR, U+2028 or U+2029, one leading byte-order mark is not
+/// text, and the first line that starts with a prefix and holds more is the
+/// statement. A statement is kept up to [`MAX_STATEMENT_BYTES`].
+#[derive(Debug, Clone, Default)]
+struct Statements {
+    /// The file's first bytes, until they are known to be, or not be, a byte-order mark.
+    head: Vec<u8>,
+    started: bool,
+    /// The current line's length so far, its last two bytes, and whether it
+    /// still starts with each prefix.
+    length: usize,
+    last: [u8; 2],
+    open: [bool; 2],
+    /// The current line's bytes after each prefix it starts with.
+    kept: [Vec<u8>; 2],
+    found: [Option<Vec<u16>>; 2],
+    overflow: bool,
+}
+
+/// The longest statement kept, as long as a preview session's metadata may be.
+pub const MAX_STATEMENT_BYTES: usize = crate::layout::MAX_METADATA_BYTES;
+const STATEMENTS: [&[u8]; 2] = [COLOURS, MATERIALS];
+
+impl Statements {
+    fn push(&mut self, chunk: &[u8]) {
+        if self.found.iter().all(Option::is_some) || self.overflow {
+            return;
+        }
+        let mut chunk = chunk;
+        if !self.started {
+            let take = chunk.len().min(3 - self.head.len());
+            self.head.extend_from_slice(&chunk[..take]);
+            chunk = &chunk[take..];
+            if self.head.len() < 3 {
+                return;
+            }
+            self.start();
+        }
+        for &byte in chunk {
+            self.byte(byte);
+        }
+    }
+
+    /// The head decided: a byte-order mark is dropped, any other bytes are text.
+    fn start(&mut self) {
+        self.started = true;
+        self.open = [true; 2];
+        let head = std::mem::take(&mut self.head);
+        if head != [0xEF, 0xBB, 0xBF] {
+            for byte in head {
+                self.byte(byte);
+            }
+        }
+    }
+
+    fn byte(&mut self, byte: u8) {
+        if byte == b'\n' || byte == b'\r' {
+            return self.end(self.length);
+        }
+        if matches!(byte, 0xA8 | 0xA9) && self.length >= 2 && self.last == [0xE2, 0x80] {
+            // U+2028 or U+2029: the line ends before its first two bytes.
+            for kept in &mut self.kept {
+                kept.truncate(kept.len().saturating_sub(2));
+            }
+            return self.end(self.length - 2);
+        }
+        for (index, prefix) in STATEMENTS.iter().enumerate() {
+            if !self.open[index] || self.found[index].is_some() {
+                continue;
+            }
+            if self.length < prefix.len() {
+                self.open[index] = prefix[self.length] == byte;
+            } else if self.kept[index].len() < MAX_STATEMENT_BYTES + 2 {
+                self.kept[index].push(byte);
+            } else {
+                self.overflow = true;
+            }
+        }
+        self.length += 1;
+        self.last = [self.last[1], byte];
+    }
+
+    /// The current line ends after `length` bytes.
+    fn end(&mut self, length: usize) {
+        for (index, prefix) in STATEMENTS.iter().enumerate() {
+            if self.open[index] && self.found[index].is_none() && length > prefix.len() {
+                if self.kept[index].len() > MAX_STATEMENT_BYTES {
+                    self.overflow = true;
+                }
+                let mut units = Vec::with_capacity(self.kept[index].len());
+                Utf8Decoder::fragment().decode(&self.kept[index], true, &mut units);
+                self.found[index] = Some(units);
+            }
+            self.kept[index].clear();
+        }
+        self.length = 0;
+        self.last = [0; 2];
+        self.open = [true; 2];
+    }
+
+    /// The statements of everything pushed, its last line ended there; none
+    /// when one was past [`MAX_STATEMENT_BYTES`].
+    fn finish(&self) -> Option<[Option<Vec<u16>>; 2]> {
+        let mut done = self.clone();
+        if !done.started {
+            done.start();
+        }
+        if done.found.iter().any(Option::is_none) {
+            done.end(done.length);
+        }
+        (!done.overflow).then_some(done.found)
+    }
 }
 
 impl SliceTally {
@@ -342,19 +461,30 @@ impl SliceTally {
             }
         }
         self.bytes += chunk.len() as u64;
+        self.statements.push(chunk);
         self.tail.extend_from_slice(chunk);
         if self.tail.len() > 2 * TRAILER_WINDOW_BYTES {
             self.tail.drain(..self.tail.len() - TRAILER_WINDOW_BYTES);
         }
     }
 
-    pub fn finish(&self) -> SliceFigures {
+    /// The trailer of everything pushed.
+    fn trailer(&self) -> Vec<u16> {
         let whole = self.bytes <= TRAILER_WINDOW_BYTES as u64;
         let window = &self.tail[self.tail.len().saturating_sub(TRAILER_WINDOW_BYTES)..];
-        let stated = integer(unit_line(
-            &trailer_of(window, whole),
-            b"; total layers count = ",
-        ));
+        trailer_of(window, whole)
+    }
+
+    /// `summarizeGcodeArtifact` of everything pushed — what [`summarize`]
+    /// reads from the whole file — or none when its colour or material
+    /// statement is longer than [`MAX_STATEMENT_BYTES`].
+    pub fn summary(&self) -> Option<ArtifactSummary> {
+        let [colours, materials] = self.statements.finish()?;
+        Some(summary(&self.trailer(), colours, materials))
+    }
+
+    pub fn finish(&self) -> SliceFigures {
+        let stated = integer(unit_line(&self.trailer(), b"; total layers count = "));
         SliceFigures {
             bytes: self.bytes,
             kilobytes: ryu_js::Buffer::new()
@@ -365,6 +495,13 @@ impl SliceTally {
             stated_layers: stated.map(number),
             layer_markers: self.markers,
         }
+    }
+}
+
+impl ArtifactSummary {
+    /// The summary as one JSON object in the browser's field names, for hosts.
+    pub fn json(&self) -> String {
+        serde_json::to_string(self).expect("an artifact summary serializes")
     }
 }
 
@@ -632,6 +769,65 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Streamed in chunks of any size — splitting byte-order marks, line
+    /// separators and prefixes — the tally summarizes as the whole file does.
+    #[test]
+    fn a_streamed_artifact_summarizes_as_the_whole_file_does() {
+        let mut stated = 0;
+        for seed in 1..=48u32 {
+            let mut bytes = noise(seed * 7_727, 3_000 + seed as usize * 211);
+            if seed % 3 == 0 {
+                bytes.splice(0..0, [0xEF, 0xBB, 0xBF]);
+            }
+            if seed % 4 == 0 {
+                bytes.extend_from_slice(
+                    b"\n; filament_type = PLA;PETG\n; filament used [g] = 1.5,2",
+                );
+            }
+            let whole = summarize(&bytes);
+            stated += usize::from(whole.per_tool.iter().any(|t| t.color_hex.is_some()));
+            for size in [1, 2, 3, 5, 64, 4_096, bytes.len().max(1)] {
+                let mut tally = SliceTally::new();
+                for chunk in bytes.chunks(size) {
+                    tally.push(chunk);
+                }
+                assert_eq!(
+                    tally.summary(),
+                    Some(whole.clone()),
+                    "seed {seed} size {size}"
+                );
+            }
+        }
+        assert!(stated >= 6, "{stated} seeds state a colour");
+        for short in [
+            &b""[..],
+            b"\xEF",
+            b"\xEF\xBB",
+            b"\xEF\xBB\xBF",
+            b";",
+            b"; filament_type = A",
+        ] {
+            let mut tally = SliceTally::new();
+            tally.push(short);
+            assert_eq!(tally.summary(), Some(summarize(short)), "{short:?}");
+        }
+    }
+
+    /// A statement longer than a session's metadata bound is not kept: the
+    /// summary is unavailable, as a session refuses it.
+    #[test]
+    fn an_oversized_statement_leaves_no_summary() {
+        let mut tally = SliceTally::new();
+        tally.push(b"G1 X1\n; filament_colour = ");
+        let line = vec![b'#'; 1 << 16];
+        for _ in 0..(MAX_STATEMENT_BYTES >> 16) + 1 {
+            tally.push(&line);
+        }
+        tally.push(b"\n; total layers count = 3\n");
+        assert_eq!(tally.summary(), None);
+        assert_eq!(tally.finish().layers, "3");
     }
 
     #[test]

@@ -402,9 +402,11 @@ fn close(handle: i64) -> Result<(), &'static str> {
 }
 
 // --- Slice status tallies -------------------------------------------------------------------
-// What the status line says of a finished slice (`SliceTally`), streamed by
-// the host as it writes or reads the artifact. Each tally keeps at most two
-// trailer windows (~400 KiB); a few may live at once, handles never reused.
+// What the status line says of a finished slice and the totals the engine
+// wrote into it (`SliceTally`), streamed by the host as it writes or reads
+// the artifact. Each tally keeps at most two trailer windows (~400 KiB) and,
+// while a colour or material statement passes, that line up to the metadata
+// bound; a few may live at once, handles never reused.
 
 const MAX_TALLIES: usize = 8;
 const MAX_TALLY_CHUNK: usize = 1 << 20;
@@ -441,6 +443,16 @@ fn tally_figures(handle: i64) -> Result<String, &'static str> {
         .ok_or("closed")?
         .finish()
         .json())
+}
+/// The artifact's summary as JSON, or `null` when a statement was past the metadata bound.
+fn tally_summary(handle: i64) -> Result<String, &'static str> {
+    Ok(tallies()
+        .lock()
+        .map_err(|_| "invalid_state")?
+        .get(&handle)
+        .ok_or("closed")?
+        .summary()
+        .map_or_else(|| "null".into(), |summary| summary.json()))
 }
 fn tally_close(handle: i64) -> Result<(), &'static str> {
     tallies()
@@ -486,6 +498,17 @@ pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_tallyFigures(
 ) -> jstring {
     boundary(&mut env, |env| {
         let value = tally_figures(handle)?;
+        string(env, value)
+    })
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_tallySummary(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+    handle: jlong,
+) -> jstring {
+    boundary(&mut env, |env| {
+        let value = tally_summary(handle)?;
         string(env, value)
     })
 }
@@ -624,11 +647,17 @@ mod tests {
             figures.contains("\"layers\":\"1\"") && figures.contains("\"lines\":3"),
             "{figures}"
         );
+        tally_push(handles[0], b"; filament used [g] = 1.5\n").unwrap();
+        assert_eq!(
+            tally_summary(handles[0]).unwrap(),
+            r#"{"perTool":[{"toolIndex":0,"weightG":1.5}],"empty":false}"#
+        );
         for handle in &handles {
             tally_close(*handle).unwrap();
         }
         assert_eq!(tally_push(handles[0], b"x"), Err("closed"));
         assert_eq!(tally_figures(handles[0]), Err("closed"));
+        assert_eq!(tally_summary(handles[0]), Err("closed"));
         let next = tally_open().unwrap();
         assert!(next > *handles.last().unwrap());
         tally_close(next).unwrap();

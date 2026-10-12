@@ -9,20 +9,22 @@ import java.io.IOException
 
 /** This build's engine and this device's memory, measured now (read on the editor's side, no engine loaded). */
 object LocalEngineDevice {
-    /** The packaged engine manifest's commit and the device ABI it runs as; nulls when the build carries none. */
-    private fun packaged(context: Context): Pair<String?, String?> = try {
+    /** The packaged engine manifest's commit, the device ABI it runs as and that ABI's
+     * verified adapter export digest; nulls when the build carries none. */
+    private fun packaged(context: Context): Triple<String?, String?, String?> = try {
         val manifest = JSONObject(context.assets.open(LocalEngineFiles.MANIFEST).use { it.readBytes().decodeToString() })
         val abis = manifest.getJSONObject("abis")
-        manifest.getString("engineCommit") to Build.SUPPORTED_ABIS.firstOrNull(abis::has)
+        val abi = Build.SUPPORTED_ABIS.firstOrNull(abis::has)
+        Triple(manifest.getString("engineCommit"), abi, abi?.let { abis.getJSONObject(it).optString("manifestSha256").ifEmpty { null } })
     } catch (_: IOException) {
-        null to null
+        Triple(null, null, null)
     }
 
     fun measure(context: Context): LocalEngineState {
-        val (commit, abi) = packaged(context)
+        val (commit, abi, packageSha256) = packaged(context)
         val memory = ActivityManager.MemoryInfo()
         context.getSystemService(ActivityManager::class.java).getMemoryInfo(memory)
-        return LocalEngineState(commit, abi, memory.totalMem, memory.availMem, memory.lowMemory)
+        return LocalEngineState(commit, abi, memory.totalMem, memory.availMem, memory.lowMemory, packageSha256)
     }
 
     /** The private directory local jobs are staged in, shared with the engine's process. */

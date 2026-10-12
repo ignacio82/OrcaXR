@@ -706,6 +706,10 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
     /** The plates a slice of [scope] slices, in slicing order, or the browser's
      * words for why it slices none ([SlicePlans]). */
     fun slicePlan(scope: SliceScope): SlicePlan = read { SlicePlans.read(NativeProject.projectSlicePlan(it, scope.wire)) }
+    /** The profile snapshot plate [plateId] is sliced with (`CanonicalStateProfileResolver.capture`),
+     * or the browser's refusal for an unknown plate thrown as [SliceSidecarRefused]. */
+    fun sliceProfiles(plateId: String): SliceProfiles =
+        read { SliceSidecars.profiles(NativeProject.projectSliceProfiles(it, CanonicalJson.quote(plateId))) }
     /** What [target] would split for instance [instanceId] (the browser's
      * `splitSourceOf`): the object holding it, or the workspace's refusal in
      * its words — an instance this project lacks, an object the split would

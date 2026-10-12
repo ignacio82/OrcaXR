@@ -240,8 +240,9 @@ object ProjectOutputChecks {
                         val engine = (header + body).toByteArray()
                         job.output.writeBytes(engine)
                         val verified = LocalSlicing.claim(job, LocalEngineResult.Completed(1, engine.size.toLong(), sha(engine), 0), File(scratch, "slice.gcode.part"))
-                        val (published, figures) = SliceStatusTally().use { tally ->
-                            LocalSlicing.withThumbnails(verified, job, File(scratch, "thumbnailed.gcode.part"), tally) to tally.figures()
+                        val tally = SliceStatusTally()
+                        val (published, figures) = tally.use {
+                            LocalSlicing.withThumbnails(verified, job, File(scratch, "thumbnailed.gcode.part"), it) to it.figures()
                         }
                         val bytes = published.file.readBytes()
                         check(bytes.contentEquals(with.toByteArray()) && published.bytes == bytes.size.toLong() && published.sha256 == sha(bytes), "published with its pictures")
@@ -249,6 +250,18 @@ object ProjectOutputChecks {
                         check(figures.bytes == bytes.size.toLong() && figures.lines == bytes.count { it == '\n'.code.toByte() } + 1L, "the status line counts the pictures too")
                         val destination = File(scratch, "gcode/plate.gcode")
                         check(LocalSlicing.publish(published, job, workspace.view.revision, destination) == destination && destination.readBytes().contentEquals(bytes), "published")
+                        // Its sidecar binds the published bytes to the job, the state, the archive and the
+                        // plate's profiles — those of the capture the archive was written from.
+                        val profiles = checkNotNull(job.profiles) { "the job carries its plate's profiles" }
+                        check(profiles.json == checkNotNull(cubePlate.profiles).json, "the job's profiles are its plate's")
+                        check(profiles.effectiveConfigHash != checkNotNull(cylinderPlate.profiles).effectiveConfigHash, "each plate its own configuration")
+                        val route = SliceSidecars.nativeRoute(SliceEngine("9fd12ffb2b1b80c9fb4c14564754d2ec1573a626", "sha256:" + "ab".repeat(32)))
+                        val binding = SliceBinding.of("slice-journey", first, checkNotNull(job.revision), job.archive.sha256, published.sha256, profiles, route)
+                        val sidecar = CanonicalJson.read(SliceSidecars.sidecar(binding, profiles, route, published.bytes, tally.summaryJson(), emptyList())) as ProjectJsonObject
+                        val bound = sidecar.get("binding") as ProjectJsonObject
+                        check(bound.get("gcodeOutputHash") == "sha256:" + sha(bytes) && bound.get("projectInputHash") == "sha256:" + sha(job.archive.file.readBytes()) &&
+                            bound.get("sourceRevision") == job.revision!!.revision.toDouble() && bound.get("plateId") == first, "the sidecar binds the published output")
+                        check(((sidecar.get("statistics") as ProjectJsonObject).get("gcodeBytes")) == bytes.size.toDouble(), "the sidecar states the published length")
                     } finally {
                         LocalSlicing.discard(job)
                     }

@@ -116,6 +116,9 @@ public final class ProjectJniHarness {
     public static long sliceStatusChecks(String script) {
         return ProjectSliceStatusChecks.run(script);
     }
+    public static long sliceSidecarChecks(String script, String summaries) {
+        return ProjectSliceSidecarChecks.run(script, summaries);
+    }
     public static long localSliceChecks(byte[] cube, byte[] gcode) {
         return ProjectLocalSliceChecks.run(cube, gcode);
     }
@@ -446,6 +449,7 @@ public final class ProjectJniHarness {
             if (name.equals("staleSliceChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, byte[].class);
             if (name.equals("outputChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, byte[].class, byte[].class, byte[].class);
             if (name.equals("sliceStatusChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("sliceSidecarChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class);
             if (name.equals("workspaceBedChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("transformFieldChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("commandPaletteChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);

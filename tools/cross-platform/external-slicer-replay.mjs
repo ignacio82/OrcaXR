@@ -46,3 +46,27 @@ export function replayExternalSlicer(core, fixture) {
     throw Error("pinned engine features");
   return { externalSlicerAnswers: counts };
 }
+
+/**
+ * The external route's metadata (`slice-sidecar-vectors.json`, from
+ * `CanonicalSlicerClientRoute`): every captured endpoint with engines of every
+ * shape answers the browser's metadata or its words, byte for byte, and each
+ * malformed request is refused.
+ */
+export function replayExternalSlicerRoutes(core, fixture) {
+  for (const [i, c] of fixture.routes.entries()) {
+    const reply = core.external_slicer_route(c.request);
+    if (reply !== c.reply) throw Error(`route ${i}: ${String(reply).slice(0, 200)}`);
+  }
+  for (const c of fixture.routeRefusals) {
+    let refused = false;
+    try {
+      core.external_slicer_route(c.request);
+    } catch (e) {
+      if (!String(e?.message ?? e).includes("invalid_request")) throw e;
+      refused = true;
+    }
+    if (!refused) throw Error(`route request ${c.request} was accepted`);
+  }
+  return { externalSlicerRoutes: [fixture.routes.length, fixture.routeRefusals.length] };
+}

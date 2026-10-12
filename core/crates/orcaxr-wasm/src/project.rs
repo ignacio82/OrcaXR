@@ -1512,6 +1512,14 @@ impl CapturedProject {
         };
         Ok(plan_reply(slice_plan(self.inner.state(), scope)))
     }
+    /// The profile snapshot the plate (`plateId` as JSON text) is sliced
+    /// with, or the browser's `{"error"}`
+    /// (`orcaxr_project::slicing::sidecar::profiles`).
+    pub fn slice_profiles(&self, plate_id: &str) -> Result<String, JsValue> {
+        use orcaxr_project::slicing::{plate::read_plate, sidecar};
+        let plate = read_plate(plate_id).map_err(error)?;
+        sidecar::profiles_reply(sidecar::profiles(self.inner.state(), &plate)).map_err(error)
+    }
     /// What a split would split (`splitSourceExchange`):
     /// `{"instanceId","target","triangleLimit"}` in, `{"source"}` or
     /// `{"refusal"}` out (`orcaxr_project::split::source`).
