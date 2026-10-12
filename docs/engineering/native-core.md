@@ -5868,6 +5868,82 @@ to the colour the assigned cube was drawn in; finds "Undo Paint colour
 facets", undoes it and finds the cube drawn as before. It passes on both
 emulators.
 
+### Android settings panels
+
+The Project area's tree rows lead to the inspector's other panels, as the
+browser's Process card and Objects card offer them, through the shared core
+([The settings panel model and the height-range editor](#the-settings-panel-model-and-the-height-range-editor)).
+An object's or part's "Settings" row opens that node's settings; an object's
+"Layer ranges (n)" row opens its height ranges. One panel shows at a time
+under the tree (after the transform inspector), beside the Workspace from
+840 dp; a setting's name and control share a line from 300 dp of column, as
+the browser's sidebar grid has them, and stack on a narrower phone.
+
+The settings panel is the browser's scoped settings panel: its heading
+("Object settings — cube.stl"), "Settings for" with every node the project
+has (`Object: Plate 1 › cube.stl — 2 overrides`, project and plates
+included; another opens its panel), what the scope's values do, the detail
+level (Simple, Advanced, Develop) and the search, the core's
+"n settings shown; m unavailable.", then each GUI group and its settings —
+the control the core names holding the inherited, default or overridden
+value with its unit, the origin badge, "Draft changed", Unavailable or
+Structured editor and Not applicable, "Use inherited" and "Use default",
+the browser's unavailable and Full Spectrum notes and the issues in its
+words — and Cancel and Apply. A field drafts every change as the browser's
+`input` event does (keeping its typing while focused); Apply is enabled for
+a valid change on the state the draft began on, commits every draft as one
+`setScopedOverrides` (or `setProjectSettingsOverrides`) intent under that
+state's guard — one undoable step the core labels "Update object
+settings", "Update part settings" or "Update height range settings" — and
+the panel reads the node again ("Applied n setting change(s) atomically.").
+An invalid draft is refused before anything is submitted ("Fix the
+highlighted validation errors before applying: …"), a draft setting what
+the node holds applies nothing, a project changed meanwhile refuses in the
+browser's words ("No settings were applied: The settings draft no longer
+matches the displayed canonical project snapshot."). A project change
+reloads a clean panel ("Project settings refreshed …") and keeps a draft as
+the browser's conflict, until "Discard draft and reload current settings".
+`ProjectSettings` (core-bridge, over `ProjectWorkspace`) opens a node's
+panel on the authority with that state's guard and submits; `InspectorModel`
+(app) hosts it on a worker thread; `SettingsShell` and `RangeForms` hold the
+platform-free rules.
+
+The height ranges are the semantic editor's: the object's ranges by height
+(a listed range selects it, as its tree row does), "Add range" with its
+bounds checked by the core as typed (finite, ordered, clear of every
+other range), and for the selection's range "Selected 0 mm–5 mm" with its
+Settings (the scoped panel on that range), "Apply boundaries", "Split
+range", the merges the command allows (or why not) and "Delete selected
+range" — each the browser's intent ("Add layer range", "Edit layer range",
+"Split layer range", "Merge layer ranges", "Delete layer range", new IDs
+drawn as the browser draws them) under the guard of the state the ranges
+were read on, the operation's pending and success words in the status, a
+stale panel refused as "Semantic object edit was prepared for a stale
+canonical project revision". A range's filament is assigned from the
+selection filament bar ([Android filaments](#android-filaments)). Layer
+events are not part of this inspector in the browser: they live in its
+Preview card, beside the G-code listing (`LayerEventPanel`), and stay with
+Preview; the semantic editor's volume roles also remain.
+
+`ProjectSettingsChecks` (1,363 checks over JNI) read every reply of the
+panel corpus through the Kotlin wrappers, then on an imported cube list the
+nodes with the browser's words, show the object's Simple view, apply a wall
+count and an infill density (one "Update object settings" each, the node
+holding exactly them), apply nothing for a held value, refuse an unreadable
+one and a draft begun before another edit, reset with "Use inherited" and
+undo it, apply a part's wall count, add a 0–5 mm range (selected), give it
+its own wall count, edit, split (the upper range selected), refuse a stale
+delete, merge and delete it, and undo all nine steps back to the import.
+`InspectorPanelsTest` (app JVM) covers the rows that open panels, Apply's
+enablement, conflicts and answers, and the range forms' words.
+`android-settings-smoke.py` (in `emulator-smoke.py` before the
+accessibility smoke) adds a cube and slices it, opens its Settings row,
+applies a wall count of 6 and a 25% infill ("Undo Update object settings",
+"Settings (1)", "Settings (2)"), slices again and finds more G-code lines,
+resets the wall count by its key's "Use inherited", adds a 0–5 mm range
+from the "Layer ranges (0)" row, applies its own wall count ("Undo Update
+height range settings") and undoes it. The emulator smoke has not run yet.
+
 ### Android Preview area
 
 The Preview area is the browser's "Open G-code Viewer…" (`file_open_gcode`)

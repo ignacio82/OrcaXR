@@ -49,4 +49,7 @@
     <string name="paint_tool_sphere">Sfär</string>
     <string name="action_delete_models">Radera</string>
     <string name="action_tool_support_paint">Färgläggning av Support</string>
+    <string name="settings_detail_level">Detaljnivå</string>
+    <string name="ranges_heading">Höjd intervall</string>
+    <string name="ranges_settings">Inställningar</string>
 </resources>

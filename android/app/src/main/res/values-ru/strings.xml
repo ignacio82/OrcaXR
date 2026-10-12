@@ -52,4 +52,7 @@
     <string name="paint_tool_sphere">Сфера</string>
     <string name="action_delete_models">Удалить</string>
     <string name="action_tool_support_paint">Рисование поддержек</string>
+    <string name="settings_detail_level">Уровень детализации</string>
+    <string name="ranges_heading">Диапазон высот слоёв</string>
+    <string name="ranges_settings">Настройки</string>
 </resources>

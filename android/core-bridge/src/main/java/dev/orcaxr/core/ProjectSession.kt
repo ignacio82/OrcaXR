@@ -764,6 +764,15 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
             NativeProject.projectSettingsExplain(it, ProjectIntents.encodeSettingsExplainRequest(request)),
         )
     }
+    /** [objectId]'s height ranges as the semantic editor shows them, [selectedLayerRangeId] (one of them) selected; null for an object this project lacks. */
+    fun layerRangeEditor(objectId: String, selectedLayerRangeId: String?): LayerRangeProjection? = read {
+        LayerRangeEditors.projection(
+            NativeProject.projectLayerRangeEditor(
+                it,
+                "{\"objectId\":${CanonicalJson.quote(objectId)},\"selectedLayerRangeId\":${selectedLayerRangeId?.let(CanonicalJson::quote) ?: "null"}}",
+            ),
+        )
+    }
     /** The settings editor a panel opens for one node; see [SettingsEditor.intent]. */
     fun settingsEditor(
         request: ProjectIntents.SettingsSessionRequest,

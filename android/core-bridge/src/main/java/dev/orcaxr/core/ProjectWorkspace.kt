@@ -127,7 +127,7 @@ class ProjectWorkspace(
     /** Runs a task after a delay in milliseconds; closing the handle cancels it. */
     private val schedule: (Long, () -> Unit) -> AutoCloseable = ::delayed,
     /** Where new entity IDs come from: the browser's UUID rule over secure words. */
-    private val ids: ProjectIds = ProjectIds(),
+    internal val ids: ProjectIds = ProjectIds(),
 ) : AutoCloseable {
     companion object {
         /** The browser's archive budgets: its safe-ZIP defaults and multi-million facets. */
@@ -1397,7 +1397,7 @@ class ProjectWorkspace(
         return ProjectIntents.SessionGuard(id, snapshot.revision(), units(snapshot.hash()), units(session.assetFingerprint()), session.historyRevision())
     }
 
-    private fun refusedBy(error: ProjectIntents.SessionError) = ProjectFailure(
+    internal fun refusedBy(error: ProjectIntents.SessionError) = ProjectFailure(
         when (error) {
             ProjectIntents.SessionError.Stale -> "The project changed meanwhile; try again."
             ProjectIntents.SessionError.Busy -> "The project is busy; try again when the current operation finishes."

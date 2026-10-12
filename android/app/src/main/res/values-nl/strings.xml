@@ -50,4 +50,7 @@
     <string name="paint_tool_sphere">Bol</string>
     <string name="action_delete_models">Verwijderen</string>
     <string name="action_tool_support_paint">Ondersteuning (Support) tekenen</string>
+    <string name="settings_detail_level">Detailniveau</string>
+    <string name="ranges_heading">Hoogtebereiken</string>
+    <string name="ranges_settings">Instellingen</string>
 </resources>

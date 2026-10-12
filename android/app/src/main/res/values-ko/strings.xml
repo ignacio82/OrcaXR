@@ -52,4 +52,7 @@
     <string name="paint_tool_sphere">구체</string>
     <string name="action_delete_models">삭제</string>
     <string name="action_tool_support_paint">서포트 칠하기</string>
+    <string name="settings_detail_level">세부 레벨</string>
+    <string name="ranges_heading">높이 범위</string>
+    <string name="ranges_settings">설정</string>
 </resources>

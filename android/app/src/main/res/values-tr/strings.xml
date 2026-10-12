@@ -52,4 +52,7 @@
     <string name="paint_tool_sphere">Küre</string>
     <string name="action_delete_models">Sil</string>
     <string name="action_tool_support_paint">Destek boyama</string>
+    <string name="settings_detail_level">Detay seviyesi</string>
+    <string name="ranges_heading">Yükseklik aralıkları</string>
+    <string name="ranges_settings">Ayarlar</string>
 </resources>

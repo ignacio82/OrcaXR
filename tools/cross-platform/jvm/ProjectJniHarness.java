@@ -179,6 +179,9 @@ public final class ProjectJniHarness {
     public static long modelToolChecks(String corpus, byte[] archive) {
         return ProjectModelToolChecks.journey(corpus, archive);
     }
+    public static long settingsChecks(String corpus, byte[] cube) {
+        return ProjectSettingsChecks.run(corpus, cube);
+    }
 
     public static long documentOwnersChecks(byte[] cube) {
         return DocumentOwnersChecks.run(cube);
@@ -447,6 +450,7 @@ public final class ProjectJniHarness {
             if (name.equals("transformEditChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, String.class);
             if (name.equals("splitSourceChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class, byte[].class, String.class);
             if (name.equals("modelToolChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
+            if (name.equals("settingsChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("primitiveChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("paintToolChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("paintChecks")) method = ProjectJniHarness.class.getMethod(name);

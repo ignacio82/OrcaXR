@@ -322,7 +322,30 @@
     "action_hint_add_support_enforcer": { "key": "action.add_support_enforcer.hint" },
     "action_hint_add_support_blocker": { "key": "action.add_support_blocker.hint" },
     "palette_search": { "key": "ui.xrCommandPalette.search" },
-    "palette_empty": { "key": "ui.commandPalette.noMatchingActions" }
+    "palette_empty": { "key": "ui.commandPalette.noMatchingActions" },
+    "settings_for": { "key": "ui.scopedSettingsPanel.settingsFor" },
+    "settings_detail_level": { "key": "ui.generatedSettingsPanel.detailLevel" },
+    "settings_search": { "key": "ui.generatedSettingsPanel.searchSettings" },
+    "settings_search_hint": { "key": "ui.generatedSettingsPanel.nameKeyCategoryTooltipAlias" },
+    "settings_no_match": { "key": "ui.generatedSettingsPanel.noSettingsMatchThisSearch" },
+    "settings_use_inherited": { "key": "ui.generatedSettingsPanel.useInherited" },
+    "settings_use_default": { "key": "ui.generatedSettingsPanel.useDefault" },
+    "settings_draft_changed": { "key": "ui.generatedSettingsPanel.draftChanged" },
+    "settings_structured_editor": { "key": "ui.generatedSettingsPanel.structuredEditor" },
+    "settings_not_applicable": { "key": "ui.generatedSettingsPanel.notApplicable" },
+    "settings_not_set": { "key": "ui.generatedSettingsPanel.notSet" },
+    "settings_structured_note": { "key": "ui.generatedSettingsPanel.managedByTheStructuredFullSpectrum" },
+    "settings_dependency_note": { "key": "ui.generatedSettingsPanel.notApplicableWhileSubdivideMix" },
+    "settings_conflict": { "key": "ui.generatedSettingsPanel.projectSettingsChangedAfterThis" },
+    "settings_discard_reload": { "key": "ui.generatedSettingsPanel.discardDraftAndReloadCurrent" },
+    "ranges_heading": { "key": "ui.semanticObjectEditor.heightRanges" },
+    "ranges_none": { "key": "ui.semanticObjectEditor.noHeightRangesAreDefined" },
+    "ranges_select_hint": { "key": "ui.semanticObjectEditor.selectAHeightRangeTo" },
+    "ranges_split": { "key": "ui.semanticObjectEditor.splitRange" },
+    "ranges_split_button": { "key": "ui.semanticObjectEditor.splitRange2" },
+    "ranges_merge": { "key": "ui.semanticObjectEditor.mergeRange" },
+    "ranges_delete": { "key": "ui.semanticObjectEditor.deleteSelectedRange" },
+    "ranges_settings": { "key": "ui.xrPanels.settings" }
   },
   "english": [
     "app_name",
@@ -570,7 +593,41 @@
     "palette_keys",
     "workspace_toolbar",
     "menu_scene_object",
-    "menu_scene_plate"
+    "menu_scene_plate",
+    "inspector_close",
+    "settings_mode_simple",
+    "settings_mode_advanced",
+    "settings_mode_develop",
+    "settings_cancel",
+    "settings_apply",
+    "settings_unavailable",
+    "settings_draft_pending",
+    "settings_applying_one",
+    "settings_applying_other",
+    "settings_applied_one",
+    "settings_applied_other",
+    "settings_nothing_to_apply",
+    "settings_cancelled",
+    "settings_conflict_kept",
+    "settings_refreshed",
+    "settings_reloaded",
+    "settings_kept_for_review",
+    "settings_error_fix",
+    "settings_error_validate",
+    "settings_error_not_applied",
+    "settings_error_default",
+    "settings_error_load",
+    "ranges_idle",
+    "ranges_rejected",
+    "ranges_add",
+    "ranges_edit_heading",
+    "ranges_min",
+    "ranges_max",
+    "ranges_apply_bounds",
+    "ranges_split_at",
+    "ranges_merge_previous",
+    "ranges_merge_next",
+    "ranges_selected"
   ],
   "kotlin": [
     {
@@ -777,6 +834,21 @@
       "text": "Delete",
       "key": "action.delete_models.label",
       "reason": "The Delete key, as Delete Selected's menu shortcut names it (DomShell's shortcutHint, untranslated in the browser too), not the toolbar's Delete action."
+    },
+    {
+      "resource": "settings_cancel",
+      "key": "persistence.cancel",
+      "reason": "The settings panel's Cancel drops its draft (GeneratedSettingsPanel writes it untranslated); the browser's translated Cancels keep editing past the unsaved-changes guard, dismiss a dialog or close the XR keypad."
+    },
+    {
+      "resource": "settings_apply",
+      "key": "ui.xrKeypad.apply",
+      "reason": "The settings panel's Apply commits every draft at once (GeneratedSettingsPanel writes it untranslated); the XR keypad's Apply enters the one value it typed."
+    },
+    {
+      "resource": "settings_unavailable",
+      "key": "ui.commandPalette.unavailable",
+      "reason": "The settings panel's Unavailable badge marks a field the generated schema cannot edit (GeneratedSettingsPanel writes it untranslated); the command palette's, the shell's and the XR menu's mark an action that cannot run now."
     }
   ]
 }

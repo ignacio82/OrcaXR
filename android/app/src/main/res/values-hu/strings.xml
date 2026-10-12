@@ -50,4 +50,6 @@
     <string name="paint_tool_sphere">Gömb</string>
     <string name="action_delete_models">Törlés</string>
     <string name="action_tool_support_paint">Támaszok festése</string>
+    <string name="settings_detail_level">Részletesség szintje</string>
+    <string name="ranges_settings">Beállítások</string>
 </resources>

@@ -47,4 +47,6 @@
     <string name="paint_tool_sphere">球体</string>
     <string name="action_delete_models">削除</string>
     <string name="action_tool_support_paint">サポートペイント</string>
+    <string name="settings_detail_level">細部レベル</string>
+    <string name="ranges_settings">設定</string>
 </resources>

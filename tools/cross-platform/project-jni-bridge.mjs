@@ -82,6 +82,7 @@ export function startProjectJni(profile = "debug") {
   signatures.transformEditChecks = ["byte[]", "String"];
   signatures.splitSourceChecks = ["String", "byte[]", "byte[]", "byte[]", "byte[]", "String"];
   signatures.modelToolChecks = ["String", "byte[]"];
+  signatures.settingsChecks = ["String", "byte[]"];
   signatures.primitiveChecks = ["String"];
   signatures.paintToolChecks = ["String"];
   signatures.paintChecks = [];
@@ -803,6 +804,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
         call("projectSettingsEditor", this.handle, request, collator, folder),
       );
     }
+    layer_range_editor(request) {
+      return call("projectLayerRangeEditor", this.handle, request);
+    }
     revision() {
       return call("projectRevision", this.handle);
     }
@@ -1189,6 +1193,24 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     intent() {
       return call("editorIntent", this.handle);
     }
+    panel_view(request) {
+      return call("editorPanelView", this.handle, request);
+    }
+    panel_row(request) {
+      return call("editorPanelRow", this.handle, request);
+    }
+    panel_edit(request) {
+      return call("editorPanelEdit", this.handle, request);
+    }
+    panel_state() {
+      return call("editorPanelState", this.handle);
+    }
+    panel_apply() {
+      return call("editorPanelApply", this.handle);
+    }
+    panel_cancel() {
+      return call("editorPanelCancel", this.handle);
+    }
   }
   class PrintJobStatus extends Handle {
     constructor() {
@@ -1440,6 +1462,10 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     virtual_filament_triangle: (request) => call("virtualFilamentTriangle", request),
     virtual_filament_match_search: (request) => call("virtualFilamentMatchSearch", request),
     transform_fields: (request) => call("transformFields", request),
+    settings_target_text: (request) => call("settingsTargetText", request),
+    layer_range_bounds: (request) => call("layerRangeBounds", request),
+    layer_range_split: (request) => call("layerRangeSplit", request),
+    layer_range_messages: (request) => call("layerRangeMessages", request),
     transform_field_edit: (request) => call("transformFieldEdit", request),
     transform_rotation: (request) => call("transformRotation", request),
     command_palette: (request) => call("commandPalette", request),

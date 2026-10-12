@@ -52,4 +52,7 @@
     <string name="paint_tool_sphere">Sfera</string>
     <string name="action_delete_models">Elimina</string>
     <string name="action_tool_support_paint">Dipingi supporti</string>
+    <string name="settings_detail_level">Livello di dettaglio</string>
+    <string name="ranges_heading">Intervalli di altezza</string>
+    <string name="ranges_settings">Impostazioni</string>
 </resources>

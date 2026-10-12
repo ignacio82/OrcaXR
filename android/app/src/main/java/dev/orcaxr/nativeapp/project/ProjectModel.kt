@@ -170,6 +170,17 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     /** The project's filament slots the pickers last followed. */
     @Volatile private var followed: SlicingSlots? = null
 
+    /** The inspector's settings panels (a node's settings, an object's height ranges) over this project's session. */
+    val inspector = InspectorModel(object : InspectorModel.Host {
+        override fun workspace(): ProjectWorkspace? = started.getNow(null)
+    })
+
+    /** Shows the project's [next] view; an open inspector panel follows it. Main thread. */
+    private fun show(next: ProjectView) {
+        view = next
+        inspector.projectChanged(next)
+    }
+
     /** The Workspace's paint tool over this project's session and scene. */
     val paint = PaintModel(object : PaintModel.Host {
         override fun workspace(): ProjectWorkspace? = started.getNow(null)
@@ -183,7 +194,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             val sync = SceneSync(workspace) { update -> main.post { sceneListeners.toList().forEach { it(update) } } }
             sceneSync = sync
             subscription = workspace.subscribe {
-                main.post { view = workspace.view }
+                main.post { show(workspace.view) }
                 sync.request()
                 refreshToolbar()
                 // The Prepare pickers follow the project's filaments through edits, undo and redo.
@@ -197,7 +208,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             started.complete(workspace)
             workspace.ready().get()
             publishRecoveries()
-            main.post { view = workspace.view }
+            main.post { show(workspace.view) }
             // The browser's new document starts from the remembered or default catalog profile.
             profiles.start(workspace)
         }
@@ -1282,6 +1293,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
 
     override fun onCleared() {
         paint.close()
+        inspector.close()
         sceneSync?.close()
         worker.execute {
             owners.releaseAll(owner)

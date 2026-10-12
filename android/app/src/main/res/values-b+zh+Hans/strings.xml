@@ -52,4 +52,7 @@
     <string name="paint_tool_sphere">球</string>
     <string name="action_delete_models">删除</string>
     <string name="action_tool_support_paint">支撑绘制</string>
+    <string name="settings_detail_level">细节等级</string>
+    <string name="ranges_heading">高度范围</string>
+    <string name="ranges_settings">设置</string>
 </resources>

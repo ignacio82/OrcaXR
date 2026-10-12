@@ -9,6 +9,7 @@ import { replayCatalogs } from "./catalog-replay.mjs";
 import { replayLibrary } from "./library-replay.mjs";
 import { replayEditor } from "./editor-replay.mjs";
 import { replayProjection } from "./projection-replay.mjs";
+import { replaySettingsPanel } from "./settings-panel-replay.mjs";
 import { replayCapabilities } from "./capability-replay.mjs";
 import { replayRender } from "./render-replay.mjs";
 import { replayFacetRegions } from "./facet-region-replay.mjs";
@@ -821,6 +822,26 @@ try {
     [projections.projectionReplies, projections.projectionRefusals],
     [281, 36],
   );
+  // The generated settings panel over captured projects' editors (platform
+  // folding), the scoped panel's target texts and the height-range editor.
+  const settingsPanel = replaySettingsPanel(
+    projectJniCore(jvm.call),
+    await json("testdata/cross-platform/settings-panel-vectors.json"),
+    layout,
+    fixture.generation,
+    [undefined, "platform"],
+  );
+  assert.deepEqual(Object.values(settingsPanel), [103, 154, 230, 72, 90, 31, 22, 15, 510, 20]);
+  // The inspector's settings panels on a real session: the corpus's replies
+  // read by the Kotlin wrappers, then ProjectSettings on an imported cube —
+  // object, part and height-range overrides, height ranges added, edited,
+  // split, merged and deleted, each with the browser's label, and undone.
+  const settingsChecks = jvm.call(
+    "settingsChecks",
+    await readFile(new URL("testdata/cross-platform/settings-panel-vectors.json", root), "utf8"),
+    decodeBytes("stl-binary/cube"),
+  );
+  assert.equal(settingsChecks, 1363);
   // Capability pages over live sessions, then the Kotlin wrapper.
   const capabilityFixture = JSON.parse(
     await readFile(
@@ -1733,6 +1754,7 @@ try {
     ...splitSources,
     splitSourceChecks,
     modelToolChecks,
+    settingsChecks,
     ...primitives,
     primitiveChecks,
     ...paintTool,

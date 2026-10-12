@@ -40,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -64,7 +65,9 @@ import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -127,9 +130,12 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
         }
     }
     var renaming by remember { mutableStateOf<Renaming?>(null) }
+    // The column's width decides whether a setting's name and control share a line.
+    var widthDp by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
 
     LazyColumn(
-        modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        modifier.fillMaxWidth().padding(horizontal = 16.dp).onSizeChanged { widthDp = with(density) { it.width.toDp().value.toInt() } },
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
@@ -198,6 +204,8 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+        // The inspector's other panels, as the tree's Settings and Layer ranges rows open them.
+        inspectorPanel(model.inspector, settingsSideBySide(widthDp))
         // The browser's Tools: the Simplify panel.
         item(key = "simplify") { SimplifyPanel(view, model) }
         if (model.recent.isNotEmpty()) {
@@ -500,6 +508,8 @@ private fun TreeRow(row: ProjectIntents.ObjectTreeRow, view: ProjectView, model:
     var menu by remember { mutableStateOf(false) }
     var modifiers by remember { mutableStateOf(PointerKeyboardModifiers(0)) }
     val selectable = ProjectEditing.selectable(row)
+    // A Settings or Layer ranges row opens the inspector's panel for its node instead of selecting.
+    val opens = InspectorRows.opens(row)
     val choices = if (menu) ProjectEditing.rowMenu(row, view) else emptyList()
     val actions = stringResource(R.string.project_plate_actions, label)
     Box {
@@ -527,8 +537,11 @@ private fun TreeRow(row: ProjectIntents.ObjectTreeRow, view: ProjectView, model:
                     opens
                 }
                 .combinedClickable(
-                    enabled = selectable,
-                    onClick = { model.selectRow(key, ProjectEditing.rowMode(modifiers.isShiftPressed, modifiers.isCtrlPressed || modifiers.isMetaPressed)) },
+                    enabled = selectable || opens != null,
+                    onClick = {
+                        if (opens != null) model.inspector.open(opens)
+                        else model.selectRow(key, ProjectEditing.rowMode(modifiers.isShiftPressed, modifiers.isCtrlPressed || modifiers.isMetaPressed))
+                    },
                     // As the browser's Objects panel: the menu opens without changing the selection.
                     // TalkBack offers it as the row's long-press action, named for the row.
                     onLongClickLabel = actions,

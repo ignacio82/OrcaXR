@@ -52,4 +52,7 @@
     <string name="paint_tool_sphere">Sfera</string>
     <string name="action_delete_models">Ištrinti</string>
     <string name="action_tool_support_paint">Palaiko piešimą</string>
+    <string name="settings_detail_level">Detalių lygis</string>
+    <string name="ranges_heading">Aukščio diapazonai</string>
+    <string name="ranges_settings">Nustatymai</string>
 </resources>

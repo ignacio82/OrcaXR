@@ -2003,7 +2003,19 @@ storage journeys on phone, tablet, and desktop-sized windows.
   cover the layouts and the drop; `android-adaptive-smoke.py` resizes the
   emulator for the bar, rail and panels and drives the keyboard (adb cannot
   drag and drop) and passes on both emulators. The transform inspector sits
-  under the Project area's tree (beside the Workspace from 840 dp).
+  under the Project area's tree (beside the Workspace from 840 dp). So do the
+  inspector's settings panels, as the tree's rows lead to them
+  ([§](engineering/native-core.md#android-settings-panels)): an object's or
+  part's Settings row opens the browser's scoped settings panel (every node
+  in its picker, the detail levels and search, the generated panel's groups,
+  controls, badges, notes and issues, Use inherited and Use default, Apply
+  as one undoable "Update object/part/height range settings", the stale
+  draft's conflict), and an object's Layer ranges row its height ranges (add,
+  edit, split, merge, delete, each the browser's step, and a range's own
+  settings) — the panel model and the range editor ported to the shared
+  core from production TypeScript (669 panel steps and 525 range answers in
+  Rust, WASM in Node and JNI; 1,363 JNI checks; the emulator settings smoke,
+  not yet run). Layer events stay with Preview, where the browser's live.
   The browser's command palette (Ctrl/⌘ K, and a search button) lists the 57
   catalogue actions the app performs, in catalogue order with the core's
   enablement, searched as the browser searches them — ported to the shared
@@ -2021,9 +2033,9 @@ storage journeys on phone, tablet, and desktop-sized windows.
   wheel, trackpad and touchpad gestures follow OrbitControls; a stylus is a
   finger whose button is a secondary click (a 1,949-check JNI journey, JVM
   tests, and `android-palette-smoke.py`, not yet run on an emulator). The
-  inspector's other panels and keyboard control of the 3D views remain;
-  Prepare's Slice and Send wait for the shell's slicing host facts before
-  the palette lists them.
+  semantic editor's volume roles and keyboard control of the 3D views
+  remain; Prepare's Slice and Send wait for the shell's slicing host facts
+  before the palette lists them.
 - [ ] Integrate the flat renderer with panel resizing, visibility, lifecycle,
   selection, painting, model tools, and preview controls. Keep CPU work and
   loading off the UI thread; avoid per-frame Compose recomposition for meshes.

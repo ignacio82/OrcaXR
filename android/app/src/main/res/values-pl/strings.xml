@@ -52,4 +52,7 @@
     <string name="paint_tool_sphere">Sfera</string>
     <string name="action_delete_models">Usuń</string>
     <string name="action_tool_support_paint">Malowanie podpór</string>
+    <string name="settings_detail_level">Poziom szczegółowości</string>
+    <string name="ranges_heading">Zakresy wysokości</string>
+    <string name="ranges_settings">Ustawienia</string>
 </resources>

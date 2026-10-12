@@ -49,6 +49,35 @@ class SettingsEditor internal constructor(handle: Long) : ProjectHandle(handle) 
      * session, then reopen the editor on the new snapshot. */
     fun intent(): ProjectIntents.Intent = read { ProjectIntents.decodeIntent(NativeProject.editorIntent(it)) }
 
+    // The browser's generated settings panel over this editor (`settingsPanel.ts`):
+    // its view, rows and drafts, and Apply's one commit.
+
+    /** What the panel shows for [mode] and [search]. */
+    fun panelView(mode: SettingsPanelMode, search: String): SettingsPanelView = read {
+        SettingsPanels.view(NativeProject.editorPanelView(it, SettingsPanels.request("mode" to mode.wire, "search" to search)))
+    }
+    /** One field's row as it stands now, or null for a field the schema lacks. */
+    fun panelRow(fieldId: String): SettingsPanelRow? = read {
+        SettingsPanels.row(NativeProject.editorPanelRow(it, SettingsPanels.request("fieldId" to fieldId)))
+    }
+    /** A typed value drafted, with the Full Spectrum values it implies. */
+    fun panelSet(fieldId: String, raw: String): SettingsPanelEdit = read {
+        SettingsPanels.edit(NativeProject.editorPanelEdit(it, SettingsPanels.request("fieldId" to fieldId, "op" to "set", "raw" to raw)))
+    }
+    /** "Use inherited": the node stops holding the field. */
+    fun panelInherit(fieldId: String): SettingsPanelEdit = read {
+        SettingsPanels.edit(NativeProject.editorPanelEdit(it, SettingsPanels.request("fieldId" to fieldId, "op" to "inherit")))
+    }
+    /** "Use default": the generated default drafted. */
+    fun panelDefault(fieldId: String): SettingsPanelEdit = read {
+        SettingsPanels.edit(NativeProject.editorPanelEdit(it, SettingsPanels.request("fieldId" to fieldId, "op" to "default")))
+    }
+    fun panelState(): SettingsPanelState = read { SettingsPanels.state(NativeProject.editorPanelState(it)) }
+    /** Apply: the drafts' one commit; one that changes something becomes [intent]. */
+    fun panelApply(): SettingsPanelApply = read { SettingsPanels.apply(NativeProject.editorPanelApply(it)) }
+    /** Cancel: every draft dropped. */
+    fun panelCancel() = read { NativeProject.editorPanelCancel(it) }
+
     companion object {
         /** One press up or down, or why the setting cannot be stepped. */
         fun step(request: ProjectIntents.EditorStepRequest): ProjectIntents.EditorStep =

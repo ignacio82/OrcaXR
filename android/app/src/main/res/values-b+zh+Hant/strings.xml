@@ -52,4 +52,7 @@
     <string name="paint_tool_sphere">球體</string>
     <string name="action_delete_models">刪除</string>
     <string name="action_tool_support_paint">支撐筆刷</string>
+    <string name="settings_detail_level">細節等級</string>
+    <string name="ranges_heading">高度範圍</string>
+    <string name="ranges_settings">設定</string>
 </resources>
