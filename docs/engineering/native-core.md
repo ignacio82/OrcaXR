@@ -2805,6 +2805,46 @@ clear that removed nothing records history without a project publication. None o
 these commands has a no-op check, so clearing an object without ears is still an
 undoable entry.
 
+### Brim-ear detection and the tool's view
+
+`brim_ears` ports the browser's `brimEarExchange.ts` over
+`brimEarDetection.ts` and `brimEarPreview.ts`. Ears are object-local: the
+first layer an ear holds is the object's model volumes, each moved by its own
+transform into object space (composed as three.js composes them). Detection
+(`BrimEarDetectRequest`) cuts that layer just above its base, chains the cut
+into loops and keeps the outward corners sharp enough to peel, thinned to the
+sharpest of each cluster. The stranded check (`BrimEarStrandedRequest`) names
+the placed ears whose discs reach neither the layer nor, through overlapping
+discs, an anchored ear. An object's view (`BrimEarViewRequest`, the browser's
+`objectBrimEarView`, which the workspace's brim-ear tool reads through
+`CanonicalWorkspaceController.getBrimEarView`) is what the tool shows and
+places with: the placed ears, the stranded ones and the base a placed ear sits
+on (`objectModelBaseZ`, the object's lowest model point; the pinned engine
+drops an ear above the bed). An object whose model parts cannot be read still
+lists its ears, with none stranded and no base, as the workspace shows them;
+only an unknown object is refused. Bindings: WASM `detect_brim_ears`,
+`stranded_brim_ears` and `brim_ear_view`, the JNI exports
+`sessionBrimEarDetect`, `sessionBrimEarStranded` and `sessionBrimEarView`, and
+Kotlin `ProjectSession.detectBrimEars`, `strandedBrimEars` and `brimEarView`.
+
+`brim-ear-vectors.mjs` detects ears on recentred split parts, a pyramid whose
+sides are single triangles, a plus with inward corners, a smooth prism, a part
+turned, scaled and mirrored by its own transform, a part beside a modifier, a
+flat sheet and a notch whose corners collide, under default and explicit
+angles, thinning radii, ear radii and cut heights; checks placed ears for the
+stranded ones (touching, chained through other ears, and islands); and reads
+every object's view: 40 detections, 9 stranded checks and 9 views (3
+refusals). Rust, WASM in Node and Chrome and JNI answer all 58 byte for byte;
+126 Kotlin checks cover the wrapper. It also records a journey through the
+production `CanonicalWorkspaceController` on a canonical 3MF, as the
+workspace's tool runs it: the one object the selection's model parts belong
+to, taps on its parts read in the object's frame through three.js and placed
+at its base (one onto a part lifted off the bed, whose ear reaches nothing),
+the detector's corners, a removal, clears, and the cases that place nothing
+(a smooth outline, a flat sheet, no single object), with the semantic hash,
+undo label and the target's view after each of its 20 steps and the 8 undo
+entries.
+
 ### Layer-height profile commands
 
 The four layer-height commands (`objects/layerHeightCommands.ts`) are native,

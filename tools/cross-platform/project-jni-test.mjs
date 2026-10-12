@@ -1254,16 +1254,23 @@ try {
   assert.deepEqual(replayBrimEars(projectJniCore(jvm.call), brimEarFixture, layout), {
     brimEarDetections: 40,
     brimEarStrandedChecks: 9,
+    brimEarViews: 9,
   });
   const brimEarChecks = jvm.call(
     "brimEarChecks",
     brimEarFixture.stateJson,
     ...brimEarFixture.assets.map((a) => Uint8Array.from(a.bytes)),
     brimEarFixture.steps
-      .map((s) => ("detect" in s ? `D\t${s.detect}\t${s.reply}` : `S\t${s.stranded}\t${s.reply}`))
+      .map((s) =>
+        "detect" in s
+          ? `D\t${s.detect}\t${s.reply}`
+          : "view" in s
+            ? `V\t${s.view}\t${s.reply}`
+            : `S\t${s.stranded}\t${s.reply}`,
+      )
       .join("\n"),
   );
-  assert.equal(brimEarChecks, 99);
+  assert.equal(brimEarChecks, 126);
   // Text embossing: cuts and stages, then the Kotlin wrapper.
   const embossFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/emboss-vectors.json", root)),

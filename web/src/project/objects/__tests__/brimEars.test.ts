@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 import { InMemoryAssetRepository } from '../../assets';
 import { canonicalStringify } from '../../domain/canonical';
-import { seededRandom, UuidIdSource } from '../../domain/ids';
+import { entityId, seededRandom, UuidIdSource } from '../../domain/ids';
 import { createEmptyProject, emptyFacetAnnotations, identityTransform, type ProjectState } from '../../domain/model';
 import { validateProjectState } from '../../domain/validation';
 import { CommandBus } from '../../history/commandBus';
@@ -23,6 +23,7 @@ import {
   ClearBrimEarsCommand,
   RemoveBrimEarCommand,
 } from '../brimEarCommands';
+import { BrimEarRefusal, objectBrimEarView, objectModelBaseZ } from '../brimEarExchange';
 
 let passed = 0;
 function test(name: string, run: () => void): void {
@@ -65,7 +66,7 @@ function harness() {
   assets.put(asset.descriptor, asset.bytes);
   const commands = new CommandBus({ project, selection: new SelectionStore(), assets });
   commands.markCheckpoint();
-  return { project, commands, objectId };
+  return { project, commands, objectId, assets };
 }
 
 const ears = (h: ReturnType<typeof harness>) => h.project.getSnapshot().state.plates[0].objects[0].brimEars;
@@ -213,6 +214,53 @@ test('an out-of-range ear is caught by canonical validation too', () => {
     issues.some((issue) => issue.code === 'invalid-brim-ear'),
     true,
   );
+});
+
+test('an object’s view lists its ears, the stranded ones and the base an ear sits on', () => {
+  const h = harness();
+  const view = () => objectBrimEarView(h.project.getSnapshot().state, h.assets, h.objectId);
+  assert.deepEqual(view(), { ears: [], stranded: [], baseZMm: 0 });
+  h.commands.execute(new AddBrimEarCommand(h.objectId, { positionMm: [1, 1, 0], headFrontRadiusMm: 2 }));
+  h.commands.execute(new AddBrimEarCommand(h.objectId, { positionMm: [90, 90, 0], headFrontRadiusMm: 2 }));
+  // A flat part has no first layer to reach, so nothing is called stranded.
+  assert.deepEqual(view(), {
+    ears: [
+      { positionMm: [1, 1, 0], headFrontRadiusMm: 2 },
+      { positionMm: [90, 90, 0], headFrontRadiusMm: 2 },
+    ],
+    stranded: [],
+    baseZMm: 0,
+  });
+  // A part with height: the far ear reaches nothing.
+  const state = structuredClone(h.project.getSnapshot().state);
+  const cube = encodeIndexedMeshAsset({
+    id: entityId<'asset'>('import:asset:brim-view-cube'),
+    positions: [0, 0, 2, 10, 0, 2, 10, 10, 2, 0, 10, 2, 0, 0, 12, 10, 0, 12, 10, 10, 12, 0, 10, 12],
+    indices: [
+      0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 3, 7, 6, 3, 6, 2, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5,
+    ],
+  });
+  h.assets.put(cube.descriptor, cube.bytes);
+  state.sourceAssets.push(cube.descriptor);
+  state.plates[0].objects[0].volumes[0].source = {
+    assetId: cube.descriptor.id,
+    topologyRevision: 0,
+    triangleCount: 12,
+  };
+  assert.deepEqual(objectBrimEarView(state, h.assets, h.objectId).stranded, [1]);
+  assert.equal(objectBrimEarView(state, h.assets, h.objectId).baseZMm, 2);
+  // Unreadable geometry still lists the ears, with none stranded and no base.
+  assert.deepEqual(objectBrimEarView(state, new InMemoryAssetRepository(), h.objectId), {
+    ears: state.plates[0].objects[0].brimEars,
+    stranded: [],
+  });
+  assert.throws(
+    () => objectBrimEarView(state, h.assets, entityId<'object'>('import:object:missing')),
+    (error: unknown) => error instanceof BrimEarRefusal && error.code === 'unknownObject',
+  );
+  assert.equal(objectModelBaseZ(undefined), undefined);
+  assert.equal(objectModelBaseZ({ positions: [], indices: [] }), undefined);
+  assert.equal(objectModelBaseZ({ positions: [0, 0, 3, 1, 1, -1.5, 2, 2, 4], indices: [0, 1, 2] }), -1.5);
 });
 
 console.log(`\nCanonical brim ears: ${passed} tests passed.`);

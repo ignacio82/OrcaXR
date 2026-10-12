@@ -7,10 +7,29 @@
 // corners collide — detected under default and explicit angles, thinning
 // radii, ear radii and cut heights; then placed ears checked for the ones
 // stranded (touching, chained through other ears, and islands), with every
-// refusal. Replayed by Rust, by WASM in Node and Chrome, and over JNI.
+// refusal; and each object's view (`brimEarViewWire`: its ears, the stranded
+// ones and the base a placed ear sits on). Replayed by Rust, by WASM in Node
+// and Chrome, and over JNI.
+//
+// Then a journey: the production `CanonicalWorkspaceController` opens a
+// canonical 3MF and runs the workspace's brim-ear tool as `OrcaWorkspace`
+// does — the one object the selection's model parts belong to
+// (`brimEarTargetObject`), taps on its parts placed in the object's frame
+// through three.js (`worldToLocal`) at its base, automatic placement by the
+// detector, removal, clearing and the cases that place nothing — recording
+// the semantic hash, undo label and the target's view after every step, then
+// undoing them all; the Android `ProjectWorkspace` takes the same steps.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
+import * as THREE from "../../web/node_modules/three/build/three.module.js";
+import { createEmptyProject } from "../../web/src/project/domain/model.ts";
+import { seededRandom, UuidIdSource } from "../../web/src/project/domain/ids.ts";
+import { EditorSession } from "../../web/src/project/session.ts";
+import { Bbs3mfProjectSerializer } from "../../web/src/project/serialization/Bbs3mfProjectSerializer.ts";
+import { getThreeProjectEntity } from "../../web/src/project/surfaces/ThreeProjectSurface.ts";
+import { CanonicalWorkspaceController } from "../../web/src/workspace/CanonicalWorkspaceController.ts";
+import { DEFAULT_BRIM_EAR_DETECTION, detectBrimEars } from "../../web/src/project/objects/brimEarDetection.ts";
 import { canonicalStringify } from "../../web/src/project/domain/canonical.ts";
 import { emptyFacetAnnotations } from "../../web/src/project/domain/model.ts";
 import { assertValidProjectState } from "../../web/src/project/domain/validation.ts";
@@ -18,16 +37,20 @@ import { InMemoryAssetRepository } from "../../web/src/project/assets.ts";
 import { encodeIndexedMeshAsset } from "../../web/src/project/meshCodec.ts";
 import { createProjectFixture } from "../../web/src/project/__tests__/fixtures.ts";
 import {
+  brimEarViewWire,
   detectObjectBrimEarsWire,
   strandedObjectBrimEarsWire,
 } from "../../web/src/project/objects/brimEarExchange.ts";
 import {
   decodeProjectBrimEarDetectRequest,
   decodeProjectBrimEarStrandedRequest,
+  decodeProjectBrimEarViewRequest,
   encodeProjectBrimEarDetectReply,
   encodeProjectBrimEarDetectRequest,
   encodeProjectBrimEarStrandedReply,
   encodeProjectBrimEarStrandedRequest,
+  encodeProjectBrimEarViewReply,
+  encodeProjectBrimEarViewRequest,
 } from "../../contracts/generated/project-intents.ts";
 
 const root = new URL("../../", import.meta.url);
@@ -290,9 +313,21 @@ function stranded(object) {
     ),
   });
 }
+function view(object) {
+  const text = encodeProjectBrimEarViewRequest({
+    objectId: units(`import:object:brim-${object}`),
+  });
+  steps.push({
+    view: text,
+    reply: encodeProjectBrimEarViewReply(
+      brimEarViewWire(state, assets, decodeProjectBrimEarViewRequest(text)),
+    ),
+  });
+}
 for (const object of [...Object.keys(objects), "missing"]) {
   detect(object);
   stranded(object);
+  view(object);
 }
 for (const object of ["split", "plus", "notch", "turned", "smooth"]) {
   detect(object, { maxAngleDeg: 90 });
@@ -308,8 +343,199 @@ detect("notch", { detectionRadiusMm: 13 });
 detect("plus", { detectionRadiusMm: 8 });
 detect("turned", { detectionRadiusMm: 9, headFrontRadiusMm: 2.5 });
 
+// --- The journey ----------------------------------------------------------------
+process.env.TZ = "UTC";
+const NOW = "2026-10-12T00:00:00.000Z";
+const serializer = new Bbs3mfProjectSerializer();
+const at = (x, y, z = 0, extra = {}) => ({ ...identity, translationMm: [x, y, z], ...extra });
+const turnedBy = (angle) => [0, 0, Math.sin(angle / 2), Math.cos(angle / 2)];
+// The fixture's object without its filament: the journey's project has its own.
+const { filamentId: _filament, ...journeyTemplate } = template;
+const journeyObject = (key, volumes, instances) => ({
+  ...structuredClone(journeyTemplate),
+  id: `import:object:journey-${key}`,
+  name: key,
+  layerRanges: [],
+  volumes: volumes.map(([name, mesh, extra]) => ({
+    ...volume(name, mesh, extra),
+    id: `import:volume:journey-${name}`,
+  })),
+  instances: instances.map((transform, i) => ({
+    id: `import:instance:journey-${key}-${i + 1}`,
+    transform,
+    printable: true,
+  })),
+});
+const journeyState = createEmptyProject({ idSource: new UuidIdSource(seededRandom(0xb41e)), now: NOW });
+journeyState.config = { printable_area: ["0.5x1", "270.5x1", "270.5x271", "0.5x271"], printable_height: "270" };
+journeyState.plates[0].objects = [
+  journeyObject(
+    "split",
+    [
+      ["big", "big", { transform: { ...identity, translationMm: big.centre } }],
+      // Lifted 3 mm off the bed: an ear tapped onto it sits at the base, reaching nothing.
+      ["small", "small", { transform: { ...identity, translationMm: [small.centre[0], small.centre[1], small.centre[2] + 3] } }],
+    ],
+    [at(60, 60)],
+  ),
+  journeyObject(
+    "turned",
+    [["turned", "cube", { transform: at(2, -3, 1.5, { rotation: turnedBy(Math.PI / 12) }) }]],
+    [at(130, 60), at(190, 110, 0, { rotation: turnedBy(Math.PI / 6), scale: [1.5, 1.5, 1.5] })],
+  ),
+  journeyObject("smooth", [["smooth", "smooth"]], [at(60, 160)]),
+  journeyObject("sheet", [["sheet", "sheet"]], [at(160, 200)]),
+];
+journeyState.sourceAssets = ["big", "small", "cube", "smooth", "sheet"].map((name) => payloads[name].descriptor);
+assertValidProjectState(journeyState);
+const journeyAssets = new InMemoryAssetRepository();
+for (const name of ["big", "small", "cube", "smooth", "sheet"]) journeyAssets.put(payloads[name].descriptor, payloads[name].bytes);
+const source = new EditorSession({ initialState: journeyState, assets: journeyAssets, serializer });
+const { serialized } = await source.serializeSnapshot(undefined, { purpose: "manual" });
+const controller = CanonicalWorkspaceController.createEmpty({
+  idSource: new UuidIdSource(seededRandom(0xb42e)),
+  clock: () => NOW,
+  parent: new THREE.Scene(),
+  mapping: { bedSizeMm: [270, 270], worldUnitsPerMm: 0.00175 },
+  projectSerializer: serializer,
+});
+assert.deepEqual(await controller.openCanonical3mf(serialized.bytes), []);
+const opened = controller.captureProjectExportGuard();
+const live = () => controller.session.project.getSnapshot().state;
+const observe = () => {
+  const { history } = controller.getSummary();
+  return {
+    semanticHash: controller.captureProjectExportGuard().semanticHash,
+    undoCount: history.undoCount,
+    undoLabel: history.undoLabel ?? null,
+  };
+};
+/** `OrcaWorkspace.brimEarTargetObject` over `paintableSelectedVolumes`: the one object owning the
+ * active plate's model parts the selection takes (all of them when nothing is), or none. */
+function target() {
+  const state = live();
+  const refs = controller.session.selection.getSnapshot().refs;
+  const volumes = new Set(refs.filter((r) => r.kind === "volume").map((r) => r.id));
+  const instances = new Set(refs.filter((r) => r.kind === "instance").map((r) => r.id));
+  const plate = state.plates.find((p) => p.id === state.activePlateId);
+  const targets = [];
+  for (const o of plate.objects)
+    for (const instance of o.instances)
+      for (const v of o.volumes) if (v.role === "model") targets.push({ volumeId: v.id, objectId: o.id, instanceId: instance.id });
+  const objects = new Set([
+    ...refs.filter((r) => r.kind === "object").map((r) => r.id),
+    ...targets.filter((t) => instances.has(t.instanceId)).map((t) => t.objectId),
+  ]);
+  const all = volumes.size === 0 && objects.size === 0;
+  const chosen = new Set(targets.filter((t) => all || volumes.has(t.volumeId) || objects.has(t.objectId)).map((t) => t.objectId));
+  return chosen.size === 1 ? [...chosen][0] : null;
+}
+const viewOf = (objectId) =>
+  objectId === null
+    ? null
+    : encodeProjectBrimEarViewReply(brimEarViewWire(live(), controller.assets, { objectId: units(objectId) }));
+const journeySteps = [];
+async function step(operation, run) {
+  const result = (await run()) ?? null;
+  const objectId = target();
+  journeySteps.push({ operation, result, target: objectId, view: viewOf(objectId), ...observe() });
+}
+const choose = (entity, id) =>
+  step({ kind: "select", entity, id }, async () => {
+    controller.setObjectsTreeSelection(entity === null ? [] : [{ kind: entity, id }]);
+  });
+/** `OrcaWorkspace.placeBrimEar`: a tap on [volumeId] of [instanceId] at a point in the part's own millimetres, read
+ * in the instance's frame (`worldToLocal`) and placed at the object's base. */
+const tap = (instanceId, volumeId, point, radiusMm) =>
+  step({ kind: "tap", instanceId, volumeId, point, radiusMm }, async () => {
+    const objectId = target();
+    const root = controller.surface.root;
+    root.updateMatrixWorld(true);
+    const instance = root.children.find((group) => getThreeProjectEntity(group)?.instanceId === instanceId);
+    const display = instance.children.find((child) => getThreeProjectEntity(child)?.volumeId === volumeId);
+    const local = instance.worldToLocal(display.localToWorld(new THREE.Vector3(...point)));
+    const baseZ = controller.getBrimEarView(objectId)?.baseZMm ?? local.z;
+    await controller.addBrimEar(objectId, { positionMm: [local.x, local.y, baseZ], headFrontRadiusMm: radiusMm });
+    return { objectId, objectPoint: [local.x, local.y, local.z] };
+  });
+/** `OrcaWorkspace.autoPlaceBrimEars`. */
+const auto = (radiusMm) =>
+  step({ kind: "auto", radiusMm }, async () => {
+    const objectId = target();
+    if (!objectId) return { outcome: "noTarget" };
+    const mesh = controller.getObjectModelMesh(objectId);
+    if (!mesh || mesh.indices.length === 0) return { outcome: "noGeometry" };
+    const detected = detectBrimEars(mesh.positions, mesh.indices, { ...DEFAULT_BRIM_EAR_DETECTION, headFrontRadiusMm: radiusMm });
+    if (detected.ears.length === 0) return { outcome: "noEars", reason: detected.reason ?? null };
+    await controller.addBrimEars(objectId, detected.ears.map((ear) => ear.point));
+    return { outcome: "placed", count: detected.ears.length };
+  });
+/** `OrcaWorkspace.clearBrimEars`. */
+const clear = () =>
+  step({ kind: "clear" }, async () => {
+    const objectId = target();
+    if (!objectId) return { outcome: "noTarget" };
+    if (controller.getBrimEars(objectId).length === 0) return { outcome: "noEars" };
+    await controller.clearBrimEars(objectId);
+    return { outcome: "cleared" };
+  });
+/** `OrcaWorkspace.removeBrimEar`. */
+const remove = (index) =>
+  step({ kind: "remove", index }, async () => {
+    const objectId = target();
+    if (!objectId) return { removed: false };
+    await controller.removeBrimEar(objectId, index);
+    return { removed: true };
+  });
+const journeyId = (kind, key) => `import:${kind}:journey-${key}`;
+
+// The split parts: a tap on the lifted small part's top (its ear reaches nothing: stranded), one on the big part's
+// side half-way up (it still sits at the base), corners found by the detector, one removed, all cleared, and a
+// clear with nothing to clear.
+await choose("instance", journeyId("instance", "split-1"));
+await tap(journeyId("instance", "split-1"), journeyId("volume", "small"), [0, 0, 3], 5);
+await tap(journeyId("instance", "split-1"), journeyId("volume", "big"), [5, 1.5, 0], 2.5);
+await auto(3);
+await remove(1);
+await clear();
+await clear();
+// The turned part, tapped on its scaled, rotated second instance; then its corners.
+await choose("instance", journeyId("instance", "turned-2"));
+await tap(journeyId("instance", "turned-2"), journeyId("volume", "turned"), [4, 4, 8], 4);
+await auto(5);
+// Corners that would not lift: a smooth prism, and a flat sheet.
+await choose("instance", journeyId("instance", "smooth-1"));
+await auto(5);
+await choose("instance", journeyId("instance", "sheet-1"));
+await auto(5);
+// Nothing selected: every part on the plate, of four objects, so no one object to place on.
+await choose(null, null);
+await auto(5);
+await clear();
+await remove(0);
+// An object chosen in the tree, and a removal of its first ear.
+await choose("object", journeyId("object", "turned"));
+await remove(0);
+
+const journeyUndo = [];
+for (let count = controller.getSummary().history.undoCount; count > 0; count -= 1) {
+  assert.equal(await controller.undoAsync(), true);
+  journeyUndo.push(observe());
+}
+assert.equal(journeyUndo.at(-1).semanticHash, opened.semanticHash);
+const journey = {
+  archive: Buffer.from(serialized.bytes).toString("base64"),
+  opened: { semanticHash: opened.semanticHash },
+  steps: journeySteps,
+  undo: journeyUndo,
+};
+controller.dispose();
+
 const sources = [
   "tools/cross-platform/brim-ear-vectors.mjs",
+  "web/src/workspace/CanonicalWorkspaceController.ts",
+  "web/src/project/objects/brimEarCommands.ts",
+  "web/node_modules/three/package.json",
   "web/src/project/objects/brimEarExchange.ts",
   "web/src/project/objects/brimEarDetection.ts",
   "web/src/project/objects/brimEarPreview.ts",
@@ -330,6 +556,7 @@ const output =
         bytes: [...a.bytes],
       })),
       steps,
+      journey,
     },
     null,
     0,
@@ -344,5 +571,8 @@ const earCount = replies.reduce(
   0,
 );
 console.log(
-  `brim ears: ${steps.filter((s) => "detect" in s).length} detections (${earCount} ears, ${replies.filter((r) => r.detected && "value" in r.detected.reason).length} with reasons), ${steps.filter((s) => "stranded" in s).length} stranded checks (${replies.reduce((sum, r) => sum + (r.stranded?.indices.length ?? 0), 0)} stranded), ${replies.filter((r) => "refused" in r).length} refused`,
+  `brim-ear journey: ${journeySteps.length} steps, ${journeyUndo.length} undo entries`,
+);
+console.log(
+  `brim ears: ${steps.filter((s) => "detect" in s).length} detections (${earCount} ears, ${replies.filter((r) => r.detected && "value" in r.detected.reason).length} with reasons), ${steps.filter((s) => "stranded" in s).length} stranded checks (${replies.reduce((sum, r) => sum + (r.stranded?.indices.length ?? 0), 0)} stranded), ${steps.filter((s) => "view" in s).length} views (${replies.reduce((sum, r) => sum + (r.view?.ears.length ?? 0), 0)} ears, ${replies.reduce((sum, r) => sum + (r.view?.stranded.length ?? 0), 0)} stranded), ${replies.filter((r) => "refused" in r).length} refused`,
 );

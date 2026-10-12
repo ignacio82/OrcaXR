@@ -209,10 +209,10 @@ if (isMainThread) {
       ],
       [6, 1, 1260, 10, 679, 1],
     );
-    // Brim-ear detection and stranded checks over a live session.
+    // Brim-ear detection, stranded checks and views over a live session.
     assert.deepEqual(
-      [result.brimEarDetections, result.brimEarStrandedChecks],
-      [40, 9],
+      [result.brimEarDetections, result.brimEarStrandedChecks, result.brimEarViews],
+      [40, 9, 9],
     );
     // Text embossing: cuts, their meshes, and stages over a live session.
     assert.deepEqual(

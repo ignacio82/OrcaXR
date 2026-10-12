@@ -1,13 +1,13 @@
 package dev.orcaxr.core
 
-/** Brim-ear detection through the Kotlin wrapper: every detection and
- * stranded check of the browser's script round-trips and answers the
- * browser's reply; a disposed session detects nothing. */
+/** Brim-ear detection through the Kotlin wrapper: every detection,
+ * stranded check and view of the browser's script round-trips and answers
+ * the browser's reply; a disposed session detects nothing. */
 object ProjectBrimEarChecks {
     private fun failure(block: () -> Unit) = runCatching(block).exceptionOrNull()?.message
 
-    /** [script] holds one step per line: `D\t<detect request>\t<reply>` or
-     * `S\t<stranded request>\t<reply>`. */
+    /** [script] holds one step per line: `D\t<detect request>\t<reply>`,
+     * `S\t<stranded request>\t<reply>` or `V\t<view request>\t<reply>`. */
     @JvmStatic fun run(source: String, assets: List<ByteArray>, script: String): Long {
         var checks = 0L
         ProjectPreparation().use { scope ->
@@ -36,6 +36,14 @@ object ProjectBrimEarChecks {
                         val request = ProjectIntents.decodeBrimEarStrandedRequest(entry[1])
                         check(ProjectIntents.encodeBrimEarStrandedRequest(request) == entry[1]) { "brim_stranded_request_$checks" }; checks++
                         check(session.strandedBrimEars(request) == ProjectIntents.decodeBrimEarStrandedReply(entry[2])) { "brim_stranded_$checks" }; checks++
+                    }
+                    "V" -> {
+                        val request = ProjectIntents.decodeBrimEarViewRequest(entry[1])
+                        check(ProjectIntents.encodeBrimEarViewRequest(request) == entry[1]) { "brim_view_request_$checks" }; checks++
+                        // Replies carry doubles, so the round trip compares values.
+                        val expected = ProjectIntents.decodeBrimEarViewReply(entry[2])
+                        check(ProjectIntents.decodeBrimEarViewReply(ProjectIntents.encodeBrimEarViewReply(expected)) == expected) { "brim_view_reply_$checks" }; checks++
+                        check(session.brimEarView(request) == expected) { "brim_view_$checks" }; checks++
                     }
                     else -> error("unknown script entry ${entry[0]}")
                 }

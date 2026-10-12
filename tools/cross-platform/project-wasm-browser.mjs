@@ -658,6 +658,7 @@ try {
           measurePairRefusals: result.measurePairRefusals,
           brimEarDetections: result.brimEarDetections,
           brimEarStrandedChecks: result.brimEarStrandedChecks,
+          brimEarViews: result.brimEarViews,
           embossPrepared: result.embossPrepared,
           embossRefused: result.embossRefused,
           embossMeshes: result.embossMeshes,
@@ -966,8 +967,8 @@ try {
     [6, 1, 1260, 10, 679, 1],
   );
   assert.deepEqual(
-    [result.brimEarDetections, result.brimEarStrandedChecks],
-    [40, 9],
+    [result.brimEarDetections, result.brimEarStrandedChecks, result.brimEarViews],
+    [40, 9, 9],
   );
   assert.deepEqual(
     [

@@ -244,7 +244,13 @@ import type { PreparedVolumeSplitPart } from '../project/objects/splitCommands';
 import { prepareVolumeSplit, type PreparedVolumeSplit } from '../project/objects/volumeSplitExchange';
 import { assertSplitToObjectsSource, splitSourceOf } from './SplitSource';
 import { prepareVolumeSimplify } from '../project/objects/simplifyExchange';
-import { BrimEarRefusal, objectModelMesh, type ObjectModelMesh } from '../project/objects/brimEarExchange';
+import {
+  BrimEarRefusal,
+  objectBrimEarView,
+  objectModelMesh,
+  type ObjectBrimEarView,
+  type ObjectModelMesh,
+} from '../project/objects/brimEarExchange';
 import {
   captureObjectVolumeSeparationGuard,
   SeparateObjectVolumesCommand,
@@ -3658,6 +3664,22 @@ export class CanonicalWorkspaceController {
     this.assertActive();
     try {
       return objectModelMesh(this.session.project.getSnapshot().state, this.assets, objectId);
+    } catch (error) {
+      if (error instanceof BrimEarRefusal) return undefined;
+      throw error;
+    }
+  }
+
+  /**
+   * What the brim-ear tool shows of one object and places with: its ears,
+   * the stranded ones and the base a placed ear sits on
+   * (`objectBrimEarView`, which the shared core answers too); undefined for
+   * an object the project does not have.
+   */
+  getBrimEarView(objectId: ObjectId): ObjectBrimEarView | undefined {
+    this.assertActive();
+    try {
+      return objectBrimEarView(this.session.project.getSnapshot().state, this.assets, objectId);
     } catch (error) {
       if (error instanceof BrimEarRefusal) return undefined;
       throw error;

@@ -7,7 +7,9 @@
 //! above its base, chains the cut into loops and keeps the outward corners
 //! sharp enough to peel, thinned to the sharpest of any cluster; the stranded
 //! check names the placed ears whose discs reach neither the layer nor an
-//! anchored ear.
+//! anchored ear. An object's view (`objectBrimEarView`) is what the brim-ear
+//! tool shows and places with: the ears, the stranded ones and the base a
+//! placed ear sits on.
 use crate::assets::AssetRepository;
 use crate::js_math::{self, convert};
 use crate::mesh::decode_indexed;
@@ -519,5 +521,85 @@ pub fn stranded_wire(
     };
     wire::BrimEarStrandedReply::Stranded(wire::BrimEarStranded {
         indices: indices.into_iter().map(|i| i as u64).collect(),
+    })
+}
+
+/// `objectModelBaseZ`: the height a placed ear sits at, the object's lowest
+/// model point; none without one.
+pub fn base_z(positions: &[f64]) -> Option<f64> {
+    if positions.len() < 3 {
+        return None;
+    }
+    Some(
+        positions
+            .iter()
+            .skip(2)
+            .step_by(3)
+            .fold(f64::INFINITY, |base, z| js_math::min(base, *z)),
+    )
+}
+
+/// `brimEarViewWire` over `objectBrimEarView`: an object's ears, the
+/// stranded ones and its base. An object whose model parts cannot be read
+/// still lists its ears, with none stranded and no base; only an unknown
+/// object is refused.
+pub fn view_wire(
+    state: &ProjectState,
+    assets: &AssetRepository,
+    request: &wire::BrimEarViewRequest,
+) -> wire::BrimEarViewReply {
+    let Some(object) = state
+        .plates
+        .iter()
+        .flat_map(|plate| plate.objects.iter())
+        .find(|object| object.id.as_utf16() == request.object_id.as_slice())
+    else {
+        let message = units("Unknown object ")
+            .into_iter()
+            .chain(request.object_id.iter().copied())
+            .collect();
+        return wire::BrimEarViewReply::Refused(refused(
+            wire::BrimEarRefusalCode::UnknownObject,
+            message,
+        ));
+    };
+    let ears: Vec<&crate::model::BrimEarPoint> = object
+        .brim_ears
+        .iter()
+        .flat_map(|ears| ears.iter())
+        .collect();
+    let mesh = object_model_mesh(state, assets, &request.object_id).ok();
+    let stranded_indices = match &mesh {
+        Some((positions, indices)) if !ears.is_empty() => {
+            match outline(positions, indices, DEFAULT_SAMPLE_HEIGHT_MM) {
+                Some(loops) => stranded(
+                    &ears
+                        .iter()
+                        .map(|ear| Disc {
+                            x: ear.position_mm[0].get(),
+                            y: ear.position_mm[1].get(),
+                            radius_mm: ear.head_front_radius_mm.get(),
+                        })
+                        .collect::<Vec<_>>(),
+                    &loops,
+                ),
+                None => Vec::new(),
+            }
+        }
+        _ => Vec::new(),
+    };
+    wire::BrimEarViewReply::View(wire::BrimEarView {
+        ears: ears
+            .iter()
+            .map(|ear| wire::BrimEar {
+                position_mm: ear.position_mm.iter().map(|value| value.get()).collect(),
+                head_front_radius_mm: ear.head_front_radius_mm.get(),
+            })
+            .collect(),
+        stranded: stranded_indices.into_iter().map(|i| i as u64).collect(),
+        base_z_mm: match mesh.and_then(|(positions, _)| base_z(&positions)) {
+            Some(value) => wire::OptionalFinite::Value(value),
+            None => wire::OptionalFinite::Absent(wire::Empty {}),
+        },
     })
 }

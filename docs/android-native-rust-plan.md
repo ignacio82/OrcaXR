@@ -1971,9 +1971,10 @@ painting, and FullSpectrum operations that can support real native projects.
     a same-count replacement was measured stale (now keyed by asset).
   - [x] Port brim-ear detection (`brim_ears`): an object's model volumes
     composed into object space as three.js composes them, the first layer
-    cut, chained and its outward corners thinned, and the placed ears whose
-    discs reach nothing found (40 detections and 9 stranded checks exact in
-    every binding). Browser fixes, each with a regression: the workspace
+    cut, chained and its outward corners thinned, the placed ears whose
+    discs reach nothing found, and an object's view for the brim-ear tool —
+    its ears, the stranded ones and the base a placed ear sits on (40
+    detections, 9 stranded checks and 9 views exact in every binding). Browser fixes, each with a regression: the workspace
     detected, placed and drew ears in one part's own frame while ears are
     object-local (split parts are recentred), so ears landed in the wrong
     place, other parts' corners were ignored and a manual ear took the first

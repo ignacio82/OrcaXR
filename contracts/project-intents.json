@@ -4021,6 +4021,27 @@
         "refused": "BrimEarRefusal"
       }
     },
+    "BrimEarViewRequest": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id"
+      }
+    },
+    "BrimEarView": {
+      "kind": "object",
+      "fields": {
+        "ears": "BrimEarList",
+        "stranded": "BrimEarIndices",
+        "baseZMm": "OptionalFinite"
+      }
+    },
+    "BrimEarViewReply": {
+      "kind": "union",
+      "variants": {
+        "view": "BrimEarView",
+        "refused": "BrimEarRefusal"
+      }
+    },
     "EmbossHorizontalAlign": {
       "kind": "enum",
       "values": [
@@ -7344,6 +7365,8 @@
     "BrimEarDetectReply",
     "BrimEarStrandedRequest",
     "BrimEarStrandedReply",
+    "BrimEarViewRequest",
+    "BrimEarViewReply",
     "EmbossRequest",
     "EmbossReply",
     "EmbossStage",

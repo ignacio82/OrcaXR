@@ -921,6 +921,11 @@ export class ProjectSession {
     asset(position: number): ProjectAsset;
     asset_fingerprint(): string;
     begin_open(): ProjectOpen;
+    /**
+     * One object's ears, the stranded ones and the base a placed ear sits
+     * on: a `BrimEarViewRequest`; returns a `BrimEarViewReply`.
+     */
+    brim_ear_view(request: string): string;
     cancel_open(ticket: ProjectOpen): boolean;
     /**
      * A `CapabilityRequest` against the session's current state; returns a
@@ -2334,6 +2339,7 @@ export interface InitOutput {
     readonly projectsession_asset: (a: number, b: number) => [number, number, number];
     readonly projectsession_asset_fingerprint: (a: number) => [number, number];
     readonly projectsession_begin_open: (a: number) => [number, number, number];
+    readonly projectsession_brim_ear_view: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_cancel_open: (a: number, b: number) => number;
     readonly projectsession_capabilities: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_capture_clipboard: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];

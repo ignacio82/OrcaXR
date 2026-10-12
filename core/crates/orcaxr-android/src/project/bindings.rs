@@ -1937,6 +1937,12 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sessionBrimEarView, session_brim_ear_view, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_prepareEmboss, prepare_emboss, jlong,
     request: JString<'local>,
 }

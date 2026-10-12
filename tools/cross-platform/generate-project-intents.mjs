@@ -146,6 +146,8 @@ assert.deepEqual(schema.roots, [
   "BrimEarDetectReply",
   "BrimEarStrandedRequest",
   "BrimEarStrandedReply",
+  "BrimEarViewRequest",
+  "BrimEarViewReply",
   "EmbossRequest",
   "EmbossReply",
   "EmbossStage",

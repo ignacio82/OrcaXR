@@ -688,6 +688,19 @@ pub(super) fn session_brim_ear_stranded(
     })?;
     string(env, json)
 }
+/// One object's ears, stranded ears and base.
+pub(super) fn session_brim_ear_view(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_brim_ear_view_request)?;
+    let json = with_session(handle, |s| {
+        let reply = s.brim_ear_view(&request).map_err(|_| "disposed")?;
+        encoded(&reply, wire::encode_brim_ear_view_reply)
+    })?;
+    string(env, json)
+}
 /// The plate's wipe tower, auto-placed.
 pub(super) fn session_wipe_tower(
     env: &mut JNIEnv<'_>,

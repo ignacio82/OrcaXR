@@ -449,6 +449,22 @@ impl<P: TimestampPolicy> ProjectSession<P> {
             request,
         ))
     }
+    /// One object's placed ears, the stranded ones and the base a placed ear
+    /// sits on: what the brim-ear tool shows and places with
+    /// (`BrimEarViewRequest` → `BrimEarViewReply`).
+    pub fn brim_ear_view(
+        &self,
+        request: &wire::BrimEarViewRequest,
+    ) -> Result<wire::BrimEarViewReply, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        Ok(crate::brim_ears::view_wire(
+            self.bus.snapshot().state(),
+            self.bus.assets(),
+            request,
+        ))
+    }
     /// Stage a prepared emboss cut ([`crate::emboss::prepare`]) as one edit
     /// on the current state: a new text part of an object under the host's
     /// IDs, or a re-cut of an existing text part (`EmbossStage`). A refused

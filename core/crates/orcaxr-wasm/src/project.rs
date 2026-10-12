@@ -636,6 +636,21 @@ impl ProjectSession {
             .map_err(|_| error("disposed"))?;
         wire::encode_brim_ear_stranded_reply(&reply).map_err(|_| error("output_limit"))
     }
+    /// One object's ears, the stranded ones and the base a placed ear sits
+    /// on: a `BrimEarViewRequest`; returns a `BrimEarViewReply`.
+    pub fn brim_ear_view(&self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_brim_ear_view_request(request).map_err(|_| error("invalid_request"))?;
+        let reply = self
+            .inner
+            .brim_ear_view(&request)
+            .map_err(|_| error("disposed"))?;
+        wire::encode_brim_ear_view_reply(&reply).map_err(|_| error("output_limit"))
+    }
     /// Stage a prepared emboss cut (an `EmbossStage`) for `executeStaged`: a
     /// new text part under the host's IDs, or a re-cut of a text part.
     pub fn stage_emboss(&mut self, emboss: &ProjectEmboss, request: &str) -> Result<f64, JsValue> {

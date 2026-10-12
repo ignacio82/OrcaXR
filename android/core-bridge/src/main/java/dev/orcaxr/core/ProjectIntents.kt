@@ -6099,6 +6099,46 @@ object ProjectIntents {
             is BrimEarStrandedReply.Refused -> w.field("refused") { writeBrimEarRefusal(w, v.value) }
         } }
     }
+    data class BrimEarViewRequest(val objectId: List<Int>)
+    private fun readBrimEarViewRequest(v: Any): BrimEarViewRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId"), false)
+        return BrimEarViewRequest(readId(obj.get("objectId")))
+    }
+    private fun writeBrimEarViewRequest(w: ProjectIntentWriter, v: BrimEarViewRequest) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+        }
+    }
+    data class BrimEarView(val ears: List<BrimEar>, val stranded: List<Long>, val baseZMm: OptionalFinite)
+    private fun readBrimEarView(v: Any): BrimEarView {
+        val obj = ProjectIntentJson.fields(v, setOf("ears", "stranded", "baseZMm"), false)
+        return BrimEarView(readBrimEarList(obj.get("ears")), readBrimEarIndices(obj.get("stranded")), readOptionalFinite(obj.get("baseZMm")))
+    }
+    private fun writeBrimEarView(w: ProjectIntentWriter, v: BrimEarView) {
+        w.obj {
+            w.field("ears") { writeBrimEarList(w, v.ears) }
+            w.field("stranded") { writeBrimEarIndices(w, v.stranded) }
+            w.field("baseZMm") { writeOptionalFinite(w, v.baseZMm) }
+        }
+    }
+    sealed interface BrimEarViewReply {
+        data class View(val value: ProjectIntents.BrimEarView) : BrimEarViewReply
+        data class Refused(val value: ProjectIntents.BrimEarRefusal) : BrimEarViewReply
+    }
+    private fun readBrimEarViewReply(v: Any): BrimEarViewReply {
+        val obj = ProjectIntentJson.fields(v, setOf("view", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "view" -> BrimEarViewReply.View(readBrimEarView(obj.get(key)))
+            "refused" -> BrimEarViewReply.Refused(readBrimEarRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeBrimEarViewReply(w: ProjectIntentWriter, v: BrimEarViewReply) {
+        w.obj { when(v) {
+            is BrimEarViewReply.View -> w.field("view") { writeBrimEarView(w, v.value) }
+            is BrimEarViewReply.Refused -> w.field("refused") { writeBrimEarRefusal(w, v.value) }
+        } }
+    }
     enum class EmbossHorizontalAlign {Left,Center,Right}
     private fun readEmbossHorizontalAlign(v: Any): EmbossHorizontalAlign {
         return when(v) {"left" -> EmbossHorizontalAlign.Left;"center" -> EmbossHorizontalAlign.Center;"right" -> EmbossHorizontalAlign.Right; else -> throw InvalidProjectIntent()}
@@ -11490,6 +11530,10 @@ object ProjectIntents {
     fun encodeBrimEarStrandedRequest(value: BrimEarStrandedRequest): String = ProjectIntentWriter().also { writeBrimEarStrandedRequest(it, value) }.finish()
     fun decodeBrimEarStrandedReply(text: String): BrimEarStrandedReply = readBrimEarStrandedReply(ProjectIntentJson.parse(text))
     fun encodeBrimEarStrandedReply(value: BrimEarStrandedReply): String = ProjectIntentWriter().also { writeBrimEarStrandedReply(it, value) }.finish()
+    fun decodeBrimEarViewRequest(text: String): BrimEarViewRequest = readBrimEarViewRequest(ProjectIntentJson.parse(text))
+    fun encodeBrimEarViewRequest(value: BrimEarViewRequest): String = ProjectIntentWriter().also { writeBrimEarViewRequest(it, value) }.finish()
+    fun decodeBrimEarViewReply(text: String): BrimEarViewReply = readBrimEarViewReply(ProjectIntentJson.parse(text))
+    fun encodeBrimEarViewReply(value: BrimEarViewReply): String = ProjectIntentWriter().also { writeBrimEarViewReply(it, value) }.finish()
     fun decodeEmbossRequest(text: String): EmbossRequest = readEmbossRequest(ProjectIntentJson.parse(text))
     fun encodeEmbossRequest(value: EmbossRequest): String = ProjectIntentWriter().also { writeEmbossRequest(it, value) }.finish()
     fun decodeEmbossReply(text: String): EmbossReply = readEmbossReply(ProjectIntentJson.parse(text))

@@ -8354,6 +8354,47 @@ fn read_brim_ear_stranded_reply(v: &Value) -> Result<BrimEarStrandedReply, Inval
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrimEarViewRequest {
+    pub object_id: Id,
+}
+fn read_brim_ear_view_request(v: &Value) -> Result<BrimEarViewRequest, InvalidIntent> {
+    let object = fields(v, &["objectId"], false)?;
+    Ok(BrimEarViewRequest {
+        object_id: read_id(&object["objectId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrimEarView {
+    pub ears: BrimEarList,
+    pub stranded: BrimEarIndices,
+    pub base_z_mm: OptionalFinite,
+}
+fn read_brim_ear_view(v: &Value) -> Result<BrimEarView, InvalidIntent> {
+    let object = fields(v, &["ears", "stranded", "baseZMm"], false)?;
+    Ok(BrimEarView {
+        ears: read_brim_ear_list(&object["ears"])?,
+        stranded: read_brim_ear_indices(&object["stranded"])?,
+        base_z_mm: read_optional_finite(&object["baseZMm"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BrimEarViewReply {
+    View(BrimEarView),
+    Refused(BrimEarRefusal),
+}
+fn read_brim_ear_view_reply(v: &Value) -> Result<BrimEarViewReply, InvalidIntent> {
+    let object = fields(v, &["view", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "view" => Ok(BrimEarViewReply::View(read_brim_ear_view(value)?)),
+        "refused" => Ok(BrimEarViewReply::Refused(read_brim_ear_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EmbossHorizontalAlign {
@@ -16275,6 +16316,22 @@ pub fn encode_brim_ear_stranded_reply(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_brim_ear_stranded_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_brim_ear_view_request(text: &str) -> Result<BrimEarViewRequest, InvalidIntent> {
+    read_brim_ear_view_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_brim_ear_view_request(value: &BrimEarViewRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_brim_ear_view_request(&text)?;
+    Ok(text)
+}
+pub fn decode_brim_ear_view_reply(text: &str) -> Result<BrimEarViewReply, InvalidIntent> {
+    read_brim_ear_view_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_brim_ear_view_reply(value: &BrimEarViewReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_brim_ear_view_reply(&text)?;
     Ok(text)
 }
 pub fn decode_emboss_request(text: &str) -> Result<EmbossRequest, InvalidIntent> {

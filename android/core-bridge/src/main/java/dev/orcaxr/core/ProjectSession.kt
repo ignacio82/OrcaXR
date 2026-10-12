@@ -248,6 +248,11 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun strandedBrimEars(request: ProjectIntents.BrimEarStrandedRequest): ProjectIntents.BrimEarStrandedReply = read {
         ProjectIntents.decodeBrimEarStrandedReply(NativeProject.sessionBrimEarStranded(it, ProjectIntents.encodeBrimEarStrandedRequest(request)))
     }
+    /** One object's ears, the stranded ones and the base a placed ear sits
+     * on: what the brim-ear tool shows and places with. */
+    fun brimEarView(request: ProjectIntents.BrimEarViewRequest): ProjectIntents.BrimEarViewReply = read {
+        ProjectIntents.decodeBrimEarViewReply(NativeProject.sessionBrimEarView(it, ProjectIntents.encodeBrimEarViewRequest(request)))
+    }
     /** A prepared emboss cut as one staged edit for `executeStaged`: a new
      * text part under the host's IDs, or a re-cut of an existing one. A
      * refused cut or an unstable ID refuses `invalid_request`. */

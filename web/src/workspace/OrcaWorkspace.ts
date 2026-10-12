@@ -188,12 +188,7 @@ import type { CalibrationFormField, CalibrationFormPreview } from '../project/ca
 import type { ScopedStepperSurface, ScopedStepperView } from '../settings/editor/scopedStepper';
 import { primitiveFileName, primitiveGeometry, type PrimitiveKind } from '../project/objects/primitives';
 import { geometryBedPlacement } from './geometryPlacement';
-import {
-  BRIM_EAR_COLORS,
-  BRIM_EAR_DISC_HEIGHT_MM,
-  brimEarOutline,
-  findDisconnectedBrimEars,
-} from '../project/objects/brimEarPreview';
+import { BRIM_EAR_COLORS, BRIM_EAR_DISC_HEIGHT_MM } from '../project/objects/brimEarPreview';
 import { CalibrationRampGenerator } from '../features/CalibrationRampGenerator';
 import { recentProjectsStore } from '../project/persistence/recentProjects';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
@@ -3167,16 +3162,7 @@ export class OrcaWorkspace extends xb.Script {
    */
   private strandedBrimEars(objectId: ObjectId | undefined): readonly number[] {
     if (!objectId) return Object.freeze([]);
-    const ears = this.canonicalProject.getBrimEars(objectId);
-    if (ears.length === 0) return Object.freeze([]);
-    const mesh = this.canonicalProject.getObjectModelMesh(objectId);
-    if (!mesh) return Object.freeze([]);
-    const outline = brimEarOutline(mesh.positions, mesh.indices);
-    if (!outline) return Object.freeze([]);
-    return findDisconnectedBrimEars(
-      ears.map((ear) => ({ x: ear.positionMm[0], y: ear.positionMm[1], radiusMm: ear.headFrontRadiusMm })),
-      outline.loops,
-    );
+    return Object.freeze([...(this.canonicalProject.getBrimEarView(objectId)?.stranded ?? [])]);
   }
 
   /**
@@ -3388,7 +3374,7 @@ export class OrcaWorkspace extends xb.Script {
       // rather than wherever on the model the ray landed: the pinned engine
       // discards any ear whose transformed world Z is above the bed
       // (`Brim.cpp:867`), which silently dropped every ear placed up a wall.
-      const baseZ = objectBaseZ(this.canonicalProject.getObjectModelMesh(objectId)) ?? local.z;
+      const baseZ = this.canonicalProject.getBrimEarView(objectId)?.baseZMm ?? local.z;
       const radiusMm = this.brimEarRadiusMm;
       // The click is handled once it lands on the part; the session commits
       // the ear and reports success or its refusal when it acknowledges.
@@ -10136,13 +10122,6 @@ export class OrcaWorkspace extends xb.Script {
  */
 /** The lowest local Z of a part's own geometry — where a brim ear belongs. */
 /** The lowest Z of an object's model parts in object space. */
-function objectBaseZ(mesh: { readonly positions: readonly number[] } | undefined): number | undefined {
-  if (!mesh || mesh.positions.length < 3) return undefined;
-  let base = Number.POSITIVE_INFINITY;
-  for (let index = 2; index < mesh.positions.length; index += 3) base = Math.min(base, mesh.positions[index]);
-  return base;
-}
-
 /**
  * Whether two guarded action lists would render the same controls. Rebuilding
  * the row on every status tick would re-create the panels a ray is currently

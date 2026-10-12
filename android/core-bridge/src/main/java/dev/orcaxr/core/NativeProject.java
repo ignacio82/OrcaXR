@@ -458,6 +458,7 @@ final class NativeProject {
     // Brim ears: an object's first-layer corners and its stranded ears.
     static native String sessionBrimEarDetect(long handle, String request);
     static native String sessionBrimEarStranded(long handle, String request);
+    static native String sessionBrimEarView(long handle, String request);
     // Emboss: cut a recipe with the host's glyph outlines, read the summary
     // or refusal and page the mesh, then stage it as a text part or re-cut.
     static native long prepareEmboss(String request);

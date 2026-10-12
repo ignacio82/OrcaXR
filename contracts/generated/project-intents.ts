@@ -4017,6 +4017,27 @@ const shapes = {
       "refused": "BrimEarRefusal"
     }
   },
+  "BrimEarViewRequest": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id"
+    }
+  },
+  "BrimEarView": {
+    "kind": "object",
+    "fields": {
+      "ears": "BrimEarList",
+      "stranded": "BrimEarIndices",
+      "baseZMm": "OptionalFinite"
+    }
+  },
+  "BrimEarViewReply": {
+    "kind": "union",
+    "variants": {
+      "view": "BrimEarView",
+      "refused": "BrimEarRefusal"
+    }
+  },
   "EmbossHorizontalAlign": {
     "kind": "enum",
     "values": [
@@ -7784,6 +7805,9 @@ export interface ProjectBrimEarStrandedRequestWire {readonly objectId: ProjectId
 export type ProjectBrimEarIndicesWire = readonly ProjectCounterWire[];
 export interface ProjectBrimEarStrandedWire {readonly indices: ProjectBrimEarIndicesWire;}
 export type ProjectBrimEarStrandedReplyWire = {readonly stranded:ProjectBrimEarStrandedWire} | {readonly refused:ProjectBrimEarRefusalWire};
+export interface ProjectBrimEarViewRequestWire {readonly objectId: ProjectIdWire;}
+export interface ProjectBrimEarViewWire {readonly ears: ProjectBrimEarListWire;readonly stranded: ProjectBrimEarIndicesWire;readonly baseZMm: ProjectOptionalFiniteWire;}
+export type ProjectBrimEarViewReplyWire = {readonly view:ProjectBrimEarViewWire} | {readonly refused:ProjectBrimEarRefusalWire};
 export type ProjectEmbossHorizontalAlignWire = "left" | "center" | "right";
 export type ProjectEmbossVerticalAlignWire = "top" | "center" | "bottom";
 export interface ProjectEmbossFontPropertyWire {readonly charGapMm: ProjectFiniteWire;readonly lineGapMm: ProjectFiniteWire;readonly lineHeightMm: ProjectFiniteWire;readonly boldnessMm: ProjectFiniteWire;readonly skew: ProjectFiniteWire;readonly perGlyph: ProjectFlagWire;readonly horizontal: ProjectEmbossHorizontalAlignWire;readonly vertical: ProjectEmbossVerticalAlignWire;readonly collection: ProjectFiniteWire;}
@@ -8463,6 +8487,12 @@ export function encodeProjectBrimEarStrandedRequest(value:ProjectBrimEarStranded
 export function captureProjectBrimEarStrandedReply(value:unknown):ProjectBrimEarStrandedReplyWire { return captureIntent("BrimEarStrandedReply",value,shapes,limits) as ProjectBrimEarStrandedReplyWire; }
 export function decodeProjectBrimEarStrandedReply(text:string):ProjectBrimEarStrandedReplyWire { return captureProjectBrimEarStrandedReply(parseIntentJson(text,limits)); }
 export function encodeProjectBrimEarStrandedReply(value:ProjectBrimEarStrandedReplyWire):string { return JSON.stringify(captureProjectBrimEarStrandedReply(value)); }
+export function captureProjectBrimEarViewRequest(value:unknown):ProjectBrimEarViewRequestWire { return captureIntent("BrimEarViewRequest",value,shapes,limits) as ProjectBrimEarViewRequestWire; }
+export function decodeProjectBrimEarViewRequest(text:string):ProjectBrimEarViewRequestWire { return captureProjectBrimEarViewRequest(parseIntentJson(text,limits)); }
+export function encodeProjectBrimEarViewRequest(value:ProjectBrimEarViewRequestWire):string { return JSON.stringify(captureProjectBrimEarViewRequest(value)); }
+export function captureProjectBrimEarViewReply(value:unknown):ProjectBrimEarViewReplyWire { return captureIntent("BrimEarViewReply",value,shapes,limits) as ProjectBrimEarViewReplyWire; }
+export function decodeProjectBrimEarViewReply(text:string):ProjectBrimEarViewReplyWire { return captureProjectBrimEarViewReply(parseIntentJson(text,limits)); }
+export function encodeProjectBrimEarViewReply(value:ProjectBrimEarViewReplyWire):string { return JSON.stringify(captureProjectBrimEarViewReply(value)); }
 export function captureProjectEmbossRequest(value:unknown):ProjectEmbossRequestWire { return captureIntent("EmbossRequest",value,shapes,limits) as ProjectEmbossRequestWire; }
 export function decodeProjectEmbossRequest(text:string):ProjectEmbossRequestWire { return captureProjectEmbossRequest(parseIntentJson(text,limits)); }
 export function encodeProjectEmbossRequest(value:ProjectEmbossRequestWire):string { return JSON.stringify(captureProjectEmbossRequest(value)); }

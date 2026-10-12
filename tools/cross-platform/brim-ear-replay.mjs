@@ -1,5 +1,5 @@
 // Brim-ear detection through a binding: open the browser-authored project as a
-// real session and answer every detection and stranded check, comparing each
+// real session and answer every detection, stranded check and view, comparing each
 // reply with the TypeScript authority's own encoding. Runs unchanged over WASM
 // in Node and a browser worker, and over the JNI bridge.
 export function replayBrimEars(core, fixture, layout) {
@@ -44,18 +44,22 @@ export function replayBrimEars(core, fixture, layout) {
   const session = upload.open(Float64Array.from([1, 2, 3, 4]));
   let brimEarDetections = 0;
   let brimEarStrandedChecks = 0;
+  let brimEarViews = 0;
   try {
     for (const [i, step] of fixture.steps.entries()) {
       const reply =
         "detect" in step
           ? session.detect_brim_ears(step.detect)
-          : session.stranded_brim_ears(step.stranded);
+          : "view" in step
+            ? session.brim_ear_view(step.view)
+            : session.stranded_brim_ears(step.stranded);
       if (reply !== step.reply) fail(`step ${i}: ${reply} !== ${step.reply}`);
       if ("detect" in step) brimEarDetections++;
+      else if ("view" in step) brimEarViews++;
       else brimEarStrandedChecks++;
     }
   } finally {
     session.free();
   }
-  return { brimEarDetections, brimEarStrandedChecks };
+  return { brimEarDetections, brimEarStrandedChecks, brimEarViews };
 }

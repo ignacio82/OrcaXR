@@ -7,8 +7,9 @@
  * `picking.ts`). Detection finds the outward corners of that layer
  * (`brimEarDetection.ts`); the stranded check names the placed ears whose
  * discs reach neither the layer nor an anchored ear (`brimEarPreview.ts`).
- * The Rust core answers the same requests
- * (`orcaxr_project::brim_ears`).
+ * An object's view is what the workspace's brim-ear tool shows and places
+ * with: its ears, the stranded ones and the base a placed ear sits on. The
+ * Rust core answers the same requests (`orcaxr_project::brim_ears`).
  */
 import type {
   ProjectBrimEarDetectReplyWire,
@@ -16,11 +17,13 @@ import type {
   ProjectBrimEarRefusalCodeWire,
   ProjectBrimEarStrandedReplyWire,
   ProjectBrimEarStrandedRequestWire,
+  ProjectBrimEarViewReplyWire,
+  ProjectBrimEarViewRequestWire,
 } from '../../../../contracts/generated/project-intents';
 import { wireText, wireUnits } from '../annotations/FacetRegionExchange';
 import type { AssetRepository } from '../assets';
 import type { ObjectId } from '../domain/ids';
-import type { ProjectState } from '../domain/model';
+import type { BrimEarPoint, ProjectState } from '../domain/model';
 import { decodeIndexedMeshAsset } from '../meshCodec';
 import { applyMatrix, composeTransform } from '../picking';
 import { DEFAULT_BRIM_EAR_DETECTION, detectBrimEars } from './brimEarDetection';
@@ -130,4 +133,81 @@ export function strandedObjectBrimEarsWire(
       )
     : [];
   return { stranded: { indices: [...indices] } };
+}
+
+/**
+ * The height a placed ear sits at: the object's lowest model point, or none
+ * when it has no model geometry. An ear is a first-layer feature, and the
+ * pinned engine discards any ear whose transformed Z is above the bed
+ * (`Brim.cpp:867`), so a click up a wall still places the ear at the base.
+ */
+export function objectModelBaseZ(mesh: ObjectModelMesh | undefined): number | undefined {
+  if (!mesh || mesh.positions.length < 3) return undefined;
+  let base = Number.POSITIVE_INFINITY;
+  for (let index = 2; index < mesh.positions.length; index += 3) base = Math.min(base, mesh.positions[index]);
+  return base;
+}
+
+/** What the brim-ear tool shows of one object and places with. */
+export interface ObjectBrimEarView {
+  /** The placed ears, in order, as the project stores them. */
+  readonly ears: readonly BrimEarPoint[];
+  /** Indices into `ears` that reach neither the part nor an ear that does. */
+  readonly stranded: readonly number[];
+  /** Where a placed ear sits (`objectModelBaseZ`); absent without model geometry. */
+  readonly baseZMm?: number;
+}
+
+/**
+ * One object's ears, the stranded ones and its base. An object whose model
+ * parts cannot be read still lists its ears, with none stranded and no base,
+ * as the workspace shows them; only an unknown object throws
+ * `BrimEarRefusal`.
+ */
+export function objectBrimEarView(state: ProjectState, assets: AssetRepository, objectId: ObjectId): ObjectBrimEarView {
+  const object = state.plates.flatMap((plate) => plate.objects).find((candidate) => candidate.id === objectId);
+  if (!object) throw new BrimEarRefusal(`Unknown object ${objectId}`, 'unknownObject');
+  const ears = object.brimEars ?? [];
+  let mesh: ObjectModelMesh | undefined;
+  try {
+    mesh = objectModelMesh(state, assets, objectId);
+  } catch (error) {
+    if (!(error instanceof BrimEarRefusal)) throw error;
+  }
+  const outline =
+    mesh && ears.length > 0
+      ? brimEarOutline(mesh.positions, mesh.indices, DEFAULT_BRIM_EAR_DETECTION.sampleHeightMm)
+      : null;
+  const stranded = outline
+    ? findDisconnectedBrimEars(
+        ears.map((ear) => ({ x: ear.positionMm[0], y: ear.positionMm[1], radiusMm: ear.headFrontRadiusMm })),
+        outline.loops,
+      )
+    : [];
+  const baseZMm = objectModelBaseZ(mesh);
+  return { ears, stranded, ...(baseZMm === undefined ? {} : { baseZMm }) };
+}
+
+/** `BrimEarViewRequest` → `BrimEarViewReply`: an object's ears, the stranded ones and its base. */
+export function brimEarViewWire(
+  state: ProjectState,
+  assets: AssetRepository,
+  request: ProjectBrimEarViewRequestWire,
+): ProjectBrimEarViewReplyWire {
+  let view;
+  try {
+    view = objectBrimEarView(state, assets, wireText(request.objectId) as ObjectId);
+  } catch (error) {
+    return refusal(error);
+  }
+  return {
+    view: {
+      ears: view.ears.map((ear) => ({
+        positionMm: [ear.positionMm[0], ear.positionMm[1], ear.positionMm[2]],
+        headFrontRadiusMm: ear.headFrontRadiusMm,
+      })),
+      stranded: [...view.stranded],
+      baseZMm: view.baseZMm === undefined ? { absent: {} } : { value: view.baseZMm },
+    },
+  };
 }

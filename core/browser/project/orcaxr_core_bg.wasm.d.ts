@@ -359,6 +359,7 @@ export const projectsession_acknowledge_checkpoint: (a: number, b: number) => [n
 export const projectsession_asset: (a: number, b: number) => [number, number, number];
 export const projectsession_asset_fingerprint: (a: number) => [number, number];
 export const projectsession_begin_open: (a: number) => [number, number, number];
+export const projectsession_brim_ear_view: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_cancel_open: (a: number, b: number) => number;
 export const projectsession_capabilities: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_capture_clipboard: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];

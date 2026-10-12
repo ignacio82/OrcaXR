@@ -1,6 +1,6 @@
 //! Brim-ear detection over a live session against the browser: corners of
-//! each object's model parts in object space, under every option, and the
-//! stranded placed ears answer byte for byte.
+//! each object's model parts in object space, under every option, the
+//! stranded placed ears and each object's view answer byte for byte.
 use orcaxr_contracts::{canonical::parse, project_intent_types as wire};
 use orcaxr_project::{assets::*, history::*, model::*, selection::*, session::*, validation::*};
 use serde_json::Value;
@@ -66,6 +66,11 @@ fn brim_ears_match_the_browser_over_a_live_session() {
                 "detect",
                 wire::encode_brim_ear_detect_reply(&reply).unwrap(),
             )
+        } else if let Some(request) = step["view"].as_str() {
+            let reply = session
+                .brim_ear_view(&wire::decode_brim_ear_view_request(request).unwrap())
+                .unwrap();
+            ("view", wire::encode_brim_ear_view_reply(&reply).unwrap())
         } else {
             let request = step["stranded"].as_str().unwrap();
             let reply = session
@@ -79,5 +84,8 @@ fn brim_ears_match_the_browser_over_a_live_session() {
         assert_eq!(reply, expected, "step {i}");
         *counts.entry(kind).or_default() += 1;
     }
-    assert_eq!(counts, BTreeMap::from([("detect", 40), ("stranded", 9)]));
+    assert_eq!(
+        counts,
+        BTreeMap::from([("detect", 40), ("stranded", 9), ("view", 9)])
+    );
 }

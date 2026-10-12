@@ -426,6 +426,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     stranded_brim_ears(request) {
       return call("sessionBrimEarStranded", this.handle, request);
     }
+    brim_ear_view(request) {
+      return call("sessionBrimEarView", this.handle, request);
+    }
     plan_wipe_tower(request) {
       return call("sessionWipeTower", this.handle, request);
     }
