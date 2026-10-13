@@ -78,4 +78,15 @@
     <string name="export_all_stls">Експортувати всі об’єкти як файли STL…</string>
     <string name="export_download">Завантажити</string>
     <string name="export_obj">Експорт траєкторій як OBJ…</string>
+    <string name="wave_reset">Скинути</string>
+    <string name="wave_group_general">Загальні</string>
+    <string name="wave_group_pattern">Зразок</string>
+    <string name="wave_group_cooling">Охолодження</string>
+    <string name="wave_opt_pattern">Зразок</string>
+    <string name="wave_opt_travel_speed">Швидкість переміщення</string>
+    <string name="wave_opt_fan_speed">Швидкість вентилятора</string>
+    <string name="wave_opt_nozzle_temp">Температура сопла</string>
+    <string name="wave_choice_monotonic">Монотонний</string>
+    <string name="wave_choice_aligned">Вирівняне</string>
+    <string name="wave_choice_random">Випадкове</string>
 </resources>

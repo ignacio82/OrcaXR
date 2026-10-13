@@ -78,4 +78,15 @@
     <string name="export_all_stls">Exportar todos os objetos como STLs…</string>
     <string name="export_download">Baixar</string>
     <string name="export_obj">Exportar Trilhas de Ferramentas como OBJ…</string>
+    <string name="wave_reset">Reiniciar</string>
+    <string name="wave_group_general">Geral</string>
+    <string name="wave_group_pattern">Padrão</string>
+    <string name="wave_group_cooling">Resfriamento</string>
+    <string name="wave_opt_pattern">Padrão</string>
+    <string name="wave_opt_travel_speed">Velocidade de deslocamento</string>
+    <string name="wave_opt_fan_speed">Velocidade do ventilador</string>
+    <string name="wave_opt_nozzle_temp">Temperatura do bico</string>
+    <string name="wave_choice_monotonic">Monótono</string>
+    <string name="wave_choice_aligned">Alinhada</string>
+    <string name="wave_choice_random">Aleatória</string>
 </resources>

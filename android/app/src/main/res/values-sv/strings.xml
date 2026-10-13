@@ -74,4 +74,15 @@
     <string name="export_all_stls">Exportera alla objekt som STL…</string>
     <string name="export_download">Ladda ner</string>
     <string name="export_obj">Exportera Toolpaths som OBJ…</string>
+    <string name="wave_reset">Återställ</string>
+    <string name="wave_group_general">Allmän</string>
+    <string name="wave_group_pattern">Mönster</string>
+    <string name="wave_group_cooling">Kylning</string>
+    <string name="wave_opt_pattern">Mönster</string>
+    <string name="wave_opt_travel_speed">Förflyttnings hastighet</string>
+    <string name="wave_opt_fan_speed">Fläkt hastighet</string>
+    <string name="wave_opt_nozzle_temp">Nozzel temperatur</string>
+    <string name="wave_choice_monotonic">Monoton</string>
+    <string name="wave_choice_aligned">Linjerad</string>
+    <string name="wave_choice_random">Slumpmässig</string>
 </resources>

@@ -78,4 +78,15 @@
     <string name="export_all_stls">Esporta tutti gli oggetti come STL multipli…</string>
     <string name="export_download">Scarica</string>
     <string name="export_obj">Esporta percorso strumento come OBJ…</string>
+    <string name="wave_reset">Reimposta</string>
+    <string name="wave_group_general">Generale</string>
+    <string name="wave_group_pattern">Modello</string>
+    <string name="wave_group_cooling">Raffreddamento</string>
+    <string name="wave_opt_pattern">Modello</string>
+    <string name="wave_opt_travel_speed">Velocità di spostamento</string>
+    <string name="wave_opt_fan_speed">Velocità ventola</string>
+    <string name="wave_opt_nozzle_temp">Temperatura ugello</string>
+    <string name="wave_choice_monotonic">Monotonico</string>
+    <string name="wave_choice_aligned">Allineato</string>
+    <string name="wave_choice_random">Casuale</string>
 </resources>

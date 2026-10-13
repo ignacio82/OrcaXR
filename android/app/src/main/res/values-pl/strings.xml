@@ -78,4 +78,15 @@
     <string name="export_all_stls">Eksportuj wszystkie obiekty jako pliki STL…</string>
     <string name="export_download">Pobierz</string>
     <string name="export_obj">Eksportuj ścieżki narzędzi jako OBJ…</string>
+    <string name="wave_reset">Resetuj</string>
+    <string name="wave_group_general">Ogólne</string>
+    <string name="wave_group_pattern">Wzór</string>
+    <string name="wave_group_cooling">Chłodzenie</string>
+    <string name="wave_opt_pattern">Wzór</string>
+    <string name="wave_opt_travel_speed">Szybkość przemieszczania</string>
+    <string name="wave_opt_fan_speed">Prędkość wentylatora</string>
+    <string name="wave_opt_nozzle_temp">Temperatura dyszy</string>
+    <string name="wave_choice_monotonic">Monotoniczny</string>
+    <string name="wave_choice_aligned">Wyrównany</string>
+    <string name="wave_choice_random">Losowo</string>
 </resources>

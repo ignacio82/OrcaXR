@@ -3057,6 +3057,43 @@ class ProjectWorkspace(
             ?: ProjectIntents.WipeTowerGhostReply.None(ProjectIntents.Empty)
     }.thenApply { reply -> (reply as? ProjectIntents.WipeTowerGhostReply.Ghost)?.value }
 
+    /**
+     * Reads the project's current settings override snapshot (`OrcaWorkspace.getProjectSettingsOverrideSnapshot`).
+     */
+    fun projectSettingsOverrideSnapshot(): CompletableFuture<ProjectSettingsOverrideSnapshot> = inspect { session ->
+        session.snapshot().use { snapshot ->
+            val result = snapshot.settingsSnapshot(ProjectIntents.SettingsTargetRequest(ProjectIntents.SettingsTarget.Project(ProjectIntents.Empty)))
+            val snap = (result as? ProjectIntents.SettingsSnapshotResult.Snapshot)?.value
+                ?: throw ProjectFailure("Failed to read project settings snapshot")
+            ProjectSettingsOverrideSnapshot(
+                inheritedConfigJson = text(snap.inheritedConfigJson),
+                overridesJson = text(snap.overridesJson),
+                effectiveConfigJson = text(snap.effectiveConfigJson),
+                sourceRevision = snap.sourceRevision,
+                sourceHash = text(snap.sourceHash),
+            )
+        }
+    }
+
+    /**
+     * Commits updated project settings overrides under the state's guard (`applyProjectSettingsOverrides`).
+     */
+    fun applyProjectSettingsOverrides(
+        inheritedConfigJson: String,
+        overridesJson: String,
+        sourceRevision: Long,
+        sourceHash: String,
+    ): CompletableFuture<Unit> {
+        val command = ProjectIntents.Command.SetProjectSettingsOverrides(
+            ProjectIntents.SetProjectSettingsOverrides(
+                guard = ProjectIntents.SettingsGuard(sourceRevision, units(sourceHash)),
+                inheritedConfigJson = units(inheritedConfigJson),
+                overridesJson = units(overridesJson),
+            )
+        )
+        return execute(command)
+    }
+
     override fun close() {
         synchronized(lock) { timer?.close() }
         cancelSimplifyPreview()
@@ -3094,6 +3131,15 @@ sealed interface NegativePartResult {
 
 /** A bed fill: how many copies were added, and how many free slots the copy limit left. */
 data class ProjectBedFill(val created: Int, val withheld: Long)
+
+/** Snapshot of project-level settings overrides, inherited config, and guard. */
+data class ProjectSettingsOverrideSnapshot(
+    val inheritedConfigJson: String,
+    val overridesJson: String,
+    val effectiveConfigJson: String,
+    val sourceRevision: Long,
+    val sourceHash: String,
+)
 
 /**
  * Recently used documents, newest first: at most [MAX] entries, one per

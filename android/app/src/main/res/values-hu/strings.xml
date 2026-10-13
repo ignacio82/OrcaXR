@@ -74,4 +74,15 @@
     <string name="export_all_stls">Az összes objektum exportálása STL-ként…</string>
     <string name="export_download">Letöltés</string>
     <string name="export_obj">Szerszámút exportálása OBJ-ként…</string>
+    <string name="wave_reset">Visszaállítás</string>
+    <string name="wave_group_general">Általános</string>
+    <string name="wave_group_pattern">Mintázat</string>
+    <string name="wave_group_cooling">Hűtés</string>
+    <string name="wave_opt_pattern">Mintázat</string>
+    <string name="wave_opt_travel_speed">Mozgás sebessége</string>
+    <string name="wave_opt_fan_speed">Ventilátor fordulatszám</string>
+    <string name="wave_opt_nozzle_temp">Fúvóka hőmérséklet</string>
+    <string name="wave_choice_monotonic">Monotonikus</string>
+    <string name="wave_choice_aligned">Igazított</string>
+    <string name="wave_choice_random">Véletlenszerû</string>
 </resources>

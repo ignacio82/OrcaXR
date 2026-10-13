@@ -78,4 +78,15 @@
     <string name="export_all_stls">导出所有对象为多个STL…</string>
     <string name="export_download">下载</string>
     <string name="export_obj">将工具路径导出为OBJ格式…</string>
+    <string name="wave_reset">重置</string>
+    <string name="wave_group_general">常规</string>
+    <string name="wave_group_pattern">图案</string>
+    <string name="wave_group_cooling">冷却</string>
+    <string name="wave_opt_pattern">图案</string>
+    <string name="wave_opt_travel_speed">空驶速度</string>
+    <string name="wave_opt_fan_speed">风扇速度</string>
+    <string name="wave_opt_nozzle_temp">喷嘴温度</string>
+    <string name="wave_choice_monotonic">单调</string>
+    <string name="wave_choice_aligned">对齐</string>
+    <string name="wave_choice_random">随机</string>
 </resources>

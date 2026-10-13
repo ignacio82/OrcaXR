@@ -75,4 +75,15 @@
     <string name="export_all_stls">Alle objecten exporteren als STL\'s…</string>
     <string name="export_download">Downloaden</string>
     <string name="export_obj">Exporteer Toolpaths als OBJ…</string>
+    <string name="wave_reset">Terugzetten</string>
+    <string name="wave_group_general">Algemeen</string>
+    <string name="wave_group_pattern">Patroon</string>
+    <string name="wave_group_cooling">Koeling</string>
+    <string name="wave_opt_pattern">Patroon</string>
+    <string name="wave_opt_travel_speed">Verplaatsing-sneleheid</string>
+    <string name="wave_opt_fan_speed">Ventilator snelheid</string>
+    <string name="wave_opt_nozzle_temp">Mondstuk temperatuur</string>
+    <string name="wave_choice_monotonic">Monotoon</string>
+    <string name="wave_choice_aligned">Uitgelijnd</string>
+    <string name="wave_choice_random">Willekeurig</string>
 </resources>

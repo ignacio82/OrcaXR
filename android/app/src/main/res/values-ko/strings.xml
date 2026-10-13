@@ -78,4 +78,15 @@
     <string name="export_all_stls">모든 객체를 여러 STL로 내보내기…</string>
     <string name="export_download">다운로드</string>
     <string name="export_obj">툴 경로를 OBJ로 내보내기 (T)…</string>
+    <string name="wave_reset">초기화</string>
+    <string name="wave_group_general">일반</string>
+    <string name="wave_group_pattern">패턴</string>
+    <string name="wave_group_cooling">냉각</string>
+    <string name="wave_opt_pattern">패턴</string>
+    <string name="wave_opt_travel_speed">이동 속도</string>
+    <string name="wave_opt_fan_speed">팬 속도</string>
+    <string name="wave_opt_nozzle_temp">노즐 온도</string>
+    <string name="wave_choice_monotonic">단조</string>
+    <string name="wave_choice_aligned">정렬</string>
+    <string name="wave_choice_random">무작위</string>
 </resources>

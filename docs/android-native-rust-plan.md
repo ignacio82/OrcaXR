@@ -138,13 +138,16 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
 
 1. Phase 7, model tools:
    Variable Layer Height (`variable_layer_height`), Magnet Cavities (`add_magnet`),
-   and Preview Layer Events (`preview_add_pause`, `preview_add_custom_gcode`) are done
-   ([§](engineering/native-core.md#android-variable-layer-height-magnet-cavities-and-layer-events)):
-   `VariableLayerHeightCard` in the Workspace overlays, `ProjectWorkspace`'s
-   adaptive/smooth/reset operations, `addMagnetHole` via negative volume and rename,
+   Preview Layer Events (`preview_add_pause`, `preview_add_custom_gcode`), and
+   Wave Overhangs (`wave_overhangs`) are done
+   ([§](engineering/native-core.md#android-variable-layer-height-magnet-cavities-and-layer-events),
+   [§](engineering/native-core.md#android-wave-overhangs)):
+   `VariableLayerHeightCard` in Workspace overlays, `WaveOverhangsCard` in Prepare
+   Process settings with 38 options across 8 groups, notices and quick fixes,
+   `ProjectWorkspace`'s override snapshot and intent application,
+   `addMagnetHole` via negative volume and rename,
    and `PreviewScreen` layer scrubber event authoring (`LayerEventType.Pause`/`Custom`).
-   Next remaining: wave-overhang card (settings the core already resolves),
-   Cut (`tool_cut`), face detector and hollow.
+   Next remaining: Cut (`tool_cut`), face detector and hollow.
    Brim ears and wipe-tower auto-placement are done
    ([§](engineering/native-core.md#android-brim-ears),
    [§](engineering/native-core.md#android-wipe-tower-auto-placement)): the
@@ -2604,8 +2607,7 @@ storage journeys on phone, tablet, and desktop-sized windows.
   `android-assembly-smoke.py` passes on an API 34 emulator.
   Status (2026-10-13): remains: lighting and preview controls; Repair (Phase
   5's kernel routing), with mesh Booleans; and the model tools with no
-  Android UI yet — variable layer height, magnets and the wave-overhang
-  card, with Cut, the face detector and hollow still to port (*Resume here*
+  Android UI yet — Cut, the face detector and hollow (*Resume here*
   items 2 and 4); both emulator suites' runs of the brim-ear, wipe-tower,
   drawn-part and assembly smokes (*Resume here* item 1).
 - [ ] Implement document open/create/save-as/share, recent files, provider URI

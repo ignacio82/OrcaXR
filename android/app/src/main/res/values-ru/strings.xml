@@ -78,4 +78,15 @@
     <string name="export_all_stls">Экспорт всех моделей в отдельные STL…</string>
     <string name="export_download">Скачать</string>
     <string name="export_obj">Экспорт траектории инструмента в OBJ…</string>
+    <string name="wave_reset">Сброс</string>
+    <string name="wave_group_general">Общие</string>
+    <string name="wave_group_pattern">Шаблон</string>
+    <string name="wave_group_cooling">Охлаждение</string>
+    <string name="wave_opt_pattern">Шаблон</string>
+    <string name="wave_opt_travel_speed">Скорость перемещения</string>
+    <string name="wave_opt_fan_speed">Скорость вентилятора</string>
+    <string name="wave_opt_nozzle_temp">Темп. сопла</string>
+    <string name="wave_choice_monotonic">Монотонный</string>
+    <string name="wave_choice_aligned">Выровненная</string>
+    <string name="wave_choice_random">Случайно</string>
 </resources>

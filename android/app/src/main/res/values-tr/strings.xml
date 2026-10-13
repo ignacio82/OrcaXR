@@ -78,4 +78,15 @@
     <string name="export_all_stls">Tüm nesneleri STLs olarak dışa aktarın…</string>
     <string name="export_download">İndir</string>
     <string name="export_obj">Takımyollarını OBJ olarak dışa aktar…</string>
+    <string name="wave_reset">Sıfırla</string>
+    <string name="wave_group_general">Genel</string>
+    <string name="wave_group_pattern">Desen</string>
+    <string name="wave_group_cooling">Soğutma</string>
+    <string name="wave_opt_pattern">Desen</string>
+    <string name="wave_opt_travel_speed">Seyahat Hızı</string>
+    <string name="wave_opt_fan_speed">Fan hızı</string>
+    <string name="wave_opt_nozzle_temp">Nozzle sıcaklığı</string>
+    <string name="wave_choice_monotonic">Monotonic</string>
+    <string name="wave_choice_aligned">Hizalı</string>
+    <string name="wave_choice_random">Rastgele</string>
 </resources>

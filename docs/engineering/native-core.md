@@ -6581,6 +6581,30 @@ layer height (`topZMm`). The operator can insert pause events
 inserting `M117 layer at <Z> mm`) at the current height through
 `ProjectModel.addLayerEvent` / `ProjectWorkspace.addLayerEvent`.
 
+### Android wave overhangs
+
+The Prepare area provides the Wave Overhangs Card (`WaveOverhangsCard`) inside
+its Process settings list, matching upstream page order (Tab.cpp) and the web
+implementation (`WAVE_OVERHANG_OPTIONS`).
+
+The card defines 38 options across 8 groups (General, Detection, Pattern, Corner
+Reinforcement, Motion, Cooling, Floor Layers, and Debug). Options are driven by
+`WaveOverhangs`:
+- Master switch on `wave_overhangs` enables or disables wave generation; sub-options
+  reflect their conditional eligibility (e.g. corner taper requirements, Hilbert floor
+  layers) and source origin (Override, Inherited, or Default).
+- Group headers collapse and expand; General, Pattern, Motion, Cooling, and Floor are
+  open by default.
+- Quick-fix notice banners detect conflicting settings: overhang wall detection off
+  (`detect_overhang_wall`), zero wall loops (`wall_loops`), spiral vase mode
+  (`spiral_mode`), and unknown wave keys, offering one-tap resolution.
+- Edits dispatch as canonical project settings overrides via
+  `ProjectWorkspace.applyProjectSettingsOverrides` under monotonic revision guards,
+  preserving unrelated overrides.
+- "Reset to default" clears all wave overrides while preserving non-wave project settings.
+- Resolution and mutation use a lightweight, portable parser (`MiniJson`), ensuring
+  deterministic JVM and Android runtime execution free of framework mocking limitations.
+
 ### Android filaments
 
 The app lists and assigns the project's filaments as the browser's
@@ -7035,8 +7059,7 @@ found the client's stale keep-alive connection (above) and a server defect:
 results in a temporary directory under a dot directory were never delivered
 ([runtime and deployment](runtime-and-deployment.md)). Slicing on the device's own engine
 is [below](#android-local-slicing); Slice All Plates, the plate's pictures and
-the repeatable download [further below](#android-slice-outputs). Not yet matched:
-the wave-overhang engine check,
+the repeatable download [further below](#android-slice-outputs). Wave overhangs are supported via [WaveOverhangsCard](#android-wave-overhangs). Not yet matched:
 preflight actions (reveal, drop to bed), troubleshooting text.
 
 ### Android profile selection

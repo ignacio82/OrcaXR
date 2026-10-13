@@ -69,4 +69,13 @@
     <string name="export_gcode">G-codeをエクスポート…</string>
     <string name="export_stl">1つのSTLとしてエクスポート…</string>
     <string name="export_download">ダウンロード</string>
+    <string name="wave_reset">リセット</string>
+    <string name="wave_group_general">一般</string>
+    <string name="wave_group_cooling">冷却</string>
+    <string name="wave_opt_travel_speed">移動速度</string>
+    <string name="wave_opt_fan_speed">回転速度</string>
+    <string name="wave_opt_nozzle_temp">ノズル温度</string>
+    <string name="wave_choice_monotonic">単調</string>
+    <string name="wave_choice_aligned">整列</string>
+    <string name="wave_choice_random">ランダム</string>
 </resources>

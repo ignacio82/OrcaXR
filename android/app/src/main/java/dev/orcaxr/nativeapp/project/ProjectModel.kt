@@ -18,6 +18,8 @@ import androidx.compose.runtime.neverEqualPolicy
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import java.util.Locale
+import dev.orcaxr.nativeapp.prepare.WaveOverhangs
+import dev.orcaxr.nativeapp.prepare.WaveSettingsState
 import dev.orcaxr.core.ActionArrangement
 import dev.orcaxr.core.ActionPresentation
 import dev.orcaxr.core.AssemblyAligned
@@ -1860,6 +1862,70 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun refreshWipeTowerGhost() = quietly {
         val ghost = workspace.wipeTowerGhost().await()
         main.post { wipeTowerGhost = ghost }
+    }
+
+    /** The project's wave-overhang settings as the shared table resolves them. */
+    var waveSettings by mutableStateOf<WaveSettingsState?>(null)
+        private set
+
+    /** Re-resolves wave-overhang settings against current project overrides and profile config. */
+    fun refreshWaveSettings() = quietly {
+        val snapshot = workspace.projectSettingsOverrideSnapshot().await()
+        val state = WaveOverhangs.resolve(snapshot)
+        main.post { waveSettings = state }
+    }
+
+    /** Sets one wave-overhang setting as a canonical project settings override. */
+    fun setWaveSetting(key: String, value: Any) = work {
+        val snapshot = workspace.projectSettingsOverrideSnapshot().await()
+        val nextOverrides = WaveOverhangs.withValue(snapshot.overridesJson, key, value)
+        workspace.applyProjectSettingsOverrides(
+            inheritedConfigJson = snapshot.inheritedConfigJson,
+            overridesJson = nextOverrides,
+            sourceRevision = snapshot.sourceRevision,
+            sourceHash = snapshot.sourceHash,
+        ).await()
+        refreshWaveSettings()
+    }
+
+    /** Clears one wave-overhang override, returning to inherited or default. */
+    fun clearWaveSetting(key: String) = work {
+        val snapshot = workspace.projectSettingsOverrideSnapshot().await()
+        val nextOverrides = WaveOverhangs.withoutValue(snapshot.overridesJson, key)
+        workspace.applyProjectSettingsOverrides(
+            inheritedConfigJson = snapshot.inheritedConfigJson,
+            overridesJson = nextOverrides,
+            sourceRevision = snapshot.sourceRevision,
+            sourceHash = snapshot.sourceHash,
+        ).await()
+        refreshWaveSettings()
+    }
+
+    /** Resets all wave-overhang overrides for the project. */
+    fun resetWaveSettings() = work {
+        val snapshot = workspace.projectSettingsOverrideSnapshot().await()
+        val nextOverrides = WaveOverhangs.withoutOverrides(snapshot.overridesJson)
+        workspace.applyProjectSettingsOverrides(
+            inheritedConfigJson = snapshot.inheritedConfigJson,
+            overridesJson = nextOverrides,
+            sourceRevision = snapshot.sourceRevision,
+            sourceHash = snapshot.sourceHash,
+        ).await()
+        refreshWaveSettings()
+        main.post { message = words(R.string.wave_reset_applied) }
+    }
+
+    /** Applies a quick fix suggested by a wave-overhang blocker notice. */
+    fun fixWaveNotice(fixId: String) = work {
+        val snapshot = workspace.projectSettingsOverrideSnapshot().await()
+        val nextOverrides = WaveOverhangs.withNoticeFix(snapshot.overridesJson, fixId)
+        workspace.applyProjectSettingsOverrides(
+            inheritedConfigJson = snapshot.inheritedConfigJson,
+            overridesJson = nextOverrides,
+            sourceRevision = snapshot.sourceRevision,
+            sourceHash = snapshot.sourceHash,
+        ).await()
+        refreshWaveSettings()
     }
 
     /** Renames an object or part (the Objects panel's Rename). */

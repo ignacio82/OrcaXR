@@ -78,4 +78,15 @@
     <string name="export_all_stls">將所有物件匯出為 STL 檔案…</string>
     <string name="export_download">下載</string>
     <string name="export_obj">將工具路徑匯出為 OBJ 格式…</string>
+    <string name="wave_reset">重設</string>
+    <string name="wave_group_general">一般</string>
+    <string name="wave_group_pattern">花紋</string>
+    <string name="wave_group_cooling">冷卻</string>
+    <string name="wave_opt_pattern">花紋</string>
+    <string name="wave_opt_travel_speed">空駛速度</string>
+    <string name="wave_opt_fan_speed">風扇速度</string>
+    <string name="wave_opt_nozzle_temp">噴嘴溫度</string>
+    <string name="wave_choice_monotonic">單調</string>
+    <string name="wave_choice_aligned">對齊</string>
+    <string name="wave_choice_random">隨機</string>
 </resources>

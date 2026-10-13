@@ -78,4 +78,15 @@
     <string name="export_all_stls">Eksportuoti visus objektus kaip STL…</string>
     <string name="export_download">Parsisiųsti</string>
     <string name="export_obj">Eksportas ir įrankių trajektorijos kaip OBJ…</string>
+    <string name="wave_reset">Nustatyti iš naujo</string>
+    <string name="wave_group_general">Bendras</string>
+    <string name="wave_group_pattern">Raštas</string>
+    <string name="wave_group_cooling">Aušinimas</string>
+    <string name="wave_opt_pattern">Raštas</string>
+    <string name="wave_opt_travel_speed">Judėjimo greitis</string>
+    <string name="wave_opt_fan_speed">Ventiliatoriaus greitis</string>
+    <string name="wave_opt_nozzle_temp">Purkštuko temperatūra</string>
+    <string name="wave_choice_monotonic">Monotoniškas</string>
+    <string name="wave_choice_aligned">Sulygiuota</string>
+    <string name="wave_choice_random">Atsitiktinė</string>
 </resources>

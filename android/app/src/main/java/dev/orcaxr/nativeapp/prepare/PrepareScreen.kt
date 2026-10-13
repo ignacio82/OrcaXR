@@ -264,6 +264,8 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
             }
             // The browser's Process card's "Auto-position wipe tower" (its title the action's hint).
             item(key = "wipe-tower-auto") { WipeTowerAuto(project) }
+            // The browser's Process card's "Wave overhangs" section.
+            item(key = "wave-overhangs") { WaveOverhangsCard(project) }
             item {
                 FilamentList(
                     view,

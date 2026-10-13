@@ -75,4 +75,15 @@
     <string name="export_stl">Exportovat jako jedno STL…</string>
     <string name="export_download">Stáhnout</string>
     <string name="export_obj">Exportovat Trasy extruderu jako OBJ…</string>
+    <string name="wave_reset">Výchozí</string>
+    <string name="wave_group_general">Obecné</string>
+    <string name="wave_group_pattern">Vzor</string>
+    <string name="wave_group_cooling">Chlazení</string>
+    <string name="wave_opt_pattern">Vzor</string>
+    <string name="wave_opt_travel_speed">Cestovní rychlost</string>
+    <string name="wave_opt_fan_speed">Rychlost ventilátoru</string>
+    <string name="wave_opt_nozzle_temp">Teplota trysky</string>
+    <string name="wave_choice_monotonic">Monotónní</string>
+    <string name="wave_choice_aligned">Zarovnaný</string>
+    <string name="wave_choice_random">Náhodný</string>
 </resources>

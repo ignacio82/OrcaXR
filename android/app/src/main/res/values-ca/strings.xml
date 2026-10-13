@@ -78,4 +78,15 @@
     <string name="export_all_stls">Exportar tots els objectes com a diferents STLs…</string>
     <string name="export_download">Descarregar</string>
     <string name="export_obj">Exportar Trajectòries d\'eina com OBJ…</string>
+    <string name="wave_reset">Restablir</string>
+    <string name="wave_group_general">General</string>
+    <string name="wave_group_pattern">Patró</string>
+    <string name="wave_group_cooling">Refrigeració</string>
+    <string name="wave_opt_pattern">Patró</string>
+    <string name="wave_opt_travel_speed">Velocitat de desplaçament</string>
+    <string name="wave_opt_fan_speed">Velocitat del ventilador</string>
+    <string name="wave_opt_nozzle_temp">Temperatura del broquet( nozzle )</string>
+    <string name="wave_choice_monotonic">Monotònic</string>
+    <string name="wave_choice_aligned">Alineat</string>
+    <string name="wave_choice_random">Aleatori</string>
 </resources>
