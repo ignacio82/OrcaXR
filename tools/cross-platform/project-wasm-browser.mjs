@@ -1111,7 +1111,7 @@ try {
   assert.equal(result.printerPreparationAnswers, 929);
   assert.deepEqual(result.printerWorkflow, [402, 19688, 13]);
   assert.deepEqual(result.printerSession, [80, 3254, 557, 8]);
-  assert.equal(result.moonrakerPolicyAnswers, 805);
+  assert.equal(result.moonrakerPolicyAnswers, 853);
   assert.deepEqual(result.moonrakerTransport, [88, 2533, 94, 20, 64]);
   assert.deepEqual(result.printerStorageAnswers, [218, 1460, 326, 64]);
   assert.deepEqual(result.printHistoryAnswers, [290, 1363, 258, 55, 55, 76, 23, 39]);

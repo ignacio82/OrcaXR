@@ -551,45 +551,82 @@ fn redact_urls(text: &[u16]) -> Vec<u16> {
     }
     out
 }
-/// `/\b(?:bearer|x-api-key|api_key|access_token)\s*[:=]\s*\S+/gi` → `<redacted>`.
+/// `CREDENTIAL_TEXT` (`SessionCredentials.ts`) → `<redacted>`:
+/// `/\b(?:(?:bearer|x-api-key|api_key|access_token)\s*[:=]\s*\S+|authorization\s*[:=]\s*(?:(?:bearer|basic|digest|token)\s+)?\S+|bearer\s+\S+)/gi`.
 fn redact_assignments(text: &[u16]) -> Vec<u16> {
     let mut out = Vec::with_capacity(text.len());
     let mut at = 0;
-    'scan: while at < text.len() {
+    while at < text.len() {
         let boundary = at == 0 || !word(text[at - 1]);
-        if boundary && word(text[at]) {
-            for name in ["bearer", "x-api-key", "api_key", "access_token"] {
-                if !ascii_ci_at(text, at, name) {
-                    continue;
-                }
-                let mut cursor = at + name.len();
-                while cursor < text.len() && js_space(text[cursor]) {
-                    cursor += 1;
-                }
-                if cursor >= text.len() || !matches!(text[cursor], 0x3a | 0x3d) {
-                    continue;
-                }
-                cursor += 1;
-                while cursor < text.len() && js_space(text[cursor]) {
-                    cursor += 1;
-                }
-                let start = cursor;
-                while cursor < text.len() && !js_space(text[cursor]) {
-                    cursor += 1;
-                }
-                if cursor == start {
-                    // Spaces given back by `\s*` are no `\S+`: no match here.
-                    continue;
-                }
-                out.extend(t("<redacted>"));
-                at = cursor;
-                continue 'scan;
-            }
+        if boundary
+            && word(text[at])
+            && let Some(end) = credential_at(text, at)
+        {
+            out.extend(t("<redacted>"));
+            at = end;
+            continue;
         }
         out.push(text[at]);
         at += 1;
     }
     out
+}
+/// Where the pattern's first matching alternative ends when it starts at `at`,
+/// tried in the pattern's order. Spaces a `\s*` or `\s+` gives back never make
+/// the `\S+` that follows it, so each run of spaces is taken whole.
+fn credential_at(text: &[u16], at: usize) -> Option<usize> {
+    for name in ["bearer", "x-api-key", "api_key", "access_token"] {
+        if ascii_ci_at(text, at, name)
+            && let Some(value) = assigned(text, at + name.len())
+            && let Some(end) = non_spaces(text, value)
+        {
+            return Some(end);
+        }
+    }
+    if ascii_ci_at(text, at, "authorization")
+        && let Some(value) = assigned(text, at + "authorization".len())
+    {
+        for scheme in ["bearer", "basic", "digest", "token"] {
+            if ascii_ci_at(text, value, scheme)
+                && let Some(end) =
+                    spaced(text, value + scheme.len()).and_then(|v| non_spaces(text, v))
+            {
+                return Some(end);
+            }
+        }
+        if let Some(end) = non_spaces(text, value) {
+            return Some(end);
+        }
+    }
+    if ascii_ci_at(text, at, "bearer") {
+        return spaced(text, at + "bearer".len()).and_then(|v| non_spaces(text, v));
+    }
+    None
+}
+/// `\s*[:=]\s*` from `at`: where the value after it starts.
+fn assigned(text: &[u16], at: usize) -> Option<usize> {
+    let at = skip_spaces(text, at);
+    (at < text.len() && matches!(text[at], 0x3a | 0x3d)).then(|| skip_spaces(text, at + 1))
+}
+/// `\s+` from `at`: where what follows the spaces starts.
+fn spaced(text: &[u16], at: usize) -> Option<usize> {
+    let after = skip_spaces(text, at);
+    (after > at).then_some(after)
+}
+/// `\S+` from `at`: where the run ends.
+fn non_spaces(text: &[u16], at: usize) -> Option<usize> {
+    let end = at
+        + text[at.min(text.len())..]
+            .iter()
+            .take_while(|&&u| !js_space(u))
+            .count();
+    (end > at).then_some(end)
+}
+fn skip_spaces(text: &[u16], at: usize) -> usize {
+    at + text[at.min(text.len())..]
+        .iter()
+        .take_while(|&&u| js_space(u))
+        .count()
 }
 fn replace_controls(text: &[u16]) -> Vec<u16> {
     let mut out = Vec::with_capacity(text.len());

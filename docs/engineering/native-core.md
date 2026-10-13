@@ -7502,9 +7502,22 @@ in a Chrome worker (`diagnostics-replay.mjs`, `model-export-replay.mjs`)
 and JNI answer all of them byte for byte; `DiagnosticsChecks` (13 host
 checks) writes every event a host records and every Android bundle through
 `Diagnostics.Input`, and `ProjectModelExportChecks` reads the workspace's
-shape. The browser's pattern rules leave `Authorization: Bearer <token>` as
-it is (only `bearer:` or `bearer=` is struck); the port keeps that, and the
-Android recorder strikes the tokens this device holds as secrets.
+shape. The Android recorder also strikes the tokens this device holds as
+secrets.
+
+Every redaction — the transport's diagnostics, the printer console's lines
+and the diagnostics bundle — shares one pattern for credentials written out
+as text (`CREDENTIAL_TEXT` in `SessionCredentials.ts`, `redact_assignments`
+in `orcaxr_printer::moonraker`): a named assignment (`api_key=…`,
+`bearer: …`, `x-api-key`, `access_token`), an HTTP Authorization header with
+or without its scheme (`Authorization: Bearer …`, `authorization=Basic …`),
+and a bare `Bearer <token>`. The pattern once struck only the assignments,
+so a header a server echoed back kept its token; the policy corpus's
+refused bodies carry each form (192 error answers), the browser's transport
+test and the Rust `credential_text_is_struck_without_its_secret` check the
+cases directly, and a word the pattern reads as a token (`the bearer token
+was refused`) is struck too, which costs a diagnostic a word and never a
+secret.
 
 On Android the exports are the browser's File menu entries and its Download
 actions: the Project area's Export menu (beside Share) lists Export G-code…,

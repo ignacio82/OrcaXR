@@ -1760,14 +1760,14 @@ try {
   const policyFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/moonraker-policy-vectors.json", root)),
   );
-  assert.equal(replayMoonrakerPolicy(projectJniCore(jvm.call), policyFixture).moonrakerPolicyAnswers, 805);
+  assert.equal(replayMoonrakerPolicy(projectJniCore(jvm.call), policyFixture).moonrakerPolicyAnswers, 853);
   const policyScript = [
     ...["endpoints", "paths", "credentials", "errors", "handshakes", "policies", "subscriptions", "methods"].flatMap(
       (section) => policyFixture[section].map((c) => [section, c.requestJson, c.replyJson].join("\t")),
     ),
     ...policyFixture.delays.map((c) => ["delays", c.requestJson, String(c.delayMs)].join("\t")),
   ];
-  assert.equal(jvm.call("moonrakerPolicyChecks", policyScript.join("\n")), 805);
+  assert.equal(jvm.call("moonrakerPolicyChecks", policyScript.join("\n")), 853);
   // Printer storage through the real JNI exports, then the Kotlin wrapper.
   const storageFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/printer-storage-vectors.json", root)),

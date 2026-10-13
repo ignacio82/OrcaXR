@@ -7,6 +7,11 @@ import {
 const SENSITIVE_KEY = /(?:api[-_]?key|access[-_]?token|bearer|authorization|password|secret|credential)/i;
 const URL_PATTERN = /\b(?:https?|wss?):\/\/[^\s"'<>]+/gi;
 const MAX_CREDENTIAL_LENGTH = 4096;
+// Credentials written out in text: a named assignment (`api_key=…`, `bearer: …`), an HTTP
+// Authorization header with or without its scheme, and a bare `Bearer <token>`. A token the
+// redactor does not know is struck as well, so a header echoed back by a server never survives.
+const CREDENTIAL_TEXT =
+  /\b(?:(?:bearer|x-api-key|api_key|access_token)\s*[:=]\s*\S+|authorization\s*[:=]\s*(?:(?:bearer|basic|digest|token)\s+)?\S+|bearer\s+\S+)/gi;
 
 /** Per-transport memory only. This class intentionally has no serialization API. */
 export class MoonrakerSessionCredentialStore {
@@ -95,7 +100,7 @@ function redactValue(value: unknown, secrets: readonly string[], depth: number, 
 function redactString(value: string, secrets: readonly string[]): string {
   let result = replaceAsciiControls(value).replace(URL_PATTERN, '<redacted-url>');
   for (const secret of secrets) result = result.split(secret).join('<redacted>');
-  result = result.replace(/\b(?:bearer|x-api-key|api_key|access_token)\s*[:=]\s*\S+/gi, '<redacted>');
+  result = result.replace(CREDENTIAL_TEXT, '<redacted>');
   return result.slice(0, 512);
 }
 

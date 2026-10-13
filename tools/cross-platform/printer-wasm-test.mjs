@@ -103,7 +103,7 @@ assert.deepEqual(
   ],
   [80, 3254, 557, 8],
 );
-assert.equal(result.moonrakerPolicyAnswers, 805);
+assert.equal(result.moonrakerPolicyAnswers, 853);
 assert.deepEqual(
   [
     result.moonrakerTransportScenarios,

@@ -500,6 +500,26 @@ for (const failure of ['exhausted', 'refused'] as const) {
   assert.doesNotMatch(credentialSource, /localStorage|sessionStorage|indexedDB/);
 }
 
+// A token the redactor was not handed still goes: an echoed Authorization header,
+// with or without its scheme, and a bare `Bearer <token>`. Only `bearer:` and
+// `bearer=` were struck before, so the header kept its token.
+{
+  const cases: Array<[string, string]> = [
+    ['Authorization: Bearer abcdefgh12345 refused', '<redacted> refused'],
+    ['authorization=Basic dXNlcjpwYXNz', '<redacted>'],
+    ['AUTHORIZATION : Token xyz rest', '<redacted> rest'],
+    ["curl -H 'Authorization: Bearer abc' x", "curl -H '<redacted> x"],
+    ['Bearer abc123 rejected', '<redacted> rejected'],
+    ['sent bearer\tabc123', 'sent <redacted>'],
+    ['Authorization: Bearerabc', '<redacted>'],
+    ['Authorization: Bearer   ', '<redacted>   '],
+    ['bearer: abc', '<redacted>'],
+    ['api_key=secret123 rest', '<redacted> rest'],
+    ['unauthorized: no bearer', 'unauthorized: no bearer'],
+  ];
+  for (const [text, expected] of cases) assert.equal(redactMoonrakerDiagnostic(text), expected, text);
+}
+
 // A file transfer rides Moonraker's HTTP API, which owes nothing to the
 // JSON-RPC socket. Refusing while the socket reconnects is what reported
 // "invalid_state" on a send made after a slice long enough for one reconnect.

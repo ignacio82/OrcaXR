@@ -333,7 +333,7 @@ if (isMainThread) {
       [80, 3254, 557, 8],
     );
     // The Moonraker transport policy.
-    assert.equal(result.moonrakerPolicyAnswers, 805);
+    assert.equal(result.moonrakerPolicyAnswers, 853);
     // The Moonraker transport, step and state or reply for each input.
     assert.deepEqual(
       [

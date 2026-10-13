@@ -184,10 +184,7 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    slice output, one STL and all STLs as a ZIP, the 3MF, the configuration,
    the toolpaths as OBJ and diagnostics, each byte for byte the browser's,
    and Download, with `android-exports-smoke.py` passing on an API 34
-   iteration emulator (neither emulator suite has run it yet, item 1). The
-   diagnostics redaction keeps a browser defect, to fix in both: its pattern
-   rules leave `Authorization: Bearer <token>` intact (only `bearer:` and
-   `bearer=` are struck); Android also strikes the tokens it holds.
+   iteration emulator (neither emulator suite has run it yet, item 1).
 4. Phase 5 and 7: Repair and mesh Booleans, which the browser computes with
    libslic3r in its slicing engine (`OrcaWorkspace.booleanModels` calls
    `slicer.boolean`), through the `:engine` job service with the slicing job's

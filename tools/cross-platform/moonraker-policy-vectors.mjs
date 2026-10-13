@@ -295,6 +295,20 @@ const bodies = [
   "http://",
   "x:https://y",
   "_https://y",
+  // Credentials echoed as text: an Authorization header with or without its
+  // scheme, and a bare Bearer token, struck though the redactor never had them.
+  "Authorization: Bearer abcdefgh12345 refused",
+  "authorization=Basic dXNlcjpwYXNz",
+  "AUTHORIZATION : Token xyz rest",
+  "curl -H 'Authorization: Bearer abc' x",
+  "Bearer abc123 rejected",
+  "sent bearer\tabc123",
+  "Bearer\u00a0abc",
+  "Authorization: Bearerabc",
+  "Authorization: Bearer   ",
+  "Authorization: digest",
+  "authorization:",
+  "unauthorized: no bearer",
 ];
 const errorCases = [];
 for (const status of [

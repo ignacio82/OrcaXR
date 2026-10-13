@@ -97,5 +97,35 @@ fn moonraker_policy_answers_as_the_browser_does() {
         failures.len(),
         failures.join("\n")
     );
-    assert_eq!(counts, [85, 180, 14, 144, 44, 11, 14, 49]);
+    assert_eq!(counts, [85, 180, 14, 192, 44, 11, 14, 49]);
+}
+
+/// A token the redactor was not handed still goes: an echoed Authorization
+/// header, with or without its scheme, and a bare `Bearer <token>` (the
+/// browser's `moonraker-transport.test.ts` cases).
+#[test]
+fn credential_text_is_struck_without_its_secret() {
+    let units = |s: &str| s.encode_utf16().collect::<Vec<u16>>();
+    for (text, expected) in [
+        (
+            "Authorization: Bearer abcdefgh12345 refused",
+            "<redacted> refused",
+        ),
+        ("authorization=Basic dXNlcjpwYXNz", "<redacted>"),
+        ("AUTHORIZATION : Token xyz rest", "<redacted> rest"),
+        (
+            "curl -H 'Authorization: Bearer abc' x",
+            "curl -H '<redacted> x",
+        ),
+        ("Bearer abc123 rejected", "<redacted> rejected"),
+        ("sent bearer\tabc123", "sent <redacted>"),
+        ("Authorization: Bearerabc", "<redacted>"),
+        ("Authorization: Bearer   ", "<redacted>   "),
+        ("bearer: abc", "<redacted>"),
+        ("api_key=secret123 rest", "<redacted> rest"),
+        ("unauthorized: no bearer", "unauthorized: no bearer"),
+    ] {
+        let actual = String::from_utf16(&m::redact_text(&units(text), &[])).unwrap();
+        assert_eq!(actual, expected, "{text}");
+    }
 }
