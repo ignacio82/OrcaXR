@@ -773,3 +773,55 @@ pub fn export_name_json(request: &str) -> Result<String, &'static str> {
     };
     Ok(canonical(&object([("filename", Value::String(filename))])))
 }
+
+/// Export Diagnostics…'s project shape (`diagnosticsProjectSummaryOf`):
+/// counts and object names, never geometry, as canonical JSON
+/// `{"mixedFilamentCount","objectCount","objectNames","paintedVolumeCount",
+/// "physicalFilamentCount","plateCount","triangleCount","volumeCount"}`.
+pub fn diagnostics_summary_json(state: &ProjectState) -> String {
+    let objects: Vec<&ProjectObject> = state
+        .plates
+        .iter()
+        .flat_map(|plate| plate.objects.iter().map(|object| &**object))
+        .collect();
+    let volumes: Vec<_> = objects
+        .iter()
+        .flat_map(|object| object.volumes.iter())
+        .collect();
+    let painted = volumes
+        .iter()
+        .filter(
+            |volume| matches!(volume.annotations.color.value(), Value::Array(a) if !a.is_empty()),
+        )
+        .count();
+    let count = |n: usize| Value::Number(n as f64);
+    canonical(&object([
+        ("mixedFilamentCount", count(state.filaments.mixed.len())),
+        ("objectCount", count(objects.len())),
+        (
+            "objectNames",
+            Value::Array(
+                objects
+                    .iter()
+                    .map(|o| Value::String(o.name.units().to_vec()))
+                    .collect(),
+            ),
+        ),
+        ("paintedVolumeCount", count(painted)),
+        (
+            "physicalFilamentCount",
+            count(state.filaments.physical.len()),
+        ),
+        ("plateCount", count(state.plates.len())),
+        (
+            "triangleCount",
+            // `reduce((total, volume) => total + volume.source.triangleCount, 0)`.
+            Value::Number(
+                volumes
+                    .iter()
+                    .fold(0.0, |total, v| total + v.source.triangle_count.get()),
+            ),
+        ),
+        ("volumeCount", count(volumes.len())),
+    ]))
+}

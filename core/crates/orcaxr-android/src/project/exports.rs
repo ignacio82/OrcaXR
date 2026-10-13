@@ -73,3 +73,32 @@ pub(super) fn export_name(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<
     let json = exports::export_name_json(&request)?;
     string(env, json)
 }
+
+/// Export Diagnostics…'s shape of export capture [handle]'s project
+/// (`diagnosticsProjectSummaryOf`): counts and object names, never geometry.
+pub(super) fn export_diagnostics_summary(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_export(handle, |e| {
+        Ok(exports::diagnostics_summary_json(e.project().state()))
+    })?;
+    string(env, json)
+}
+
+/// `diagnosticsBundleExchange`: `{"includeModelNames","input"}` →
+/// `{"description","file","logEntries"}`, the browser's bundle and preview.
+pub(super) fn diagnostics_bundle(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let json = orcaxr_printer::diagnostics::bundle_json(&request)?;
+    string(env, json)
+}
+
+/// `diagnosticEntryExchange`: a recorded event as the browser's recorder keeps it.
+pub(super) fn diagnostic_entry(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let json = orcaxr_printer::diagnostics::entry_json(&request)?;
+    string(env, json)
+}
+
+/// `diagnosticsFactsExchange`: the catalogue's counts and the engine build a bundle states.
+pub(super) fn diagnostics_facts(env: &mut JNIEnv<'_>) -> Result<jstring> {
+    string(env, orcaxr_printer::diagnostics::facts_json())
+}

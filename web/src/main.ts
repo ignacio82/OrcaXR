@@ -129,6 +129,7 @@ import {
   describeDiagnosticsBundle,
   serializeDiagnosticsBundle,
 } from './diagnostics/DiagnosticsBundle';
+import { diagnosticsCapabilities } from './diagnostics/diagnosticsExchange';
 import { PINNED_ENGINE_PROVENANCE } from './slicer/pinnedEngineProvenance';
 import {
   addPrinter,
@@ -4397,10 +4398,7 @@ function setupDomUI(
           connected: printerConnectionState?.status === 'connected',
           ...(printJobSnapshot?.state ? { jobState: printJobSnapshot.state } : {}),
         },
-        capabilities: {
-          actionCount: registry.all().length,
-          unavailableCount: registry.all().filter((action) => action.capability.status === 'unavailable').length,
-        },
+        capabilities: diagnosticsCapabilities(registry.all()),
         project: workspace.diagnosticsProjectSummary(),
         log: diagnostics.snapshot(),
       },

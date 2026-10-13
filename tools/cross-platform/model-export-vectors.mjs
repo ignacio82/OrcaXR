@@ -19,6 +19,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import * as THREE from "../../web/node_modules/three/build/three.module.js";
 import { InMemoryAssetRepository } from "../../web/src/project/assets.ts";
 import { canonicalStringify } from "../../web/src/project/domain/canonical.ts";
+import { diagnosticsProjectSummaryOf } from "../../web/src/diagnostics/projectSummary.ts";
 import { seededRandom, UuidIdSource } from "../../web/src/project/domain/ids.ts";
 import { validateProjectState } from "../../web/src/project/domain/validation.ts";
 import {
@@ -221,6 +222,8 @@ const roleAssets = roles.assets.map((asset) => ({
 }));
 states.push(...roleStates);
 payloads.push(...roleAssets);
+// Export Diagnostics…'s project shape of each state (`diagnosticsProjectSummaryOf`).
+for (const state of states) state.diagnosticsSummaryJson = canonicalStringify(diagnosticsProjectSummaryOf(JSON.parse(state.stateJson)));
 const projects = [];
 for (const state of states) {
   const parsed = JSON.parse(state.stateJson);
@@ -291,6 +294,7 @@ for (const r of refusals)
 const sources = [
   "tools/cross-platform/model-export-vectors.mjs",
   "web/src/project/objects/modelExportExchange.ts",
+  "web/src/diagnostics/projectSummary.ts",
   "web/src/project/objects/stlExport.ts",
   "web/src/project/outputNames.ts",
   "web/src/project/serialization/Bbs3mfProjectSerializer.ts",

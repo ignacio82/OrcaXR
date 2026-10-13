@@ -18,6 +18,7 @@ import dev.orcaxr.core.DiscoveryProbe
 import dev.orcaxr.core.DiscoveryProposal
 import dev.orcaxr.core.CameraFrameException
 import dev.orcaxr.core.PrintHistory
+import dev.orcaxr.core.Diagnostics
 import dev.orcaxr.core.PrintJobCommandException
 import dev.orcaxr.core.PrinterCamera
 import dev.orcaxr.core.PrinterConsole
@@ -548,6 +549,17 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
             totals = totalsText,
         )
         main.post { history = next }
+    }
+
+    /**
+     * The printer's part of a diagnostics bundle, as the browser's shell
+     * states it: whether a printer is set up, whether it is connected, and
+     * its job's state when the session has one — never its address or key.
+     */
+    fun diagnosticsPrinter(): Diagnostics.Printer {
+        val job = if (!::workspace.isInitialized) null
+        else (workspace.session.view.snapshot as? ProjectIntents.OptionalPrintJobSnapshot.Value)?.value?.state
+        return Diagnostics.Printer(state.activeId != null, state.connected, job?.name?.lowercase())
     }
 
     // --- Console -----------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 import { AsyncTransformGesture, type TransformGestureHost } from './AsyncTransformGesture';
+import { diagnosticsProjectSummaryOf } from '../diagnostics/projectSummary';
 import {
   filamentAssignmentChanges,
   filamentAssignmentResolution,
@@ -4107,19 +4108,7 @@ export class CanonicalWorkspaceController {
     objectNames: string[];
   } {
     this.assertActive();
-    const state = this.session.project.getSnapshot().state;
-    const objects = state.plates.flatMap((plate) => plate.objects);
-    const volumes = objects.flatMap((object) => object.volumes);
-    return {
-      plateCount: state.plates.length,
-      objectCount: objects.length,
-      volumeCount: volumes.length,
-      triangleCount: volumes.reduce((total, volume) => total + volume.source.triangleCount, 0),
-      physicalFilamentCount: state.filaments.physical.length,
-      mixedFilamentCount: state.filaments.mixed.length,
-      paintedVolumeCount: volumes.filter((volume) => volume.annotations.color.length > 0).length,
-      objectNames: objects.map((object) => object.name),
-    };
+    return diagnosticsProjectSummaryOf(this.session.project.getSnapshot().state);
   }
 
   /** The drawing parameters on one volume, when it is an SVG part. */

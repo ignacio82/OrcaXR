@@ -7,9 +7,13 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import dev.orcaxr.nativeapp.prepare.PrepareCommands
 import dev.orcaxr.nativeapp.prepare.PrepareModel
 
@@ -42,7 +46,18 @@ fun ExportHost(exports: ExportModel, prepare: PrepareModel, show: (String) -> Un
         when (request) {
             is ExportRequest.Document -> document.launch(request)
             is ExportRequest.Folder -> folder.launch(null)
+            // Shown below for as long as it is asked.
+            is ExportRequest.Review -> Unit
         }
+    }
+    // Export Diagnostics…'s privacy preview: the bundle's own account, then the operator decides.
+    (request as? ExportRequest.Review)?.let { review ->
+        AlertDialog(
+            onDismissRequest = { exports.reviewed(review, false) },
+            text = { Text(review.question) },
+            confirmButton = { TextButton(onClick = { exports.reviewed(review, true) }) { Text(stringResource(android.R.string.ok)) } },
+            dismissButton = { TextButton(onClick = { exports.reviewed(review, false) }) { Text(stringResource(android.R.string.cancel)) } },
+        )
     }
     val slice = exports.sliceRequest
     LaunchedEffect(slice) {

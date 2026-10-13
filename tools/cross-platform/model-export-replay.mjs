@@ -24,7 +24,7 @@ export async function replayModelExports(core, fixture, layout, generation, sha2
     }
     if (!refused) fail(`${label} was accepted`);
   };
-  const counts = { files: 0, refused: 0, names: 0, refusals: 0, projects: 0, unsaved: 0 };
+  const counts = { files: 0, refused: 0, names: 0, refusals: 0, projects: 0, unsaved: 0, summaries: 0 };
   const budgets = {
     archiveBytes: 2 ** 30,
     entries: 4096,
@@ -90,6 +90,9 @@ export async function replayModelExports(core, fixture, layout, generation, sha2
     const guard = session.capture_guard();
     const capture = session.capture_export(guard);
     try {
+      // Export Diagnostics…'s shape of the project (`diagnosticsProjectSummaryOf`).
+      eq(capture.diagnostics_summary(), state.diagnosticsSummaryJson, `${state.name} diagnostics summary`);
+      counts.summaries++;
       for (const c of fixture.projects.filter((c) => c.state === state.name)) {
         const output = capture.project_archive_export(archiveLayout.version, policy);
         try {
@@ -144,6 +147,6 @@ export async function replayModelExports(core, fixture, layout, generation, sha2
     counts.refusals++;
   }
   return {
-    modelExportAnswers: [counts.files, counts.refused, counts.projects, counts.unsaved, counts.names, counts.refusals],
+    modelExportAnswers: [counts.files, counts.refused, counts.projects, counts.unsaved, counts.names, counts.refusals, counts.summaries],
   };
 }

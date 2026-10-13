@@ -115,6 +115,7 @@ object ActionTexts {
         "file_export_3mf" to R.string.export_3mf,
         "file_export_config" to R.string.export_config,
         "file_export_obj" to R.string.export_obj,
+        "file_export_logs" to R.string.export_logs,
         "save_gcode_to_downloads" to R.string.export_download,
         "save_all_plate_gcode" to R.string.export_download_all,
     )
@@ -203,6 +204,7 @@ object ActionTexts {
         "file_export_3mf" to R.string.action_hint_file_export_3mf,
         "file_export_config" to R.string.action_hint_file_export_config,
         "file_export_obj" to R.string.action_hint_file_export_obj,
+        "file_export_logs" to R.string.action_hint_file_export_logs,
         "save_gcode_to_downloads" to R.string.action_hint_save_gcode_to_downloads,
         "save_all_plate_gcode" to R.string.action_hint_save_all_plate_gcode,
     )

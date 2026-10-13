@@ -66,6 +66,7 @@ import { replayFilamentAssignment } from "./filament-assignment-replay.mjs";
 import { replayVolumeRoles } from "./volume-role-replay.mjs";
 import { replayModelExports } from "./model-export-replay.mjs";
 import { replayConfigExports } from "./config-export-replay.mjs";
+import { replayDiagnostics } from "./diagnostics-replay.mjs";
 import { replayPaintTool } from "./paint-tool-replay.mjs";
 import { replayVirtualFilaments } from "./virtual-filament-replay.mjs";
 import { readFileSync } from "node:fs";
@@ -824,6 +825,19 @@ try {
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
   );
   assert.deepEqual(configExports.configExportAnswers, [1482, 9]);
+  // File → Export Diagnostics… through the raw exports.
+  const diagnosticsFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/diagnostics-vectors.json", root)),
+  );
+  const diagnostics = replayDiagnostics(projectJniCore(jvm.call), diagnosticsFixture);
+  assert.deepEqual(diagnostics.diagnosticsAnswers, [12, 15, 11, 7]);
+  // Then through the Kotlin owner: the facts, every event a host records and
+  // every bundle of an Android host's facts.
+  const diagnosticsChecks = jvm.call(
+    "diagnosticsChecks",
+    await readFile(new URL("testdata/cross-platform/diagnostics-vectors.json", root), "utf8"),
+  );
+  assert.equal(diagnosticsChecks, 13);
   // File → Export Toolpaths as OBJ… through the Kotlin owner and the G-code
   // session's JNI export: every case's file from its text and its bytes.
   const toolpathObjFixture = JSON.parse(
@@ -1001,7 +1015,7 @@ try {
     (text) => Buffer.from(text, "base64"),
     JSON.parse(await readFile(new URL("contracts/project-archive.json", root))),
   );
-  assert.deepEqual(modelExports.modelExportAnswers, [85, 35, 8, 4, 78, 12]);
+  assert.deepEqual(modelExports.modelExportAnswers, [85, 35, 8, 4, 78, 12, 12]);
   // Then the Kotlin readers and owners: every reply and name, every export
   // through an export capture, and the workspace journey (selections, a
   // refusal that never opens the destination, a failing destination).
@@ -1010,7 +1024,7 @@ try {
     await readFile(new URL("testdata/cross-platform/model-export-vectors.json", root), "utf8"),
     decodeBytes("stl-binary/cube"),
   );
-  assert.equal(modelExportChecks, 493);
+  assert.equal(modelExportChecks, 494);
   // Capability pages over live sessions, then the Kotlin wrapper.
   const capabilityFixture = JSON.parse(
     await readFile(
@@ -2043,6 +2057,8 @@ try {
     modelExports,
     modelExportChecks,
     configExports,
+    diagnostics,
+    diagnosticsChecks,
     toolpathObjChecks,
     ...primitives,
     primitiveChecks,

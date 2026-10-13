@@ -133,6 +133,13 @@ final class NativeProject {
     static native String exportStl(long handle, String request, ProjectJsonSink sink);
     static native String exportProjectArchive(long handle, int version, double[] options, ProjectJsonSink sink);
     static native String exportName(String request);
+    // File → Export Diagnostics… (orcaxr_printer::diagnostics, the browser's
+    // diagnosticsExchange): an export capture's project shape, a bundle and its
+    // preview from a host's facts, a recorded event, and what the core states.
+    static native String exportDiagnosticsSummary(long handle);
+    static native String diagnosticsBundle(String request);
+    static native String diagnosticEntry(String request);
+    static native String diagnosticsFacts();
     // What binds a slice's output (orcaxr_project::slicing::sidecar, the
     // browser's SliceSidecarExchange): a plate's profile snapshot (of a state
     // document, or of a captured project with plateId as JSON text), an output

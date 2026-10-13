@@ -696,6 +696,11 @@ export class ProjectExport {
     free(): void;
     [Symbol.dispose](): void;
     /**
+     * Export Diagnostics…'s shape of this capture's project
+     * (`diagnosticsProjectSummaryOf`): counts and object names, never geometry.
+     */
+    diagnostics_summary(): string;
+    /**
      * The one-plate slice capture of `plate_id` (a JSON string): this
      * capture's project reduced to that plate as plate zero with only the
      * assets it keeps, admitted under the host's `Date.parse`, for
@@ -1486,6 +1491,23 @@ export function credentials_save(record: string): string | undefined;
  */
 export function describe_transport_failure(request: string): string;
 
+/**
+ * A recorded event (`diagnosticEntryExchange`):
+ * `{"atMs","level","message","scope","secrets"}` → the entry kept.
+ */
+export function diagnostic_entry(request: string): string;
+
+/**
+ * File → Export Diagnostics… (`diagnosticsBundleExchange`):
+ * `{"includeModelNames","input"}` → `{"description","file","logEntries"}`.
+ */
+export function diagnostics_bundle(request: string): string;
+
+/**
+ * What a bundle states of the catalogue and the engine (`diagnosticsFactsExchange`).
+ */
+export function diagnostics_facts(): string;
+
 export function evaluate(request: string): string;
 
 /**
@@ -2170,6 +2192,9 @@ export interface InitOutput {
     readonly credentials_load: (a: number, b: number) => [number, number, number, number];
     readonly credentials_save: (a: number, b: number) => [number, number, number, number];
     readonly describe_transport_failure: (a: number, b: number) => [number, number, number, number];
+    readonly diagnostic_entry: (a: number, b: number) => [number, number, number, number];
+    readonly diagnostics_bundle: (a: number, b: number) => [number, number, number, number];
+    readonly diagnostics_facts: () => [number, number];
     readonly evaluate: (a: number, b: number) => [number, number];
     readonly export_name: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_artifact: (a: number, b: number) => [number, number, number, number];
@@ -2377,6 +2402,7 @@ export interface InitOutput {
     readonly projectembossfont_glyphs: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectembossfont_prepare: (a: number, b: number, c: number) => [number, number, number];
     readonly projectembossfont_reply: (a: number) => [number, number, number, number];
+    readonly projectexport_diagnostics_summary: (a: number) => [number, number];
     readonly projectexport_plate: (a: number, b: number, c: number) => [number, number, number];
     readonly projectexport_preflight: (a: number, b: number, c: number) => [number, number, number];
     readonly projectexport_project: (a: number) => number;

@@ -188,7 +188,7 @@ class ProjectWorkspace(
         val OUTPUT_TOOLBAR_ACTIONS = listOf("save_gcode_to_downloads")
         val OUTPUT_MENU_ACTIONS = listOf(
             "file_export_gcode", "file_export_all_plates", "file_export_stl", "file_export_all_stls", "file_export_3mf",
-            "file_export_config", "file_export_obj", "save_all_plate_gcode",
+            "file_export_config", "file_export_obj", "file_export_logs", "save_all_plate_gcode",
         )
         /** The catalogue actions the Project area's Edit and Add menus offer for creation (`dom-menu`):
          * the clipboard, the bed fill, the primitives, the helper volumes and Set as Negative Part. */
@@ -772,6 +772,18 @@ class ProjectWorkspace(
         var answer: ProjectArchiveExport? = null
         return run({ guard, record ->
             actor.exportDocument(guard, EXPORT) { _, source -> capturing(record) { answer = ProjectDocuments.writeProjectArchive(source, ARCHIVE, output) } }
+        }) { result -> if (result is ProjectOutcome.Exported) answer else null }
+    }
+
+    /**
+     * Export Diagnostics…'s shape of the project as it stands once every
+     * queued edit has settled (`diagnosticsProjectSummaryOf`): counts and
+     * object names, never geometry. The project's saved state is untouched.
+     */
+    fun diagnosticsSummary(): CompletableFuture<Diagnostics.ProjectShape> {
+        var answer: Diagnostics.ProjectShape? = null
+        return run({ guard, record ->
+            actor.exportDocument(guard, EXPORT) { _, source -> capturing(record) { answer = source.diagnosticsSummary() } }
         }) { result -> if (result is ProjectOutcome.Exported) answer else null }
     }
 

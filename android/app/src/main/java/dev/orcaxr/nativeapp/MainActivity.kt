@@ -68,6 +68,7 @@ import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.nativeapp.device.DeviceModel
 import dev.orcaxr.nativeapp.device.DeviceScreen
 import dev.orcaxr.nativeapp.prepare.FollowSlicing
+import dev.orcaxr.nativeapp.exports.DiagnosticsLog
 import dev.orcaxr.nativeapp.exports.ExportCommands
 import dev.orcaxr.nativeapp.exports.ExportHost
 import dev.orcaxr.nativeapp.exports.ExportModel
@@ -353,7 +354,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         project.taskId = taskId
         prepare.bind(project)
-        exports.bind(project, prepare)
+        exports.bind(project, prepare, device::diagnosticsPrinter)
         if (savedInstanceState == null) handle(intent, created = true) else area = savedInstanceState.getInt(AREA, area)
         setContent {
             // Back with unsaved changes, from any area, asks in the Project area first.
@@ -372,6 +373,10 @@ class MainActivity : ComponentActivity() {
             // Output of a state the project has left is withdrawn wherever it is shown.
             val revision = project.view.revision
             LaunchedEffect(revision) { preview.projectChanged(revision) }
+            // The credentials this device holds now are struck from every diagnostic event recorded while it does.
+            val token = prepare.state.token
+            val apiKey = device.state.apiKey
+            LaunchedEffect(token, apiKey) { DiagnosticsLog.secrets = listOf(token, apiKey).filter { it.isNotEmpty() } }
             var state by remember { mutableIntStateOf(R.string.workspace_loading) }
             LaunchedEffect(Unit) {
                 state = withContext(Dispatchers.Default) {

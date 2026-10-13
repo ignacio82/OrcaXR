@@ -84,10 +84,11 @@ physical-device gate below is still open.
   layouts, file drop, recovery and multi-window document ownership, the
   Workspace's transform gizmo with its keys G, R and S, the semantic
   editor's volume roles with Set as Negative Part, and the File menu's
-  exports of slice output, STLs, the 3MF, the configuration and the toolpaths as OBJ with Download (the emulator suites for
-  the gizmo, the roles, brim ears, the wipe tower, drawn parts and the
-  exports pending). Remains: *Resume here* items 1 to 4, and physical
-  devices for the exit gate.
+  exports (slice output, STLs, the 3MF, the configuration, the toolpaths as
+  OBJ and diagnostics) with Download (the emulator suites for the gizmo, the
+  roles, brim ears, the wipe tower, drawn parts and the exports pending).
+  Remains: *Resume here* items 1 to 4, and physical devices for the exit
+  gate.
 - **Phase 8, Android XR: not started.** Only Phase 2's SceneCore candidate
   (`android/renderer-scenecore`, `android/xr-experiment`) exists. Verification
   needs the user's Galaxy XR.
@@ -170,13 +171,7 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    `assembly_explode`) and the wipe tower's ghost on local branch
    `assembly` (worktree `~/.cache/orcaxr-assembly`, from `main` after emboss
    and SVG), a sub-agent's.
-3. Phase 7, other surfaces: the last File menu export, Export
-   Diagnostics… (`file_export_logs`, a privacy-reviewed bundle), through the
-   exchange pattern into the Export menu
-   ([§](engineering/native-core.md#android-exports); slice output, STLs,
-   the 3MF, the configuration, the toolpaths as OBJ and Download are done
-   there, in flight on local branch `exports`),
-   geometry-only 3MF import, the View menu's
+3. Phase 7, other surfaces: geometry-only 3MF import, the View menu's
    display toggles, lighting and preview controls, handy and calibration
    models, preset management, the Help menu, the Android-only words still
    literal in Kotlin, and the in-app reduce-motion override. For the full gap,
@@ -184,12 +179,15 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    actions the app performs) with the catalogue in
    `core/crates/orcaxr-contracts/src/capabilities/generated.rs`; some catalogue
    actions are carried out outside the palette (the Device area's printer
-   actions, the plate bar, the filament bar, the settings panels).
-   In flight: the exports (slice output to a chosen document, Export as one
-   STL, all STLs as a ZIP, generic 3MF, configuration, toolpaths as OBJ, then
-   diagnostics), byte-identical to the browser's, on local branch `exports`
-   (worktree `~/.cache/orcaxr-exports`, from `main` after the volume roles),
-   a sub-agent's.
+   actions, the plate bar, the filament bar, the settings panels). The File
+   menu's exports are done ([§](engineering/native-core.md#android-exports)):
+   slice output, one STL and all STLs as a ZIP, the 3MF, the configuration,
+   the toolpaths as OBJ and diagnostics, each byte for byte the browser's,
+   and Download, with `android-exports-smoke.py` passing on an API 34
+   iteration emulator (neither emulator suite has run it yet, item 1). The
+   diagnostics redaction keeps a browser defect, to fix in both: its pattern
+   rules leave `Authorization: Bearer <token>` intact (only `bearer:` and
+   `bearer=` are struck); Android also strikes the tokens it holds.
 4. Phase 5 and 7: Repair and mesh Booleans, which the browser computes with
    libslic3r in its slicing engine (`OrcaWorkspace.booleanModels` calls
    `slicer.boolean`), through the `:engine` job service with the slicing job's
@@ -2591,14 +2589,15 @@ storage journeys on phone, tablet, and desktop-sized windows.
   The File menu's exports of slice output (Download, Export G-code…,
   Download All Plates, Export All Plates…), STLs (one merged, or one per
   instance in the browser's ZIP), the 3MF (the browser's Save, byte for
-  byte), the chosen profile's configuration and the published slice's
-  toolpaths as OBJ write the browser's bytes and names through the system's
+  byte), the chosen profile's configuration, the published slice's
+  toolpaths as OBJ and the diagnostics bundle (after the browser's privacy
+  preview) write the browser's bytes and names through the system's
   picker,
   with the provider failures in words
   ([§](engineering/native-core.md#android-exports)).
   Status (2026-10-12): remains: disk-full and revoked-grant checks and
-  large-file timing on a device, the diagnostics export and geometry-only
-  3MF import (*Resume here* item 3).
+  large-file timing on a device, and geometry-only 3MF import (*Resume
+  here* item 3).
 - [x] Implement recovery storage and Save/Discard/Cancel guards for back,
   navigation, new/open/replace, window close where observable, and app updates.
   Test process death during capture, write, commit, and restore.

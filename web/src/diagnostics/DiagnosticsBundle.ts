@@ -46,17 +46,11 @@ export class DiagnosticsRecorder {
 
   /** Values to strike from every message, in addition to the pattern rules. */
   setSecrets(secrets: readonly string[]): void {
-    this.secrets = secrets.filter((secret) => secret.length >= 8);
+    this.secrets = diagnosticSecrets(secrets);
   }
 
   record(level: DiagnosticLevel, scope: string, message: string, data?: unknown): void {
-    const entry: DiagnosticEntry = {
-      atMs: Date.now() - this.startedAt,
-      level,
-      scope: String(scope).slice(0, 64),
-      message: String(redactMoonrakerDiagnostic(message, this.secrets)).slice(0, MAX_MESSAGE_LENGTH),
-      ...(data === undefined ? {} : { data: redactMoonrakerDiagnostic(data, this.secrets) }),
-    };
+    const entry = diagnosticEntry(Date.now() - this.startedAt, level, scope, message, this.secrets, data);
     this.entries.push(entry);
     // Oldest first out: a crash is usually near the end of a session.
     if (this.entries.length > MAX_LOG_ENTRIES) this.entries.splice(0, this.entries.length - MAX_LOG_ENTRIES);
@@ -75,6 +69,33 @@ export class DiagnosticsRecorder {
   clear(): void {
     this.entries.length = 0;
   }
+}
+
+/** The secrets a recorder strikes: those long enough to be told from ordinary words. */
+export function diagnosticSecrets(secrets: readonly string[]): readonly string[] {
+  return secrets.filter((secret) => secret.length >= 8);
+}
+
+/**
+ * One recorded event, redacted as it is recorded: [atMs] since the recorder
+ * started, the scope at most 64 units, the message struck of [secrets]
+ * (already [diagnosticSecrets]) and the pattern rules, at most 512 units.
+ */
+export function diagnosticEntry(
+  atMs: number,
+  level: DiagnosticLevel,
+  scope: string,
+  message: string,
+  secrets: readonly string[],
+  data?: unknown,
+): DiagnosticEntry {
+  return {
+    atMs,
+    level,
+    scope: String(scope).slice(0, 64),
+    message: String(redactMoonrakerDiagnostic(message, secrets)).slice(0, MAX_MESSAGE_LENGTH),
+    ...(data === undefined ? {} : { data: redactMoonrakerDiagnostic(data, secrets) }),
+  };
 }
 
 /** Facts the caller supplies; this module never reaches for globals itself. */

@@ -18,7 +18,7 @@ class ExportCommandsTest {
         assertEquals(
             listOf(
                 "file_export_gcode", "file_export_all_plates", "file_export_stl", "file_export_all_stls", "file_export_3mf",
-                "file_export_config", "file_export_obj", "save_gcode_to_downloads", "save_all_plate_gcode",
+                "file_export_config", "file_export_obj", "file_export_logs", "save_gcode_to_downloads", "save_all_plate_gcode",
             ),
             ExportCommands.IDS,
         )
@@ -89,6 +89,13 @@ class ExportCommandsTest {
         assertEquals(ExportWords(R.string.export_obj_slice_first), ExportCommands.OBJ_SLICE_FIRST)
         assertEquals("Export OBJ failed: The G-code is too large for this device.", ExportCommands.text(ExportCommands.failedObj("source_length")) { "Export OBJ failed" })
         assertEquals(ExportWords(R.string.export_obj_failed, ": The toolpaths could not be written."), ExportCommands.failedObj("invalid-model"))
+        // Export Diagnostics…: the browser's confirmation around the bundle's own account, and its outcomes.
+        assertEquals(
+            "Export this diagnostics bundle?\n\nOrcaXR 1 · engine abc · android-native\n\nNothing is sent anywhere; the file is saved to this device.",
+            ExportCommands.reviewQuestion("OrcaXR 1 · engine abc · android-native"),
+        )
+        assertEquals(ExportWords(R.string.export_logs_cancelled), ExportCommands.LOGS_CANCELLED)
+        assertEquals("Exported 3 log entries. No project, addresses, or tokens are in the file.", ExportCommands.logsExported(3).text)
     }
 
     @Test fun aProvidersFailureIsSaidInWords() {

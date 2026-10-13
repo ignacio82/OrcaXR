@@ -30,12 +30,13 @@ object ExportCommands {
     const val EXPORT_3MF = "file_export_3mf"
     const val EXPORT_CONFIG = "file_export_config"
     const val EXPORT_OBJ = "file_export_obj"
+    const val EXPORT_LOGS = "file_export_logs"
 
     /** The exports the app performs, in the catalogue's order. */
-    val IDS = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, EXPORT_CONFIG, EXPORT_OBJ, DOWNLOAD, DOWNLOAD_ALL)
+    val IDS = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, EXPORT_CONFIG, EXPORT_OBJ, EXPORT_LOGS, DOWNLOAD, DOWNLOAD_ALL)
 
     /** The File menu's export section as the browser's menu lists it (Download All Plates is in its file section too). */
-    val MENU = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, EXPORT_CONFIG, EXPORT_OBJ, DOWNLOAD_ALL)
+    val MENU = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, EXPORT_CONFIG, EXPORT_OBJ, EXPORT_LOGS, DOWNLOAD_ALL)
 
     /** Export Config…'s file name (`CONFIG_EXPORT_FILENAME`). */
     const val CONFIG_FILENAME = "orcaxr_config.json"
@@ -130,6 +131,20 @@ object ExportCommands {
             else -> "The toolpaths could not be written."
         },
     )
+
+    /** Export Diagnostics…'s privacy preview, as the browser's confirmation asks it: [description] is the bundle's own account. */
+    fun reviewQuestion(description: String) =
+        "Export this diagnostics bundle?\n\n$description\n\nNothing is sent anywhere; the file is saved to this device."
+
+    /** The preview declined: nothing was written. */
+    val LOGS_CANCELLED = ExportWords(R.string.export_logs_cancelled)
+
+    /** The bundle saved, keeping [entries] events. */
+    fun logsExported(entries: Int) =
+        ExportWords(text = "Exported $entries log entries. No project, addresses, or tokens are in the file.")
+
+    /** Android-only words: the facts could not be gathered or written (the browser's shell would record it as an error). */
+    val LOGS_FAILED = ExportWords(text = "The diagnostics bundle could not be written.")
 
     /** What the status line says when [id]'s STL export was refused for [message]. */
     fun stlRefused(id: String, message: String): ExportWords =

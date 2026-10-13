@@ -97,6 +97,7 @@ export function startProjectJni(profile = "debug") {
   signatures.exportProjectArchiveFile = ["long", "int", "double[]"];
   signatures.modelExportChecks = ["String", "byte[]"];
   signatures.toolpathObjChecks = ["String"];
+  signatures.diagnosticsChecks = ["String"];
   signatures.primitiveChecks = ["String"];
   signatures.paintToolChecks = ["String"];
   signatures.paintChecks = [];
@@ -601,6 +602,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     // The STL export streams through a ProjectJsonSink; the harness collects
     // it and answers the reply and the bytes (base64) on two lines.
+    diagnostics_summary() {
+      return call("exportDiagnosticsSummary", this.handle);
+    }
     stl_export(request) {
       const answer = call("exportStlFile", this.handle, request);
       const split = answer.indexOf("\n");
@@ -1557,6 +1561,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     layer_range_messages: (request) => call("layerRangeMessages", request),
     volume_role_messages: (request) => call("volumeRoleMessages", request),
     export_name: (request) => call("exportName", request),
+    diagnostics_bundle: (request) => call("diagnosticsBundle", request),
+    diagnostic_entry: (request) => call("diagnosticEntry", request),
+    diagnostics_facts: () => call("diagnosticsFacts"),
     transform_field_edit: (request) => call("transformFieldEdit", request),
     transform_rotation: (request) => call("transformRotation", request),
     transform_gizmo_attach: (request) => call("transformGizmoAttach", request),

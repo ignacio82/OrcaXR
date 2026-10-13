@@ -191,6 +191,10 @@ object ProjectModelExportChecks {
             val posedCase = objects(reference.get("projects")).single { it.get("state") == "posed" }
             check(saved == ModelExports.projectArchive(posedCase.get("replyJson") as String) && saved.filename == "Untitled project.3mf", "workspace 3MF $saved")
             check(sha(project.bytes.toByteArray()) == posedCase.get("sha256") && (workspace.view.undo to workspace.view.dirty) == history, "workspace 3MF bytes")
+            // Export Diagnostics…'s shape of the same state: its counts and names, the browser's.
+            val shape = done(workspace.diagnosticsSummary())
+            val posedShape = states.single { it.get("name") == "posed" }.get("diagnosticsSummaryJson") as String
+            check(shape == Diagnostics.projectShape(posedShape) && (workspace.view.undo to workspace.view.dirty) == history, "workspace diagnostics shape $shape")
             exported(false, emptyList(), "plate")
             exported(true, emptyList(), "plate archive")
             done(workspace.selectInstance(instances.first()))

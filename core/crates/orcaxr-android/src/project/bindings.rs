@@ -510,6 +510,25 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_exportDiagnosticsSummary, export_diagnostics_summary, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_diagnosticsBundle, diagnostics_bundle, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_diagnosticEntry, diagnostic_entry, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_diagnosticsFacts, diagnostics_facts, jstring,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sliceProfiles, slice_profiles, jstring,
     request: JString<'local>,
 }

@@ -22,6 +22,7 @@ import dev.orcaxr.core.BrimEarAuto
 import dev.orcaxr.core.BrimEarClear
 import dev.orcaxr.core.BrimEarState
 import dev.orcaxr.core.ContentProjectDocument
+import dev.orcaxr.core.Diagnostics
 import dev.orcaxr.core.ProjectArchiveExport
 import dev.orcaxr.core.StlExport
 import dev.orcaxr.core.DigestingDocument
@@ -73,6 +74,7 @@ import dev.orcaxr.core.VirtualFilamentSearch
 import dev.orcaxr.core.VirtualFilaments
 import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.device.PreferencesTextStore
+import dev.orcaxr.nativeapp.exports.DiagnosticsLog
 import dev.orcaxr.nativeapp.prepare.PlateSource
 import dev.orcaxr.nativeapp.shell.AppActions
 import dev.orcaxr.nativeapp.workspace.DrawnPartModel
@@ -276,6 +278,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
                 task()
             } catch (failure: Throwable) {
                 val reason = cause(failure)
+                DiagnosticsLog.recordError("project", reason)
                 main.post { message = reason.message ?: reason.javaClass.simpleName }
             } finally {
                 // After what the task posted: a dialog it raised is up before the next dropped file is considered.
@@ -872,6 +875,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
      */
     fun exportConfig(): CompletableFuture<String?> = CompletableFuture.supplyAsync({ profiles.configExport() }, worker)
 
+    /** Export Diagnostics…'s shape of the project as it stands once every queued edit has settled ([ProjectWorkspace.diagnosticsSummary]). */
+    fun diagnosticsSummary(): CompletableFuture<Diagnostics.ProjectShape> = started.thenCompose { it.diagnosticsSummary() }
+
     fun undo() = work { workspace.undo().await() }
     fun redo() = work { workspace.redo().await() }
 
@@ -886,6 +892,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
                 task()
             } catch (failure: Throwable) {
                 val reason = cause(failure)
+                DiagnosticsLog.recordError("project", reason)
                 main.post { message = reason.message ?: reason.javaClass.simpleName }
             }
         }

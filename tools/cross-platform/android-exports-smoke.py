@@ -18,8 +18,13 @@ Save is the export), while the project's own saved state is untouched.
 "Export Config…" writes `orcaxr_config.json`: the browser's file of the
 chosen catalog profile, byte for byte (its SHA-256 and length among the
 bundled profiles' recorded by `config-export-vectors.mjs`, the profile the
-one its printer names). Each document is saved in Downloads, chosen from the
-picker's roots (it reopens where it was last used).
+one its printer names). "Export Diagnostics…" shows the browser's privacy
+preview — declined, it writes nothing and says so — and, agreed,
+`orcaxr-diagnostics.json`: written as the browser's `JSON.stringify` writes
+it, the preview's account the browser's own `describeDiagnosticsBundle` of
+that very file, the project's shape without its names, no address. Each
+document is saved in Downloads, chosen from the picker's roots (it reopens
+where it was last used).
 
 Then on the external slicer (the real server on the host, its engine a
 stand-in writing the reference G-code), once connected and agreed to:
@@ -88,6 +93,14 @@ import {{ exportToolpathsToObj }} from {json.dumps(str(ROOT / "web/src/slicer/Gc
 const chunks = [];
 for await (const chunk of process.stdin) chunks.push(chunk);
 process.stdout.write(exportToolpathsToObj(new TextDecoder().decode(Buffer.concat(chunks))));
+"""
+# The browser over a diagnostics file from stdin: whether its own JSON.stringify writes it, and its preview's account.
+BROWSER_DIAGNOSTICS = f"""
+import {{ describeDiagnosticsBundle }} from {json.dumps(str(ROOT / "web/src/diagnostics/DiagnosticsBundle.ts"))};
+let input = "";
+for await (const chunk of process.stdin) input += chunk;
+const bundle = JSON.parse(input);
+process.stdout.write(JSON.stringify({{ written: JSON.stringify(bundle, null, 2) + "\\n" === input, description: describeDiagnosticsBundle(bundle) }}));
 """
 FOLDER = "orcaxr-plates"
 
@@ -262,6 +275,33 @@ try:
     fields = json.loads(config)
     assert fields["orcaxr_config"] == 1 and chosen["id"].startswith(f"{fields['machineName']}|{fields['processName']}|"), chosen["id"]
     written["orcaxr_config.json"] = len(config)
+
+    # Export Diagnostics…: the browser's privacy preview first; declined, nothing is written.
+    question = "Export this diagnostics bundle?"
+    menu("Export", "Export Diagnostics…")
+    find(question, exact=False, timeout=60)
+    tap("Cancel")
+    find("Diagnostics export cancelled; nothing was written.", timeout=30)
+    # Agreed: the file the preview describes, written as the browser writes it.
+    menu("Export", "Export Diagnostics…")
+    find(question, exact=False, timeout=60)
+    shown = next((n.get("text") or "") for n in screen.nodes() if (n.get("text") or "").startswith(question))
+    tap("OK")
+    save_as("orcaxr-diagnostics.json")
+    find(" log entries. No project, addresses, or tokens are in the file.", exact=False, timeout=30)
+    diagnostics = pull(f"{DOWNLOAD}/orcaxr-diagnostics.json")
+    browser = json.loads(subprocess.check_output(
+        ["node", "--import", "./web/node_modules/tsx/dist/loader.mjs", "--input-type=module", "-e", BROWSER_DIAGNOSTICS],
+        input=diagnostics, cwd=ROOT, timeout=120))
+    assert browser["written"], "The diagnostics file is not written as the browser's JSON.stringify writes it"
+    expected = f"{question}\n\n{browser['description']}\n\nNothing is sent anywhere; the file is saved to this device."
+    assert shown == expected, f"The preview is not the browser's account of the file: {shown!r}"
+    bundle = json.loads(diagnostics)
+    assert bundle["format"] == "orcaxr.diagnostics" and bundle["engine"]["route"] == "android-native", bundle["engine"]
+    assert (bundle["project"]["plateCount"], bundle["project"]["objectCount"]) == (2, 2), bundle["project"]
+    assert "objectNames" not in bundle["project"] and "model and object names" in bundle["omitted"], bundle["omitted"]
+    assert b"://" not in diagnostics and TOKEN.encode() not in diagnostics, "An address or the token reached the file"
+    written["orcaxr-diagnostics.json"] = len(diagnostics)
 
     # A negative part: refused in the browser's words; no picker opens.
     menu("Edit", "Select All")

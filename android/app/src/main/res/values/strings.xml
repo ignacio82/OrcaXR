@@ -704,4 +704,7 @@
     <string name="export_obj_done">Sliced toolpaths exported as OBJ.</string>
     <string name="export_obj_failed">Export OBJ failed</string>
     <string name="export_obj_slice_first">Slice the plate before exporting toolpaths.</string>
+    <string name="export_logs">Export Diagnostics…</string>
+    <string name="action_hint_file_export_logs">Review and export a diagnostics bundle for a bug report; it carries no project or tokens</string>
+    <string name="export_logs_cancelled">Diagnostics export cancelled; nothing was written.</string>
 </resources>

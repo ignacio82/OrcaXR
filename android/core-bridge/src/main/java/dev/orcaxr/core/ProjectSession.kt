@@ -601,20 +601,23 @@ class ProjectExportCapture internal constructor(handle: Long) : ProjectHandle(ha
      * from its active plate — a plate capture's only one — by the shared core
      * (`orcaxr_archive::thumbnail`). Synchronous; run it on the export worker. */
     fun thumbnails(): PlateThumbnails = read { GcodeThumbnails.read(NativeProject.exportThumbnails(it)) }
-    /** File → Export as one STL… or Export all objects as STLs… of this capture
-     * (`orcaxr_archive::exports`, the browser's bytes): [request] from
-     * [ModelExports.stlRequest]. The file streams to [destination] in chunks of
-     * at most 64 KiB; the reply says what was written, or is the browser's
-     * refusal, which writes nothing. Synchronous; run it on the export worker. */
     /** Export as 3MF… of this capture under [options]: the browser's own package
      * (its serializer's Save, byte for byte) streamed to [destination], or the
      * refusal, which writes nothing. Synchronous; run it on the export worker. */
     fun writeProjectArchive(options: ProjectArchiveOptions, destination: java.io.OutputStream): ProjectArchiveExport = read {
         ModelExports.projectArchive(NativeProject.exportProjectArchive(it, ProjectArchive.VERSION, options.encode()) { bytes -> destination.write(bytes) })
     }
+    /** File → Export as one STL… or Export all objects as STLs… of this capture
+     * (`orcaxr_archive::exports`, the browser's bytes): [request] from
+     * [ModelExports.stlRequest]. The file streams to [destination] in chunks of
+     * at most 64 KiB; the reply says what was written, or is the browser's
+     * refusal, which writes nothing. Synchronous; run it on the export worker. */
     fun writeStl(request: String, destination: java.io.OutputStream): StlExport = read {
         ModelExports.stl(NativeProject.exportStl(it, request) { bytes -> destination.write(bytes) })
     }
+    /** Export Diagnostics…'s shape of this capture's project
+     * (`diagnosticsProjectSummaryOf`): counts and object names, never geometry. */
+    fun diagnosticsSummary(): Diagnostics.ProjectShape = read { Diagnostics.projectShape(NativeProject.exportDiagnosticsSummary(it)) }
     /** Live slice preflight of exactly this frozen bundle. Synchronous; run it on
      * the export worker. Closing this capture cancels the native preflight. */
     fun preflight(request: ProjectIntents.PreflightRequest): ProjectPreflight = read {

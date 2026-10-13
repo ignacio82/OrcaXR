@@ -219,6 +219,26 @@ pub fn export_name(request: &str) -> Result<String, JsValue> {
     orcaxr_archive::exports::export_name_json(request).map_err(error)
 }
 
+/// File → Export Diagnostics… (`diagnosticsBundleExchange`):
+/// `{"includeModelNames","input"}` → `{"description","file","logEntries"}`.
+#[wasm_bindgen]
+pub fn diagnostics_bundle(request: &str) -> Result<String, JsValue> {
+    orcaxr_printer::diagnostics::bundle_json(request).map_err(error)
+}
+
+/// A recorded event (`diagnosticEntryExchange`):
+/// `{"atMs","level","message","scope","secrets"}` → the entry kept.
+#[wasm_bindgen]
+pub fn diagnostic_entry(request: &str) -> Result<String, JsValue> {
+    orcaxr_printer::diagnostics::entry_json(request).map_err(error)
+}
+
+/// What a bundle states of the catalogue and the engine (`diagnosticsFactsExchange`).
+#[wasm_bindgen]
+pub fn diagnostics_facts() -> String {
+    orcaxr_printer::diagnostics::facts_json()
+}
+
 #[wasm_bindgen]
 impl ProjectExport {
     /// The pictures this capture's project asks for (its `thumbnails`),
@@ -250,6 +270,11 @@ impl ProjectExport {
         )
         .map_err(|e| error(save_code(e)))?;
         Ok(ProjectFileOutput { reply, bytes })
+    }
+    /// Export Diagnostics…'s shape of this capture's project
+    /// (`diagnosticsProjectSummaryOf`): counts and object names, never geometry.
+    pub fn diagnostics_summary(&self) -> String {
+        orcaxr_archive::exports::diagnostics_summary_json(self.inner.project().state())
     }
     pub fn stl_export(&self, request: &str) -> Result<ProjectFileOutput, JsValue> {
         let mut bytes = Vec::new();

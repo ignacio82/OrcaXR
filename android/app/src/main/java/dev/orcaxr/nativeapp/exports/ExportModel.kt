@@ -2,6 +2,7 @@ package dev.orcaxr.nativeapp.exports
 
 import android.app.Application
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
@@ -12,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import dev.orcaxr.core.ContentProjectDocument
+import dev.orcaxr.core.Diagnostics
 import dev.orcaxr.core.ExportNameKind
 import dev.orcaxr.core.ModelExports
 import dev.orcaxr.core.ProjectDocumentException
@@ -24,6 +26,7 @@ import dev.orcaxr.nativeapp.prepare.PrepareModel
 import dev.orcaxr.nativeapp.project.ProjectModel
 import java.io.File
 import java.text.NumberFormat
+import java.util.Locale
 import java.util.concurrent.CompletionException
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
@@ -39,6 +42,9 @@ sealed interface ExportRequest {
 
     /** A folder to create one document per sliced plate in. */
     data class Folder(override val id: String, override val serial: Int) : ExportRequest
+
+    /** Export Diagnostics…'s privacy preview: [question] asks to export the bundle it describes. */
+    data class Review(override val id: String, val question: String, override val serial: Int) : ExportRequest
 }
 
 /** A status the shell shows once (the browser's status line); [serial] tells equal words apart. */
@@ -54,7 +60,10 @@ data class ExportStatus(val words: ExportWords, val serial: Int)
  * as a 3MF ([ExportCommands.EXPORT_3MF]), the chosen profile's
  * configuration ([ExportCommands.EXPORT_CONFIG]) and the published slice's
  * toolpaths as OBJ ([ExportCommands.EXPORT_OBJ]) — each the same bytes the
- * browser downloads, under its name.
+ * browser downloads, under its name — and the diagnostics bundle
+ * ([ExportCommands.EXPORT_LOGS]): this device's facts written as the browser
+ * writes its own, shown in the browser's privacy preview before any place is
+ * asked for, and written only once the operator agrees.
  *
  * What is written is fixed when the action is chosen, as the browser's
  * download is: a model export is written by the shared core, after every
@@ -112,11 +121,18 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
 
         /** A model export written to [file] by the core; [done] says what the status line says once it is saved. */
         class Staged(override val id: String, val file: File, val done: ExportWords) : Pending
+
+        /** A diagnostics bundle written to [file], keeping [entries] events, awaiting the operator's review. */
+        class Review(override val id: String, val file: File, val entries: Int) : Pending
     }
 
-    fun bind(project: ProjectModel, prepare: PrepareModel) {
+    /** The printer's part of a diagnostics bundle, read where the Device area keeps it. Main thread. */
+    private var printer: () -> Diagnostics.Printer? = { null }
+
+    fun bind(project: ProjectModel, prepare: PrepareModel, printer: () -> Diagnostics.Printer?) {
         this.project = project
         this.prepare = prepare
+        this.printer = printer
         worker.execute { staging.listFiles()?.forEach { it.delete() } }
     }
 
@@ -138,6 +154,7 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
                 val slice = prepare.sendable() ?: return show(ExportCommands.OBJ_SLICE_FIRST)
                 stage(id, Toolpaths(slice.file, project.view.activePlate?.name))
             }
+            id == ExportCommands.EXPORT_LOGS -> diagnostics(id)
             id == ExportCommands.DOWNLOAD_ALL -> downloadAll(id)
             id == ExportCommands.EXPORT_ALL_PLATES -> when {
                 project.view.plateList.sumOf { it.objects } == 0 -> show(ExportCommands.NOTHING_TO_SLICE)
@@ -246,6 +263,7 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (failure: Throwable) {
                 val cause = unwrap(failure)
+                DiagnosticsLog.recordError("export", cause)
                 Staging(null, refused(cause.message ?: cause.javaClass.simpleName))
             }
             if (staged.filename == null) file.delete()
@@ -256,6 +274,75 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Export Diagnostics…, as the browser's shell gathers it: this device's
+     * facts (the app's version; the core's engine build and catalogue; the
+     * route Prepare slices on; the platform's release, language and cores in
+     * the browser's `browser` part — never the device's model or build; the
+     * printer's state; the project's shape; the recorded events), written by
+     * the core into a staging file and described, then shown for review.
+     */
+    private fun diagnostics(id: String) {
+        busy = true
+        val printer = printer()
+        val route = if (prepare.state.connection.enabled) "external-server" else "android-native"
+        val log = DiagnosticsLog.snapshot()
+        val version = runCatching {
+            getApplication<Application>().run { packageManager.getPackageInfo(packageName, 0).versionName }
+        }.getOrNull() ?: "unknown"
+        val file = File(staging, "staged-${++serial}")
+        task = worker.submit {
+            val bundle = try {
+                val facts = Diagnostics.facts()
+                val shape = project.diagnosticsSummary().get()
+                val written = Diagnostics.bundle(
+                    Diagnostics.Input(
+                        appVersion = version,
+                        engineCommit = facts.engineCommit,
+                        route = route,
+                        userAgent = "OrcaXR Android $version (Android ${Build.VERSION.RELEASE}; API ${Build.VERSION.SDK_INT})",
+                        language = Locale.getDefault().toLanguageTag(),
+                        hardwareConcurrency = Runtime.getRuntime().availableProcessors(),
+                        printer = printer,
+                        actionCount = facts.actionCount,
+                        unavailableCount = facts.unavailableCount,
+                        project = shape,
+                        log = log,
+                    ),
+                )
+                staging.mkdirs()
+                file.writeText(written.file, Charsets.UTF_8)
+                written
+            } catch (failure: Throwable) {
+                DiagnosticsLog.recordError("export", unwrap(failure))
+                file.delete()
+                null
+            }
+            main.post {
+                busy = false
+                if (bundle == null) {
+                    show(ExportCommands.LOGS_FAILED)
+                } else {
+                    pending = Pending.Review(id, file, bundle.logEntries)
+                    request = ExportRequest.Review(id, ExportCommands.reviewQuestion(bundle.description), ++serial)
+                }
+            }
+        }
+    }
+
+    /** The operator's answer to [asked]'s preview: agreed asks for a place; declined writes nothing. Main thread. */
+    fun reviewed(asked: ExportRequest.Review, agreed: Boolean) {
+        if (request != asked) return
+        request = null
+        val what = pending as? Pending.Review ?: return
+        pending = null
+        if (!agreed) {
+            worker.execute { what.file.delete() }
+            return show(ExportCommands.LOGS_CANCELLED)
+        }
+        ask(Pending.Staged(what.id, what.file, ExportCommands.logsExported(what.entries)), document(what.id, Diagnostics.FILENAME))
+    }
+
     /** The picker's answer for [asked]: where to write it, or nothing (dismissed). Main thread. */
     fun picked(asked: ExportRequest, uri: Uri?) {
         if (request != asked) return
@@ -264,6 +351,7 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
         pending = null
         if (uri == null) {
             if (what is Pending.Staged) worker.execute { what.file.delete() }
+            if (what is Pending.Review) worker.execute { what.file.delete() }
             return
         }
         busy = true
@@ -287,6 +375,8 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
                         what.file.delete()
                     }
                     is Pending.Plates -> if (!what.current()) ExportCommands.STALE else writePlates(uri, what.files)
+                    // A preview is answered by [reviewed], never by a picker.
+                    is Pending.Review -> ExportCommands.LOGS_FAILED
                 }
             } catch (failure: Failed) {
                 failure.words
@@ -306,6 +396,7 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
         try {
             ProjectDocuments.copy(source, ContentProjectDocument(resolver, uri)) { cancelled }
         } catch (failure: Throwable) {
+            DiagnosticsLog.recordError("export", unwrap(failure))
             val name = displayName(uri)
             delete(uri)
             throw Failed(ExportCommands.failed(name, (unwrap(failure) as? ProjectDocumentException)?.code))

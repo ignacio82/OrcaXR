@@ -212,6 +212,9 @@ public final class ProjectJniHarness {
     public static long volumeRoleChecks(String corpus, byte[] cube) {
         return ProjectVolumeRoleChecks.run(corpus, cube);
     }
+    public static long diagnosticsChecks(String corpus) {
+        return DiagnosticsChecks.run(corpus);
+    }
     public static long toolpathObjChecks(String script) {
         return ToolpathObjChecks.run(script);
     }
@@ -511,6 +514,7 @@ public final class ProjectJniHarness {
             if (name.equals("volumeRoleChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("modelExportChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("toolpathObjChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("diagnosticsChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("exportStlFile")) method = ProjectJniHarness.class.getMethod(name, long.class, String.class);
             if (name.equals("exportProjectArchiveFile")) method = ProjectJniHarness.class.getMethod(name, long.class, int.class, double[].class);
             if (name.equals("primitiveChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);

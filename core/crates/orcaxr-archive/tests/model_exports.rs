@@ -267,3 +267,21 @@ fn malformed_requests_are_refused() {
         assert_eq!(outcome, Err(exports::INVALID_REQUEST), "{refusal}");
     }
 }
+
+#[test]
+fn diagnostics_summaries_match_the_browser() {
+    // Export Diagnostics…'s project shape of every state (`diagnosticsProjectSummaryOf`).
+    let fixture = corpus();
+    let states = fixture["states"].as_array().unwrap();
+    for state in states {
+        let parsed =
+            ProjectState::from_value(parse(state["stateJson"].as_str().unwrap()).unwrap()).unwrap();
+        assert_eq!(
+            exports::diagnostics_summary_json(&parsed),
+            state["diagnosticsSummaryJson"].as_str().unwrap(),
+            "{}",
+            state["name"]
+        );
+    }
+    assert_eq!(states.len(), 12);
+}

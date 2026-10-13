@@ -6,6 +6,7 @@ pub mod camera;
 pub mod console;
 pub mod control;
 pub mod credentials;
+pub mod diagnostics;
 pub mod directory;
 pub mod history;
 pub mod moonraker;

@@ -7464,12 +7464,55 @@ the parser's 256 Mi-unit input the core refuses (`resource_limit`) where
 the browser would export the truncated parse, and the browser's own failure
 past V8's longest string has no Android counterpart.
 
+Export Diagnostics…. The browser's shell gathers facts (its version, the
+pinned engine commit and its route, the browser's user agent, language and
+cores, the printer's state, the catalogue's action counts, the project's
+shape from `diagnosticsProjectSummaryOf`, the recorder's events), builds the
+bundle (`buildDiagnosticsBundle`: the newest 200 events, object names only
+when asked, the first 64 each redacted and cut to 120 units, what was left
+out; then `redactMoonrakerDiagnostic` over the whole of it, which redacts
+every string again and cuts every array to its first 32 items — so a bundle
+keeps at most 32 events, the oldest of the newest 200), shows its privacy
+preview (`describeDiagnosticsBundle` in the browser's confirmation) and
+writes `JSON.stringify(bundle, null, 2)` and a line break as
+`orcaxr-diagnostics.json`. Its recorder keeps each event's scope to 64 units
+and its message struck of the session's secrets (of at least 8 units) and
+the pattern rules. These are production functions now (`diagnosticEntry`,
+`diagnosticSecrets`, `diagnosticsProjectSummaryOf`, `diagnosticsCapabilities`)
+behind `diagnosticsExchange.ts`, which reads a request's objects in the
+input interface's order and only the keys it declares. `orcaxr_printer::diagnostics`
+ports the bundle (`bundle_json`: the file, the preview and the kept events),
+the event (`entry_json`) and the facts the core itself knows (`facts_json`:
+the catalogue's 226 actions, 7 unavailable, and the pinned engine commit);
+`orcaxr_archive::exports::diagnostics_summary_json` the project's shape of
+an export capture. Hosts: WASM `diagnostics_bundle`, `diagnostic_entry`,
+`diagnostics_facts` and `ProjectExport.diagnostics_summary` (project set),
+JNI `diagnosticsBundle`, `diagnosticEntry`, `diagnosticsFacts` and
+`exportDiagnosticsSummary`, Kotlin `Diagnostics` and
+`ProjectWorkspace.diagnosticsSummary`. `diagnostics-vectors.mjs` records 12
+bundles (the browser shell's facts with and without names, a minimal one,
+every optional section, more than 200 events, 32 printer capabilities and
+64 names, names past 120 units, numbers in exponent form, URLs, credential
+assignments, controls and lone surrogates everywhere, and three of an
+Android host's facts), 15 malformed bundle requests, 11 events (secrets
+short and long, overlapping, at the 512-unit cut) and 7 malformed ones, and
+the facts; `model-export-vectors.mjs` the shape of each of its 12 states.
+Rust (`tests/diagnostics.rs`, `tests/model_exports.rs`), WASM in Node and
+in a Chrome worker (`diagnostics-replay.mjs`, `model-export-replay.mjs`)
+and JNI answer all of them byte for byte; `DiagnosticsChecks` (13 host
+checks) writes every event a host records and every Android bundle through
+`Diagnostics.Input`, and `ProjectModelExportChecks` reads the workspace's
+shape. The browser's pattern rules leave `Authorization: Bearer <token>` as
+it is (only `bearer:` or `bearer=` is struck); the port keeps that, and the
+Android recorder strikes the tokens this device holds as secrets.
+
 On Android the exports are the browser's File menu entries and its Download
 actions: the Project area's Export menu (beside Share) lists Export G-code…,
 Export All Plates…, Export as one STL…, Export all objects as STLs…, Export
-as 3MF…, Export Config…, Export Toolpaths as OBJ… and Download All Plates; Prepare's result card offers Download beside Preview and
+as 3MF…, Export Config…, Export Toolpaths as OBJ…, Export Diagnostics…
+and Download All Plates; Prepare's result card offers Download beside Preview and
 Send to Printer, and Download All Plates under every plate's result; the
-command palette lists all nine. Each is enabled as the browser's registry
+command palette lists all ten. Each is enabled as the browser's registry
 gate judges it — the core's capability rules read with the Prepare area's
 facts (`ProjectWorkspace.sliceActions` now takes the published slice's
 `gcodeReady` and reads the output actions too) — and not while another
@@ -7486,7 +7529,16 @@ project worker holds once every choice asked before has applied,
 three presets; "No active profile to export." while an opened project slices
 with its own) and the toolpaths (`ToolpathObj.write` over the published
 G-code, still the project's when chosen, named after the active plate;
-"Export OBJ failed: …" with the core's reason), the G-code is the published
+"Export OBJ failed: …" with the core's reason) and the diagnostics bundle
+(this device's facts in the browser's shape: the app's version, the core's
+engine commit and catalogue, the route Prepare slices on — `external-server`
+or `android-native` — the platform's release, API level, language and cores
+as the `browser` part, never the device's model or build, the printer's
+state, the project's shape and `DiagnosticsLog`'s events: failures at the
+Project area's and the exports' boundaries, redacted as recorded with the
+external slicer's token and the printer's key struck; shown in the browser's
+confirmation words before any place is asked for, and "Diagnostics export
+cancelled; nothing was written." when declined), the G-code is the published
 file, whose currency is checked again once a place is picked. The picker
 creates the document under the browser's name with the type the device
 associates with its extension (else `application/octet-stream`): a provider
@@ -7504,15 +7556,16 @@ left for …", "OrcaXR can no longer write to …") and the half-written documen
 is removed. Outcomes are the browser's status words in the shell's snackbar
 ("Saved orcaxr.gcode.", "Downloaded 2 plate G-code file(s).", "Exported 1
 model as 12 STL triangles.", "Plated geometry exported as 3MF.", "Exported
-config.", "Sliced toolpaths exported as OBJ."), the
+config.", "Sliced toolpaths exported as OBJ.", "Exported 3 log entries. No
+project, addresses, or tokens are in the file."), the
 catalogued ones in the operator's language. One deviation: the browser's
 Export as 3MF… is its Save, so it also marks the project saved; on Android a
 project's document is its own (Save writes it, Save as rebinds it), so the
 export is a copy and the project's saved state is untouched, as Share's.
 
-`ExportCommandsTest` (4 JVM tests: the nine and where they run, the gate
+`ExportCommandsTest` (4 JVM tests: the ten and where they run, the gate
 and the one-at-a-time rule, the browser's words, the providers' failures and
-the document type), `AppActionsTest` (74 performed actions with their
+the document type), `AppActionsTest` (75 performed actions with their
 glyphs, words and hints). `android-exports-smoke.py` (in `emulator-smoke.py` after
 the outputs smoke) drives them through the system's picker on the engine-less
 APK and reads every file back: `cube.stl` (the browser's header, 12 facets,
@@ -7522,7 +7575,11 @@ own `writeDeterministicZip` writes from those members — `Untitled
 project.3mf`, which the browser, reopening and saving it again, writes byte
 for byte the same, the project still unsaved, `orcaxr_config.json` — the
 browser's file of the chosen bundled profile byte for byte (its SHA-256 and
-length among the corpus's, the profile the one its names give) — a negative
+length among the corpus's, the profile the one its names give) — the
+diagnostics preview declined (nothing written) and agreed:
+`orcaxr-diagnostics.json` as the browser's `JSON.stringify` writes it, the
+preview the browser's `describeDiagnosticsBundle` of that very file, the
+project's shape without names and no address or token — a negative
 part refused with no picker, then on the external slicer stand-in Download and the
 palette's Export G-code… (`orcaxr.gcode`, `orcaxr (1).gcode`, each the
 published file byte for byte), `Plate_1_toolpaths.obj` (byte for byte the

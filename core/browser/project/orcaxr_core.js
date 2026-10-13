@@ -3640,6 +3640,23 @@ export class ProjectExport {
         wasm.__wbg_projectexport_free(ptr, 0);
     }
     /**
+     * Export Diagnostics…'s shape of this capture's project
+     * (`diagnosticsProjectSummaryOf`): counts and object names, never geometry.
+     * @returns {string}
+     */
+    diagnostics_summary() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.projectexport_diagnostics_summary(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
      * The one-plate slice capture of `plate_id` (a JSON string): this
      * capture's project reduced to that plate as plate zero with only the
      * assets it keeps, admitted under the host's `Date.parse`, for
@@ -7214,6 +7231,77 @@ export function describe_transport_failure(request) {
         return getStringFromWasm0(ptr2, len2);
     } finally {
         wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * A recorded event (`diagnosticEntryExchange`):
+ * `{"atMs","level","message","scope","secrets"}` → the entry kept.
+ * @param {string} request
+ * @returns {string}
+ */
+export function diagnostic_entry(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.diagnostic_entry(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * File → Export Diagnostics… (`diagnosticsBundleExchange`):
+ * `{"includeModelNames","input"}` → `{"description","file","logEntries"}`.
+ * @param {string} request
+ * @returns {string}
+ */
+export function diagnostics_bundle(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.diagnostics_bundle(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * What a bundle states of the catalogue and the engine (`diagnosticsFactsExchange`).
+ * @returns {string}
+ */
+export function diagnostics_facts() {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+        const ret = wasm.diagnostics_facts();
+        deferred1_0 = ret[0];
+        deferred1_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
     }
 }
 
