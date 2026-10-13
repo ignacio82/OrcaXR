@@ -1,11 +1,12 @@
 // The File menu's model exports through a binding (`model-export-vectors.json`):
 // each recorded state opened as a real session with its meshes uploaded, an
 // export capture taken under its guard, and every STL export — one merged
-// file, or one per instance in the browser's ZIP — answered with the
-// browser's reply and the same bytes (length and SHA-256); every output name;
-// every malformed request refused. Runs unchanged over WASM in Node and a
-// browser worker, and over the JNI bridge.
-export async function replayModelExports(core, fixture, layout, generation, sha256, b64) {
+// file, or one per instance in the browser's ZIP — and Export as 3MF… (under
+// the browser's archive budgets, [archiveLayout] `contracts/project-archive.json`)
+// answered with the browser's reply and the same bytes (length and SHA-256);
+// every output name; every malformed request refused. Runs unchanged over
+// WASM in Node and a browser worker, and over the JNI bridge.
+export async function replayModelExports(core, fixture, layout, generation, sha256, b64, archiveLayout) {
   const encode = new TextEncoder();
   const fail = (label) => {
     throw Error(label);
@@ -23,7 +24,23 @@ export async function replayModelExports(core, fixture, layout, generation, sha2
     }
     if (!refused) fail(`${label} was accepted`);
   };
-  const counts = { files: 0, refused: 0, names: 0, refusals: 0 };
+  const counts = { files: 0, refused: 0, names: 0, refusals: 0, projects: 0, unsaved: 0 };
+  const budgets = {
+    archiveBytes: 2 ** 30,
+    entries: 4096,
+    entryBytes: 512 * 2 ** 20,
+    totalBytes: 2 * 2 ** 30,
+    vertices: 16_000_000,
+    triangles: 16_000_000,
+    records: 2_000_000,
+    textUnits: 64 * 2 ** 20,
+    paintNodes: 256_000_000,
+    assets: 4096,
+    assetBytes: 512 * 2 ** 20,
+    totalAssetBytes: 2 * 2 ** 30,
+    warnings: 1_000_000,
+  };
+  const policy = Float64Array.from(archiveLayout.options.map((k) => budgets[k]));
   const open = (state) => {
     const source = encode.encode(state.stateJson);
     const options = {
@@ -73,6 +90,23 @@ export async function replayModelExports(core, fixture, layout, generation, sha2
     const guard = session.capture_guard();
     const capture = session.capture_export(guard);
     try {
+      for (const c of fixture.projects.filter((c) => c.state === state.name)) {
+        const output = capture.project_archive_export(archiveLayout.version, policy);
+        try {
+          eq(output.reply(), c.replyJson, `${state.name} 3MF`);
+          const bytes = read(output);
+          if (c.sha256) {
+            eq(bytes.length, c.bytes, `${state.name} 3MF length`);
+            eq(await sha256(bytes), c.sha256, `${state.name} 3MF bytes`);
+            counts.projects++;
+          } else {
+            eq(bytes.length, 0, `${state.name} refused 3MF wrote bytes`);
+            counts.unsaved++;
+          }
+        } finally {
+          output.free();
+        }
+      }
       for (const c of fixture.stl.filter((c) => c.state === state.name)) {
         const output = capture.stl_export(c.requestJson);
         try {
@@ -110,6 +144,6 @@ export async function replayModelExports(core, fixture, layout, generation, sha2
     counts.refusals++;
   }
   return {
-    modelExportAnswers: [counts.files, counts.refused, counts.names, counts.refusals],
+    modelExportAnswers: [counts.files, counts.refused, counts.projects, counts.unsaved, counts.names, counts.refusals],
   };
 }

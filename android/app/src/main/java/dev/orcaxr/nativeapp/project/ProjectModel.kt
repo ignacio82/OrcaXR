@@ -22,6 +22,7 @@ import dev.orcaxr.core.BrimEarAuto
 import dev.orcaxr.core.BrimEarClear
 import dev.orcaxr.core.BrimEarState
 import dev.orcaxr.core.ContentProjectDocument
+import dev.orcaxr.core.ProjectArchiveExport
 import dev.orcaxr.core.StlExport
 import dev.orcaxr.core.DigestingDocument
 import dev.orcaxr.core.DocumentOwners
@@ -859,6 +860,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
      */
     fun exportStl(archive: Boolean, output: ProjectDocumentOutput): CompletableFuture<StlExport> =
         started.thenCompose { it.exportStl(archive, output) }
+
+    /** File → Export as 3MF…: the browser's Save of the project as it stands ([ProjectWorkspace.export3mf]); the saved state is untouched. */
+    fun export3mf(output: ProjectDocumentOutput): CompletableFuture<ProjectArchiveExport> =
+        started.thenCompose { it.export3mf(output) }
 
     fun undo() = work { workspace.undo().await() }
     fun redo() = work { workspace.redo().await() }

@@ -129,6 +129,18 @@ class ProjectExportSource internal constructor(
      * or one per instance in the browser's ZIP ([ModelExports.stlRequest]) — to
      * [destination], or the browser's refusal, which writes nothing. Either
      * completes an export, never a save. */
+    /** Alternative for Export as 3MF…: this capture as the browser's own
+     * package to [destination] (never a save: no checkpoint), or the refusal,
+     * which writes nothing. */
+    fun writeProjectArchive(options: ProjectArchiveOptions, destination: OutputStream): ProjectArchiveExport {
+        checkActive(); check(!jsonWritten && nextAsset == 0L && !archiveWritten && !plateWritten && !stlAnswered) { "already_written" }
+        val answer = capture.writeProjectArchive(options, object : OutputStream() {
+            override fun write(value: Int) { checkActive(); destination.write(value) }
+            override fun write(bytes: ByteArray, offset: Int, count: Int) { checkActive(); destination.write(bytes, offset, count) }
+        })
+        checkActive(); stlAnswered = true
+        return answer
+    }
     fun writeStl(request: String, destination: OutputStream): StlExport {
         checkActive(); check(!jsonWritten && nextAsset == 0L && !archiveWritten && !plateWritten && !stlAnswered) { "already_written" }
         val answer = capture.writeStl(request, object : OutputStream() {
@@ -149,7 +161,7 @@ class ProjectExportSource internal constructor(
         return output.warnings()
     }
     /** Whether the callback consumed the capture: the complete bundle, or for
-     * an export (never a [save]) one plate's archive or its STL's answer. */
+     * an export (never a [save]) one plate's archive, or its STL's or 3MF's answer. */
     internal fun requireComplete(save: Boolean) {
         checkActive()
         check(archiveWritten || (jsonWritten && nextAsset == assetCount) || (!save && (plateWritten || stlAnswered))) { "incomplete_export" }

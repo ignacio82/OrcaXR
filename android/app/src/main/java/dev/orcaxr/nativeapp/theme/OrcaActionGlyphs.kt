@@ -18,6 +18,7 @@ object OrcaActionGlyphs {
         "file_export_all_plates" to OrcaActionGlyph(R.drawable.ic_symbol_download),
         "file_export_stl" to OrcaActionGlyph(R.drawable.ic_symbol_deployed_code),
         "file_export_all_stls" to OrcaActionGlyph(R.drawable.ic_symbol_deployed_code),
+        "file_export_3mf" to OrcaActionGlyph(R.drawable.ic_symbol_view_in_ar),
         "edit_undo" to OrcaActionGlyph(R.drawable.ic_symbol_undo, "Ctrl+Z"),
         "edit_redo" to OrcaActionGlyph(R.drawable.ic_symbol_redo, "Ctrl+⇧+Z"),
         "edit_cut" to OrcaActionGlyph(R.drawable.ic_symbol_content_cut),

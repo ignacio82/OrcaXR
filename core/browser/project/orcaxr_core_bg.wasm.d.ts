@@ -320,6 +320,7 @@ export const projectembossfont_reply: (a: number) => [number, number, number, nu
 export const projectexport_plate: (a: number, b: number, c: number) => [number, number, number];
 export const projectexport_preflight: (a: number, b: number, c: number) => [number, number, number];
 export const projectexport_project: (a: number) => number;
+export const projectexport_project_archive_export: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const projectexport_stl_export: (a: number, b: number, c: number) => [number, number, number];
 export const projectexport_thumbnails: (a: number) => [number, number, number, number];
 export const projectexport_write_archive: (a: number, b: number, c: number, d: number) => [number, number, number];

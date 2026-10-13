@@ -185,6 +185,71 @@ pub fn write<'a, W: Write + Seek>(
     limits: Limits,
     mut cancelled: impl FnMut() -> bool,
 ) -> Result<Receipt<'a>, Error> {
+    package(
+        project,
+        assets.into_iter().collect(),
+        Target::Native(output),
+        limits,
+        &mut cancelled,
+    )
+}
+
+/// The same package, written as the browser's serializer writes it: every
+/// member through fflate's compressor and ZIP ([`crate::fflate`]), so a
+/// project the browser would save is these bytes exactly — Export as 3MF….
+/// Each member is produced whole before it is compressed (the browser holds
+/// the whole archive); only compressed members are held until [output] gets
+/// the archive, which needs no seeking.
+pub fn write_browser<'a>(
+    project: &'a ValidatedProject,
+    assets: impl IntoIterator<Item = AssetLease>,
+    output: &mut dyn Write,
+    limits: Limits,
+    mut cancelled: impl FnMut() -> bool,
+) -> Result<Receipt<'a>, Error> {
+    package(
+        project,
+        assets.into_iter().collect(),
+        Target::Browser(output),
+        limits,
+        &mut cancelled,
+    )
+}
+
+/// [`write_browser`] of an export capture.
+pub fn write_capture_browser<'a>(
+    capture: &'a orcaxr_project::export::ExportCapture,
+    output: &mut dyn Write,
+    limits: Limits,
+    cancelled: impl FnMut() -> bool,
+) -> Result<Receipt<'a>, Error> {
+    write_browser(
+        capture.project().project(),
+        (0..capture.asset_count()).filter_map(|i| capture.asset(i)),
+        output,
+        limits,
+        cancelled,
+    )
+}
+
+/// A seekable destination, as one type: the package writer is compiled once
+/// for every caller (the WASM project set counts its bytes).
+trait SeekWrite: Write + Seek {}
+impl<T: Write + Seek> SeekWrite for T {}
+
+/// Where a package goes: the native writer's seekable destination, or the browser's compressor.
+enum Target<'o> {
+    Native(&'o mut dyn SeekWrite),
+    Browser(&'o mut dyn Write),
+}
+
+fn package<'a>(
+    project: &'a ValidatedProject,
+    assets: Vec<AssetLease>,
+    target: Target<'_>,
+    limits: Limits,
+    mut cancelled: &mut dyn FnMut() -> bool,
+) -> Result<Receipt<'a>, Error> {
     check(&mut cancelled)?;
     let mut budget = Budget {
         records: limits.records,
@@ -345,36 +410,56 @@ pub fn write<'a, W: Write + Seek>(
         .collect();
     let maps: Vec<_> = mappings.iter().map(|(id, p)| (*id, p.as_str())).collect();
     let cancellation = RefCell::new(cancelled);
-    let result = zip::archive(
-        output,
-        &zip_members,
-        limits.zip,
-        |i, mut out| {
-            let mut c = || (cancellation.borrow_mut())();
-            match entries[i].1 {
-                Member::Envelope => {
-                    canonical::write::envelope(project, &maps, &mut out, limits.envelope, &mut c)?;
-                }
-                Member::ModelRels => {
-                    model_rels.write_relationships(opc::Source::Model, &mut out, &mut c)?;
-                }
-                Member::RootRels => {
-                    for w in root_rels.write_relationships(opc::Source::Root, &mut out, &mut c)? {
-                        push(&mut warnings, Warning::Opc(w), limits.warnings)?;
-                    }
-                }
-                Member::Types => types.write_content_types(&mut out, &mut c)?,
-                member => generated(member, &model, &metadata, &settings, &mut out, &mut c)?,
+    let mut produce = |i: usize, mut out: &mut dyn Write| {
+        let mut c = || (cancellation.borrow_mut())();
+        match entries[i].1 {
+            Member::Envelope => {
+                canonical::write::envelope(project, &maps, &mut out, limits.envelope, &mut c)?;
             }
-            Ok::<_, Error>(())
-        },
-        || (cancellation.borrow_mut())(),
-    );
-    let zip = match result {
-        Ok(v) => v,
-        Err(zip::Error::Producer(e)) => return Err(e),
-        Err(zip::Error::Archive(e)) => return Err(Error::Zip(e)),
-        Err(zip::Error::NonemptyOutput) => return Err(Error::NonemptyOutput),
+            Member::ModelRels => {
+                model_rels.write_relationships(opc::Source::Model, &mut out, &mut c)?;
+            }
+            Member::RootRels => {
+                for w in root_rels.write_relationships(opc::Source::Root, &mut out, &mut c)? {
+                    push(&mut warnings, Warning::Opc(w), limits.warnings)?;
+                }
+            }
+            Member::Types => types.write_content_types(&mut out, &mut c)?,
+            member => generated(member, &model, &metadata, &settings, &mut out, &mut c)?,
+        }
+        Ok::<_, Error>(())
+    };
+    let zip = match target {
+        Target::Native(mut output) => {
+            match zip::archive(&mut output, &zip_members, limits.zip, &mut produce, || {
+                (cancellation.borrow_mut())()
+            }) {
+                Ok(v) => v,
+                Err(zip::Error::Producer(e)) => return Err(e),
+                Err(zip::Error::Archive(e)) => return Err(Error::Zip(e)),
+                Err(zip::Error::NonemptyOutput) => return Err(Error::NonemptyOutput),
+            }
+        }
+        Target::Browser(output) => {
+            let mut archive = crate::fflate::Zip::new(limits.zip.zip);
+            let mut uncompressed = 0u64;
+            for (i, member) in zip_members.iter().enumerate() {
+                if (cancellation.borrow_mut())() {
+                    return Err(Error::Zip(crate::Error::Cancelled));
+                }
+                let mut bytes = Vec::new();
+                produce(i, &mut bytes)?;
+                uncompressed += bytes.len() as u64;
+                archive.add(member.path, &bytes).map_err(Error::Zip)?;
+            }
+            let members = zip_members.len();
+            let bytes = archive.finish(output).map_err(Error::Zip)?;
+            zip::Receipt {
+                bytes,
+                members,
+                uncompressed_bytes: uncompressed,
+            }
+        }
     };
     Ok(Receipt { zip, warnings })
 }

@@ -7351,6 +7351,24 @@ streamed through a `ProjectJsonSink` in chunks of at most 64 KiB) and
 `ProjectDocuments.writeStl`, which opens the destination on the first byte,
 so a refusal never touches it).
 
+Export as 3MF…. The browser's is its Save: `exportPlate3mf` runs the
+persistence controller's manual save, the serializer's package under
+`suggestedProjectFilename` (the fallback without persistence names it
+`-export.3mf`; production never takes it). The core's package members were
+already the serializer's byte for byte ([§](#shared-archive-container-and-canonical-staging));
+`package::write_browser` writes them through the fflate port instead of the
+native writer, each member produced whole and compressed as it comes, so the
+file is the browser's Save of the same state byte for byte, and a project
+the serializer refuses (a character XML cannot carry, plates without a bed)
+is refused before the first byte. The package writer is compiled once for
+every caller (concrete asset lists, cancellation and destinations as trait
+objects): its two instantiations had cost the project set 536 KB.
+`exports::project_archive_json` replies `{"filename","mediaType","warnings"}`
+or `{"refused":<code>}` (the core's save code; the browser's words are its
+serializer's exception text, not ported); WASM `ProjectExport.project_archive_export`,
+JNI `exportProjectArchive` (streamed), Kotlin `ProjectExportCapture.writeProjectArchive`,
+`ProjectDocuments.writeProjectArchive` and `ProjectWorkspace.export3mf`.
+
 `model-export-vectors.mjs` records 120 STL exports (85 files, 35 refused:
 a negative volume, an empty plate, a repeated selection) over six states
 built from the production controller's cube, cylinder and sphere and posed
@@ -7358,25 +7376,31 @@ built from the production controller's cube, cylinder and sphere and posed
 transforms, modifiers, support volumes; names empty, repeated in other
 cases, with controls, reserved characters, compatibility forms, emoji, lone
 surrogates and more than 120 units; selections empty, partial, reordered, on
-another plate, unknown and repeated), 78 names and 12 malformed requests.
+another plate, unknown and repeated), 12 Export as 3MF… cases over those
+states and the volume-role corpus's (painted parts on every channel, local
+filaments, every role; 8 packages, 4 refused: a control character and lone
+surrogates XML cannot carry, two plates without a bed), 78 names and 12
+malformed requests.
 Rust (`tests/model_exports.rs`), WASM in Node and in a Chrome 150 worker, and
 JNI (`model-export-replay.mjs`: each state opened as a session, every export
 through an export capture) answer all of them byte for byte.
-`ProjectModelExportChecks` (466 host JNI checks) reads every reply and name
-through the Kotlin owners, writes every export through `writeStl`, and on a
-`ProjectWorkspace` opens the posed state (saved by the core as a 3MF) and
-exports it as one STL and as an archive with nothing, one and another
+`ProjectModelExportChecks` (493 host JNI checks) reads every reply and name
+through the Kotlin owners, writes every export through `writeStl` and
+`writeProjectArchive`, and on a `ProjectWorkspace` opens the posed state
+(saved by the core as a 3MF) and exports it as the browser's 3MF of that
+very state, as one STL and as an archive with nothing, one and another
 instance selected — each the browser's file — without touching the history,
 then finds a negative volume refused in the browser's words without the
 destination opening, a destination that cannot open failing the export,
-an empty plate refused, and an imported cube exported as `cube.stl`.
+an empty plate refused (an empty project still exports as a 3MF, as the
+browser saves one), and an imported cube exported as `cube.stl`.
 
 On Android the exports are the browser's File menu entries and its Download
 actions: the Project area's Export menu (beside Share) lists Export G-code…,
-Export All Plates…, Export as one STL…, Export all objects as STLs… and
-Download All Plates; Prepare's result card offers Download beside Preview and
+Export All Plates…, Export as one STL…, Export all objects as STLs…, Export
+as 3MF… and Download All Plates; Prepare's result card offers Download beside Preview and
 Send to Printer, and Download All Plates under every plate's result; the
-command palette lists all six. Each is enabled as the browser's registry
+command palette lists all seven. Each is enabled as the browser's registry
 gate judges it — the core's capability rules read with the Prepare area's
 facts (`ProjectWorkspace.sliceActions` now takes the published slice's
 `gcodeReady` and reads the output actions too) — and not while another
@@ -7386,7 +7410,8 @@ finish."). `ExportModel` carries them out wherever they are chosen and
 fixed when the action is chosen, as the browser's download is — an STL is
 written by the core, after every queued edit settles, into a private staging
 file before the picker is asked for a place (a refusal asks for none and says
-"STL export failed: …" or "STL export failed."), the G-code is the published
+"STL export failed: …" or "STL export failed."), as is the 3MF ("Export 3MF
+failed: …" with the core's reason), the G-code is the published
 file, whose currency is checked again once a place is picked. The picker
 creates the document under the browser's name with the type the device
 associates with its extension (else `application/octet-stream`): a provider
@@ -7403,18 +7428,24 @@ run on one worker; a provider failure is said in words ("There is no room
 left for …", "OrcaXR can no longer write to …") and the half-written document
 is removed. Outcomes are the browser's status words in the shell's snackbar
 ("Saved orcaxr.gcode.", "Downloaded 2 plate G-code file(s).", "Exported 1
-model as 12 STL triangles."), the catalogued ones in the operator's language.
+model as 12 STL triangles.", "Plated geometry exported as 3MF."), the
+catalogued ones in the operator's language. One deviation: the browser's
+Export as 3MF… is its Save, so it also marks the project saved; on Android a
+project's document is its own (Save writes it, Save as rebinds it), so the
+export is a copy and the project's saved state is untouched, as Share's.
 
-`ExportCommandsTest` (4 JVM tests: the six and where they run, the gate and
-the one-at-a-time rule, the browser's words, the providers' failures and the
-document type), `AppActionsTest` (71 performed actions with their glyphs,
-words and hints). `android-exports-smoke.py` (in `emulator-smoke.py` after
+`ExportCommandsTest` (4 JVM tests: the seven and where they run, the gate
+and the one-at-a-time rule, the browser's words, the providers' failures and
+the document type), `AppActionsTest` (72 performed actions with their
+glyphs, words and hints). `android-exports-smoke.py` (in `emulator-smoke.py` after
 the outputs smoke) drives them through the system's picker on the engine-less
 APK and reads every file back: `cube.stl` (the browser's header, 12 facets,
 unit normals, the 20 mm cube on the bed), `Untitled_project_stls.zip` with
 `cube_stl.stl` and `cube_stl_2.stl` — byte for byte the archive the browser's
-own `writeDeterministicZip` writes from those members — a negative part
-refused with no picker, then on the external slicer stand-in Download and the
+own `writeDeterministicZip` writes from those members — `Untitled
+project.3mf`, which the browser, reopening and saving it again, writes byte
+for byte the same, the project still unsaved, a negative part refused with no
+picker, then on the external slicer stand-in Download and the
 palette's Export G-code… (`orcaxr.gcode`, `orcaxr (1).gcode`, each the
 published file byte for byte), Download All Plates refused before a Slice All
 Plates, and Export All Plates… slicing both plates and writing `Plate_1.gcode`

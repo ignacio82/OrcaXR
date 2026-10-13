@@ -36,7 +36,11 @@ pub(super) struct Output {
     warnings: Vec<Vec<u16>>,
 }
 
-fn policy(env: &mut JNIEnv<'_>, version: jint, options: &JDoubleArray<'_>) -> Result<Policy> {
+pub(super) fn policy(
+    env: &mut JNIEnv<'_>,
+    version: jint,
+    options: &JDoubleArray<'_>,
+) -> Result<Policy> {
     decode_options(
         version as f64,
         &option_values::<{ layout::OPTION_COUNT }>(env, options)?,

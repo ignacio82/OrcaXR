@@ -12,7 +12,9 @@ after the object, the second numbered, each the same STL, stored as fflate
 stores them (DEFLATE, no UTF-8 flag, 0644, 1980-01-01) — and the browser's own
 `writeDeterministicZip`, given those members, writes the same bytes. A
 negative part makes the STL export refuse in the browser's words, and no
-picker opens. Each document is saved in Downloads, chosen from the picker's
+picker opens. "Export as 3MF…" writes `Untitled project.3mf`, which the
+browser, reopening it and saving it again, writes byte for byte the same (its
+Save is the export), while the project's own saved state is untouched. Each document is saved in Downloads, chosen from the picker's
 roots (it reopens where it was last used).
 
 Then on the external slicer (the real server on the host, its engine a
@@ -58,6 +60,16 @@ let input = "";
 for await (const chunk of process.stdin) input += chunk;
 const files = new Map(Object.entries(JSON.parse(input)).map(([name, data]) => [name, Buffer.from(data, "base64")]));
 process.stdout.write(writeDeterministicZip(files));
+"""
+# The browser reopening a project and saving it again (its Save: the serializer's package), stdin to stdout.
+BROWSER_RESAVE = f"""
+import {{ Bbs3mfProjectSerializer }} from {json.dumps(str(ROOT / "web/src/project/serialization/Bbs3mfProjectSerializer.ts"))};
+const chunks = [];
+for await (const chunk of process.stdin) chunks.push(chunk);
+const serializer = new Bbs3mfProjectSerializer();
+const parsed = await serializer.deserialize(new Uint8Array(Buffer.concat(chunks)));
+const saved = await serializer.serialize({{ state: parsed.state, assets: parsed.assets, sourceRevision: 0, sourceHash: "" }});
+process.stdout.write(saved.bytes);
 """
 FOLDER = "orcaxr-plates"
 
@@ -148,8 +160,9 @@ try:
     # Through MediaStore, which the picker's Downloads root lists (a file removed behind its back keeps its row).
     adb("shell", "content delete --uri content://media/external/file --where \"relative_path LIKE 'Download/%' AND "
         "(_display_name LIKE 'cube%' OR _display_name LIKE 'orcaxr%' OR _display_name LIKE 'Untitled_project_stls%' "
+        "OR _display_name LIKE 'Untitled project%' "
         "OR _display_name LIKE 'Plate_%')\"")
-    adb("shell", f"rm -rf {DOWNLOAD}/cube*.stl {DOWNLOAD}/Untitled_project_stls*.zip '{DOWNLOAD}/orcaxr'*")
+    adb("shell", f"rm -rf {DOWNLOAD}/cube*.stl {DOWNLOAD}/Untitled_project_stls*.zip '{DOWNLOAD}/orcaxr'* '{DOWNLOAD}/Untitled project'*.3mf")
     adb("shell", f"mkdir -p {DOWNLOAD}/{FOLDER}")
     screen.launch(PACKAGE)
     find("Import a model in the Project area to see it here.")
@@ -202,6 +215,22 @@ try:
         input=json.dumps(members).encode(), cwd=ROOT, timeout=120)
     assert browser == archive, f"The archive is not the browser's: {len(archive)} bytes, the browser's {len(browser)}"
     written["Untitled_project_stls.zip"] = len(archive)
+
+    # Export as 3MF…: the browser's Save of the project, byte for byte — the browser, reopening the file
+    # and saving it again, writes the very same bytes — and the project's own saved state is untouched.
+    menu("Export", "Export as 3MF…")
+    save_as("Untitled project.3mf")
+    find("Plated geometry exported as 3MF.", timeout=30)
+    project = pull(f"{DOWNLOAD}/Untitled project.3mf")
+    resaved = subprocess.check_output(
+        ["node", "--import", "./web/node_modules/tsx/dist/loader.mjs", "--input-type=module", "-e", BROWSER_RESAVE],
+        input=project, cwd=ROOT, timeout=120)
+    assert resaved == project, f"The 3MF is not the browser's Save: {len(project)} bytes, the browser's {len(resaved)}"
+    with zipfile.ZipFile(BytesIO(project)) as zipped:
+        names = zipped.namelist()
+        assert "3D/3dmodel.model" in names and "[Content_Types].xml" in names, names
+    find("Unsaved changes", timeout=10)
+    written["Untitled project.3mf"] = len(project)
 
     # A negative part: refused in the browser's words; no picker opens.
     menu("Edit", "Select All")

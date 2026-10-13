@@ -233,6 +233,24 @@ impl ProjectExport {
     /// capture (`stlExportExchange`): `{"archive","selectedInstanceIds"}` →
     /// the reply and the file, byte for byte the browser's. Synchronous; run
     /// it on a worker.
+    /// Export as 3MF… of this capture under the archive policy: the
+    /// browser's own package (its serializer's Save, byte for byte) and the
+    /// reply, or the refusal with no bytes. Synchronous; run it on a worker.
+    pub fn project_archive_export(
+        &self,
+        version: f64,
+        policy: &[f64],
+    ) -> Result<ProjectFileOutput, JsValue> {
+        let policy = Policy::new(options(version, policy)?);
+        let mut bytes = Vec::new();
+        let reply = orcaxr_archive::exports::project_archive_json(
+            &self.inner,
+            policy.package(),
+            &mut bytes,
+        )
+        .map_err(|e| error(save_code(e)))?;
+        Ok(ProjectFileOutput { reply, bytes })
+    }
     pub fn stl_export(&self, request: &str) -> Result<ProjectFileOutput, JsValue> {
         let mut bytes = Vec::new();
         let reply = orcaxr_archive::exports::stl_export_json(&self.inner, request, &mut bytes)

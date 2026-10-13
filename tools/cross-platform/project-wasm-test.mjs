@@ -373,7 +373,7 @@ if (isMainThread) {
     assert.deepEqual(result.volumeRoleAnswers, [38, 330, 25, 12]);
     // The File menu's model exports: STL files and archives byte for byte,
     // refused exports, output names and malformed requests.
-    assert.deepEqual(result.modelExportAnswers, [85, 35, 78, 12]);
+    assert.deepEqual(result.modelExportAnswers, [85, 35, 8, 4, 78, 12]);
     // The virtual filament library: libraries shown, dialogs opened, their
     // validations, triangle points and Match searches, library edits planned,
     // those refused in the browser's words, and malformed requests.
@@ -1025,6 +1025,7 @@ if (isMainThread) {
     fixture.generation,
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
     (text) => Buffer.from(text, "base64"),
+    JSON.parse(await readFile(new URL("contracts/project-archive.json", root))),
   );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {

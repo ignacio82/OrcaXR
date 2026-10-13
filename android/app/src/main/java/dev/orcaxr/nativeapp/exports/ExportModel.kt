@@ -15,6 +15,7 @@ import dev.orcaxr.core.ContentProjectDocument
 import dev.orcaxr.core.ExportNameKind
 import dev.orcaxr.core.ModelExports
 import dev.orcaxr.core.ProjectDocumentException
+import dev.orcaxr.core.ProjectArchiveExport
 import dev.orcaxr.core.ProjectDocumentOutput
 import dev.orcaxr.core.ProjectDocuments
 import dev.orcaxr.core.StlExport
@@ -105,8 +106,8 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
         /** Every sliced plate's G-code ([files], with the names they are written under), while [current]. */
         class Plates(override val id: String, val files: List<Pair<String, File>>, val current: () -> Boolean) : Pending
 
-        /** A model export written to [file] by the core; [answer] says what it is. */
-        class Staged(override val id: String, val file: File, val answer: StlExport.Written) : Pending
+        /** A model export written to [file] by the core; [done] says what the status line says once it is saved. */
+        class Staged(override val id: String, val file: File, val done: ExportWords) : Pending
     }
 
     fun bind(project: ProjectModel, prepare: PrepareModel) {
@@ -187,36 +188,39 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
         request = picker
     }
 
+    /** What a model export staged: the name to offer and what to say once saved, or the browser's refusal. */
+    private class Staging(val filename: String?, val words: ExportWords)
+
     /** A model export: written by the core into a staging file first, then offered under the browser's name. */
     private fun stage(id: String) {
         busy = true
-        val archive = id == ExportCommands.EXPORT_ALL_STLS
         val file = File(staging, "staged-${++serial}")
+        val output = object : ProjectDocumentOutput {
+            override fun openOutput() = file.outputStream()
+        }
+        val refused = { message: String -> if (id == ExportCommands.EXPORT_3MF) ExportCommands.failed3mf(message) else ExportCommands.stlRefused(id, message) }
         task = worker.submit {
-            val outcome = try {
+            val staged = try {
                 staging.mkdirs()
-                val answer = project.exportStl(archive, object : ProjectDocumentOutput {
-                    override fun openOutput() = file.outputStream()
-                }).get()
-                answer
-            } catch (failure: Throwable) {
-                file.delete()
-                val cause = unwrap(failure)
-                main.post {
-                    busy = false
-                    show(ExportCommands.stlRefused(id, cause.message ?: cause.javaClass.simpleName))
+                if (id == ExportCommands.EXPORT_3MF) {
+                    when (val answer = project.export3mf(output).get()) {
+                        is ProjectArchiveExport.Written -> Staging(answer.filename, ExportCommands.EXPORTED_3MF)
+                        is ProjectArchiveExport.Refused -> Staging(null, ExportCommands.failed3mf(answer.code))
+                    }
+                } else {
+                    when (val answer = project.exportStl(id == ExportCommands.EXPORT_ALL_STLS, output).get()) {
+                        is StlExport.Written -> Staging(answer.filename, ExportCommands.stlWritten(id, answer) { NumberFormat.getIntegerInstance().format(it) })
+                        is StlExport.Refused -> Staging(null, ExportCommands.stlRefused(id, answer.message))
+                    }
                 }
-                return@submit
+            } catch (failure: Throwable) {
+                val cause = unwrap(failure)
+                Staging(null, refused(cause.message ?: cause.javaClass.simpleName))
             }
+            if (staged.filename == null) file.delete()
             main.post {
                 busy = false
-                when (outcome) {
-                    is StlExport.Refused -> {
-                        file.delete()
-                        show(ExportCommands.stlRefused(id, outcome.message))
-                    }
-                    is StlExport.Written -> ask(Pending.Staged(id, file, outcome), document(id, outcome.filename))
-                }
+                if (staged.filename == null) show(staged.words) else ask(Pending.Staged(id, file, staged.words), document(id, staged.filename))
             }
         }
     }
@@ -247,7 +251,7 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
                     }
                     is Pending.Staged -> try {
                         write(uri, what.file)
-                        ExportCommands.stlWritten(what.id, what.answer) { NumberFormat.getIntegerInstance().format(it) }
+                        what.done
                     } finally {
                         what.file.delete()
                     }

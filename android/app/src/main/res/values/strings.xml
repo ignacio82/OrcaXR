@@ -691,4 +691,8 @@
     <string name="export_nothing_to_slice">No printable plate has models to slice.</string>
     <string name="export_all_stls_done">Exported all models as separate STL files.</string>
     <string name="export_stl_failed">STL export failed.</string>
+    <string name="export_3mf">Export as 3MF…</string>
+    <string name="action_hint_file_export_3mf">Export the plated geometry as a generic 3MF</string>
+    <string name="export_3mf_done">Plated geometry exported as 3MF.</string>
+    <string name="export_3mf_failed">Export 3MF failed</string>
 </resources>

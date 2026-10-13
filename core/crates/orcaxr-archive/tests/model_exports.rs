@@ -46,9 +46,20 @@ fn base64(text: &str) -> Vec<u8> {
 
 fn session(fixture: &Json, state_json: &str) -> ProjectSession<impl TimestampPolicy<Error = ()>> {
     let state = ProjectState::from_value(parse(state_json).unwrap()).unwrap();
+    let declared: Vec<Vec<u16>> = state
+        .source_assets
+        .iter()
+        .map(|d| d.id.as_utf16().to_vec())
+        .collect();
     let project = ValidatedProject::new(ProjectData::new(state).unwrap(), &mut utc()).unwrap();
     let mut assets = AssetRepository::new();
     for asset in fixture["assets"].as_array().unwrap() {
+        let descriptor: Json =
+            serde_json::from_str(asset["descriptorJson"].as_str().unwrap()).unwrap();
+        let id: Vec<u16> = descriptor["id"].as_str().unwrap().encode_utf16().collect();
+        if !declared.contains(&id) {
+            continue;
+        }
         assets
             .put(
                 &parse(asset["descriptorJson"].as_str().unwrap()).unwrap(),
@@ -115,6 +126,68 @@ fn stl_exports_match_the_browser() {
         }
     }
     assert_eq!((files, refused), (85, 35));
+}
+
+/// The browser's archive budgets (its safe-ZIP defaults, multi-million-facet projects).
+fn policy() -> orcaxr_archive::policy::Policy {
+    orcaxr_archive::policy::Policy::new(orcaxr_archive::archive_layout::ArchiveOptions {
+        archive_bytes: 1 << 30,
+        entries: 4096,
+        entry_bytes: 512 << 20,
+        total_bytes: 2 << 30,
+        vertices: 16_000_000,
+        triangles: 16_000_000,
+        records: 2_000_000,
+        text_units: 64 << 20,
+        paint_nodes: 256_000_000,
+        assets: 4096,
+        asset_bytes: 512 << 20,
+        total_asset_bytes: 2 << 30,
+        warnings: 1_000_000,
+    })
+}
+
+#[test]
+fn project_archives_match_the_browser() {
+    let fixture = corpus();
+    let (mut saved, mut refused) = (0, 0);
+    for case in fixture["projects"].as_array().unwrap() {
+        let state = fixture["states"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["name"] == case["state"])
+            .unwrap();
+        let session = session(&fixture, state["stateJson"].as_str().unwrap());
+        let capture = ExportCapture::new(&session, &session.capture_guard().unwrap()).unwrap();
+        let mut bytes = Vec::new();
+        let reply =
+            exports::project_archive_json(&capture, policy().package(), &mut bytes).unwrap();
+        assert_eq!(
+            reply,
+            case["replyJson"].as_str().unwrap(),
+            "{}",
+            case["state"]
+        );
+        if let Some(sha) = case["sha256"].as_str() {
+            assert_eq!(
+                bytes.len() as u64,
+                case["bytes"].as_u64().unwrap(),
+                "{}",
+                case["state"]
+            );
+            assert_eq!(hex(&bytes), sha, "{}", case["state"]);
+            saved += 1;
+        } else {
+            assert!(
+                bytes.is_empty(),
+                "a refusal writes nothing: {}",
+                case["state"]
+            );
+            refused += 1;
+        }
+    }
+    assert_eq!((saved, refused), (8, 4));
 }
 
 #[test]

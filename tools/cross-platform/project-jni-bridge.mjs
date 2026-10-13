@@ -94,6 +94,7 @@ export function startProjectJni(profile = "debug") {
   signatures.settingsChecks = ["String", "byte[]"];
   signatures.volumeRoleChecks = ["String", "byte[]"];
   signatures.exportStlFile = ["long", "String"];
+  signatures.exportProjectArchiveFile = ["long", "int", "double[]"];
   signatures.modelExportChecks = ["String", "byte[]"];
   signatures.primitiveChecks = ["String"];
   signatures.paintToolChecks = ["String"];
@@ -601,6 +602,18 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     // it and answers the reply and the bytes (base64) on two lines.
     stl_export(request) {
       const answer = call("exportStlFile", this.handle, request);
+      const split = answer.indexOf("\n");
+      const reply = answer.slice(0, split);
+      const bytes = Uint8Array.from(Buffer.from(answer.slice(split + 1), "base64"));
+      return {
+        reply: () => reply,
+        length: () => bytes.length,
+        read: (start, count) => bytes.subarray(start, start + count),
+        free() {},
+      };
+    }
+    project_archive_export(version, policy) {
+      const answer = call("exportProjectArchiveFile", this.handle, version, policy);
       const split = answer.indexOf("\n");
       const reply = answer.slice(0, split);
       const bytes = Uint8Array.from(Buffer.from(answer.slice(split + 1), "base64"));

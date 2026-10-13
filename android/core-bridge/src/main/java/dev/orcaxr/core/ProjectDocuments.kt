@@ -137,6 +137,21 @@ object ProjectDocuments {
         return answer
     }
 
+    /** Callback body for [ProjectActor.exportDocument]: Export as 3MF…
+     * ([ProjectExportSource.writeProjectArchive]) into [document], opened on its
+     * first byte — a refused export never opens it — with [save]'s failure rules. */
+    fun writeProjectArchive(source: ProjectExportSource, options: ProjectArchiveOptions, document: ProjectDocumentOutput): ProjectArchiveExport {
+        val output = DeferredOutput(document)
+        val answer = try {
+            source.writeProjectArchive(options, output)
+        } catch (failure: Throwable) {
+            output.abandon(failure)
+            if (output.opened) throw written(failure) else throw failure
+        }
+        try { output.close() } catch (failure: Throwable) { throw written(failure) }
+        return answer
+    }
+
     /** A file the app already holds (a sliced plate's G-code) copied into
      * [document] — opened only once [source] is open — with [save]'s failure
      * rules; answers the bytes copied. */

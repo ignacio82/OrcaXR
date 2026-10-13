@@ -129,6 +129,7 @@ final class NativeProject {
     // per instance in the browser's own ZIP — streamed to the sink in bounded
     // chunks with the exchange's reply, and the names outputs are offered under.
     static native String exportStl(long handle, String request, ProjectJsonSink sink);
+    static native String exportProjectArchive(long handle, int version, double[] options, ProjectJsonSink sink);
     static native String exportName(String request);
     // What binds a slice's output (orcaxr_project::slicing::sidecar, the
     // browser's SliceSidecarExchange): a plate's profile snapshot (of a state

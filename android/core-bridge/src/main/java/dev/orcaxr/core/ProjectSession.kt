@@ -606,6 +606,12 @@ class ProjectExportCapture internal constructor(handle: Long) : ProjectHandle(ha
      * [ModelExports.stlRequest]. The file streams to [destination] in chunks of
      * at most 64 KiB; the reply says what was written, or is the browser's
      * refusal, which writes nothing. Synchronous; run it on the export worker. */
+    /** Export as 3MF… of this capture under [options]: the browser's own package
+     * (its serializer's Save, byte for byte) streamed to [destination], or the
+     * refusal, which writes nothing. Synchronous; run it on the export worker. */
+    fun writeProjectArchive(options: ProjectArchiveOptions, destination: java.io.OutputStream): ProjectArchiveExport = read {
+        ModelExports.projectArchive(NativeProject.exportProjectArchive(it, ProjectArchive.VERSION, options.encode()) { bytes -> destination.write(bytes) })
+    }
     fun writeStl(request: String, destination: java.io.OutputStream): StlExport = read {
         ModelExports.stl(NativeProject.exportStl(it, request) { bytes -> destination.write(bytes) })
     }

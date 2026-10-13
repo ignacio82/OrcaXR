@@ -7,8 +7,8 @@ import dev.orcaxr.nativeapp.R
 
 /**
  * What a status line says: the browser's catalogued [message] (a string
- * resource, read in the operator's language), else [text] — the browser's
- * own uncatalogued words, or Android's.
+ * resource, read in the operator's language), then [text] — the browser's
+ * own uncatalogued words, or Android's (`Export 3MF failed` and its reason).
  */
 data class ExportWords(val message: Int? = null, val text: String = "")
 
@@ -27,12 +27,13 @@ object ExportCommands {
     const val EXPORT_ALL_PLATES = "file_export_all_plates"
     const val EXPORT_STL = "file_export_stl"
     const val EXPORT_ALL_STLS = "file_export_all_stls"
+    const val EXPORT_3MF = "file_export_3mf"
 
     /** The exports the app performs, in the catalogue's order. */
-    val IDS = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, DOWNLOAD, DOWNLOAD_ALL)
+    val IDS = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, DOWNLOAD, DOWNLOAD_ALL)
 
     /** The File menu's export section as the browser's menu lists it (Download All Plates is in its file section too). */
-    val MENU = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, DOWNLOAD_ALL)
+    val MENU = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, DOWNLOAD_ALL)
 
     /** The G-code a download writes: the published slice (the single Download and Export G-code…). */
     fun isGcode(id: String): Boolean = id == DOWNLOAD || id == EXPORT_GCODE
@@ -90,6 +91,19 @@ object ExportCommands {
     fun stlWritten(id: String, answer: StlExport.Written, group: (Long) -> String): ExportWords =
         if (id == EXPORT_ALL_STLS) ExportWords(R.string.export_all_stls_done) else ExportWords(text = ModelExports.exportedStatus(answer, group))
 
+    /** `exportPlate3mf`'s status once written. */
+    val EXPORTED_3MF = ExportWords(R.string.export_3mf_done)
+
+    /** `exportPlate3mf`'s status when the project cannot be saved: `Export 3MF failed: ` and why, from the core's code. */
+    fun failed3mf(code: String) = ExportWords(
+        R.string.export_3mf_failed,
+        ": " + when (code) {
+            "resource_limit" -> "The project is too large for this device."
+            "cancelled" -> "Cancelled."
+            else -> "This project cannot be written as a 3MF (the browser's Save refuses it too)."
+        },
+    )
+
     /** What the status line says when [id]'s STL export was refused for [message]. */
     fun stlRefused(id: String, message: String): ExportWords =
         if (id == EXPORT_ALL_STLS) ExportWords(R.string.export_stl_failed) else ExportWords(text = ModelExports.failedStatus(message))
@@ -110,5 +124,5 @@ object ExportCommands {
     )
 
     /** The words to show for [words], with [resource] reading a catalogued message in the operator's language. */
-    fun text(words: ExportWords, resource: (Int) -> String): String = words.message?.let(resource) ?: words.text
+    fun text(words: ExportWords, resource: (Int) -> String): String = (words.message?.let(resource) ?: "") + words.text
 }

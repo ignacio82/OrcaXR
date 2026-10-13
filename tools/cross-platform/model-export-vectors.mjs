@@ -21,7 +21,11 @@ import { InMemoryAssetRepository } from "../../web/src/project/assets.ts";
 import { canonicalStringify } from "../../web/src/project/domain/canonical.ts";
 import { seededRandom, UuidIdSource } from "../../web/src/project/domain/ids.ts";
 import { validateProjectState } from "../../web/src/project/domain/validation.ts";
-import { exportNameExchange, stlExportExchange } from "../../web/src/project/objects/modelExportExchange.ts";
+import {
+  exportNameExchange,
+  projectArchiveExportExchange,
+  stlExportExchange,
+} from "../../web/src/project/objects/modelExportExchange.ts";
 import { primitiveFileName, primitiveGeometry } from "../../web/src/project/objects/primitives.ts";
 import { ProjectStore } from "../../web/src/project/store.ts";
 import { CanonicalWorkspaceController } from "../../web/src/workspace/CanonicalWorkspaceController.ts";
@@ -187,6 +191,50 @@ assert.ok(stl.some((c) => c.replyJson.includes("No models to export")));
 assert.ok(stl.some((c) => c.replyJson.includes("duplicate instance")));
 assert.ok(stl.some((c) => c.replyJson.includes("application/zip")));
 
+// --- Export as 3MF… ------------------------------------------------------------------------
+
+// The states above, and the volume-role corpus's (painted parts on every channel, local filaments,
+// every role), saved as the browser saves them.
+const roles = JSON.parse(read("testdata/cross-platform/volume-role-vectors.json"));
+const roleStates = roles.states.map((recorded) => {
+  // With a bed, so their second plate has a place in the saved build space.
+  const state = JSON.parse(recorded.stateJson);
+  state.config = { ...state.config, printable_area: "0x0,270x0,270x270,0x270" };
+  const snapshot = new ProjectStore(state).getSnapshot();
+  return { name: `roles-${recorded.name}`, stateJson: json(snapshot.state), revision: snapshot.revision, hash: snapshot.hash };
+});
+// And one as recorded: two plates and no bed, which the serializer refuses.
+roleStates.push({ ...roles.states[1], name: "roles-rich-unplaced" });
+// The rich and converted states name a part with a lone surrogate, which XML cannot carry (refused);
+// with that name representable they save, painted parts, local filaments and every role included.
+const lone = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
+for (const recorded of roleStates.filter((state) => /rich$|converted$/.test(state.name))) {
+  const state = JSON.parse(recorded.stateJson);
+  for (const object of state.plates.flatMap((plate) => plate.objects))
+    for (const volume of object.volumes) volume.name = volume.name.replace(lone, "?");
+  const snapshot = new ProjectStore(state).getSnapshot();
+  roleStates.push({ name: `${recorded.name}-named`, stateJson: json(snapshot.state), revision: snapshot.revision, hash: snapshot.hash });
+}
+const roleAssets = roles.assets.map((asset) => ({
+  descriptor: JSON.parse(asset.descriptorJson),
+  bytes: Uint8Array.from(asset.bytes),
+}));
+states.push(...roleStates);
+payloads.push(...roleAssets);
+const projects = [];
+for (const state of states) {
+  const parsed = JSON.parse(state.stateJson);
+  const snapshot = {
+    state: parsed,
+    assets: payloads.filter((p) => parsed.sourceAssets.some((d) => d.id === p.descriptor.id)),
+    sourceRevision: state.revision,
+    sourceHash: state.hash,
+  };
+  const { reply, bytes } = await projectArchiveExportExchange(snapshot);
+  projects.push({ state: state.name, replyJson: reply, ...(bytes ? { sha256: digest(bytes), bytes: bytes.length } : {}) });
+}
+assert.ok(projects.filter((p) => p.sha256).length >= 6 && projects.some((p) => p.replyJson.includes("refused")));
+
 // --- Names ---------------------------------------------------------------------------------
 
 const nameCases = [
@@ -248,6 +296,7 @@ const sources = [
   "web/src/project/serialization/Bbs3mfProjectSerializer.ts",
   "web/src/project/serialization/deterministicZip.ts",
   "web/src/project/meshCodec.ts",
+  "testdata/cross-platform/volume-role-vectors.json",
 ];
 const output =
   JSON.stringify(
@@ -257,6 +306,7 @@ const output =
       states,
       assets: payloads.map((p) => ({ descriptorJson: json(p.descriptor), base64: Buffer.from(p.bytes).toString("base64") })),
       stl,
+      projects,
       names: names_,
       refusals,
     },
@@ -267,7 +317,9 @@ const path = new URL("testdata/cross-platform/model-export-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);
 else assert.equal(readFileSync(path, "utf8"), output, "Model export reference drift");
 const files = stl.filter((c) => c.sha256).length;
+const saved = projects.filter((p) => p.sha256).length;
 console.log(
   `model exports: ${states.length} states, ${stl.length} STL exports (${files} files, ` +
-    `${stl.length - files} refused), ${names_.length} names, ${refusals.length} refusals`,
+    `${stl.length - files} refused), ${saved} 3MF exports (${projects.length - saved} refused), ` +
+    `${names_.length} names, ${refusals.length} refusals`,
 );

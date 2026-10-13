@@ -761,6 +761,21 @@ class ProjectWorkspace(
     }) { result -> if (result is ProjectOutcome.Exported) Unit else null }
 
     /**
+     * File → Export as 3MF…: the project as it stands once every queued edit
+     * has settled, written to [output] as the browser's Save writes it (its
+     * serializer's package, byte for byte), or the browser's refusal, which
+     * never opens [output]. Unlike Save it binds no document and leaves the
+     * project's saved state untouched: on Android a project's document is its
+     * own, and an export is a copy.
+     */
+    fun export3mf(output: ProjectDocumentOutput): CompletableFuture<ProjectArchiveExport> {
+        var answer: ProjectArchiveExport? = null
+        return run({ guard, record ->
+            actor.exportDocument(guard, EXPORT) { _, source -> capturing(record) { answer = ProjectDocuments.writeProjectArchive(source, ARCHIVE, output) } }
+        }) { result -> if (result is ProjectOutcome.Exported) answer else null }
+    }
+
+    /**
      * File → Export as one STL… ([archive] false: the selected instances on the
      * active plate, else every one on it, merged) or Export all objects as
      * STLs… ([archive] true: one STL per instance in a ZIP) of the project as

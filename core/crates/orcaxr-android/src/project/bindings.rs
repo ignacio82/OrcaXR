@@ -491,6 +491,14 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_exportProjectArchive, export_project_archive, jstring,
+    handle: jlong,
+    version: jint,
+    options: JDoubleArray<'local>,
+    sink: JObject<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_exportName, export_name, jstring,
     request: JString<'local>,
 }

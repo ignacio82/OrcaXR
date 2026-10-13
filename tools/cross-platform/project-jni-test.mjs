@@ -964,8 +964,9 @@ try {
     fixture.generation,
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
     (text) => Buffer.from(text, "base64"),
+    JSON.parse(await readFile(new URL("contracts/project-archive.json", root))),
   );
-  assert.deepEqual(modelExports.modelExportAnswers, [85, 35, 78, 12]);
+  assert.deepEqual(modelExports.modelExportAnswers, [85, 35, 8, 4, 78, 12]);
   // Then the Kotlin readers and owners: every reply and name, every export
   // through an export capture, and the workspace journey (selections, a
   // refusal that never opens the destination, a failing destination).
@@ -974,7 +975,7 @@ try {
     await readFile(new URL("testdata/cross-platform/model-export-vectors.json", root), "utf8"),
     decodeBytes("stl-binary/cube"),
   );
-  assert.equal(modelExportChecks, 466);
+  assert.equal(modelExportChecks, 493);
   // Capability pages over live sessions, then the Kotlin wrapper.
   const capabilityFixture = JSON.parse(
     await readFile(

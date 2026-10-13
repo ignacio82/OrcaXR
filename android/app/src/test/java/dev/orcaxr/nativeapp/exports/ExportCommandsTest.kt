@@ -16,7 +16,10 @@ class ExportCommandsTest {
 
     @Test fun theExportsAreTheAppsAndRunWhereverTheyAreChosen() {
         assertEquals(
-            listOf("file_export_gcode", "file_export_all_plates", "file_export_stl", "file_export_all_stls", "save_gcode_to_downloads", "save_all_plate_gcode"),
+            listOf(
+                "file_export_gcode", "file_export_all_plates", "file_export_stl", "file_export_all_stls", "file_export_3mf",
+                "save_gcode_to_downloads", "save_all_plate_gcode",
+            ),
             ExportCommands.IDS,
         )
         ExportCommands.IDS.forEach {
@@ -68,6 +71,15 @@ class ExportCommandsTest {
         assertEquals("translated", ExportCommands.text(ExportCommands.STALE) { "translated" })
         assertEquals("Downloaded 1 plate G-code file(s).", ExportCommands.text(ExportCommands.downloaded(1)) { error("no resource") })
         assertNull(ExportCommands.downloaded(1).message)
+        // Export as 3MF…: the browser's words, its failure's prefix catalogued and the reason after it.
+        assertEquals(ExportWords(R.string.export_3mf_done), ExportCommands.EXPORTED_3MF)
+        val failed = ExportCommands.failed3mf("unsavable_project")
+        assertEquals(R.string.export_3mf_failed, failed.message)
+        assertEquals(
+            "Export 3MF failed: This project cannot be written as a 3MF (the browser's Save refuses it too).",
+            ExportCommands.text(failed) { "Export 3MF failed" },
+        )
+        assertEquals("Échec: The project is too large for this device.", ExportCommands.text(ExportCommands.failed3mf("resource_limit")) { "Échec" })
     }
 
     @Test fun aProvidersFailureIsSaidInWords() {

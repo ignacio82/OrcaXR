@@ -16,6 +16,15 @@ sealed interface StlExport {
     data class Refused(val message: String) : StlExport
 }
 
+/** What Export as 3MF… wrote — the browser's package, its serializer's Save — or why the project cannot be saved (writing nothing). */
+sealed interface ProjectArchiveExport {
+    /** The package: offered as [filename], with the serializer's sorted, unique [warnings]. */
+    data class Written(val filename: String, val mediaType: String, val warnings: List<String>) : ProjectArchiveExport
+
+    /** Refused, as the browser's serializer refuses it, with the core's code (`unsavable_project`, `resource_limit`, `cancelled`). */
+    data class Refused(val code: String) : ProjectArchiveExport
+}
+
 /** The kinds of output [ModelExports.filename] names. */
 enum class ExportNameKind(internal val wire: String) {
     /** A plate's G-code when every plate is downloaded. */
@@ -64,6 +73,14 @@ object ModelExports {
             (obj.get("instanceCount") as Number).toLong(),
             List(ids.length()) { ids.get(it) as String },
         )
+    }
+
+    /** An Export as 3MF… reply. */
+    internal fun projectArchive(json: String): ProjectArchiveExport {
+        val obj = CanonicalJson.read(json) as ProjectJsonObject
+        if (obj.keys().asSequence().any { it == "refused" }) return ProjectArchiveExport.Refused(obj.get("refused") as String)
+        val warnings = obj.get("warnings") as ProjectJsonArray
+        return ProjectArchiveExport.Written(obj.get("filename") as String, obj.get("mediaType") as String, List(warnings.length()) { warnings.get(it) as String })
     }
 
     /** The name an output of [kind] is offered under, after [name] (a plate the project no longer has: null). */

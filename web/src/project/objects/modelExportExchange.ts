@@ -11,6 +11,10 @@
  *   merged) or Export all objects as STLs… (true: one STL per instance in a
  *   ZIP, a lone instance its own STL) — or `{"error"}`, the export's own
  *   words, and no bytes;
+ * - Export as 3MF… of a project snapshot → the reply `{"filename",
+ *   "mediaType","warnings"}` with the package's bytes — the serializer's own
+ *   Save, which the browser's Export as 3MF… is — or `{"refused":
+ *   "unsavable_project"}` for a project the serializer refuses, and no bytes;
  * - name `{"kind","name"}` (`kind` one of `plate-gcode`, `toolpath-obj`,
  *   `stl`, `project`; `name` text, or null for a plate the project lacks) →
  *   `{"filename"}`.
@@ -21,7 +25,8 @@ import type { AssetRepository } from '../assets';
 import { canonicalStringify } from '../domain/canonical';
 import type { InstanceId } from '../domain/ids';
 import type { ProjectState } from '../domain/model';
-import { suggestedProjectFilename } from '../serialization/Bbs3mfProjectSerializer';
+import { Bbs3mfProjectSerializer, suggestedProjectFilename } from '../serialization/Bbs3mfProjectSerializer';
+import type { ProjectArchiveSnapshot } from '../ports';
 import { plateGcodeFilename, toolpathObjFilename } from '../outputNames';
 import {
   activePlateInstanceIds,
@@ -89,6 +94,26 @@ export function stlExportExchange(
   } catch (error) {
     return { reply: canonicalStringify({ error: error instanceof Error ? error.message : String(error) }) };
   }
+}
+
+/** Export as 3MF…: the project's package as the browser saves it. */
+export async function projectArchiveExportExchange(
+  snapshot: ProjectArchiveSnapshot,
+): Promise<{ reply: string; bytes?: Uint8Array }> {
+  let saved;
+  try {
+    saved = await new Bbs3mfProjectSerializer().serialize(snapshot);
+  } catch {
+    return { reply: canonicalStringify({ refused: 'unsavable_project' }) };
+  }
+  return {
+    reply: canonicalStringify({
+      filename: saved.suggestedFilename,
+      mediaType: saved.mediaType,
+      warnings: saved.warnings,
+    }),
+    bytes: saved.bytes,
+  };
 }
 
 /** The name an output is offered under. */

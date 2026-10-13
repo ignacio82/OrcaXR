@@ -3662,6 +3662,23 @@ export class ProjectExport {
      * capture (`stlExportExchange`): `{"archive","selectedInstanceIds"}` →
      * the reply and the file, byte for byte the browser's. Synchronous; run
      * it on a worker.
+     * Export as 3MF… of this capture under the archive policy: the
+     * browser's own package (its serializer's Save, byte for byte) and the
+     * reply, or the refusal with no bytes. Synchronous; run it on a worker.
+     * @param {number} version
+     * @param {Float64Array} policy
+     * @returns {ProjectFileOutput}
+     */
+    project_archive_export(version, policy) {
+        const ptr0 = passArrayF64ToWasm0(policy, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectexport_project_archive_export(this.__wbg_ptr, version, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectFileOutput.__wrap(ret[0]);
+    }
+    /**
      * @param {string} request
      * @returns {ProjectFileOutput}
      */

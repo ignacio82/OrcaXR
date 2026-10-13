@@ -10,6 +10,9 @@
 //!   number of mirrors, a refusal in the browser's words;
 //! - Export all objects as STLs…: one binary STL per instance in the
 //!   browser's own deterministic ZIP ([`crate::fflate`]), byte for byte;
+//! - Export as 3MF…: the project's package as the browser's serializer
+//!   writes it ([`crate::package::write_capture_browser`]: the same members
+//!   through fflate's ZIP), byte for byte, offered under the project's name;
 //! - the names: a plate's G-code and toolpaths (runs outside
 //!   `A–Z a–z 0–9 . _ -` become `_`), and the STL's and project's suggested
 //!   file names (controls to `-`, NFKC, the extension and reserved characters
@@ -708,6 +711,46 @@ pub fn stl_export_json(
         out,
     );
     stl_reply(&outcome).ok_or("export_io")
+}
+
+/// Export as 3MF… of [capture]: the browser's package to [out], under
+/// [limits] (the browser's archive budgets), and the reply
+/// `{"filename","mediaType","warnings"}` — the serializer's sorted, unique
+/// warnings — or `{"refused":<code>}` for a project the browser refuses to
+/// save too (a refusal precedes the first byte). An I/O failure of [out] is
+/// the host's, never a reply.
+pub fn project_archive_json(
+    capture: &ExportCapture,
+    limits: crate::package::Limits,
+    out: &mut dyn Write,
+) -> Result<String, crate::package::Error> {
+    let state = capture.project().state();
+    match crate::package::write_capture_browser(capture, out, limits, || false) {
+        Ok(receipt) => Ok(canonical(&object([
+            (
+                "filename",
+                Value::String(suggested_project_filename(state.name.units())),
+            ),
+            ("mediaType", Value::String(units("model/3mf"))),
+            (
+                "warnings",
+                Value::Array(
+                    crate::text::package_warnings(state, &receipt.warnings)
+                        .into_iter()
+                        .map(Value::String)
+                        .collect(),
+                ),
+            ),
+        ]))),
+        Err(crate::package::Error::Io(kind)) => Err(crate::package::Error::Io(kind)),
+        Err(crate::package::Error::Zip(crate::Error::Io(kind))) => {
+            Err(crate::package::Error::Io(kind))
+        }
+        Err(error) => Ok(canonical(&object([(
+            "refused",
+            Value::String(units(crate::policy::save_code(error))),
+        )]))),
+    }
 }
 
 /// `exportNameExchange`: `{"kind","name"}` → `{"filename"}`.

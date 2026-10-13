@@ -68,8 +68,10 @@ object ProjectModelExportChecks {
 
     /** [stateJson] as a session, its meshes from [library] (asset ID to bytes) in the state's declaration order. */
     private fun session(scope: ProjectPreparation, stateJson: String, library: Map<String, ByteArray>): ProjectSession {
-        val declared = objects((CanonicalJson.read(stateJson) as ProjectJsonObject).get("sourceAssets"))
-        val assets = declared.map { library.getValue(it.get("id") as String) }
+        // In the state's declaration order (canonical JSON lists `sourceAssets` once; a state may carry
+        // lone surrogates the strict reader refuses, so the order is read from the text).
+        val section = stateJson.substring(stateJson.indexOf("\"sourceAssets\":["))
+        val assets = library.keys.filter { section.contains("\"$it\"") }.sortedBy { section.indexOf("\"$it\"") }.map(library::getValue)
         val bytes = stateJson.toByteArray(Charsets.UTF_8)
         val upload = scope.own(ProjectUpload(bytes.size.toLong(), ProjectHostOptions(bytes.size.toLong(), 1_000_000, 8_000_000, 1024, 128, assets.size.toLong(), 16_777_216, 33_554_432, 100, 33_554_432), LocalTimestampResolver { it }, ProjectIntegerProfile.NODE))
         for (start in bytes.indices step ProjectHost.MAX_CHUNK_BYTES) upload.appendDocument(start.toLong(), bytes.copyOfRange(start, minOf(start + ProjectHost.MAX_CHUNK_BYTES, bytes.size)))
@@ -138,6 +140,17 @@ object ProjectModelExportChecks {
                                 check(written.size() == 0, "refusal wrote nothing $name ${case.get("requestJson")}")
                             }
                         }
+                        for (case in objects(reference.get("projects")).filter { it.get("state") == name }) {
+                            val written = ByteArrayOutputStream()
+                            val answer = capture.writeProjectArchive(ProjectWorkspace.ARCHIVE, written)
+                            check(answer == ModelExports.projectArchive(case.get("replyJson") as String), "3MF answer $name")
+                            if (has(case, "sha256")) {
+                                check(answer is ProjectArchiveExport.Written && written.size().toLong() == (case.get("bytes") as Number).toLong() &&
+                                    sha(written.toByteArray()) == case.get("sha256"), "3MF bytes $name")
+                            } else {
+                                check(answer is ProjectArchiveExport.Refused && written.size() == 0, "3MF refusal wrote nothing $name")
+                            }
+                        }
                         if (name == "posed") posedArchive = capture.writeArchive(ProjectWorkspace.ARCHIVE).use { output ->
                             val out = ByteArrayOutputStream()
                             var offset = 0L
@@ -172,6 +185,12 @@ object ProjectModelExportChecks {
                 check(target.opened && bytes.size.toLong() == (case.get("bytes") as Number).toLong() && sha(bytes) == case.get("sha256"), "workspace bytes $label")
                 check((workspace.view.undo to workspace.view.dirty) == history, "export leaves the history $label")
             }
+            // Export as 3MF…: the browser's Save of this very state, byte for byte; the project stays unsaved.
+            val project = Target()
+            val saved = done(workspace.export3mf(project)) as ProjectArchiveExport.Written
+            val posedCase = objects(reference.get("projects")).single { it.get("state") == "posed" }
+            check(saved == ModelExports.projectArchive(posedCase.get("replyJson") as String) && saved.filename == "Untitled project.3mf", "workspace 3MF $saved")
+            check(sha(project.bytes.toByteArray()) == posedCase.get("sha256") && (workspace.view.undo to workspace.view.dirty) == history, "workspace 3MF bytes")
             exported(false, emptyList(), "plate")
             exported(true, emptyList(), "plate archive")
             done(workspace.selectInstance(instances.first()))
@@ -206,6 +225,9 @@ object ProjectModelExportChecks {
             val empty = Target()
             check(done(workspace.exportStl(false, empty)) == StlExport.Refused("STL export requires at least one instance") && !empty.opened, "empty plate")
             check(done(workspace.exportStl(true, Target())) == StlExport.Refused("No models to export"), "empty archive")
+            // An empty project saves (the browser's Save does too), under the project's name.
+            val blank = Target()
+            check((done(workspace.export3mf(blank)) as ProjectArchiveExport.Written).filename == "Untitled project.3mf" && blank.opened, "empty 3MF")
             done(workspace.prepareImport(Memory(cube), "cube.stl").thenCompose { workspace.commitImport(it, emptyList()) })
             until(workspace, "import") { it.undo != null }
             val target = Target()

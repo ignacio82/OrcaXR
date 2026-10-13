@@ -713,7 +713,11 @@ export class ProjectExport {
      * capture (`stlExportExchange`): `{"archive","selectedInstanceIds"}` →
      * the reply and the file, byte for byte the browser's. Synchronous; run
      * it on a worker.
+     * Export as 3MF… of this capture under the archive policy: the
+     * browser's own package (its serializer's Save, byte for byte) and the
+     * reply, or the refusal with no bytes. Synchronous; run it on a worker.
      */
+    project_archive_export(version: number, policy: Float64Array): ProjectFileOutput;
     stl_export(request: string): ProjectFileOutput;
     /**
      * The pictures this capture's project asks for (its `thumbnails`),
@@ -2370,6 +2374,7 @@ export interface InitOutput {
     readonly projectexport_plate: (a: number, b: number, c: number) => [number, number, number];
     readonly projectexport_preflight: (a: number, b: number, c: number) => [number, number, number];
     readonly projectexport_project: (a: number) => number;
+    readonly projectexport_project_archive_export: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectexport_stl_export: (a: number, b: number, c: number) => [number, number, number];
     readonly projectexport_thumbnails: (a: number) => [number, number, number, number];
     readonly projectexport_write_archive: (a: number, b: number, c: number, d: number) => [number, number, number];
