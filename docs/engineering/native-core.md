@@ -5938,12 +5938,17 @@ Move, Rotate and Scale (`tool_move`, `tool_rotate`, `tool_scale`, enabled
 with an instance selected) join the model toolbar and the command palette,
 and G, R and S choose them when no text field has the typing, showing the
 Workspace. Each is the Workspace's one tool, as the browser's `setTool`:
-choosing one ends Lay flat, Measure or painting. The gizmo stays drawn under
-those tools as the browser's does: while painting the stroke owns the
-press; under Lay flat and Measure a press on a handle drags the gizmo and a
-tap without a drag still reaches the tool (the browser's click handler takes
-it first); otherwise a tap on a handle leaves the selection alone, as the
-browser's handler does when the gizmo's axis is set.
+choosing one ends Lay flat, Measure, Brim Ears, the drawn parts or painting.
+The gizmo shows only while Move, Rotate or Scale is the tool
+(`ProjectModel.gizmoShown`), as Orca shows one gizmo at a time; a tap on a
+handle leaves the selection alone, as the browser's handler does when the
+gizmo's axis is set. Both apps once drew the handles under every tool: in
+the browser a paint stroke, a lay-flat click or a measure pick that began on
+a handle also dragged the model (TransformControls listens on the same
+canvas), and in both the handles covered what was painted or measured. The
+browser's `setTool` now detaches them outside Move, Rotate and Scale
+(`async-plate-presentation.test.ts`), and the paint smoke, whose recolour
+check counted the handles' pixels as unchanged cube, found it.
 
 Two choices differ from the browser on purpose: each gesture step is planned
 against the state it applies to, where the browser carries one guard from

@@ -683,6 +683,9 @@ export const PAINT_TOOL_CHANNELS: Readonly<Record<string, PaintChannel>> = Objec
   fuzzy_skin: 'fuzzySkin',
 });
 
+/** The tools whose handles TransformControls draws; every other tool hides them. */
+const TRANSFORM_TOOLS: ReadonlySet<WorkspaceGizmoTool> = new Set<WorkspaceGizmoTool>(['move', 'rotate', 'scale']);
+
 /** Read-only view a Smart Paint surface renders; every number is canonical. */
 export interface SmartPaintSnapshot {
   readonly providerId: string;
@@ -1752,6 +1755,31 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(t('workspace.orcaWorkspace.modelUnselected', 'Model unselected'));
     }
     if (this.onSelectionChanged) this.onSelectionChanged(false);
+  }
+
+  /**
+   * One tool at a time, as Orca's gizmos: the transform handles stand over a
+   * selection only while Move, Rotate or Scale is the tool. Under any other a
+   * press that began on a handle was a drag as well as the tool's stroke,
+   * click or pick (TransformControls listens on the same canvas), and the
+   * handles hid what was painted or measured.
+   */
+  private syncTransformControlsVisibility(): void {
+    const controls = this.transformControls;
+    if (!controls) return;
+    const shown =
+      TRANSFORM_TOOLS.has(this.tool) &&
+      this.canonicalProject.getSummary().selectedInstanceIds.length > 0 &&
+      xb.core.renderer?.xr?.isPresenting !== true;
+    if (shown) {
+      this.add(controls.getHelper());
+      controls.attach(this.transformProxy);
+      controls.getHelper().visible = true;
+    } else {
+      controls.detach();
+      controls.getHelper().visible = false;
+      this.remove(controls.getHelper());
+    }
   }
 
   private syncTransformProxy(): void {
@@ -8057,6 +8085,7 @@ export class OrcaWorkspace extends xb.Script {
     // leaving the Measure tool its measured line.
     this.refreshBrimEarPreview();
     this.refreshMeasureAnnotation();
+    this.syncTransformControlsVisibility();
     const channel = PAINT_TOOL_CHANNELS[tool];
     if (channel) {
       this.paintChannel = channel;

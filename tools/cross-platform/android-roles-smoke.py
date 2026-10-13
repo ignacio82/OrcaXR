@@ -148,8 +148,7 @@ assert converted["Negative volume"]["current"] and not converted["Negative volum
 assert converted["Parameter modifier"]["offered"], converted
 # The object's rows opened, the part's row shows its new role.
 screen.to_top()
-if any((n.get("content-desc") or "") == "Expand cube.stl" for n in screen.nodes()):
-    tap("Expand cube.stl")
+tap("Expand cube.stl")
 find("negative-volume", timeout=60)
 
 # The cube's own part is the object's last model part: every other role is refused in the command's words.

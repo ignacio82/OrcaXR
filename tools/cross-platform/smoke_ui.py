@@ -178,6 +178,19 @@ class Screen:
         x, y = self.center(self.find(text, **kwargs))
         self.adb("shell", "input", "tap", str(x), str(y))
 
+    def pick_download(self, name, timeout=30):
+        """Chooses [name] from Downloads in the system picker, navigating via roots if needed."""
+        nodes = self.nodes()
+        if any((n.get("text") or "") == name for n in nodes):
+            self.tap(name)
+            return
+        if any((n.get("content-desc") or "") == "Show roots" for n in nodes):
+            self.tap("Show roots")
+            time.sleep(1.5)
+            self.tap("Downloads", timeout=20)
+            time.sleep(1.5)
+        self.tap(name, timeout=timeout)
+
     def key(self, code):
         self.adb("shell", "input", "keyevent", str(code))
 

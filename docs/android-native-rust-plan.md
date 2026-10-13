@@ -86,9 +86,8 @@ physical-device gate below is still open.
   its keys G, R and S, the semantic editor's volume roles with Set as
   Negative Part, and the File menu's exports (slice output, STLs, the 3MF,
   the configuration, the toolpaths as OBJ and diagnostics) with Download
-  (the emulator suites for the gizmo, the roles, brim ears, the wipe tower,
-  drawn parts, assembly and the exports pending). Remains: *Resume here*
-  items 1 to 4, and physical devices for the exit gate.
+  (all verified across both emulator suites: API 34 4 KB and API 37 16 KB).
+  Remains: *Resume here* items 2 to 4, and physical devices for the exit gate.
 - **Phase 8, Android XR: not started.** Only Phase 2's SceneCore candidate
   (`android/renderer-scenecore`, `android/xr-experiment`) exists. Verification
   needs the user's Galaxy XR.
@@ -126,21 +125,18 @@ fling had carried rows past the screen's edge and out of every dump.
   `emulator-smoke.py --api 37 --pages 16` pass in full on the round-2 tree,
   `android-palette-smoke.py`, `android-settings-smoke.py` and
   `android-outputs-smoke.py` among them.
+- [x] Post-round-2 emulator suites: `emulator-smoke.py` (API 34 4 KB) and
+  `emulator-smoke.py --api 37 --pages 16` pass in full across all 27 smokes on
+  `main`, including `android-gizmo-smoke.py`, `android-roles-smoke.py`,
+  `android-brimears-smoke.py`, `android-wipetower-smoke.py`,
+  `android-drawnparts-smoke.py`, `android-assembly-smoke.py`, and
+  `android-exports-smoke.py`.
 
 Phase notes below that say "part of the round-2 suites" refer to that line.
 
 ### Resume here
 
-1. Both emulator suites on `main` with the smokes added since round 2:
-   `android-gizmo-smoke.py` and `android-roles-smoke.py` (the Phase 7 input
-   item, otherwise done), `android-brimears-smoke.py`,
-   `android-wipetower-smoke.py` (now with the tower's ghost),
-   `android-drawnparts-smoke.py` and `android-assembly-smoke.py` (item 2) and
-   `android-exports-smoke.py` (item 3) have passed only on iteration
-   emulators. Run `emulator-smoke.py` and then
-   `emulator-smoke.py --api 37 --pages 16` on a quiet host (no builds, no
-   other suite), and record the result here and in the Phase 7 statuses.
-2. Phase 7, model tools whose shared-core ports exist but have no Android UI:
+1. Phase 7, model tools whose shared-core ports exist but have no Android UI:
    variable layer height (`layer_heights`,
    `variable_layer_height`); layer events belong with
    Preview (`layer_event_mutate`). Magnets (`add_magnet`) and the wave-overhang

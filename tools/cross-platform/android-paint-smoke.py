@@ -96,14 +96,21 @@ tap("Project")
 find("Untitled project", timeout=30)
 menu("Add", "Cube")
 find("Undo Add cube.stl", timeout=30)
-menu("Edit", "Select All")
 tap("Workspace")
 time.sleep(4)
+# Escape deselects: the transform gizmo leaves the cube, so the changed pixels are the cube's alone
+# (its handles reach far past a 20 mm cube and would stretch its bounds). Select All selects it again.
+screen.key(111)
+time.sleep(2)
 drawn = screen.screenshot()
 cube = changed_pixels(empty, drawn, 0, top_row, width, height - 220)
 assert len(cube) > 300, "The cube was not drawn on the bed"
 left, right = min(x for x, _ in cube), max(x for x, _ in cube)
 top, bottom = min(y for _, y in cube), max(y for _, y in cube)
+tap("Project")
+menu("Edit", "Select All")
+tap("Workspace")
+time.sleep(2)
 
 # The toolbar's Paint, once the core enables it for the selected instance.
 until_enabled("Paint")

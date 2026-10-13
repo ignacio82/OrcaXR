@@ -90,14 +90,7 @@ def choose_tool(description):
 def pick_download(name):
     """Chooses [name] from Downloads in the system picker: Recent lists files lately added; through its
     roots when Recent lacks it."""
-    try:
-        tap(name, timeout=20)
-    except AssertionError:
-        tap("Show roots")
-        time.sleep(1.5)
-        tap("Downloads")
-        time.sleep(2)
-        tap(name, timeout=60)
+    screen.pick_download(name)
 
 
 def press(text, timeout=60):

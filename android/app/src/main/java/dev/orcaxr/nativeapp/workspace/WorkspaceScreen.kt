@@ -162,7 +162,8 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     // The gizmo stands over the selection, read again whenever the project or the selection changes (the browser's
     // syncTransformProxy) — not while its own drag edits the project, which reads it once as the drag ends.
     LaunchedEffect(view.revision, view.selection) { if (!renderer.gizmoPressed) model.refreshGizmo() }
-    val proxy = model.gizmoProxy
+    // Only Move, Rotate and Scale show it: under any other tool the gizmo stands over nothing.
+    val proxy = if (model.gizmoShown) model.gizmoProxy else TransformProxy.None
     val gizmoMode = model.gizmoMode
     SideEffect { renderer.gizmo(proxy, gizmoMode) }
     LaunchedEffect(view.bed.widthMm, view.bed.depthMm) { renderer.bed(view.bed.widthMm, view.bed.depthMm) }
@@ -891,11 +892,9 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
                         stroking = false
                         paint.end()
                     } else if (gizmoPressed) {
+                        // A tap on a handle leaves the selection be ("Don't unselect if they clicked the transform gizmo
+                        // directly"); the handles show only under Move, Rotate and Scale, so no other tool's tap meets one.
                         liftGizmo(event.x, event.y)
-                        // A tap on a handle still reaches Lay flat, Measure and Brim Ears, as the browser's click handler takes it
-                        // before it looks at the gizmo; otherwise it leaves the selection be ("Don't unselect if they
-                        // clicked the transform gizmo directly").
-                        if (!dragged && !scaling && (model.layingFlat || model.measuring || model.brimEaring)) tapTool(renderer, event)
                     } else if (menuShown) {
                         // The long press opened the menu: lifting the finger chooses nothing.
                     } else if (context) {

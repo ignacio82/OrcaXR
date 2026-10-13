@@ -689,4 +689,44 @@ for (const [action, method] of lifecycleActions) {
   }
 }
 
+// One tool at a time: the transform handles stood over a selection under every tool, so a paint
+// stroke, a lay-flat click or a measure pick that began on a handle also dragged the model.
+await test('the transform handles show only while Move, Rotate or Scale is the tool', async () => {
+  const { workspace, controller, model } = await setup();
+  try {
+    const helper = new THREE.Object3D();
+    let attached = 0;
+    Object.assign(workspace, {
+      transformControls: {
+        attach() {
+          attached++;
+        },
+        detach() {},
+        getHelper() {
+          return helper;
+        },
+        setMode() {},
+        dispose() {},
+      },
+    });
+    controller.selectInstance(model.instanceId);
+    await Promise.resolve();
+    for (const tool of ['paint', 'seam_paint', 'lay_on_face', 'measure', 'brim_ears'] as const) {
+      workspace.setTool(tool);
+      assert.equal(helper.visible, false, `handles shown under ${tool}`);
+      assert.equal(helper.parent, null, `handles in the scene under ${tool}`);
+    }
+    workspace.setTool('rotate');
+    assert.equal(helper.visible, true);
+    assert.equal(helper.parent, workspace);
+    assert.ok(attached > 0);
+    controller.clearSelection();
+    await Promise.resolve();
+    workspace.setTool('move');
+    assert.equal(helper.visible, false, 'handles shown with nothing selected');
+  } finally {
+    workspace.dispose();
+  }
+});
+
 console.log(`\nAsynchronous editing presentation: ${passed} tests passed.`);

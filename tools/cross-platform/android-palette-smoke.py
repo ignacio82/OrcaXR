@@ -80,9 +80,32 @@ def closed(timeout=20):
         time.sleep(0.5)
 
 
+def tool(description, timeout=30):
+    """The model toolbar's button described as [description], the toolbar dragged sideways until it shows."""
+    deadline = time.monotonic() + timeout
+    while True:
+        nodes = screen.nodes()
+        node = next((n for n in nodes if (n.get("content-desc") or "") == description), None)
+        if node is not None and bounds(node)[2] - bounds(node)[0] > 30 and bounds(node)[2] <= width:
+            return node
+        assert time.monotonic() < deadline, f"The toolbar's {description} never showed"
+        bar = next(n for n in nodes if (n.get("content-desc") or "") == "Model tools")
+        left, top, right, bottom = bounds(bar)
+        y = str((top + bottom) // 2)
+        adb("shell", "input", "swipe", str(right - 140), y, str(left + 140), y, "400")
+        time.sleep(0.5)
+
+
 def until_enabled(text, enabled=True, timeout=30):
     deadline = time.monotonic() + timeout
-    while screen.enabled(text, timeout=20) != enabled:
+    while True:
+        if text == "Delete":
+            tool(text, timeout=10)
+        try:
+            if screen.enabled(text, timeout=2) == enabled:
+                return
+        except AssertionError:
+            pass
         assert time.monotonic() < deadline, f"'{text}' never became {'enabled' if enabled else 'disabled'}"
         time.sleep(1)
 
@@ -149,6 +172,10 @@ tap("Project")
 find("Undo Add cube.stl", timeout=30)
 tap("Workspace")
 time.sleep(4)
+# Escape deselects the added cube: the transform gizmo leaves it, so the changed pixels are the cube's
+# alone, and the long press below meets the cube rather than a handle (a handle takes a press).
+screen.key(ESCAPE)
+time.sleep(2)
 drawn = screen.screenshot()
 cube = changed_pixels(empty, drawn, *box)
 # A 20 mm cube on the 270 mm plate: a few hundred pixels.
@@ -194,7 +221,7 @@ assert len(changed_pixels(framed, screen.screenshot(), *box)) > 2000, "Top View 
 # Nothing selected: the toolbar's Delete is disabled, and a mouse over it shows why, in the browser's words.
 screen.key(ESCAPE)
 until_enabled("Delete", enabled=False)
-delete = find("Delete")
+delete = tool("Delete")
 before = screen.screenshot()
 dx, dy = screen.center(delete)
 # adb's mouse cannot hover, only tap, and Compose takes the tap as the pointer entering; the first

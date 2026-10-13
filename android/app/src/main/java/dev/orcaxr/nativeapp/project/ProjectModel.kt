@@ -1016,11 +1016,18 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         "tool_brim_ears" -> brimEaring
         "add_emboss" -> drawn.embossing
         "tool_svg" -> drawn.svgCutting
-        "tool_move", "tool_rotate", "tool_scale" ->
-            !layingFlat && !measuring && !brimEaring && !drawn.embossing && !drawn.svgCutting && !paint.state.active &&
-                ProjectEditing.gizmoAction(gizmoMode) == id
+        "tool_move", "tool_rotate", "tool_scale" -> gizmoShown && ProjectEditing.gizmoAction(gizmoMode) == id
         else -> paint.state.active && PaintChannel.entries.any { it.toolAction == id && it == paint.state.channel }
     }
+
+    /**
+     * Whether the gizmo's handles stand over the selection: only while Move,
+     * Rotate or Scale is the Workspace's tool, as the browser's `setTool` shows
+     * them (Orca's one gizmo at a time). Under Lay flat, Measure, Brim Ears,
+     * the drawn parts or painting no handle covers the model or takes a press.
+     */
+    val gizmoShown: Boolean
+        get() = !layingFlat && !measuring && !brimEaring && !drawn.embossing && !drawn.svgCutting && !paint.state.active
 
     /** A document action (New, Open, Save, Save As, Import) for the Project area's pickers and dialogs to carry out. */
     var documentRequest by mutableStateOf<String?>(null)

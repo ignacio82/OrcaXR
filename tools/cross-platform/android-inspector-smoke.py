@@ -42,7 +42,7 @@ def bounds(node):
 
 def import_cube(objects):
     tap("Import Model…")
-    tap("cube.stl", timeout=30)
+    screen.pick_download("cube.stl", timeout=30)
     find("Import cube.stl?", timeout=30)
     find(f"The project will then have {objects} object(s). Importing is one step you can undo.")
     tap("Import")
@@ -220,12 +220,17 @@ assert [value(SCALE, axis) for axis in AXES] == ["100.00"] * 3, "An imported cub
 # Lay flat: the Edit menu's tool, then a tap on the cube in the Workspace lays the tapped face on the bed.
 tap("Workspace")
 time.sleep(4)
+# Escape deselects: the transform gizmo leaves the cube, so the changed pixels are the cube's alone
+# (its handles reach far past a 20 mm cube and would pull the tap off it). Select All selects it again.
+screen.key(111)
+time.sleep(2)
 model = changed_pixels(empty, screen.screenshot(), *box)
 # A 20 mm cube on the default profile's 270 mm bed: a few hundred pixels.
-assert len(model) > 300, f"The selected model was not drawn ({len(model)} pixels changed)"
+assert len(model) > 300, f"The model was not drawn ({len(model)} pixels changed)"
 x = sum(p[0] for p in model) // len(model)
 y = sum(p[1] for p in model) // len(model)
 tap("Project")
+edit("Select All")
 edit("Lay flat")
 tap("Workspace")
 find("Lay flat: click the facet that should rest on the bed.", timeout=20)

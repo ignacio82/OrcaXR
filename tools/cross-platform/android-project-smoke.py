@@ -53,7 +53,7 @@ def launch():
 
 def import_cube(objects):
     tap("Import Model…")
-    tap("cube.stl", timeout=30)
+    screen.pick_download("cube.stl", timeout=30)
     find("Import cube.stl?", timeout=30)
     find(f"The project will then have {objects} object(s). Importing is one step you can undo.")
     tap("Import")
@@ -255,7 +255,7 @@ while any((node.get("text") or "") == "Unsaved work: Untitled project" for node 
 task = re.search(r"taskId=(\d+): " + re.escape(PACKAGE), adb("shell", "am", "stack", "list")).group(1)
 screen.to_top()
 tap("Import Model…")
-tap("cube.stl", timeout=30)
+screen.pick_download("cube.stl", timeout=30)
 find("Import cube.stl?", timeout=30)
 tap("Import")
 edited = time.monotonic()
@@ -279,7 +279,7 @@ while any((node.get("text") or "") == "Unsaved work: Untitled project" for node 
 # Work older than the timed capture's 5 s is offered by the updated app.
 screen.to_top()
 tap("Import Model…")
-tap("cube.stl", timeout=30)
+screen.pick_download("cube.stl", timeout=30)
 find("Import cube.stl?", timeout=30)
 tap("Import")
 find("Unsaved changes", timeout=10)

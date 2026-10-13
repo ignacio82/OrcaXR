@@ -37,7 +37,7 @@ type_into, center = screen.type_into, screen.center
 
 def import_cube(objects):
     tap("Import Model…")
-    tap("cube.stl", timeout=30)
+    screen.pick_download("cube.stl", timeout=30)
     find("Import cube.stl?", timeout=30)
     find(f"The project will then have {objects} object(s). Importing is one step you can undo.")
     tap("Import")

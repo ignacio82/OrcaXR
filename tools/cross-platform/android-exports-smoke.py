@@ -51,6 +51,7 @@ import base64
 import hashlib
 import json
 import math
+import re
 import struct
 import subprocess
 import time
@@ -377,8 +378,22 @@ try:
     while not any((n.get("text") or "") in (FOLDER, "Download") for n in screen.nodes()):
         assert time.monotonic() < deadline, "The folder picker never opened"
         time.sleep(2)
-    if not any((n.get("text") or "") == FOLDER for n in screen.nodes()):
-        tap("Download")
+    # A fresh device's picker opens on the storage's root, where Download's tile can lie under the
+    # picker's own "USE THIS FOLDER" bar (a tap there meets the bar): drag the grid up first.
+    deadline = time.monotonic() + 60
+    while not any((n.get("text") or "") == FOLDER for n in screen.nodes()):
+        assert time.monotonic() < deadline, f"The folder picker never showed {FOLDER}"
+        nodes = screen.nodes()
+        tile = next((n for n in nodes if (n.get("text") or "") == "Download"), None)
+        bar = next((n for n in nodes if (n.get("text") or "") == "USE THIS FOLDER"), None)
+        if tile is not None:
+            x, y = screen.center(tile)
+            bar_top = int(re.findall(r"\d+", bar.get("bounds"))[1]) if bar is not None else 10**6
+            if y > bar_top - 40:
+                screen.drag(x, bar_top - 190, max(200, bar_top - 190 - (y - bar_top + 250)))
+            else:
+                adb("shell", "input", "tap", str(x), str(y))
+        time.sleep(2)
     tap(FOLDER, timeout=30)
     tap("USE THIS FOLDER", timeout=30)
     tap("ALLOW", timeout=30)

@@ -162,11 +162,16 @@ assert not checked("Move"), "Move stayed the tool after R"
 rings = settled(box)
 green = handle(empty, rings, box, "green")
 assert len(green) > 40, f"The rotate gizmo's green ring was not drawn ({len(green)} pixels)"
-(gx, gy), _ = ends(green)
-rx, ry = near(green, (gx, gy), 20)
-drag(rx, ry, rx + 90, ry + 60)
+first, second = ends(green)
+# The apex of the arc: the green pixel farthest from the chord between its ends.
+apex = max(green, key=lambda p: abs((second[1] - first[1]) * p[0] - (second[0] - first[0]) * p[1] + second[0] * first[1] - second[1] * first[0]))
+rx, ry = near(green, apex, 20)
+chord = math.hypot(second[0] - first[0], second[1] - first[1])
+dx, dy = (second[0] - first[0]) / chord, (second[1] - first[1]) / chord
+drag(rx, ry, int(rx + dx * 100), int(ry + dy * 100))
 turned = settled(box)
-assert len(changed_pixels(rings, turned, *box)) > 150, "Dragging the green ring turned nothing"
+diff = len(changed_pixels(rings, turned, *box))
+assert diff > 150, f"Dragging the green ring turned nothing ({diff} pixels)"
 tap("Project")
 find(LABEL, timeout=30)
 tap(LABEL)

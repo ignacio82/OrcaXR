@@ -104,10 +104,16 @@ def colour_field():
 def row_action(name, action):
     """Taps [action] among the buttons of the library row of recipe [name] (described "Actions for <name>"):
     the Prepare area shows other buttons with the same words."""
-    find(f"Actions for {name}", timeout=30)
-    root = ET.fromstring(adb("shell", "cat", screen.dump))
+    # The row's description may be the list's last line, its buttons below the screen: lift it first.
+    screen.lift(find(f"Actions for {name}", timeout=30))
+    xml = adb("shell", "cat", screen.dump)
+    root = ET.fromstring(xml)
     group = next(n for n in root.iter("node") if (n.get("content-desc") or "") == f"Actions for {name}")
-    button = next(n for n in group.iter("node") if (n.get("text") or "") == action)
+    button = next((n for n in group.iter("node") if (n.get("text") or "") == action), None)
+    if button is None:
+        (output / "filament-row-failed.xml").write_text(xml)
+        shown = [n.get("text") for n in group.iter("node") if n.get("text")]
+        raise AssertionError(f"The row of {name} shows no '{action}' (it shows {shown})")
     x, y = screen.center(button)
     adb("shell", "input", "tap", str(x), str(y))
 
