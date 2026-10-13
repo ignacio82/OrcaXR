@@ -45,7 +45,7 @@ object ProjectEditing {
      * Tools menu's Auto-place Wipe Tower, on the active plate.
      */
     val TOOLS_MENU = listOf(
-        "split_to_objects", "split_to_parts", "simplify_model", "tool_measure", "tool_assembly", "tool_brim_ears", "add_emboss", "tool_svg",
+        "split_to_objects", "split_to_parts", "simplify_model", "variable_layer_height", "tool_measure", "tool_assembly", "tool_brim_ears", "add_emboss", "tool_svg",
         "auto_place_wipe",
     )
 
@@ -67,10 +67,10 @@ object ProjectEditing {
 
     /**
      * The Add menu: the browser's `add` section primitives (scene.ts), then the helper volumes for the selected
-     * object and Set as Negative Part, in the catalogue's order (gizmos.ts, its menu's tools section).
+     * object, Set as Negative Part, and Add Magnet Hole, in the catalogue's order.
      */
     val ADD_MENU = PrimitiveShape.PRIMITIVES.mapNotNull { it.actionId } +
-        HelperVolumeRole.entries.mapNotNull { it.actionId } + "set_negative_part"
+        HelperVolumeRole.entries.mapNotNull { it.actionId } + listOf("set_negative_part", "add_magnet")
 
     /** Creation's catalogue actions the app performs: the clipboard, the bed fill and the Add menu. */
     val CREATED = (EDIT_CLIPBOARD + EDIT_INSTANCES + ADD_MENU).toSet()

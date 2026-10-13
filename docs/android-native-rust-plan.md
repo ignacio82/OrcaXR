@@ -136,14 +136,16 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
 
 ### Resume here
 
-1. Phase 7, model tools whose shared-core ports exist but have no Android UI:
-   variable layer height (`layer_heights`,
-   `variable_layer_height`); layer events belong with
-   Preview (`layer_event_mutate`). Magnets (`add_magnet`) and the wave-overhang
-   card (settings the core already resolves) need the browser's computation
-   checked first; Cut (`tool_cut`), the face detector and hollow have no core
-   port yet. Each one follows the exchange pattern below and gets an emulator
-   smoke. Brim ears and wipe-tower auto-placement are done
+1. Phase 7, model tools:
+   Variable Layer Height (`variable_layer_height`), Magnet Cavities (`add_magnet`),
+   and Preview Layer Events (`preview_add_pause`, `preview_add_custom_gcode`) are done
+   ([§](engineering/native-core.md#android-variable-layer-height-magnet-cavities-and-layer-events)):
+   `VariableLayerHeightCard` in the Workspace overlays, `ProjectWorkspace`'s
+   adaptive/smooth/reset operations, `addMagnetHole` via negative volume and rename,
+   and `PreviewScreen` layer scrubber event authoring (`LayerEventType.Pause`/`Custom`).
+   Next remaining: wave-overhang card (settings the core already resolves),
+   Cut (`tool_cut`), face detector and hollow.
+   Brim ears and wipe-tower auto-placement are done
    ([§](engineering/native-core.md#android-brim-ears),
    [§](engineering/native-core.md#android-wipe-tower-auto-placement)): the
    Workspace's Brim Ears tool, its panel and discs, and Auto-place Wipe

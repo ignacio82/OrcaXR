@@ -27,7 +27,7 @@ object AppActions {
     /** The model toolbar's tools: each takes the Workspace's touch until it is chosen again or ended. */
     val TOOLS = listOf(
         "tool_lay_on_face", "tool_paint", "tool_support_paint", "tool_seam_paint", "tool_fuzzy_skin", "tool_measure", "tool_assembly",
-        "tool_brim_ears", "add_emboss", "tool_svg",
+        "tool_brim_ears", "add_emboss", "tool_svg", "variable_layer_height",
     )
 
     /**

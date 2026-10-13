@@ -59,6 +59,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.orcaxr.core.GcodeArtifactText
+import dev.orcaxr.nativeapp.project.ProjectModel
 import dev.orcaxr.nativeapp.theme.LocalOrcaTheme
 import dev.orcaxr.nativeapp.theme.OrcaThemeTokens
 import dev.orcaxr.nativeapp.workspace.ViewDescription
@@ -95,7 +96,13 @@ import kotlin.math.abs
  * status line says, and offers the browser's View menu camera views.
  */
 @Composable
-fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier, panelWidth: Dp? = null, bed: WorkspaceBed = WorkspaceBed.DEFAULT) {
+fun PreviewScreen(
+    model: PreviewModel,
+    modifier: Modifier = Modifier,
+    panelWidth: Dp? = null,
+    bed: WorkspaceBed = WorkspaceBed.DEFAULT,
+    project: ProjectModel? = null,
+) {
     val state = model.state
     // Any document: providers often report G-code only as bytes or text.
     val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(model::open) }
@@ -163,7 +170,7 @@ fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier, panelWidth
             }
             val bounds = state.layerBounds ?: return@Column
             ModeChooser(state.mode, enabled = !state.loading, onChoose = model::setMode)
-            LayerControls(state, bounds, model)
+            LayerControls(state, bounds, model, project)
             MoveFilters(state, model)
             state.unsupportedReason?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
             state.summary?.let { Summary(it) }
@@ -218,13 +225,17 @@ private fun ModeChooser(mode: String, enabled: Boolean, onChoose: (String) -> Un
     }
 }
 
-/** "Top layer" and "Bottom layer" sliders over the whole print, "Single layer", and Previous/Next moves when windowed. */
+/** "Top layer" and "Bottom layer" sliders over the whole print, "Single layer", layer events, and Previous/Next moves when windowed. */
 @Composable
-private fun LayerControls(state: PreviewState, bounds: Pair<Int, Int>, model: PreviewModel) {
+private fun LayerControls(state: PreviewState, bounds: Pair<Int, Int>, model: PreviewModel, project: ProjectModel? = null) {
     val (low, high) = state.layerRange ?: bounds
     LayerSlider(stringResource(R.string.preview_top_layer), high, bounds, state.topZMm, !state.loading, model::setTopLayer)
     LayerSlider(stringResource(R.string.preview_bottom_layer), low, bounds, state.bottomZMm, !state.loading, model::setBottomLayer)
     LabelledCheckbox(stringResource(R.string.preview_single_layer), state.singleLayer, !state.loading, model::setSingleLayer)
+    val topZ = state.topZMm
+    if (project != null && topZ != null) {
+        LayerEventsSection(project, topZ)
+    }
     if (state.windowed) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { model.step(-1) }, enabled = !state.loading && state.hasPrevious) {
@@ -232,6 +243,39 @@ private fun LayerControls(state: PreviewState, bounds: Pair<Int, Int>, model: Pr
             }
             OutlinedButton(onClick = { model.step(1) }, enabled = !state.loading && state.hasNext) {
                 Text(stringResource(R.string.preview_next_moves))
+            }
+        }
+    }
+}
+
+/** Layer events at the currently inspected height [topZMm]. */
+@Composable
+private fun LayerEventsSection(project: ProjectModel, topZMm: Double) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(stringResource(R.string.preview_layer_events), style = MaterialTheme.typography.labelMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = {
+                    project.addLayerEvent(
+                        dev.orcaxr.core.ProjectIntents.LayerEventType.Pause,
+                        topZMm,
+                    )
+                },
+                enabled = !project.busy,
+            ) {
+                Text(stringResource(R.string.preview_add_pause))
+            }
+            OutlinedButton(
+                onClick = {
+                    project.addLayerEvent(
+                        dev.orcaxr.core.ProjectIntents.LayerEventType.Custom,
+                        topZMm,
+                        code = String.format(Locale.ROOT, "M117 layer at %.2f mm", topZMm),
+                    )
+                },
+                enabled = !project.busy,
+            ) {
+                Text(stringResource(R.string.preview_add_custom_gcode))
             }
         }
     }

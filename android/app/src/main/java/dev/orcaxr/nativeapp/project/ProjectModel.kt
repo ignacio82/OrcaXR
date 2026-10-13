@@ -11,11 +11,13 @@ import android.provider.OpenableColumns
 import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.neverEqualPolicy
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import java.util.Locale
 import dev.orcaxr.core.ActionArrangement
 import dev.orcaxr.core.ActionPresentation
 import dev.orcaxr.core.AssemblyAligned
@@ -220,6 +222,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             layFlat(false)
             if (measuring) measure(false)
             if (brimEaring) brimEars(false)
+            if (variableLayerHeighting) variableLayerHeight(false)
             if (paint.state.active) paint.stop()
         }
     })
@@ -964,6 +967,8 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "svg_load_drawing" -> drawn.requestDrawing()
             "svg_apply" -> drawn.applySvg()
             "auto_place_wipe" -> autoPlaceWipeTower()
+            "variable_layer_height" -> variableLayerHeight(!variableLayerHeighting)
+            "add_magnet" -> addMagnetHole()
             // The toolbar's, the command palette's and the menus' other actions: one call for all of them.
             "delete_models" -> work { workspace.deleteSelected().await() }
             "edit_undo" -> if (view.undo != null) undo()
@@ -992,6 +997,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
                 layFlat(false)
                 if (measuring) measure(false)
                 if (brimEaring) brimEars(false)
+                if (variableLayerHeighting) variableLayerHeight(false)
                 drawnToolsOff()
                 paint.start(channel)
             }
@@ -1006,7 +1012,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
 
     /**
      * Whether toolbar tool [id] is the Workspace's tool now: Lay flat, Measure,
-     * Brim Ears, Emboss Text, SVG Part, the paint channel being painted, or —
+     * Brim Ears, Emboss Text, SVG Part, Variable Layer Height, the paint channel being painted, or —
      * while none of those is — the gizmo's Move, Rotate or Scale.
      */
     fun toolActive(id: String): Boolean = when (id) {
@@ -1014,6 +1020,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         "tool_measure" -> measuring && !assembling
         "tool_assembly" -> measuring && assembling
         "tool_brim_ears" -> brimEaring
+        "variable_layer_height" -> variableLayerHeighting
         "add_emboss" -> drawn.embossing
         "tool_svg" -> drawn.svgCutting
         "tool_move", "tool_rotate", "tool_scale" -> gizmoShown && ProjectEditing.gizmoAction(gizmoMode) == id
@@ -1024,10 +1031,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
      * Whether the gizmo's handles stand over the selection: only while Move,
      * Rotate or Scale is the Workspace's tool, as the browser's `setTool` shows
      * them (Orca's one gizmo at a time). Under Lay flat, Measure, Brim Ears,
-     * the drawn parts or painting no handle covers the model or takes a press.
+     * Variable Layer Height, the drawn parts or painting no handle covers the model or takes a press.
      */
     val gizmoShown: Boolean
-        get() = !layingFlat && !measuring && !brimEaring && !drawn.embossing && !drawn.svgCutting && !paint.state.active
+        get() = !layingFlat && !measuring && !brimEaring && !variableLayerHeighting && !drawn.embossing && !drawn.svgCutting && !paint.state.active
 
     /** A document action (New, Open, Save, Save As, Import) for the Project area's pickers and dialogs to carry out. */
     var documentRequest by mutableStateOf<String?>(null)
@@ -1136,6 +1143,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         layFlat(false)
         if (measuring) measure(false)
         if (brimEaring) brimEars(false)
+        if (variableLayerHeighting) variableLayerHeight(false)
         drawnToolsOff()
         if (paint.state.active) paint.stop()
         gizmoMode = mode
@@ -1204,6 +1212,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         // One Workspace tool at a time, as the browser's `setTool`.
         if (on && measuring) measure(false)
         if (on && brimEaring) brimEars(false)
+        if (on && variableLayerHeighting) variableLayerHeight(false)
         if (on) drawnToolsOff()
         if (on && paint.state.active) paint.stop()
         layingFlat = on
@@ -1407,6 +1416,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun measure(on: Boolean) {
         if (on) layFlat(false)
         if (on && brimEaring) brimEars(false)
+        if (on && variableLayerHeighting) variableLayerHeight(false)
         if (on) drawnToolsOff()
         if (on && paint.state.active) paint.stop()
         measuring = on
@@ -1577,6 +1587,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         if (on) {
             layFlat(false)
             if (measuring) measure(false)
+            if (variableLayerHeighting) variableLayerHeight(false)
             drawnToolsOff()
             if (paint.state.active) paint.stop()
         }
@@ -1676,6 +1687,117 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             ProjectBrimEars.failed(cause(failure).message)
         }
         status?.let(::brimStatus)
+    }
+
+    // ---- The Variable Layer Height tool ----
+
+    /** The Variable Layer Height tool (`variable_layer_height`): calculate and edit layer heights per-Z on the selected model. */
+    var variableLayerHeighting by mutableStateOf(false)
+        private set
+    /** The adaptive quality/speed factor (0.0–1.0, default 0.5). */
+    var vlhQuality by mutableFloatStateOf(0.5f)
+    /** The smooth radius in mm (1.0–10.0, default 1.0). */
+    var vlhRadius by mutableFloatStateOf(1.0f)
+    /** The tool's last status. */
+    var vlhStatus by mutableStateOf<String?>(null)
+
+    /** Turns the Variable Layer Height tool on or off. */
+    fun variableLayerHeight(on: Boolean) {
+        if (on) {
+            layFlat(false)
+            if (measuring) measure(false)
+            if (brimEaring) brimEars(false)
+            drawnToolsOff()
+            if (paint.state.active) paint.stop()
+        }
+        variableLayerHeighting = on
+        vlhStatus = null
+    }
+
+    /** Calculate and apply adaptive variable layer heights to the selected model. */
+    fun applyAdaptiveLayerHeight() {
+        work {
+            try {
+                workspace.adaptiveLayerHeight(vlhQuality.toDouble()).get()
+                main.post {
+                    vlhStatus = words(R.string.workspace_applied_adaptive_layer_height)
+                }
+            } catch (failure: Throwable) {
+                val reason = cause(failure)
+                main.post {
+                    vlhStatus = "${words(R.string.workspace_variable_layer_height_failed)}: ${reason.message ?: reason.javaClass.simpleName}"
+                }
+            }
+        }
+    }
+
+    /** Smooth variable layer heights on the selected model. */
+    fun applySmoothLayerHeight() {
+        work {
+            try {
+                workspace.smoothLayerHeight(vlhRadius.toDouble()).get()
+                main.post {
+                    vlhStatus = "Smoothed variable layer heights."
+                }
+            } catch (failure: Throwable) {
+                val reason = cause(failure)
+                main.post {
+                    vlhStatus = "${words(R.string.workspace_variable_layer_height_failed)}: ${reason.message ?: reason.javaClass.simpleName}"
+                }
+            }
+        }
+    }
+
+    /** Reset variable layer heights on the selected model. */
+    fun applyResetLayerHeight() {
+        work {
+            try {
+                workspace.resetLayerHeight().get()
+                main.post {
+                    vlhStatus = words(R.string.vlh_reset_applied)
+                }
+            } catch (failure: Throwable) {
+                val reason = cause(failure)
+                main.post {
+                    vlhStatus = "${words(R.string.workspace_variable_layer_height_failed)}: ${reason.message ?: reason.javaClass.simpleName}"
+                }
+            }
+        }
+    }
+
+    /** Add Magnet Hole cavity to the selected model (`add_magnet`). */
+    fun addMagnetHole() {
+        work {
+            try {
+                workspace.addMagnetHole().get()
+                main.post {
+                    message = words(R.string.workspace_added_magnet_hole)
+                }
+            } catch (failure: Throwable) {
+                val reason = cause(failure)
+                main.post {
+                    message = "${words(R.string.workspace_add_magnet_hole_failed)}: ${reason.message ?: reason.javaClass.simpleName}"
+                }
+            }
+        }
+    }
+
+    /** Add a layer event (pause, custom G-code) at [topZMm]. */
+    fun addLayerEvent(eventType: dev.orcaxr.core.ProjectIntents.LayerEventType, topZMm: Double, code: String? = null) {
+        val plateId = view.activePlate?.id ?: "plate:1"
+        work {
+            try {
+                workspace.addLayerEvent(plateId, eventType, topZMm, code = code).get()
+                main.post {
+                    message = "Added layer event at ${String.format(Locale.US, "%.2f", topZMm)} mm"
+                }
+            } catch (failure: Throwable) {
+                val reason = cause(failure)
+                main.post {
+                    message = "Add layer event failed: ${reason.message ?: reason.javaClass.simpleName}"
+                }
+            }
+        }
     }
 
     // ---- The wipe tower ----

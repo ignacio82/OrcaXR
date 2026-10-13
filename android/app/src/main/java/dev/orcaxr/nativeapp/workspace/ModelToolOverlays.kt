@@ -61,6 +61,7 @@ import dev.orcaxr.nativeapp.shell.focusRing
 import dev.orcaxr.renderer.OrbitCamera
 import dev.orcaxr.renderer.Point3
 import dev.orcaxr.renderer.RenderSpace
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
@@ -289,6 +290,82 @@ internal fun SimplifyCard(model: ProjectModel, preview: SimplifyPreview, modifie
             Row {
                 TextButton(onClick = model::applySimplify, enabled = !model.busy) { Text(stringResource(R.string.simplify_apply)) }
                 TextButton(onClick = model::cancelSimplify, enabled = !model.busy) { Text(stringResource(R.string.device_cancel)) }
+            }
+        }
+    }
+}
+
+/**
+ * The browser's Variable Layer Height panel while the tool is on: Adaptive
+ * quality factor slider and button, Smooth radius slider and button, Reset,
+ * status message, and Done.
+ */
+@Composable
+internal fun VariableLayerHeightCard(model: ProjectModel, modifier: Modifier = Modifier) {
+    Card(modifier.padding(16.dp)) {
+        Column(
+            Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.workspace_variable_layer_height),
+                    Modifier.weight(1f).semantics { heading() },
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                TextButton(onClick = { model.variableLayerHeight(false) }) {
+                    Text(stringResource(R.string.workspace_lay_flat_done))
+                }
+            }
+            model.vlhStatus?.let {
+                Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium)
+            }
+
+            // Adaptive section: Quality/Speed slider + Adaptive button
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.vlh_quality), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                Text(String.format(Locale.US, "%.2f", model.vlhQuality), style = MaterialTheme.typography.bodySmall)
+            }
+            Slider(
+                value = model.vlhQuality,
+                onValueChange = { model.vlhQuality = it },
+                valueRange = 0f..1f,
+                modifier = Modifier.fillMaxWidth().focusRing(MaterialTheme.colorScheme.primary),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = model::applyAdaptiveLayerHeight,
+                    enabled = !model.busy,
+                    modifier = Modifier.focusRing(MaterialTheme.colorScheme.primary),
+                ) {
+                    Text(stringResource(R.string.vlh_adaptive))
+                }
+                OutlinedButton(
+                    onClick = model::applyResetLayerHeight,
+                    enabled = !model.busy,
+                    modifier = Modifier.focusRing(MaterialTheme.colorScheme.primary),
+                ) {
+                    Text(stringResource(R.string.vlh_reset))
+                }
+            }
+
+            // Smooth section: Radius slider + Smooth button
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.vlh_radius), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                Text(String.format(Locale.US, "%.1f", model.vlhRadius), style = MaterialTheme.typography.bodySmall)
+            }
+            Slider(
+                value = model.vlhRadius,
+                onValueChange = { model.vlhRadius = it },
+                valueRange = 1f..10f,
+                modifier = Modifier.fillMaxWidth().focusRing(MaterialTheme.colorScheme.primary),
+            )
+            OutlinedButton(
+                onClick = model::applySmoothLayerHeight,
+                enabled = !model.busy,
+                modifier = Modifier.focusRing(MaterialTheme.colorScheme.primary),
+            ) {
+                Text(stringResource(R.string.vlh_smooth))
             }
         }
     }

@@ -90,12 +90,14 @@ object OrcaActionGlyphs {
         "add_support_enforcer" to OrcaActionGlyph(R.drawable.ic_symbol_add_box),
         "add_support_blocker" to OrcaActionGlyph(R.drawable.ic_symbol_disabled_by_default),
         "set_negative_part" to OrcaActionGlyph(R.drawable.ic_symbol_do_not_disturb_on),
+        "variable_layer_height" to OrcaActionGlyph(R.drawable.ic_symbol_layers),
         "slice_active_plate" to OrcaActionGlyph(R.drawable.ic_symbol_play_circle),
         "slice_all_plates" to OrcaActionGlyph(R.drawable.ic_symbol_play_circle),
         "slice_cancel" to OrcaActionGlyph(R.drawable.ic_symbol_play_circle),
         "save_gcode_to_downloads" to OrcaActionGlyph(R.drawable.ic_symbol_download),
         "save_all_plate_gcode" to OrcaActionGlyph(R.drawable.ic_symbol_download),
         "send_to_printer" to OrcaActionGlyph(R.drawable.ic_symbol_send),
+        "add_magnet" to OrcaActionGlyph(R.drawable.ic_symbol_commit),
         "auto_place_wipe" to OrcaActionGlyph(R.drawable.ic_symbol_cleaning_services),
     )
 

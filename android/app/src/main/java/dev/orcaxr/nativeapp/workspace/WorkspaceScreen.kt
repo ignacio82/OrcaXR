@@ -268,6 +268,8 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                 EmbossCard(model)
             } else if (drawn.svgCutting) {
                 SvgPartCard(model)
+            } else if (model.variableLayerHeighting) {
+                VariableLayerHeightCard(model)
             } else if (model.layingFlat) {
                 // The Lay flat tool's status (the browser's), and the way out of it.
                 Card(Modifier.padding(16.dp)) {

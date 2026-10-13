@@ -195,7 +195,7 @@ class ProjectWorkspace(
         val CREATE_ACTIONS = listOf(
             "edit_cut", "edit_copy", "edit_paste", "fill_bed_with_instances",
             "add_primitive_cube", "add_primitive_cylinder", "add_primitive_sphere", "add_primitive_cone", "add_primitive_disc", "add_primitive_torus",
-            "add_modifier", "add_support_enforcer", "add_support_blocker", "set_negative_part",
+            "add_modifier", "add_support_enforcer", "add_support_blocker", "set_negative_part", "add_magnet",
         )
         /** The browser's words for Set as Negative Part with nothing selected (`CanonicalWorkspaceController.setNegativePart`). */
         const val NEGATIVE_PART_UNSELECTED = "Set as Negative Part requires a selected object, instance, or volume"
@@ -215,8 +215,8 @@ class ProjectWorkspace(
          * (`dom-toolbar`) and the Simplify, Measure (with its alignments and
          * the exploded view) and Brim ears panels' controls (`dom-inspector`).
          */
-        val MODEL_TOOL_MENU_ACTIONS = listOf("split_to_objects", "split_to_parts", "simplify_model", "auto_place_wipe")
-        val MODEL_TOOL_TOOLBAR_ACTIONS = listOf("tool_measure", "tool_assembly", "tool_brim_ears", "add_emboss", "tool_svg")
+        val MODEL_TOOL_MENU_ACTIONS = listOf("split_to_objects", "split_to_parts", "simplify_model", "variable_layer_height", "auto_place_wipe")
+        val MODEL_TOOL_TOOLBAR_ACTIONS = listOf("tool_measure", "tool_assembly", "tool_brim_ears", "add_emboss", "tool_svg", "variable_layer_height")
         val MODEL_TOOL_INSPECTOR_ACTIONS = listOf(
             "simplify_preview", "simplify_apply", "simplify_cancel", "measure_clear", "assembly_align", "assembly_explode",
             "brim_ears_configure", "brim_ears_remove", "brim_ears_auto", "brim_ears_clear",
@@ -2044,6 +2044,126 @@ class ProjectWorkspace(
         if (converted != null) CompletableFuture.completedFuture<NegativePartResult?>(converted)
         else addHelperVolume(HelperVolumeRole.NEGATIVE_VOLUME).thenApply<NegativePartResult?> { added -> added?.let { NegativePartResult.Added(it) } }
     }
+
+    /**
+     * Add Magnet Hole (`add_magnet`, the browser's `addMagnetHole`): a
+     * negative volume cavity named "Magnet Hole" added to the selected
+     * object or instance.
+     */
+    fun addMagnetHole(): CompletableFuture<ProjectHelperAdded?> =
+        addHelperVolume(HelperVolumeRole.NEGATIVE_VOLUME).thenCompose { added ->
+            if (added == null) CompletableFuture.completedFuture(null)
+            else renameVolume(added.volumeId, "Magnet Hole").thenApply { added }
+        }
+
+    private fun targetObjectId(snapshot: ProjectSnapshot, primary: ProjectIntents.SelectionEntity?): String? = when (primary) {
+        null -> null
+        is ProjectIntents.SelectionEntity.Object -> text(primary.value)
+        is ProjectIntents.SelectionEntity.Instance -> {
+            val instanceId = text(primary.value)
+            snapshot.query().use { root ->
+                ProjectFacts.instances(root).firstOrNull { it.id == instanceId }?.objectId
+            }
+        }
+        is ProjectIntents.SelectionEntity.Volume -> {
+            val volumeId = text(primary.value)
+            snapshot.query().use { root ->
+                ProjectFacts.objects(root).firstOrNull { obj -> obj.volumes.any { it.id == volumeId } }?.id
+            }
+        }
+        else -> null
+    }
+
+    /**
+     * Calculate and apply adaptive layer heights to the selected object (`variable_layer_height`).
+     */
+    fun adaptiveLayerHeight(qualityFactor: Double = 0.5): CompletableFuture<Boolean> = edit { session, snapshot ->
+        val primary = whole(session).primary
+        val objectId = targetObjectId(snapshot, primary)
+            ?: throw ProjectFailure("Variable layer height requires a selected object or instance")
+        val limits = ProjectIntents.LayerHeightLimits(
+            layerHeightMm = 0.2,
+            minLayerHeightMm = 0.08,
+            maxLayerHeightMm = 0.28,
+            firstObjectLayerHeightMm = 0.2,
+            firstObjectLayerHeightFixed = false,
+        )
+        Edit(
+            listOf(ProjectIntents.Command.AdaptiveLayerHeightProfile(ProjectIntents.AdaptiveLayerHeightProfile(units(objectId), limits, qualityFactor))),
+            true,
+        )
+    }.thenApply { it ?: false }
+
+    /**
+     * Smooth variable layer heights on the selected object.
+     */
+    fun smoothLayerHeight(radius: Double = 1.0, keepMin: Boolean = false): CompletableFuture<Boolean> = edit { session, snapshot ->
+        val primary = whole(session).primary
+        val objectId = targetObjectId(snapshot, primary)
+            ?: throw ProjectFailure("Variable layer height requires a selected object or instance")
+        val limits = ProjectIntents.LayerHeightLimits(
+            layerHeightMm = 0.2,
+            minLayerHeightMm = 0.08,
+            maxLayerHeightMm = 0.28,
+            firstObjectLayerHeightMm = 0.2,
+            firstObjectLayerHeightFixed = false,
+        )
+        val parameters = ProjectIntents.LayerHeightParameters(limits, 20.0)
+        Edit(
+            listOf(ProjectIntents.Command.SmoothLayerHeightProfile(ProjectIntents.SmoothLayerHeightProfile(units(objectId), parameters, radius, keepMin))),
+            true,
+        )
+    }.thenApply { it ?: false }
+
+    /**
+     * Reset variable layer heights on the selected object.
+     */
+    fun resetLayerHeight(): CompletableFuture<Boolean> = edit { session, snapshot ->
+        val primary = whole(session).primary
+        val objectId = targetObjectId(snapshot, primary)
+            ?: throw ProjectFailure("Variable layer height requires a selected object or instance")
+        Edit(
+            listOf(ProjectIntents.Command.ResetLayerHeightProfile(ProjectIntents.ResetLayerHeightProfile(units(objectId)))),
+            true,
+        )
+    }.thenApply { it ?: false }
+
+    /**
+     * Add a custom layer event (pause, custom G-code, etc.) at [topZMm] on plate [plateId].
+     */
+    fun addLayerEvent(
+        plateId: String,
+        eventType: ProjectIntents.LayerEventType,
+        topZMm: Double,
+        code: String? = null,
+        message: String? = null,
+    ): CompletableFuture<String?> = edit { session, snapshot ->
+        val id = ids.next(1).first()
+        val emptyFinite = ProjectIntents.OptionalFinite.Absent(ProjectIntents.Empty)
+        val emptyId = ProjectIntents.OptionalId.Absent(ProjectIntents.Empty)
+        val optCode = if (code != null) ProjectIntents.OptionalText.Value(units(code)) else ProjectIntents.OptionalText.Absent(ProjectIntents.Empty)
+        val optMessage = if (message != null) ProjectIntents.OptionalText.Value(units(message)) else ProjectIntents.OptionalText.Absent(ProjectIntents.Empty)
+        val emptyText = ProjectIntents.OptionalText.Absent(ProjectIntents.Empty)
+        val cmd = ProjectIntents.AddLayerEvent(
+            customGcodeId = units(id),
+            plateId = units(plateId),
+            eventType = eventType,
+            topZMm = topZMm,
+            toolIndex = emptyFinite,
+            filamentId = emptyId,
+            color = emptyText,
+            message = optMessage,
+            code = optCode,
+        )
+        Edit(listOf(ProjectIntents.Command.AddLayerEvent(cmd)), id)
+    }
+
+    /**
+     * Delete an authored layer event by [customGcodeId].
+     */
+    fun deleteLayerEvent(customGcodeId: String): CompletableFuture<Boolean> = edit { session, _ ->
+        Edit(listOf(ProjectIntents.Command.DeleteLayerEvent(ProjectIntents.DeleteLayerEvent(units(customGcodeId)))), true)
+    }.thenApply { it ?: false }
 
     /**
      * Fill Bed with Instances (`fill_bed_with_instances`, the browser's

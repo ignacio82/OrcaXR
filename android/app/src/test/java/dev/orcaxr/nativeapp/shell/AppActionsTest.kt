@@ -19,7 +19,7 @@ class AppActionsTest {
         assertTrue(AppActions.TOOLBAR.all { it in AppActions.PERFORMED })
         assertTrue(AppActions.QUICK.all { it in AppActions.PERFORMED })
         assertTrue(AppActions.PANELS.all { it in AppActions.PERFORMED })
-        assertEquals(88, AppActions.PERFORMED.size)
+        assertEquals(90, AppActions.PERFORMED.size)
     }
 
     @Test fun everyCatalogueGroupHeadsItsSectionsInTheAppsLanguage() {

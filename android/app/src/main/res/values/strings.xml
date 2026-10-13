@@ -733,4 +733,22 @@
     <string name="export_logs">Export Diagnostics…</string>
     <string name="action_hint_file_export_logs">Review and export a diagnostics bundle for a bug report; it carries no project or tokens</string>
     <string name="export_logs_cancelled">Diagnostics export cancelled; nothing was written.</string>
+    <string name="workspace_variable_layer_height">Variable Layer Height</string>
+    <string name="action_hint_variable_layer_height">Paint per-Z layer heights on the model</string>
+    <string name="workspace_applied_adaptive_layer_height">Calculated variable layer heights for selected model.</string>
+    <string name="workspace_variable_layer_height_failed">Variable Layer Height failed</string>
+    <string name="project_add_magnet">Add Magnet Hole</string>
+    <string name="action_hint_add_magnet">Add a cavity for a magnet</string>
+    <string name="workspace_added_magnet_hole">Added magnet hole cavity to selected model.</string>
+    <string name="workspace_add_magnet_hole_failed">Add Magnet Hole failed</string>
+    <string name="preview_layer_events">Layer events</string>
+    <string name="vlh_adaptive">Adaptive</string>
+    <string name="vlh_smooth">Smooth</string>
+    <string name="vlh_reset">Reset</string>
+    <string name="vlh_quality">Quality/Speed</string>
+    <string name="vlh_radius">Smooth radius</string>
+    <string name="vlh_reset_applied">Reset variable layer heights.</string>
+    <string name="preview_add_pause">Add pause</string>
+    <string name="preview_add_custom_gcode">Add custom G-code</string>
+    <string name="preview_remove_event">Remove</string>
 </resources>

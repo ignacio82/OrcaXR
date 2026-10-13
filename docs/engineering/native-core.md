@@ -6555,6 +6555,32 @@ coincidence (each one "Transform instance", undone), explodes the view (the
 project's undo label unchanged) and ends the tool, the view assembled
 again.
 
+### Android variable layer height, magnet cavities and layer events
+
+The Workspace and Preview areas provide variable layer height, magnet cavity
+creation, and layer event authoring matching the browser's tools.
+
+Variable layer height (`variable_layer_height`). Enabled when an object or
+instance is selected, the tool joins the model toolbar and the Tools menu. Its
+overlay card (`VariableLayerHeightCard`) provides an adaptive quality slider
+(0.0–1.0), "Adaptive" calculation (`applyAdaptiveLayerHeight`), "Smooth"
+adjustment (`applySmoothLayerHeight` with radius 1–10 mm), and "Reset"
+(`applyResetLayerHeight`). Edits dispatch through
+`ProjectWorkspace.adaptiveLayerHeight`, `smoothLayerHeight`, and
+`resetLayerHeight` to the core's layer height engine.
+
+Magnet cavities (`add_magnet`). Added to the Add menu as "Add Magnet Hole", the
+tool plans a negative volume cavity via `addHelperVolume(HelperVolumeRole.NEGATIVE_VOLUME)`
+and renames it to "Magnet Hole" as the web workspace controller does, staging one
+undoable volume addition.
+
+Layer events (`preview_add_pause`, `preview_add_custom_gcode`). Wired directly into
+`PreviewScreen`'s layer scrubber when inspecting a sliced toolpath with a valid
+layer height (`topZMm`). The operator can insert pause events
+(`LayerEventType.Pause`) or custom G-code commands (`LayerEventType.Custom`,
+inserting `M117 layer at <Z> mm`) at the current height through
+`ProjectModel.addLayerEvent` / `ProjectWorkspace.addLayerEvent`.
+
 ### Android filaments
 
 The app lists and assigns the project's filaments as the browser's

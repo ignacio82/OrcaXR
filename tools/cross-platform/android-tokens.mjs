@@ -77,8 +77,8 @@ const APP_ACTIONS = [
   "tool_assembly", "assembly_explode", "assembly_align",
   "tool_brim_ears", "brim_ears_auto", "brim_ears_clear", "auto_place_wipe",
   "add_emboss", "emboss_load_font", "emboss_apply", "tool_svg", "svg_load_drawing", "svg_apply",
-  "add_modifier", "add_support_enforcer", "add_support_blocker", "set_negative_part",
-  "slice_active_plate", "slice_all_plates", "slice_cancel", "send_to_printer",
+  "add_modifier", "add_support_enforcer", "add_support_blocker", "set_negative_part", "variable_layer_height",
+  "slice_active_plate", "slice_all_plates", "slice_cancel", "send_to_printer", "add_magnet",
   "file_export_gcode", "file_export_all_plates", "file_export_stl", "file_export_all_stls", "file_export_3mf",
   "file_export_config", "file_export_obj", "file_export_logs", "save_gcode_to_downloads", "save_all_plate_gcode",
 ];

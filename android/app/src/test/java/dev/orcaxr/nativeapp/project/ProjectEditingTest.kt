@@ -161,7 +161,7 @@ class ProjectEditingTest {
         // then its Tools menu's wipe-tower placement: performed, with the core's enablement.
         assertEquals(
             listOf(
-                "split_to_objects", "split_to_parts", "simplify_model", "tool_measure", "tool_assembly", "tool_brim_ears", "add_emboss", "tool_svg",
+                "split_to_objects", "split_to_parts", "simplify_model", "variable_layer_height", "tool_measure", "tool_assembly", "tool_brim_ears", "add_emboss", "tool_svg",
                 "auto_place_wipe",
             ),
             ProjectEditing.TOOLS_MENU,
@@ -189,11 +189,11 @@ class ProjectEditingTest {
         // The clipboard opens the Edit menu, as in the browser's; instance creations close it.
         assertEquals(listOf("edit_cut", "edit_copy", "edit_paste"), ProjectEditing.editMenu(view).take(3).map { it.id })
         assertEquals(listOf("add_instance", "fill_bed_with_instances"), ProjectEditing.editMenu(view).takeLast(2).map { it.id })
-        // The Add menu: the six primitives in the browser's order, then the helper volumes and Set as Negative Part.
+        // The Add menu: the six primitives in the browser's order, then the helper volumes, Set as Negative Part, and Add Magnet Hole.
         assertEquals(
             listOf(
                 "add_primitive_cube", "add_primitive_cylinder", "add_primitive_sphere", "add_primitive_cone", "add_primitive_disc",
-                "add_primitive_torus", "add_modifier", "add_support_enforcer", "add_support_blocker", "set_negative_part",
+                "add_primitive_torus", "add_modifier", "add_support_enforcer", "add_support_blocker", "set_negative_part", "add_magnet",
             ),
             ProjectEditing.ADD_MENU,
         )

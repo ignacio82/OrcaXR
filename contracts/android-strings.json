@@ -409,6 +409,15 @@
     "action_hint_add_support_enforcer": { "key": "action.add_support_enforcer.hint" },
     "action_hint_add_support_blocker": { "key": "action.add_support_blocker.hint" },
     "action_hint_set_negative_part": { "key": "action.set_negative_part.hint" },
+    "workspace_variable_layer_height": { "key": "action.variable_layer_height.label" },
+    "action_hint_variable_layer_height": { "key": "action.variable_layer_height.hint" },
+    "workspace_applied_adaptive_layer_height": { "key": "workspace.orcaWorkspace.appliedAdaptiveLayerHeight" },
+    "workspace_variable_layer_height_failed": { "key": "workspace.orcaWorkspace.variableLayerHeightFailed" },
+    "project_add_magnet": { "key": "action.add_magnet.label" },
+    "action_hint_add_magnet": { "key": "action.add_magnet.hint" },
+    "workspace_added_magnet_hole": { "key": "workspace.orcaWorkspace.addedMagnetHole" },
+    "workspace_add_magnet_hole_failed": { "key": "workspace.orcaWorkspace.addMagnetHoleFailed" },
+    "preview_layer_events": { "key": "ui.layerEventPanel.layerEvents" },
     "action_hint_slice_active_plate": { "key": "action.slice_active_plate.hint" },
     "action_hint_slice_all_plates": { "key": "action.slice_all_plates.hint" },
     "action_hint_slice_cancel": { "key": "action.slice_cancel.hint" },
@@ -792,7 +801,16 @@
     "ranges_split_at",
     "ranges_merge_previous",
     "ranges_merge_next",
-    "ranges_selected"
+    "ranges_selected",
+    "vlh_adaptive",
+    "vlh_smooth",
+    "vlh_reset",
+    "vlh_quality",
+    "vlh_radius",
+    "vlh_reset_applied",
+    "preview_add_pause",
+    "preview_add_custom_gcode",
+    "preview_remove_event"
   ],
   "kotlin": [
     {
@@ -1045,6 +1063,16 @@
       "resource": "settings_unavailable",
       "key": "ui.commandPalette.unavailable",
       "reason": "The settings panel's Unavailable badge marks a field the generated schema cannot edit (GeneratedSettingsPanel writes it untranslated); the command palette's, the shell's and the XR menu's mark an action that cannot run now."
+    },
+    {
+      "resource": "vlh_reset",
+      "key": "ui.waveOverhangs.reset",
+      "reason": "The Variable Layer Height panel's Reset restores default layer heights, not the Wave Overhangs panel's Reset."
+    },
+    {
+      "resource": "vlh_reset",
+      "key": "ui.xrWaveOverhangs.reset",
+      "reason": "The Variable Layer Height panel's Reset restores default layer heights, not the XR Wave Overhangs panel's Reset."
     }
   ]
 }
