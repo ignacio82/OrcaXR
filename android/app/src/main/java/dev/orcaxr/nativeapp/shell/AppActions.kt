@@ -1,6 +1,7 @@
 package dev.orcaxr.nativeapp.shell
 
 import dev.orcaxr.core.ProjectActionState
+import dev.orcaxr.nativeapp.exports.ExportCommands
 import dev.orcaxr.nativeapp.prepare.PrepareCommands
 import dev.orcaxr.nativeapp.project.ProjectEditing
 import dev.orcaxr.renderer.CameraView
@@ -52,8 +53,11 @@ object AppActions {
     /** Slice, Slice All Plates, Cancel Slice and Send to Printer: the Prepare area's buttons, enabled as they are ([PrepareCommands]). */
     val PREPARE = PrepareCommands.IDS
 
+    /** The File menu's exports and the Download actions: the system's picker takes the file, from any area ([ExportCommands]). */
+    val EXPORT = ExportCommands.IDS
+
     /** Every catalogue action the app performs. */
-    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PANELS + PREPARE).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
+    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PANELS + PREPARE + EXPORT).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
 
     /**
      * Whether running [id] needs the Workspace's 3D view on screen: a camera
@@ -67,6 +71,9 @@ object AppActions {
 
     /** Whether running [id] needs the Project area, whose pickers and dialogs carry it out. */
     fun needsProject(id: String): Boolean = id in DOCUMENT
+
+    /** Whether running [id] is an export: written where the operator picks, whichever area shows. */
+    fun needsExport(id: String): Boolean = id in EXPORT
 
     /** Whether running [id] is the Prepare area's: its buttons carry it out, with their progress and outcome. */
     fun needsPrepare(id: String): Boolean = id in PREPARE

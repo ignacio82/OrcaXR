@@ -68,6 +68,9 @@ import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.nativeapp.device.DeviceModel
 import dev.orcaxr.nativeapp.device.DeviceScreen
 import dev.orcaxr.nativeapp.prepare.FollowSlicing
+import dev.orcaxr.nativeapp.exports.ExportCommands
+import dev.orcaxr.nativeapp.exports.ExportHost
+import dev.orcaxr.nativeapp.exports.ExportModel
 import dev.orcaxr.nativeapp.prepare.PrepareCommands
 import dev.orcaxr.nativeapp.prepare.PrepareModel
 import dev.orcaxr.nativeapp.prepare.PrepareScreen
@@ -135,6 +138,7 @@ class MainActivity : ComponentActivity() {
     private val project: ProjectModel by viewModels()
     private val preview: PreviewModel by viewModels()
     private val prepare: PrepareModel by viewModels()
+    private val exports: ExportModel by viewModels()
     /** The area shown; an opened or shared document switches to the Project area, a finished slice to Preview. */
     private var area by mutableIntStateOf(R.string.nav_workspace)
     private val themePreference by lazy { ThemePreference(this) }
@@ -154,6 +158,11 @@ class MainActivity : ComponentActivity() {
      * or a tool that takes its touch.
      */
     private fun runAction(id: String) {
+        if (AppActions.needsExport(id)) {
+            // The File menu's exports: the system's picker takes the file over whichever area shows.
+            exports.perform(id)
+            return
+        }
         if (AppActions.needsPrepare(id)) {
             // Slice, Slice All Plates, Cancel Slice and Send: the Prepare area carries them out as its buttons do,
             // with their permission prompt, consent, progress and outcome.
@@ -166,8 +175,10 @@ class MainActivity : ComponentActivity() {
         project.perform(id)
     }
 
-    /** [action] as the app enables it: the Prepare area's four as its buttons are, from its state and the Device area's. */
+    /** [action] as the app enables it: the Prepare area's four as its buttons are, from its state and the Device area's;
+     * the exports as the core's gate judges them with the Prepare area's facts, one at a time. */
     private fun actionState(action: ProjectActionState): ProjectActionState {
+        if (AppActions.needsExport(action.id)) return ExportCommands.state(action, prepare.state.actions, exports.busy)
         if (!AppActions.needsPrepare(action.id)) return action
         val view = project.view
         val plate = view.activePlate
@@ -342,6 +353,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         project.taskId = taskId
         prepare.bind(project)
+        exports.bind(project, prepare)
         if (savedInstanceState == null) handle(intent, created = true) else area = savedInstanceState.getInt(AREA, area)
         setContent {
             // Back with unsaved changes, from any area, asks in the Project area first.
@@ -399,8 +411,9 @@ class MainActivity : ComponentActivity() {
                 val layout = ShellLayout.of(LocalWindowInfo.current.containerDpSize.width.value.toInt(), shellArea(area))
                 workspaceShown = area == R.string.nav_workspace || layout.viewport == Viewport.Workspace
                 val snackbar = remember { SnackbarHostState() }
-                // A drop's refusals: each drop's own, so the same words dropped again show again.
+                // A drop's refusals and an export's outcome: each one's own, so the same words shown again show again.
                 var refused by remember { mutableStateOf<Refusal?>(null) }
+                ExportHost(exports, prepare, show = { refused = Refusal(it) }, run = ::runAction)
                 LaunchedEffect(refused) {
                     refused?.let { snackbar.showSnackbar(it.text, withDismissAction = true, duration = SnackbarDuration.Long) }
                 }
@@ -483,7 +496,7 @@ class MainActivity : ComponentActivity() {
             // One arrangement for every area beside the plate, so moving between them keeps its view.
             Viewport.Workspace -> Row(modifier) {
                 when (area) {
-                    R.string.nav_project -> ProjectScreen(project, panel)
+                    R.string.nav_project -> ProjectScreen(project, prepare, panel)
                     else -> PrepareScreen(prepare, project, device, panel)
                 }
                 WorkspaceScreen(project, Modifier.weight(1f).fillMaxHeight())
@@ -491,7 +504,7 @@ class MainActivity : ComponentActivity() {
             Viewport.Toolpath -> PreviewScreen(preview, modifier, panelWidth = layout.panelWidthDp.dp, bed = project.view.bed)
             null -> when (area) {
                 R.string.nav_device -> DeviceScreen(device, modifier)
-                R.string.nav_project -> ProjectScreen(project, modifier)
+                R.string.nav_project -> ProjectScreen(project, prepare, modifier)
                 R.string.nav_prepare -> PrepareScreen(prepare, project, device, modifier)
                 R.string.nav_preview -> PreviewScreen(preview, modifier, bed = project.view.bed)
                 else -> WorkspaceScreen(project, modifier)
@@ -527,7 +540,7 @@ private fun DropPrompt() {
     }
 }
 
-/** What a drop refused, shown once. */
+/** What a drop refused (or an export did), shown once. */
 private class Refusal(val text: String)
 
 /** The area an `R.string.nav_*` label names. */

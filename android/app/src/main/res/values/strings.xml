@@ -673,4 +673,22 @@
     <string name="ranges_merge_next">Merge with next range</string>
     <string name="ranges_selected">Selected %1$s</string>
     <string name="ranges_settings">Settings</string>
+    <string name="export_menu">Export</string>
+    <string name="export_gcode">Export G-code…</string>
+    <string name="export_all_plates">Export All Plates…</string>
+    <string name="export_stl">Export as one STL…</string>
+    <string name="export_all_stls">Export all objects as STLs…</string>
+    <string name="export_download">Download</string>
+    <string name="export_download_all">Download All Plates</string>
+    <string name="action_hint_file_export_gcode">Export the sliced G-code for the active plate</string>
+    <string name="action_hint_file_export_all_plates">Slice and export G-code for every build plate</string>
+    <string name="action_hint_file_export_stl">Export selected models, or every model on the active plate, from canonical geometry</string>
+    <string name="action_hint_file_export_all_stls">Export every model on the active plate as separate STL files in a ZIP archive</string>
+    <string name="action_hint_save_gcode_to_downloads">Download the sliced G-code</string>
+    <string name="action_hint_save_all_plate_gcode">Download one named G-code artifact per sliced plate</string>
+    <string name="export_slice_all_first">Slice all plates before downloading their G-code.</string>
+    <string name="export_stale">The project changed since the last slice; slice again before downloading.</string>
+    <string name="export_nothing_to_slice">No printable plate has models to slice.</string>
+    <string name="export_all_stls_done">Exported all models as separate STL files.</string>
+    <string name="export_stl_failed">STL export failed.</string>
 </resources>

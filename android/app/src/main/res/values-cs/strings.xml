@@ -70,4 +70,7 @@
     <string name="settings_detail_level">Úroveň detailu</string>
     <string name="ranges_heading">Výškové rozsahy</string>
     <string name="ranges_settings">Nastavení</string>
+    <string name="export_gcode">Exportovat G-kód…</string>
+    <string name="export_stl">Exportovat jako jedno STL…</string>
+    <string name="export_download">Stáhnout</string>
 </resources>

@@ -7371,6 +7371,57 @@ then finds a negative volume refused in the browser's words without the
 destination opening, a destination that cannot open failing the export,
 an empty plate refused, and an imported cube exported as `cube.stl`.
 
+On Android the exports are the browser's File menu entries and its Download
+actions: the Project area's Export menu (beside Share) lists Export G-code…,
+Export All Plates…, Export as one STL…, Export all objects as STLs… and
+Download All Plates; Prepare's result card offers Download beside Preview and
+Send to Printer, and Download All Plates under every plate's result; the
+command palette lists all six. Each is enabled as the browser's registry
+gate judges it — the core's capability rules read with the Prepare area's
+facts (`ProjectWorkspace.sliceActions` now takes the published slice's
+`gcodeReady` and reads the output actions too) — and not while another
+export is being written ("Another export is being written; wait for it to
+finish."). `ExportModel` carries them out wherever they are chosen and
+`ExportHost`, at the shell's root, meets the system: what is written is
+fixed when the action is chosen, as the browser's download is — an STL is
+written by the core, after every queued edit settles, into a private staging
+file before the picker is asked for a place (a refusal asks for none and says
+"STL export failed: …" or "STL export failed."), the G-code is the published
+file, whose currency is checked again once a place is picked. The picker
+creates the document under the browser's name with the type the device
+associates with its extension (else `application/octet-stream`): a provider
+keeps an extension only for its own type, and otherwise writes
+`orcaxr.gcode.txt` or numbers a copy `orcaxr.gcode (1)`; so the file keeps
+the browser's name and a copy is numbered `orcaxr (1).gcode`, as a browser
+numbers a download. Download All Plates writes `<plate>.gcode` for each
+plate of the last Slice All Plates into a folder the operator picks (the
+browser downloads one file per plate); Export All Plates… slices every plate
+first when their results are not the project's (the Prepare area runs the
+Slice All Plates, with its consent and progress; the export goes on once
+`PrepareModel.ended` moves, or stops when the slice did not publish). Copies
+run on one worker; a provider failure is said in words ("There is no room
+left for …", "OrcaXR can no longer write to …") and the half-written document
+is removed. Outcomes are the browser's status words in the shell's snackbar
+("Saved orcaxr.gcode.", "Downloaded 2 plate G-code file(s).", "Exported 1
+model as 12 STL triangles."), the catalogued ones in the operator's language.
+
+`ExportCommandsTest` (4 JVM tests: the six and where they run, the gate and
+the one-at-a-time rule, the browser's words, the providers' failures and the
+document type), `AppActionsTest` (71 performed actions with their glyphs,
+words and hints). `android-exports-smoke.py` (in `emulator-smoke.py` after
+the outputs smoke) drives them through the system's picker on the engine-less
+APK and reads every file back: `cube.stl` (the browser's header, 12 facets,
+unit normals, the 20 mm cube on the bed), `Untitled_project_stls.zip` with
+`cube_stl.stl` and `cube_stl_2.stl` — byte for byte the archive the browser's
+own `writeDeterministicZip` writes from those members — a negative part
+refused with no picker, then on the external slicer stand-in Download and the
+palette's Export G-code… (`orcaxr.gcode`, `orcaxr (1).gcode`, each the
+published file byte for byte), Download All Plates refused before a Slice All
+Plates, and Export All Plates… slicing both plates and writing `Plate_1.gcode`
+and `Plate_2.gcode` into a picked folder, each its plate's published file; an
+edit withdraws them. It passes on the iteration emulator (API 34, x86_64);
+the two suites have not run it.
+
 ### Android Device area
 
 The app's Device area is the first product area on Android, built only from

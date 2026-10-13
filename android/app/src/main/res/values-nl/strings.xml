@@ -69,4 +69,8 @@
     <string name="settings_detail_level">Detailniveau</string>
     <string name="ranges_heading">Hoogtebereiken</string>
     <string name="ranges_settings">Instellingen</string>
+    <string name="export_gcode">Exporteer G-code…</string>
+    <string name="export_stl">Exporteren als één STL…</string>
+    <string name="export_all_stls">Alle objecten exporteren als STL\'s…</string>
+    <string name="export_download">Downloaden</string>
 </resources>

@@ -72,4 +72,8 @@
     <string name="settings_detail_level">细节等级</string>
     <string name="ranges_heading">高度范围</string>
     <string name="ranges_settings">设置</string>
+    <string name="export_gcode">导出 G-code…</string>
+    <string name="export_stl">导出为一个STL…</string>
+    <string name="export_all_stls">导出所有对象为多个STL…</string>
+    <string name="export_download">下载</string>
 </resources>

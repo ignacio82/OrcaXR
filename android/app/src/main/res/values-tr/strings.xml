@@ -72,4 +72,8 @@
     <string name="settings_detail_level">Detay seviyesi</string>
     <string name="ranges_heading">Yükseklik aralıkları</string>
     <string name="ranges_settings">Ayarlar</string>
+    <string name="export_gcode">G-kodunu dışa aktar…</string>
+    <string name="export_stl">STL olarak dışa aktar…</string>
+    <string name="export_all_stls">Tüm nesneleri STLs olarak dışa aktarın…</string>
+    <string name="export_download">İndir</string>
 </resources>

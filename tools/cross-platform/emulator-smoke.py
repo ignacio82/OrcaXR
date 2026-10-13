@@ -22,7 +22,10 @@ parser.add_argument("--pages", type=int, choices=(4, 16), default=4)
 SMOKES = ["android-smoke", "android-local-network-smoke", "android-device-smoke", "android-project-smoke",
           "android-preview-smoke", "android-prepare-smoke", "android-send-smoke", "android-locale-smoke",
           "android-edit-smoke", "android-inspector-smoke", "android-create-smoke", "android-filament-smoke",
-          "android-local-slice-smoke", "android-outputs-smoke", "android-paint-smoke", "android-modeltools-smoke",
+          "android-local-slice-smoke", "android-outputs-smoke",
+          # The File menu's exports and Download through the system's picker, every file read back.
+          "android-exports-smoke",
+          "android-paint-smoke", "android-modeltools-smoke",
           "android-settings-smoke",
           # The semantic editor's volume roles and Set as Negative Part.
           "android-roles-smoke",

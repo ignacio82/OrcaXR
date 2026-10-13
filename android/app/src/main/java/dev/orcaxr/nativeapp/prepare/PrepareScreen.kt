@@ -63,7 +63,13 @@ import dev.orcaxr.nativeapp.project.VirtualFilamentAuthorDialog
 import dev.orcaxr.nativeapp.project.VirtualFilamentDeleteDialog
 import dev.orcaxr.nativeapp.project.VirtualFilamentLibraryPanel
 import kotlinx.coroutines.launch
+import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.nativeapp.device.DeviceModel
+import dev.orcaxr.nativeapp.exports.ExportCommands
+import dev.orcaxr.nativeapp.shell.ActionTexts
+import dev.orcaxr.nativeapp.shell.ActionTooltip
+import dev.orcaxr.nativeapp.shell.LocalActionRunner
+import dev.orcaxr.nativeapp.shell.LocalActionStates
 import dev.orcaxr.nativeapp.send.SendWords
 
 /**
@@ -224,8 +230,10 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                                 Text(PrepareWords.OUT_OF_DATE, color = MaterialTheme.colorScheme.error)
                             } else {
                                 val connected = device.state.connected
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton(onClick = model::showResult) { Text(stringResource(R.string.nav_preview)) }
+                                    // The browser's Download beside it on its toolbar: the published G-code, where the operator picks.
+                                    OutputButton(ExportCommands.DOWNLOAD, model)
                                     // While a send runs, its Cancel send is the status line's, above the list, beside the
                                     // words that name it (the browser's one button turns into it there).
                                     Button(onClick = { device.send(model.sendable()) }, enabled = PrepareCommands.canSend(facts)) {
@@ -239,6 +247,7 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                                 Text(stringResource(R.string.prepare_sliced_plates), Modifier.semantics { heading() }, style = MaterialTheme.typography.labelLarge)
                                 for (sliced in state.plates) Text(sliced.row, style = MaterialTheme.typography.bodySmall)
                                 Text(stringResource(R.string.prepare_sliced_shown, result.plateName), style = MaterialTheme.typography.bodySmall)
+                                OutputButton(ExportCommands.DOWNLOAD_ALL, model)
                             }
                         }
                     }
@@ -380,6 +389,20 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
 }
 
 /**
+ * An output action ([ExportCommands]) as this area offers it: its label,
+ * enabled as the command palette enables it (the core's gate with this
+ * area's facts), its reason as its tooltip, run as the menus run it.
+ */
+@Composable
+private fun OutputButton(id: String, model: PrepareModel) {
+    val action = LocalActionStates.current(model.state.actions[id] ?: ProjectActionState(id, id, false))
+    val run = LocalActionRunner.current
+    ActionTooltip(ActionTexts.tooltip(action)) {
+        OutlinedButton(onClick = { run(id) }, enabled = action.enabled) { Text(ActionTexts.label(action)) }
+    }
+}
+
+/**
  * Keeps what the slice actions are judged by current while shown — the
  * Prepare area, or the command palette over any area: the active plate's
  * preflight as the project and its profiles change, and Slice, Slice All
@@ -393,7 +416,8 @@ fun FollowSlicing(model: PrepareModel, project: ProjectModel) {
     val plate = view.activePlate
     LaunchedEffect(view.revision, plate, project.profilesView) { model.refreshPreflight() }
     val blocked = model.state.preflight?.takeIf { it.plateId == plate?.id }?.canSlice == false
-    LaunchedEffect(view.revision, plate?.id, model.state.job != null, blocked) { model.refreshActions() }
+    // The published slice too: the output actions' `gcodeReady` is whether it is still the project's.
+    LaunchedEffect(view.revision, plate?.id, model.state.job != null, blocked, model.state.result, model.state.plates) { model.refreshActions() }
 }
 
 /** One issue, as the browser's preflight card: severity and code, message, help, path, entities, and Hide. */

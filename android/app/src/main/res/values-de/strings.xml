@@ -72,4 +72,8 @@
     <string name="settings_detail_level">Detailgrad</string>
     <string name="ranges_heading">Höhenbereiche</string>
     <string name="ranges_settings">Einstellungen</string>
+    <string name="export_gcode">Exportiere G-Code…</string>
+    <string name="export_stl">Exportieren als eine STL…</string>
+    <string name="export_all_stls">Exportiere alle Objekte als STLs…</string>
+    <string name="export_download">Herunterladen</string>
 </resources>

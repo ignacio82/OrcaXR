@@ -22,6 +22,7 @@ import dev.orcaxr.core.BrimEarAuto
 import dev.orcaxr.core.BrimEarClear
 import dev.orcaxr.core.BrimEarState
 import dev.orcaxr.core.ContentProjectDocument
+import dev.orcaxr.core.StlExport
 import dev.orcaxr.core.DigestingDocument
 import dev.orcaxr.core.DocumentOwners
 import dev.orcaxr.core.GizmoMode
@@ -847,9 +848,17 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     override fun slicePlan(scope: SliceScope): CompletableFuture<Pair<ProjectRevision, SlicePlan>> =
         started.thenCompose { it.slicePlan(scope) }
 
-    /** The slice actions as the core enables them ([ProjectWorkspace.sliceActions]). */
-    override fun sliceActions(slicing: Boolean, block: Boolean): CompletableFuture<Map<String, ProjectActionState>> =
-        started.thenCompose { it.sliceActions(slicing, block) }
+    /** The slice and output actions as the core enables them ([ProjectWorkspace.sliceActions]). */
+    override fun sliceActions(slicing: Boolean, block: Boolean, gcodeReady: Boolean): CompletableFuture<Map<String, ProjectActionState>> =
+        started.thenCompose { it.sliceActions(slicing, block, gcodeReady) }
+
+    /**
+     * File → Export as one STL… or Export all objects as STLs… of the project
+     * as it stands once every queued edit has settled ([ProjectWorkspace.exportStl]),
+     * written to [output]; the project's saved state is untouched.
+     */
+    fun exportStl(archive: Boolean, output: ProjectDocumentOutput): CompletableFuture<StlExport> =
+        started.thenCompose { it.exportStl(archive, output) }
 
     fun undo() = work { workspace.undo().await() }
     fun redo() = work { workspace.redo().await() }

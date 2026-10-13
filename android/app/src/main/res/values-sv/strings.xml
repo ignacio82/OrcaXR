@@ -68,4 +68,8 @@
     <string name="settings_detail_level">Detaljnivå</string>
     <string name="ranges_heading">Höjd intervall</string>
     <string name="ranges_settings">Inställningar</string>
+    <string name="export_gcode">Exportera G-kod…</string>
+    <string name="export_stl">Exportera som en STL…</string>
+    <string name="export_all_stls">Exportera alla objekt som STL…</string>
+    <string name="export_download">Ladda ner</string>
 </resources>

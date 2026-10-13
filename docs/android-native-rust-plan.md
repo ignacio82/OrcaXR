@@ -71,7 +71,7 @@ physical-device gate below is still open.
   slicer route, the route rule and its reason; round 2 adds plate pictures in
   the G-code, slice sidecars, Slice All Plates and the repeatable download,
   pending its suites. Remains: a reproducible clean-source engine build with a
-  hosted run, the full engine-feature matrix, a Save action for slice output,
+  hosted run, the full engine-feature matrix,
   the full statistics artifact, background-execution qualification, device
   memory measurements for the route rule, and ARM64 execution.
 - **Phase 7, the adaptive Android application: largely done.** Workspace,
@@ -79,14 +79,14 @@ physical-device gate below is still open.
   creation, placement and the transform inspector, filaments and the virtual
   filament library, painting, split, simplify, measure, brim ears and
   wipe-tower auto-placement, emboss text and SVG parts, settings panels and
-  height ranges, the command
-  palette, toolbar and context menus, generated localization (19 languages)
-  and design tokens, accessibility, adaptive layouts, file drop, recovery
-  and multi-window document ownership, the Workspace's transform gizmo with
-  its keys G, R and S, and the semantic editor's volume roles with Set as
-  Negative Part (the emulator suites for the gizmo, the roles, brim ears,
-  the wipe tower and drawn parts pending). Remains: *Resume here* items 1 to
-  4, and physical
+  height ranges, the command palette, toolbar and context menus, generated
+  localization (19 languages) and design tokens, accessibility, adaptive
+  layouts, file drop, recovery and multi-window document ownership, the
+  Workspace's transform gizmo with its keys G, R and S, the semantic
+  editor's volume roles with Set as Negative Part, and the File menu's
+  exports of slice output and STLs with Download (the emulator suites for
+  the gizmo, the roles, brim ears, the wipe tower, drawn parts and the
+  exports pending). Remains: *Resume here* items 1 to 4, and physical
   devices for the exit gate.
 - **Phase 8, Android XR: not started.** Only Phase 2's SceneCore candidate
   (`android/renderer-scenecore`, `android/xr-experiment`) exists. Verification
@@ -134,7 +134,8 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    `android-gizmo-smoke.py` and `android-roles-smoke.py` (the Phase 7 input
    item, otherwise done), `android-brimears-smoke.py`,
    `android-wipetower-smoke.py` and `android-drawnparts-smoke.py` (item 2)
-   have passed only on iteration emulators. Run `emulator-smoke.py` and then
+   and `android-exports-smoke.py` (item 3) have passed only on iteration
+   emulators. Run `emulator-smoke.py` and then
    `emulator-smoke.py --api 37 --pages 16` on a quiet host (no builds, no
    other suite), and record the result here and in the Phase 7 statuses.
 2. Phase 7, model tools whose shared-core ports exist but have no Android UI:
@@ -169,12 +170,17 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    `assembly_explode`) and the wipe tower's ghost on local branch
    `assembly` (worktree `~/.cache/orcaxr-assembly`, from `main` after emboss
    and SVG), a sub-agent's.
-3. Phase 7, other surfaces: a Save/export action for slice output
-   (`save_gcode_to_downloads`, `file_export_gcode`), model and project exports
-   (STL, OBJ, 3MF, configuration; the shared core writes both STL exports
-   and the browser's own ZIP byte for byte, and names every output —
-   [§](engineering/native-core.md#android-exports) — with no Android UI yet;
-   in flight on local branch `exports`), geometry-only 3MF import, the View menu's
+3. Phase 7, other surfaces: the remaining File menu exports — Export as 3MF…
+   (`file_export_3mf`; the browser's is its Save, so it needs the core's
+   package written through `orcaxr_archive::fflate` with members identical
+   to the browser serializer's), Export Config… (`file_export_config`,
+   `exportConfigJson` over the live catalog profile), Export Toolpaths as
+   OBJ… (`file_export_obj`, `exportToolpathsToObj` over the published
+   G-code) and Export Diagnostics… (`file_export_logs`, a privacy-reviewed
+   bundle) — each through the exchange pattern into the Export menu
+   ([§](engineering/native-core.md#android-exports); slice output, STLs and
+   Download are done there, in flight on local branch `exports`),
+   geometry-only 3MF import, the View menu's
    display toggles, lighting and preview controls, handy and calibration
    models, preset management, the Help menu, the Android-only words still
    literal in Kotlin, and the in-app reduce-motion override. For the full gap,
@@ -2586,9 +2592,14 @@ storage journeys on phone, tablet, and desktop-sized windows.
   drives them through the system picker; Share offers a 3MF copy through a
   read-only provider. A disk-full or revoked grant on a device and
   large-file timing remain unverified.
+  The File menu's exports of slice output (Download, Export G-code…,
+  Download All Plates, Export All Plates…) and STLs (one merged, or one per
+  instance in the browser's ZIP) write the browser's bytes and names through
+  the system's picker, with the provider failures in words
+  ([§](engineering/native-core.md#android-exports)).
   Status (2026-10-12): remains: disk-full and revoked-grant checks and
-  large-file timing on a device, exports (slice output, STL, OBJ, 3MF,
-  configuration) and geometry-only 3MF import (*Resume here* item 3).
+  large-file timing on a device, the 3MF, OBJ, configuration and diagnostics
+  exports and geometry-only 3MF import (*Resume here* item 3).
 - [x] Implement recovery storage and Save/Discard/Cancel guards for back,
   navigation, new/open/replace, window close where observable, and app updates.
   Test process death during capture, write, commit, and restore.

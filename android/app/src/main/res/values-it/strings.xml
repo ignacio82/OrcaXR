@@ -72,4 +72,8 @@
     <string name="settings_detail_level">Livello di dettaglio</string>
     <string name="ranges_heading">Intervalli di altezza</string>
     <string name="ranges_settings">Impostazioni</string>
+    <string name="export_gcode">Esporta G-code…</string>
+    <string name="export_stl">Esporta come STL unico…</string>
+    <string name="export_all_stls">Esporta tutti gli oggetti come STL multipli…</string>
+    <string name="export_download">Scarica</string>
 </resources>

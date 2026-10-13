@@ -72,4 +72,8 @@
     <string name="settings_detail_level">Detalių lygis</string>
     <string name="ranges_heading">Aukščio diapazonai</string>
     <string name="ranges_settings">Nustatymai</string>
+    <string name="export_gcode">Eksportuoti G-kodą…</string>
+    <string name="export_stl">Eksportuoti kaip vieną STL…</string>
+    <string name="export_all_stls">Eksportuoti visus objektus kaip STL…</string>
+    <string name="export_download">Parsisiųsti</string>
 </resources>

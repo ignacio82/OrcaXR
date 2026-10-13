@@ -72,4 +72,8 @@
     <string name="settings_detail_level">세부 레벨</string>
     <string name="ranges_heading">높이 범위</string>
     <string name="ranges_settings">설정</string>
+    <string name="export_gcode">Gcode 내보내기…</string>
+    <string name="export_stl">하나의 STL로 내보내기…</string>
+    <string name="export_all_stls">모든 객체를 여러 STL로 내보내기…</string>
+    <string name="export_download">다운로드</string>
 </resources>

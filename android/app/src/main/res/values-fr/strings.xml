@@ -72,4 +72,8 @@
     <string name="settings_detail_level">Niveau de détail</string>
     <string name="ranges_heading">Plages de hauteur</string>
     <string name="ranges_settings">Réglages</string>
+    <string name="export_gcode">Exporter le G-code…</string>
+    <string name="export_stl">Exporter en un seul STL…</string>
+    <string name="export_all_stls">Exporter tous les objets en tant que plusieurs STL…</string>
+    <string name="export_download">Télécharger</string>
 </resources>

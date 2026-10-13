@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -65,7 +66,7 @@ interface PlateSource {
     fun preflight(plateId: String): CompletableFuture<ProjectPlatePreflight>
     fun projectPlate(plateId: String, output: ProjectDocumentOutput): CompletableFuture<ProjectPlateArchive>
     fun slicePlan(scope: SliceScope): CompletableFuture<Pair<ProjectRevision, SlicePlan>>
-    fun sliceActions(slicing: Boolean, block: Boolean): CompletableFuture<Map<String, ProjectActionState>>
+    fun sliceActions(slicing: Boolean, block: Boolean, gcodeReady: Boolean): CompletableFuture<Map<String, ProjectActionState>>
 }
 
 /** The active plate's preflight, as the browser's panel shows it, and the state it describes. */
@@ -173,6 +174,14 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
      * its button for it does.
      */
     var asked by mutableStateOf<String?>(null)
+        private set
+    /**
+     * Counts slice requests that ended: a job's outcome published (its result
+     * or its failure), a refusal before it ran, the operator declining the
+     * upload. An export waiting on a Slice All Plates goes on (or stops) once
+     * this moves. Main thread.
+     */
+    var ended by mutableIntStateOf(0)
         private set
     /** The slice [state] shows (`state.result`), readable from any thread: the output a send checks it still is. */
     @Volatile private var published: SlicedPlate? = null
@@ -433,7 +442,7 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             SliceRouteKind.Local -> launch(scope, { true }) { project, plateId, plateName, staged, jobId ->
                 runLocal(project, plateId, plateName, staged, jobId)
             }
-            SliceRouteKind.None -> Unit
+            SliceRouteKind.None -> ended++
         }
     }
 
@@ -441,7 +450,10 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
     fun answerConsent(accept: Boolean) {
         val endpoint = state.consentFor ?: return
         state = state.copy(consentFor = null)
-        if (!accept) return
+        if (!accept) {
+            ended++
+            return
+        }
         val granted = synchronized(lock) { consent.grant(endpoint).also { consent = it } }
         preferences.edit().putStringSet(CONSENTED, granted.endpoints).apply()
         state = state.copy(consent = granted)
@@ -460,16 +472,18 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Slice, Slice All Plates and Cancel Slice as the core enables them now,
-     * given what only this area knows: whether a slice runs and whether the
-     * active plate's preflight blocks it. A request made meanwhile replaces this one.
+     * Slice, Slice All Plates and Cancel Slice, and the output actions, as
+     * the core enables them now, given what only this area knows: whether a
+     * slice runs, whether the active plate's preflight blocks it, and whether
+     * the published slice is still the project's (the browser's `gcodeReady`).
+     * A request made meanwhile replaces this one.
      */
     fun refreshActions() {
         val project = source ?: return
         val now = state
         val blocked = now.preflight?.takeIf { it.plateId == project.view.activePlate?.id }?.canSlice == false
         val request = actionReads.incrementAndGet()
-        project.sliceActions(now.job != null, blocked).whenComplete { actions, _ ->
+        project.sliceActions(now.job != null, blocked, gcodeReady()).whenComplete { actions, _ ->
             if (actions != null && actionReads.get() == request) main.post { state = state.copy(actions = actions) }
         }
     }
@@ -507,10 +521,14 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
         val plate = view.activePlate
         if (scope == SliceScope.CurrentPlate && (plate == null || plate.objects == 0)) {
             state = state.copy(status = PrepareWords.NO_MODELS)
+            ended++
             return
         }
         synchronized(lock) {
-            if (running || !admit()) return
+            if (running || !admit()) {
+                main.post { ended++ }
+                return
+            }
             running = true
             cancelRequested = false
         }
@@ -558,6 +576,7 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
                     is Outcome.Done -> state.copy(job = null, result = outcome.published, plates = outcome.plates, status = outcome.status)
                     is Outcome.Failed -> state.copy(job = null, status = outcome.status)
                 }
+                ended++
                 if (outcome is Outcome.Done) {
                     published = outcome.published
                     sliced = outcome.published
@@ -620,7 +639,10 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
     /** The asked action was taken up — or, no longer possible, refused for [refusal], which the status line shows. */
     fun answered(refusal: String? = null) {
         asked = null
-        if (refusal != null) state = state.copy(status = refusal)
+        if (refusal != null) {
+            state = state.copy(status = refusal)
+            ended++
+        }
     }
 
     fun slicedShown() {
@@ -630,6 +652,21 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
     /** "Preview": the finished slice again (the screen offers it only while it is the project's). */
     fun showResult() {
         state.result?.let { sliced = it }
+    }
+
+    /** Whether the published slice is still the active plate's, of the project as it stands: the browser's `gcodeReady`. */
+    fun gcodeReady(): Boolean = sendable() != null
+
+    /**
+     * Every plate's result of the last Slice All Plates while they are still
+     * the project's — the set the browser downloads one file per plate from
+     * (`publishedPlateGcode`) — else none.
+     */
+    fun publishedPlates(): List<SlicedPlate> {
+        val project = source ?: return emptyList()
+        val plates = state.plates
+        val revision = project.view.revision
+        return if (plates.isNotEmpty() && plates.all { it.revision == revision }) plates else emptyList()
     }
 
     /**

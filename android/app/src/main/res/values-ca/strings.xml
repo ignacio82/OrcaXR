@@ -72,4 +72,8 @@
     <string name="settings_detail_level">Nivell de detall</string>
     <string name="ranges_heading">Intervals d\'alçada</string>
     <string name="ranges_settings">Configuració</string>
+    <string name="export_gcode">Exportar el Codi-G…</string>
+    <string name="export_stl">Exporta com un STL…</string>
+    <string name="export_all_stls">Exportar tots els objectes com a diferents STLs…</string>
+    <string name="export_download">Descarregar</string>
 </resources>

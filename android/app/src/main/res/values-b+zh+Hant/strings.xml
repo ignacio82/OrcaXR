@@ -72,4 +72,8 @@
     <string name="settings_detail_level">細節等級</string>
     <string name="ranges_heading">高度範圍</string>
     <string name="ranges_settings">設定</string>
+    <string name="export_gcode">匯出 G-code…</string>
+    <string name="export_stl">匯出為單一 STL…</string>
+    <string name="export_all_stls">將所有物件匯出為 STL 檔案…</string>
+    <string name="export_download">下載</string>
 </resources>

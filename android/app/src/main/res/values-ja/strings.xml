@@ -65,4 +65,7 @@
     <string name="action_group_help">ヘルプ</string>
     <string name="settings_detail_level">細部レベル</string>
     <string name="ranges_settings">設定</string>
+    <string name="export_gcode">G-codeをエクスポート…</string>
+    <string name="export_stl">1つのSTLとしてエクスポート…</string>
+    <string name="export_download">ダウンロード</string>
 </resources>

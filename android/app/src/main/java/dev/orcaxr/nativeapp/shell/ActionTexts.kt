@@ -108,6 +108,12 @@ object ActionTexts {
         "slice_all_plates" to R.string.prepare_slice_all,
         "slice_cancel" to R.string.prepare_cancel,
         "send_to_printer" to R.string.send_action,
+        "file_export_gcode" to R.string.export_gcode,
+        "file_export_all_plates" to R.string.export_all_plates,
+        "file_export_stl" to R.string.export_stl,
+        "file_export_all_stls" to R.string.export_all_stls,
+        "save_gcode_to_downloads" to R.string.export_download,
+        "save_all_plate_gcode" to R.string.export_download_all,
     )
 
     /** Each action the app performs, by catalogue id, with its hint. */
@@ -187,6 +193,12 @@ object ActionTexts {
         "slice_all_plates" to R.string.action_hint_slice_all_plates,
         "slice_cancel" to R.string.action_hint_slice_cancel,
         "send_to_printer" to R.string.action_hint_send_to_printer,
+        "file_export_gcode" to R.string.action_hint_file_export_gcode,
+        "file_export_all_plates" to R.string.action_hint_file_export_all_plates,
+        "file_export_stl" to R.string.action_hint_file_export_stl,
+        "file_export_all_stls" to R.string.action_hint_file_export_all_stls,
+        "save_gcode_to_downloads" to R.string.action_hint_save_gcode_to_downloads,
+        "save_all_plate_gcode" to R.string.action_hint_save_all_plate_gcode,
     )
 
     /** [action]'s label in the app's language; the core's English one for an action the app has no words for. */

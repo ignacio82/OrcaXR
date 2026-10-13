@@ -68,4 +68,8 @@
     <string name="action_group_help">Segítség</string>
     <string name="settings_detail_level">Részletesség szintje</string>
     <string name="ranges_settings">Beállítások</string>
+    <string name="export_gcode">G-kód exportálása…</string>
+    <string name="export_stl">Exportálás egy STL-ként…</string>
+    <string name="export_all_stls">Az összes objektum exportálása STL-ként…</string>
+    <string name="export_download">Letöltés</string>
 </resources>

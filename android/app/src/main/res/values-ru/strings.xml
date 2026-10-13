@@ -72,4 +72,8 @@
     <string name="settings_detail_level">Уровень детализации</string>
     <string name="ranges_heading">Диапазон высот слоёв</string>
     <string name="ranges_settings">Настройки</string>
+    <string name="export_gcode">Экспорт в G-код…</string>
+    <string name="export_stl">Экспорт в один STL…</string>
+    <string name="export_all_stls">Экспорт всех моделей в отдельные STL…</string>
+    <string name="export_download">Скачать</string>
 </resources>

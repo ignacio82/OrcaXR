@@ -72,4 +72,8 @@
     <string name="settings_detail_level">Рівень деталізації</string>
     <string name="ranges_heading">Діапазон висот шарів</string>
     <string name="ranges_settings">Налаштування</string>
+    <string name="export_gcode">Експорт G-коду…</string>
+    <string name="export_stl">Експортувати як один STL…</string>
+    <string name="export_all_stls">Експортувати всі об’єкти як файли STL…</string>
+    <string name="export_download">Завантажити</string>
 </resources>

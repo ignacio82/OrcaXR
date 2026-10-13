@@ -93,7 +93,12 @@ import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.shell.ActionMenuItem
 import dev.orcaxr.nativeapp.shell.ActionSections
 import dev.orcaxr.nativeapp.shell.ActionTooltip
+import dev.orcaxr.nativeapp.exports.ExportCommands
+import dev.orcaxr.nativeapp.prepare.FollowSlicing
+import dev.orcaxr.nativeapp.prepare.PrepareModel
 import dev.orcaxr.nativeapp.shell.AppActions
+import dev.orcaxr.nativeapp.shell.LocalActionRunner
+import dev.orcaxr.nativeapp.shell.LocalActionStates
 import dev.orcaxr.nativeapp.shell.LocalCommandPalette
 import dev.orcaxr.nativeapp.theme.OrcaActionGlyphs
 import java.text.DateFormat
@@ -101,9 +106,10 @@ import java.util.Date
 
 private fun text(units: List<Int>) = String(CharArray(units.size) { units[it].toChar() })
 
-/** The Project area: the open project's name, objects and history, and its document operations. */
+/** The Project area: the open project's name, objects and history, its document operations and its exports
+ * (judged with [prepare]'s facts: the published slice, a slice running). */
 @Composable
-fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
+fun ProjectScreen(model: ProjectModel, prepare: PrepareModel, modifier: Modifier = Modifier) {
     val view = model.view
     // Any document: providers often report a 3MF or STL only as bytes; the content decides.
     val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(model::open) }
@@ -156,6 +162,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                 OutlinedButton(onClick = { saveAs.launch(suggested) }, enabled = enabled) { Text(stringResource(R.string.project_save_as)) }
                 OutlinedButton(onClick = { import.launch(arrayOf("*/*")) }, enabled = enabled) { Text(stringResource(R.string.project_import)) }
                 OutlinedButton(onClick = model::share, enabled = enabled) { Text(stringResource(R.string.project_share)) }
+                ExportMenu(view, model, prepare)
                 // The browser's command palette, from this page too (its strip's search button).
                 val openPalette = LocalCommandPalette.current
                 ActionTooltip(stringResource(R.string.palette_open_hint)) {
@@ -329,6 +336,33 @@ private fun EditMenu(view: ProjectView, model: ProjectModel) {
             HorizontalDivider()
             // The model tools: split and simplify on the selection, Measure a tool that stays on until it is chosen again.
             for (action in ProjectEditing.toolsMenu(view)) ToolMenuItem(action, model) { choose(action) }
+        }
+    }
+}
+
+/**
+ * The browser's File menu exports and Download All Plates: each enabled as
+ * the core's gate judges it with the Prepare area's facts (read afresh while
+ * the menu is open), carried out by the shell's export host — the system's
+ * picker takes the file.
+ */
+@Composable
+private fun ExportMenu(view: ProjectView, model: ProjectModel, prepare: PrepareModel) {
+    var open by remember { mutableStateOf(false) }
+    val run = LocalActionRunner.current
+    val states = LocalActionStates.current
+    Box {
+        OutlinedButton(onClick = { open = true }, enabled = view.ready && !model.busy) { Text(stringResource(R.string.export_menu)) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // What the exports are judged by: the published slice, a slice running, a blocking preflight.
+            FollowSlicing(prepare, model)
+            for (id in ExportCommands.MENU) {
+                val action = states(prepare.state.actions[id] ?: ProjectActionState(id, id, false))
+                ActionMenuItem(action, onClick = {
+                    open = false
+                    run(id)
+                })
+            }
         }
     }
 }
