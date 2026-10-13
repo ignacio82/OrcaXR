@@ -3335,6 +3335,7 @@ function setupDomUI(
             assembly: {
               canSetToParallel: assembly.available.canSetToParallel,
               canSetToCenterCoincidence: assembly.available.canSetToCenterCoincidence,
+              canReverseFeature2: assembly.available.canReverseFeature2,
               canRotateAroundFaceCenter: assembly.available.canRotateAroundFaceCenter,
               hasParallelDistance: assembly.available.hasParallelDistance,
               parallelDistanceMm: assembly.available.parallelDistanceMm,

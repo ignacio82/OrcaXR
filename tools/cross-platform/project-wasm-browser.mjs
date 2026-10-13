@@ -1078,7 +1078,7 @@ try {
       result.assemblyPlanned,
       result.assemblyExplosions,
     ],
-    [55, 525, 246, 7],
+    [61, 535, 253, 9],
   );
   assert.deepEqual(
     [

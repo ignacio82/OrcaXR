@@ -53,6 +53,7 @@
     <string name="vf_delete">삭제</string>
     <string name="project_measure">측정</string>
     <string name="simplify_apply">적용</string>
+    <string name="workspace_assembly">조립</string>
     <string name="workspace_brim_ears">브림 귀</string>
     <string name="brim_ears_title">브림 귀</string>
     <string name="svg_apply">SVG 부분 추가</string>

@@ -6165,7 +6165,9 @@ the accessibility smoke, passes on both emulators. Its steps:
 2. Preview a sphere's simplification and apply it from the Workspace, by its
    counts and undo label.
 3. Move a 20 mm cube beside the pair and read the 10 mm between the two
-   tops picked with two taps.
+   tops picked with two taps. The models are read from the view with
+   nothing selected (Escape): since the transform gizmo landed, a selected
+   cube's handles were counted as its pixels and both taps missed.
 
 ### Android brim ears
 
@@ -6425,6 +6427,128 @@ drawing (its size and the part that cannot be cut listed) and adds it, each
 step by its undo label, and ends the tool. It passes on a suite-sized API 34
 emulator (720 × 1280 at 240 dpi, two cores); neither emulator suite has run
 it yet.
+
+### Android assembly
+
+The Workspace aligns models and explodes the view as the browser's
+assembly flow does, through the shared core. The core's port is
+`orcaxr_project::assembly` (`assemblyExchange.ts` over `assembly.ts`, the
+pinned `GLGizmoAssembly` alignments and `Measure::get_assembly_action`):
+which alignments two picked features allow, the transform one alignment
+gives the second pick's instance, and the view-only exploded layout. Its
+bindings are WASM `assembly_availability`/`assembly_alignment`/
+`assembly_explosion`, the JNI exports of the same names and Kotlin
+`ProjectAssembly`.
+
+The browser's flow moved out of `OrcaWorkspace` into
+`web/src/workspace/AssemblyAlignment.ts` so a corpus can run it:
+`assemblySnapshot` (what the pair allows, whether the second pick's model
+can move — not when both picks are on one instance — and the panel's hint)
+and `planAssemblyStep` (refused without two picks on two models, or when the
+model to move is gone; nothing for faces already aligned; the plan's refusal
+as "Alignment failed: …"; otherwise the move and its "Applied …" status).
+The workspace commits a move as one `setInstanceTransform`, "Transform
+instance", and drops the picks, which described where the faces were.
+
+The Android side. Assembly (`tool_assembly`, enabled with more than one
+model) joins the model toolbar, the Edit menu's model tools and the palette;
+as the browser's `assemblyView` it turns the Measure tool on with a fresh
+pair and the browser's "Assembly: pick a face on each model, then choose an
+alignment." Both are the browser's Measure tool; here the toolbar shows
+which one was chosen, choosing the other switches to it, and only the
+Assembly tool's panel explodes the view. Once two features are picked —
+with either — the Measure panel shows the
+browser's Align section (`AssemblySection`): the hint, then Parallel, Centre
+coincidence, Flip over, Set gap with its Gap (mm) field (starting at the
+measured gap, written as `Number(value.toFixed(3))`) and Turn about centre
+with its Turn (°) field (90 to start), each enabled as the core allows the
+pair and only when the second model can move. The fields hand over what was
+typed as an `<input type=number>` does (`HtmlNumberInput`).
+`ProjectAssemblies.view` is the snapshot; `ProjectWorkspace.alignAssembly`
+refuses a pair before anything is read, then plans on the authority from the
+second pick's instance as the guarded state places it — a missing instance
+refused — and commits a move as one guarded `setInstanceTransform` under the
+workspace's next `single:<n>` gesture, as the browser's controller commits
+it. The panel's statuses are the browser's: its catalogue's words for the
+refusals and faces already aligned (translated), and its templates "Applied
+… Undo restores the previous placement." and "Alignment failed: …".
+Align picked faces (`assembly_align`) and Explode the assembly
+(`assembly_explode`) in the palette open the tool, whose panel holds the
+faces and the factor; the browser's palette reports them unavailable without
+their parameters.
+
+The exploded view. Explode the assembly is a slider in the Assembly tool's
+panel, from 1 (assembled) to 3 as upstream's assemble view slides it, kept
+to a twentieth, shown while more than one model is on the plate.
+`SceneExplosion` gives the core's offsets for each instance the active plate
+draws (its canonical translation, in draw order) and moves only what is
+drawn: each draw's placement stays canonical, so painting, measuring, Lay
+flat and every edit read the project while picks meet the parts where they
+are drawn. The offsets are recomputed from the draws on every scene update,
+so an edit re-explodes from where the parts now stand. Brim-ear discs ride
+on their instances, and the measured line's ends move with the parts they
+were picked on. Ending the tool, or choosing Measure, assembles the view — the explosion
+is the assembly tool's view, as upstream resets its ratio leaving the
+assemble view — and a new, opened or restored project starts assembled with
+no picks. The browser keeps its factor after its tool ends (it has no
+control for it but the automation route).
+
+Porting it found browser defects, each fixed with a regression
+(`exploded-workspace.test.ts` and `MeasurePanel.test.ts` fail on the old
+code). The exploded view composed its offsets from a baseline captured the
+first time a part was exploded and never renewed, and every project change
+put the parts back while the factor still read exploded, so a moved part
+jumped back to its old place on the next adjustment; the view now
+re-explodes from the canonical placement after every project change. A
+measure pick read the exploded display, so a measurement — and an alignment
+computed from it — was off by the explosion; picks now place the feature
+where the project places the part. The measured line was drawn only by a
+snapshot of two picks and never taken away, so Clear, an alignment and
+leaving the tool left it standing; it now shows only while the tool has two
+picks, and its ends follow an exploded view. A new or opened project kept
+the old one's picks and explosion; both reset. The panel offered Flip over
+for any pair, which failed on a point, edge or circle second; it now follows
+the pair's `canReverseFeature2`. And it had no way to ask for the turn about
+the face centre the core plans for two parallel faces: Turn about centre and
+its Turn (°) field are new in both shells.
+
+`assembly-vectors.mjs` now also records a journey through the production
+`CanonicalWorkspaceController` and `AssemblyAlignment.ts` over a canonical
+3MF (a block, a tilted lid, a two-instance twin and a pin), with each pick
+taken as the workspace takes it (the scene root's inverse): parallel, centre
+coincidence, the same pair again (nothing moves), parallel refused, a gap,
+a gap without its distance, a turn about the face centre, a flip, two faces
+of one model, one twin onto the other, one pick, a circle second, and the
+exploded view at 2 and 1 — 37 steps, 6 undo entries, with the pick's
+feature, the panel's snapshot, the outcome, status and committed transform,
+the semantic hash and the undo label after each. Its availability,
+alignment and explosion requests join the script every binding replays (605
+requests now: 61 availability, 535 alignment, 253 planned, 9 explosion).
+`ProjectAssemblyEditChecks` (166 checks over JNI on the host) takes the same
+steps through `ProjectWorkspace`: each pick the browser's feature to
+rounding and its summary exactly; then, with the browser's features (the
+pair the operator picked), the snapshot, every outcome, status and
+transform, the hash and the label exactly, and undoes all 6 entries.
+`ProjectSceneExplosionChecks` (30 checks, `renderer-api`) opens the
+journey's 3MF, applies its moves and, over a real scene's draws, gives the
+browser's explosion request and offsets and draws each instance at its
+translation plus its offset with its placement unchanged.
+`AssemblyToolTest` (app JVM) covers the statuses, the pairing rule, the
+factor's bounds, the measured line's and the discs' explosion;
+`SceneExplosionTest` (`renderer-api`) the inputs and the moved draws;
+`AppActionsTest` (78 performed actions) and `ProjectEditingTest` the actions
+and the menu. Checking it found an Android defect too: the Edit menu's
+Emboss Text and SVG Part read their enablement from actions the workspace
+never asked the core about, so they were always disabled; the toolbar's
+tools are now all read (`MODEL_TOOL_TOOLBAR_ACTIONS`).
+`android-assembly-smoke.py`, added to `emulator-smoke.py` after the
+drawn-parts smoke, adds two cubes side by side at the back of the bed, takes
+Assembly from the toolbar, picks their tops (everything but Parallel
+offered, the gap 0), has a 0 mm gap refused as already aligned, lifts the
+second cube by a 25 mm gap and turns it over onto the first by centre
+coincidence (each one "Transform instance", undone), explodes the view (the
+project's undo label unchanged) and ends the tool, the view assembled
+again.
 
 ### Android filaments
 

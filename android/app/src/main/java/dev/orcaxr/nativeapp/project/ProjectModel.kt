@@ -18,6 +18,10 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import dev.orcaxr.core.ActionArrangement
 import dev.orcaxr.core.ActionPresentation
+import dev.orcaxr.core.AssemblyAligned
+import dev.orcaxr.core.AssemblyKind
+import dev.orcaxr.core.AssemblyPairing
+import dev.orcaxr.core.AssemblyView
 import dev.orcaxr.core.BrimEarAuto
 import dev.orcaxr.core.BrimEarClear
 import dev.orcaxr.core.BrimEarState
@@ -39,6 +43,7 @@ import dev.orcaxr.core.PrimitiveShape
 import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.core.ProjectActorImport
 import dev.orcaxr.core.ProjectArchiveFormat
+import dev.orcaxr.core.ProjectAssemblies
 import dev.orcaxr.core.ProjectBrimEars
 import dev.orcaxr.core.ProjectDocumentOutput
 import dev.orcaxr.core.ProjectIntents
@@ -365,6 +370,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun restore(entry: ProjectRecovery.Entry) = unlessDirty {
         work {
             workspace.restore(entry).await()
+            main.post { projectReplaced() }
             profiles.opened(workspace)
             savedUri = null
             hold(null)
@@ -440,6 +446,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun newProject() = unlessDirty {
         work {
             workspace.newProject().await()
+            main.post { projectReplaced() }
             savedUri = null
             hold(null)
         }
@@ -452,6 +459,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             claimed(uri) {
                 val document = DigestingDocument(ContentProjectDocument(resolver, uri), null)
                 val format = workspace.open(document, name).await()
+                main.post { projectReplaced() }
                 profiles.opened(workspace)
                 adopt(uri, format, document.digest)
             }
@@ -476,6 +484,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
                 }
                 throw failure
             }
+            main.post { projectReplaced() }
             profiles.opened(workspace)
             adopt(uri, format, document.digest)
             remember(uri, entry.name)
@@ -495,6 +504,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         unlessDirty {
             work {
                 workspace.open(ContentProjectDocument(resolver, uri), displayName(uri)).await()
+                main.post { projectReplaced() }
                 profiles.opened(workspace)
                 // A one-time grant: this window does not write it back, so it holds nothing.
                 savedUri = null
@@ -940,7 +950,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "set_negative_part" -> setNegativePart()
             "split_to_parts" -> splitToParts()
             "simplify_model" -> simplifyNow()
-            "tool_measure" -> measure(!measuring)
+            "tool_measure" -> if (measuring && !assembling) measure(false) else measure(true)
+            "tool_assembly" -> if (measuring && assembling) measure(false) else assembly()
+            // The palette's Align and Explode: the Assembly tool's panel holds their faces and factor.
+            "assembly_align", "assembly_explode" -> if (!(measuring && assembling)) assembly()
             "tool_brim_ears" -> brimEars(!brimEaring)
             "brim_ears_auto" -> autoPlaceBrimEars()
             "brim_ears_clear" -> clearBrimEars()
@@ -998,7 +1011,8 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
      */
     fun toolActive(id: String): Boolean = when (id) {
         "tool_lay_on_face" -> layingFlat
-        "tool_measure" -> measuring
+        "tool_measure" -> measuring && !assembling
+        "tool_assembly" -> measuring && assembling
         "tool_brim_ears" -> brimEaring
         "add_emboss" -> drawn.embossing
         "tool_svg" -> drawn.svgCutting
@@ -1378,16 +1392,105 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         }
     }
 
-    /** Turns the Measure tool on — with a fresh pair of picks, as the browser's `measureTool` — or off; Lay flat and painting go off. */
+    /**
+     * Turns the Measure tool on — with a fresh pair of picks, as the browser's
+     * `measureTool` — or off; Lay flat and painting go off. Off, the view is
+     * assembled again: the explosion is the Assembly tool's view.
+     */
     fun measure(on: Boolean) {
         if (on) layFlat(false)
         if (on && brimEaring) brimEars(false)
         if (on) drawnToolsOff()
         if (on && paint.state.active) paint.stop()
         measuring = on
+        assembling = false
         measurePicks = emptyList()
         measureStatus = if (on) words(R.string.measure_start) else null
+        explosionFactor = 1.0
         measured()
+    }
+
+    /**
+     * The toolbar's Assembly (`tool_assembly`, the browser's `assemblyView`):
+     * the Measure tool with a fresh pair of picks and the assembly status;
+     * two faces picked on different models offer the alignments.
+     */
+    fun assembly() {
+        measure(true)
+        assembling = true
+        measureStatus = words(R.string.assembly_start)
+    }
+
+    /**
+     * Whether the Measure tool is on as the Assembly tool: its panel then
+     * also explodes the view. (Both are the browser's Measure tool; the
+     * explosion is the assembly's view, as upstream's assemble view's.)
+     */
+    var assembling by mutableStateOf(false)
+        private set
+
+    /** The Align section's view of the picks (the browser's `getAssemblySnapshot`), while two are picked. */
+    var assemblyView by mutableStateOf<AssemblyView?>(null)
+        private set
+
+    /**
+     * One alignment of the Align section (`assembly_align`,
+     * `applyAssemblyAlignment`): the second pick's model moved so its face
+     * meets the first's, as one undoable step — after which the picks, which
+     * describe where the faces were, are dropped — or the workspace's words
+     * for why nothing moved.
+     */
+    fun align(kind: AssemblyKind, parameter: Double? = null) {
+        val picks = measurePicks
+        work {
+            val aligned = try {
+                workspace.alignAssembly(picks, kind, parameter).await()
+            } catch (failure: Throwable) {
+                AssemblyAligned.Failed(cause(failure).message.orEmpty())
+            }
+            main.post {
+                if (measurePicks !== picks) return@post
+                measureStatus = when (aligned) {
+                    is AssemblyAligned.Moved -> {
+                        measurePicks = emptyList()
+                        ProjectAssemblies.applied(kind)
+                    }
+                    AssemblyAligned.Aligned -> words(R.string.assembly_already_aligned)
+                    is AssemblyAligned.Failed -> ProjectAssemblies.failed(aligned.message)
+                    is AssemblyAligned.Refused -> words(
+                        when (aligned.reason) {
+                            AssemblyPairing.TWO_PICKS -> R.string.assembly_pick_two
+                            AssemblyPairing.DIFFERENT_MODELS -> R.string.assembly_different_models
+                            AssemblyPairing.GONE -> R.string.assembly_model_gone
+                        },
+                    )
+                }
+                measured()
+            }
+        }
+    }
+
+    /**
+     * How far apart the Workspace draws the active plate's models (the
+     * browser's `explosionFactor`, `assembly_explode`): 1 is assembled. The
+     * view alone moves; the project never does.
+     */
+    var explosionFactor by mutableDoubleStateOf(1.0)
+        private set
+
+    /** Explodes the view to [factor] (`setExplosionFactor`): one below 1, or not a number, is refused in the browser's words. */
+    fun explode(factor: Double) {
+        if (ProjectAssemblies.explosionAllowed(factor)) explosionFactor = factor
+        else measureStatus = words(R.string.assembly_explosion_refused)
+    }
+
+    /** A new, opened or restored project replaced the last: its picks named the old project's parts, and the view is assembled again. */
+    private fun projectReplaced() {
+        explosionFactor = 1.0
+        if (measurePicks.isNotEmpty()) {
+            measurePicks = emptyList()
+            measured()
+        }
     }
 
     /** The panel's Clear (`measure_clear`): both picks dropped for a new measurement. */
@@ -1397,11 +1500,12 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         measured()
     }
 
-    /** The readout of the picks now (main thread). */
+    /** The readout of the picks now, and the Align section's view of them (main thread). */
     private fun measured() {
         val picks = measurePicks
         val result = if (picks.size >= 2 && ::workspace.isInitialized) workspace.measure(picks[0], picks[1]) else null
         measureReadout = if (measuring) ProjectMeasures.readout(true, picks, result) else null
+        assemblyView = if (measuring && picks.size >= 2) ProjectAssemblies.view(picks) else null
     }
 
     /**

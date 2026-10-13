@@ -53,6 +53,7 @@
     <string name="vf_delete">Delete</string>
     <string name="project_measure">Виміряти</string>
     <string name="simplify_apply">Застосувати</string>
+    <string name="workspace_assembly">Збірка</string>
     <string name="workspace_brim_ears">Краєчки</string>
     <string name="brim_ears_title">Вушка кайми</string>
     <string name="svg_apply">Додати елемент SVG</string>

@@ -48,6 +48,7 @@
     <string name="filament_bar_default">デフォルト</string>
     <string name="vf_delete">削除</string>
     <string name="simplify_apply">適用</string>
+    <string name="workspace_assembly">アセンブリ</string>
     <string name="workspace_brim_ears">ブリム</string>
     <string name="svg_apply">SVGパーツ追加</string>
     <string name="workspace_paint">ペイント</string>

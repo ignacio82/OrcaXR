@@ -200,6 +200,12 @@ public final class ProjectJniHarness {
     public static long wipeTowerEditChecks(String corpus, byte[] archive) {
         return ProjectWipeTowerEditChecks.journey(corpus, archive);
     }
+    public static long assemblyEditChecks(String corpus, byte[] archive) {
+        return ProjectAssemblyEditChecks.journey(corpus, archive);
+    }
+    public static long sceneExplosionChecks(String script, byte[] archive) {
+        return dev.orcaxr.renderer.ProjectSceneExplosionChecks.run(script, archive);
+    }
     public static long brimEarEditChecks(String corpus, byte[] archive) {
         return ProjectBrimEarEditChecks.journey(corpus, archive);
     }
@@ -510,6 +516,8 @@ public final class ProjectJniHarness {
             if (name.equals("modelToolChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("brimEarEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("wipeTowerEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
+            if (name.equals("assemblyEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
+            if (name.equals("sceneExplosionChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("settingsChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("volumeRoleChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("modelExportChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);

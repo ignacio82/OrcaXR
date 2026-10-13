@@ -399,6 +399,32 @@
     <string name="measure_diameter">Diameter</string>
     <string name="measure_unsupported">Two circles in non-parallel planes need the engine’s polynomial solver, which this build does not carry.</string>
     <string name="measure_clear">Clear</string>
+    <!-- The Assembly tool on the Measure panel: the browser's catalogue actions (web/src/actions/groups/gizmos.ts), the
+         Measure panel's Align section (web/src/ui/dom/MeasurePanel.ts), its flow's words (web/src/workspace/AssemblyAlignment.ts)
+         and the exploded view. -->
+    <string name="workspace_assembly">Assembly</string>
+    <string name="assembly_align_action">Align picked faces</string>
+    <string name="assembly_explode">Explode the assembly</string>
+    <string name="action_hint_tool_assembly">Pick two faces on different models, then align them</string>
+    <string name="action_hint_assembly_align">Apply one pinned alignment to the second picked model as a single undoable move</string>
+    <string name="action_hint_assembly_explode">Move the rendered parts apart to see inside; the project is not changed</string>
+    <string name="assembly_start">Assembly: pick a face on each model, then choose an alignment.</string>
+    <string name="assembly_align_heading">Align</string>
+    <string name="assembly_hint_pick">Pick two faces — the second one moves.</string>
+    <string name="assembly_hint_choose">Choose an alignment; it commits as one undoable move.</string>
+    <string name="assembly_hint_different">Pick two faces on different models to align them.</string>
+    <string name="assembly_parallel">Parallel</string>
+    <string name="assembly_center">Centre coincidence</string>
+    <string name="assembly_flip">Flip over</string>
+    <string name="assembly_gap">Gap (mm)</string>
+    <string name="assembly_set_gap">Set gap</string>
+    <string name="assembly_turn">Turn (°)</string>
+    <string name="assembly_turn_apply">Turn about centre</string>
+    <string name="assembly_pick_two">Pick two faces before aligning.</string>
+    <string name="assembly_different_models">Assembly alignment needs two faces on different models.</string>
+    <string name="assembly_model_gone">The model to align is no longer on this plate.</string>
+    <string name="assembly_already_aligned">Those faces are already aligned; nothing moved.</string>
+    <string name="assembly_explosion_refused">An explosion factor must be at least 1, where 1 is fully assembled.</string>
     <!-- The Brim Ears tool: the browser's catalogue actions (web/src/actions/groups/gizmos.ts), its Brim ears panel
          (web/src/ui/dom/BrimEarsPanel.ts) and the workspace's statuses its catalogue carries. -->
     <string name="workspace_brim_ears">Brim Ears</string>

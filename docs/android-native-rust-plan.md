@@ -1,7 +1,7 @@
 # Native Android and shared Rust implementation plan
 
 **Status:** implementation in progress, started 2026-10-04 at the user's request.
-**Last reconciled:** 2026-10-12. Checked items below are implemented and verified
+**Last reconciled:** 2026-10-13. Checked items below are implemented and verified
 within their stated scope; unchecked items still require work. A checked sub-item
 does not close its parent task, phase exit, or physical-device gate. This document
 defines the required work; it does not change supported release platforms.
@@ -77,18 +77,18 @@ physical-device gate below is still open.
 - **Phase 7, the adaptive Android application: largely done.** Workspace,
   Prepare, Preview, Device and Project areas; selection and object edits,
   creation, placement and the transform inspector, filaments and the virtual
-  filament library, painting, split, simplify, measure, brim ears,
-  wipe-tower auto-placement and the tower's ghost, emboss text and SVG
-  parts, settings panels and height ranges, the command palette, toolbar
-  and context menus, generated localization (19 languages) and design
-  tokens, accessibility, adaptive layouts, file drop, recovery and
-  multi-window document ownership, the Workspace's transform gizmo with its
-  keys G, R and S, the semantic editor's volume roles with Set as Negative
-  Part, and the File menu's exports (slice output, STLs, the 3MF, the
-  configuration, the toolpaths as OBJ and diagnostics) with Download (the
-  emulator suites for the gizmo, the roles, brim ears, the wipe tower, drawn
-  parts and the exports pending). Remains: *Resume here* items 1 to 4, and
-  physical devices for the exit gate.
+  filament library, painting, split, simplify, measure, assembly and the
+  exploded view, brim ears, wipe-tower auto-placement and the tower's ghost,
+  emboss text and SVG parts, settings panels and height ranges, the command
+  palette, toolbar and context menus, generated localization (19 languages)
+  and design tokens, accessibility, adaptive layouts, file drop, recovery
+  and multi-window document ownership, the Workspace's transform gizmo with
+  its keys G, R and S, the semantic editor's volume roles with Set as
+  Negative Part, and the File menu's exports (slice output, STLs, the 3MF,
+  the configuration, the toolpaths as OBJ and diagnostics) with Download
+  (the emulator suites for the gizmo, the roles, brim ears, the wipe tower,
+  drawn parts, assembly and the exports pending). Remains: *Resume here*
+  items 1 to 4, and physical devices for the exit gate.
 - **Phase 8, Android XR: not started.** Only Phase 2's SceneCore candidate
   (`android/renderer-scenecore`, `android/xr-experiment`) exists. Verification
   needs the user's Galaxy XR.
@@ -134,14 +134,14 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
 1. Both emulator suites on `main` with the smokes added since round 2:
    `android-gizmo-smoke.py` and `android-roles-smoke.py` (the Phase 7 input
    item, otherwise done), `android-brimears-smoke.py`,
-   `android-wipetower-smoke.py` and `android-drawnparts-smoke.py` (item 2)
-   and `android-exports-smoke.py` (item 3) have passed only on iteration
+   `android-wipetower-smoke.py` (now with the tower's ghost),
+   `android-drawnparts-smoke.py` and `android-assembly-smoke.py` (item 2) and
+   `android-exports-smoke.py` (item 3) have passed only on iteration
    emulators. Run `emulator-smoke.py` and then
    `emulator-smoke.py --api 37 --pages 16` on a quiet host (no builds, no
    other suite), and record the result here and in the Phase 7 statuses.
 2. Phase 7, model tools whose shared-core ports exist but have no Android UI:
-   assembly (`assembly`,
-   `tool_assembly`) and variable layer height (`layer_heights`,
+   variable layer height (`layer_heights`,
    `variable_layer_height`); layer events belong with
    Preview (`layer_event_mutate`). Magnets (`add_magnet`) and the wave-overhang
    card (settings the core already resolves) need the browser's computation
@@ -164,15 +164,26 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    drawing read, ported), new parts and re-cuts, with
    `android-drawnparts-smoke.py` passing on an API 34 iteration emulator;
    neither emulator suite has run it yet (*Resume here* item 1).
-   They leave for later: the emboss tool's preview on the model before
+   Assembly is done ([§](engineering/native-core.md#android-assembly)): the
+   toolbar's Assembly on the Measure tool, the Measure panel's Align
+   section with every alignment the core plans (Parallel, Centre
+   coincidence, Flip over, Set gap, Turn about centre), each one
+   "Transform instance", and the exploded view as a slider (1 to 3) in the
+   Assembly panel, view-only and assembled again when the tool ends; the browser's
+   flow moved to `AssemblyAlignment.ts` with a journey corpus, and six
+   browser defects fixed (the explosion's stale baseline and reassembly,
+   picks off by the explosion, the measured line never taken away, a new
+   project keeping picks and explosion, Flip over offered for any pair, no
+   turn control); `android-assembly-smoke.py` passes on an API 34
+   iteration emulator, neither suite has run it (*Resume here* item 1).
+   The browser itself still has no exploded-view control (only the
+   automation route `explode_assembly`); adding one to its Measure panel is
+   left for a browser change.
+   The drawn parts leave for later: the emboss tool's preview on the model before
    applying (the browser has none either), offering the fonts installed on
    the device (`SystemFonts`, which the browser cannot read), and the
    recipe's `useSurface` projection onto the model and `boldnessMm` and
    `perGlyph`, which the browser's cut ignores too.
-   In flight: assembly (`tool_assembly`, `assembly_align`,
-   `assembly_explode`) and the wipe tower's ghost on local branch
-   `assembly` (worktree `~/.cache/orcaxr-assembly`, from `main` after emboss
-   and SVG), a sub-agent's.
 3. Phase 7, other surfaces: geometry-only 3MF import, the View menu's
    display toggles, lighting and preview controls, handy and calibration
    models, preset management, the Help menu, the Android-only words still
@@ -2092,9 +2103,10 @@ painting, and FullSpectrum operations that can support real native projects.
     commits through the guarded transform intent a drag uses; which
     alignments a pair allows (`Measure::get_assembly_action`); and the
     view-only exploded layout. Requests are session-free, and a placement
-    too large to be finite is refused rather than sent. 587 requests (246
-    planned alignments, every refusal the browser raises) are exact in
-    every binding.
+    too large to be finite is refused rather than sent. 605 requests (253
+    planned alignments, every refusal the browser raises, and the requests
+    of a journey through the browser's flow, now `AssemblyAlignment.ts`) are
+    exact in every binding.
   - [ ] Wire mesh packets into the flat and spatial renderers and qualify
     them on devices.
     The flat renderer reads them (`PacketMeshes`, `SceneSync`,
@@ -2577,12 +2589,27 @@ storage journeys on phone, tablet, and desktop-sized windows.
   99-check JNI journey matches the browser controller's outcome, hash,
   label and target after all 20 steps and undoes them;
   `android-drawnparts-smoke.py` passes on an API 34 emulator.
-  Status (2026-10-12): remains: lighting and preview controls; Repair (Phase
+  Assembly aligns two picked faces as the browser's flow does
+  ([§](engineering/native-core.md#android-assembly)): the toolbar's
+  Assembly on the Measure tool, the panel's Align section with every
+  alignment the core plans, each one guarded "Transform instance", and a
+  view-only exploded view (a slider in the Assembly panel; drawn parts move, picks
+  and edits read the project); the browser's flow moved into
+  `AssemblyAlignment.ts` with a journey corpus, six browser defects fixed
+  (the exploded view's stale baseline and silent reassembly, picks off by
+  the explosion, a measured line never taken away, a new project keeping
+  picks and explosion, Flip over for any pair, no turn about the face
+  centre) and one Android one (the Edit menu's Emboss Text and SVG Part
+  always disabled). A 166-check JNI journey matches the browser controller's
+  snapshots, outcomes, statuses, transforms, hashes and labels after all 37
+  steps and undoes them, 30 scene checks match its explosions, and
+  `android-assembly-smoke.py` passes on an API 34 emulator.
+  Status (2026-10-13): remains: lighting and preview controls; Repair (Phase
   5's kernel routing), with mesh Booleans; and the model tools with no
-  Android UI yet — assembly, variable layer height, magnets and the
-  wave-overhang card, with Cut, the face detector and hollow still to port
-  (*Resume here* items 2 and 4); both emulator suites' runs of the
-  brim-ear, wipe-tower and drawn-part smokes (*Resume here* item 1).
+  Android UI yet — variable layer height, magnets and the wave-overhang
+  card, with Cut, the face detector and hollow still to port (*Resume here*
+  items 2 and 4); both emulator suites' runs of the brim-ear, wipe-tower,
+  drawn-part and assembly smokes (*Resume here* item 1).
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
   large-file streaming. Validate incoming open/share intents as untrusted input.

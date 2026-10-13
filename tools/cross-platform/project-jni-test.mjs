@@ -1549,7 +1549,7 @@ try {
       assembled.assemblyPlanned,
       assembled.assemblyExplosions,
     ],
-    [55, 525, 246, 7],
+    [61, 535, 253, 9],
   );
   const assemblyChecks = jvm.call(
     "assemblyChecks",
@@ -1563,7 +1563,40 @@ try {
       )
       .join("\n"),
   );
-  assert.equal(assemblyChecks, 1174);
+  assert.equal(assemblyChecks, 1210);
+  // The Workspace's assembly flow as the Android app runs it, step by step
+  // against the browser's journey through its production controller; then the
+  // exploded view over a real scene, against the journey's explosions.
+  const assemblyArchive = Buffer.from(assemblyFixture.journey.archive, "base64");
+  const assemblyEditChecks = jvm.call(
+    "assemblyEditChecks",
+    JSON.stringify({
+      opened: assemblyFixture.journey.opened,
+      steps: assemblyFixture.journey.steps,
+      undo: assemblyFixture.journey.undo,
+    }),
+    assemblyArchive,
+  );
+  assert.equal(assemblyEditChecks, 166);
+  const numbers = (values) => values.map((value) => String(value)).join(",");
+  const sceneExplosionChecks = jvm.call(
+    "sceneExplosionChecks",
+    assemblyFixture.journey.steps
+      .flatMap((step) => {
+        if (step.operation.kind === "align" && step.result.outcome === "move") {
+          const { translationMm, rotation, scale } = step.result.transform;
+          return [
+            ["M", step.result.instanceId, numbers(translationMm), numbers(rotation), numbers(scale), step.semanticHash].join("\t"),
+          ];
+        }
+        if (step.operation.kind === "explode")
+          return [["X", String(step.operation.factor), step.result.request, step.result.reply, step.semanticHash].join("\t")];
+        return [];
+      })
+      .join("\n"),
+    assemblyArchive,
+  );
+  assert.equal(sceneExplosionChecks, 30);
   // The Objects tree on captured projects (platform folding), then the Kotlin
   // wrapper over the browser's richest state.
   const treeFixture = JSON.parse(
@@ -2057,6 +2090,8 @@ try {
     modelToolChecks,
     brimEarEditChecks,
     wipeTowerEditChecks,
+    assemblyEditChecks,
+    sceneExplosionChecks,
     settingsChecks,
     volumeRoles,
     volumeRoleChecks,

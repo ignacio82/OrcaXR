@@ -53,6 +53,7 @@
     <string name="vf_delete">Usuń</string>
     <string name="project_measure">Zmierz</string>
     <string name="simplify_apply">Zastosuj</string>
+    <string name="workspace_assembly">Złożenie</string>
     <string name="workspace_brim_ears">Uszy brim</string>
     <string name="brim_ears_title">Uszy brim</string>
     <string name="svg_apply">Dodaj część SVG</string>

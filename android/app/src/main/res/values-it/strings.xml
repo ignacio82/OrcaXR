@@ -53,6 +53,7 @@
     <string name="vf_delete">Elimina</string>
     <string name="project_measure">Misura</string>
     <string name="simplify_apply">Applica</string>
+    <string name="workspace_assembly">Assemblaggio</string>
     <string name="workspace_brim_ears">Tese ad orecchio</string>
     <string name="brim_ears_title">Tesa ad orecchio</string>
     <string name="svg_apply">Aggiungi parte SVG</string>

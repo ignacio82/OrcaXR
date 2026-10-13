@@ -47,6 +47,7 @@ import dev.orcaxr.nativeapp.shell.ActionTooltip
 import dev.orcaxr.nativeapp.shell.focusRing
 import dev.orcaxr.renderer.MarkerShape
 import dev.orcaxr.renderer.ModelTransform
+import dev.orcaxr.renderer.Point3
 import dev.orcaxr.renderer.ProjectScene
 import dev.orcaxr.renderer.SceneMarker
 import dev.orcaxr.renderer.decomposedScale
@@ -65,12 +66,22 @@ internal object BrimEarDiscs {
     /** The disc: three's `CylinderGeometry(radius, radius, 0.2, 32)` (`BRIM_EAR_DISC_HEIGHT_MM`), here of unit radius, scaled to each ear's. */
     val SHAPE = MarkerShape.cylinder("brim-ear-disc", 0.2, 32)
 
-    /** The discs of [state]'s ears on every instance of its object among [draws] (the active plate's), instance by instance. */
-    fun markers(state: BrimEarState, draws: List<ProjectScene.Draw>): List<SceneMarker> {
+    /**
+     * The discs of [state]'s ears on every instance of its object among
+     * [draws] (the active plate's), instance by instance — each moved with
+     * its instance in an exploded view ([offsets], mm), as the browser's
+     * discs ride on the instance's group.
+     */
+    fun markers(state: BrimEarState, draws: List<ProjectScene.Draw>, offsets: Map<String, Point3> = emptyMap()): List<SceneMarker> {
         val objectId = state.objectId ?: return emptyList()
         if (state.ears.isEmpty()) return emptyList()
         val stranded = state.stranded.toSet()
-        val instances = draws.filter { it.objectId == objectId }.distinctBy { it.instanceId }.map { ModelTransform.fromCanonical(it.placement.instance) }
+        val instances = draws.filter { it.objectId == objectId }.distinctBy { it.instanceId }.map { draw ->
+            val instance = draw.placement.instance
+            val offset = offsets[draw.instanceId] ?: return@map ModelTransform.fromCanonical(instance)
+            val (x, y, z) = instance.translationMm
+            ModelTransform.fromCanonical(instance.copy(translationMm = listOf(x + offset.x, y + offset.y, z + offset.z)))
+        }
         return instances.flatMap { instance -> state.ears.mapIndexed { index, ear -> disc(instance, ear, index in stranded) } }
     }
 

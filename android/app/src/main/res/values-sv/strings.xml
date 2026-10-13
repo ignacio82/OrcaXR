@@ -50,6 +50,7 @@
     <string name="vf_delete">Radera</string>
     <string name="project_measure">Measure</string>
     <string name="simplify_apply">Applicera</string>
+    <string name="workspace_assembly">Montering</string>
     <string name="workspace_brim_ears">Brätte Öron</string>
     <string name="brim_ears_title">Brätte öron</string>
     <string name="workspace_paint">Färglägga</string>

@@ -9,6 +9,8 @@ export interface MeasurePickView {
 export interface MeasureAssemblyView {
   readonly canSetToParallel: boolean;
   readonly canSetToCenterCoincidence: boolean;
+  /** Whether the second pick is a plane its model can be turned over about. */
+  readonly canReverseFeature2: boolean;
   readonly canRotateAroundFaceCenter: boolean;
   readonly hasParallelDistance: boolean;
   readonly parallelDistanceMm: number;
@@ -194,7 +196,10 @@ export class MeasurePanel {
     };
     align('align-parallel', 'Parallel', assembly.canSetToParallel);
     align('align-center-coincidence', 'Centre coincidence', assembly.canSetToCenterCoincidence);
-    align('align-reverse-rotation', 'Flip over', true);
+    // Turned over about the second face: offered only when that face is a
+    // plane. It used to be offered for any pair and fail on a point, an edge
+    // or a circle with "This alignment needs a plane as the second feature".
+    align('align-reverse-rotation', 'Flip over', assembly.canReverseFeature2);
 
     const distance = document.createElement('input');
     distance.type = 'number';
@@ -213,7 +218,27 @@ export class MeasurePanel {
     distanceLabel.appendChild(distance);
     align('align-parallel-distance', 'Set gap', assembly.hasParallelDistance, () => Number(distance.value));
 
-    group.append(legend, hint, row, distanceLabel);
+    // A turn of the second model about its face's centre, as upstream's
+    // "Rotate around center" offers for two parallel faces. The core plans it
+    // and the pair's availability says when; the panel had no way to ask.
+    const turn = document.createElement('input');
+    turn.type = 'number';
+    turn.step = '1';
+    turn.id = `orcaxr-measure-turn-${this.instanceId}`;
+    turn.dataset.measureAssemblyTurn = 'true';
+    turn.value = '90';
+    turn.disabled = !assembly.canRotateAroundFaceCenter || !assembly.movable;
+    turn.style.cssText = distance.style.cssText;
+    const turnLabel = document.createElement('label');
+    turnLabel.htmlFor = turn.id;
+    turnLabel.textContent = 'Turn (°)';
+    turnLabel.style.cssText = distanceLabel.style.cssText;
+    turnLabel.appendChild(turn);
+    align('align-around-face-center', 'Turn about centre', assembly.canRotateAroundFaceCenter, () =>
+      Number(turn.value),
+    );
+
+    group.append(legend, hint, row, distanceLabel, turnLabel);
     return group;
   }
 

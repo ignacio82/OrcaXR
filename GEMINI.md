@@ -292,7 +292,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   (host-folded search). Read names/IDs in bounded UTF-16 chunks. Query addresses never
   become command IDs. Plate/range sorting has an explicit entry budget and belongs on an owned projection executor. Authored
   mesh declarations are not validated GPU buffers. Production subscriptions,
-  worker/JNI integration, other command families and Android editing beyond selection/object/plate/transform edits and creation (primitives, helper volumes, clipboard, bed fill through a typed staged-record writer: [native-core](docs/engineering/native-core.md#android-creation)), filaments (list, slot edits, assignment, virtual library: [§](docs/engineering/native-core.md#android-filaments)), model tools (split, simplify, measure, emboss/SVG parts; no repair: [§](docs/engineering/native-core.md#android-model-tools)) and settings panels (scoped settings, height ranges: [§](docs/engineering/native-core.md#android-settings-panels)) remain open.
+  worker/JNI integration, other command families and Android editing beyond selection/object/plate/transform edits and creation (primitives, helper volumes, clipboard, bed fill through a typed staged-record writer: [native-core](docs/engineering/native-core.md#android-creation)), filaments (list, slot edits, assignment, virtual library: [§](docs/engineering/native-core.md#android-filaments)), model tools (split, simplify, measure, assembly, emboss/SVG parts; no repair: [§](docs/engineering/native-core.md#android-model-tools)) and settings panels (scoped settings, height ranges: [§](docs/engineering/native-core.md#android-settings-panels)) remain open.
 - SHA-256 identifies artifacts/project/config outputs. Canonical FNV-1a64
   identifies source assets and semantic snapshots where explicitly defined.
   Never substitute one for the other or infer engine statistics from observations.
@@ -316,7 +316,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   topology consistency; revision plate requests have native session guards; native paint strokes
   stage one guarded commit each; splits/simplifications prepare on a guard and stage under host IDs.
   Emboss takes glyph contours or a font file (the core's port of the browser's TrueType reader), SVG the file's bytes (as `File.text()`); a part stores the drawing it names.
-  Assembly plans are session-free: two picked features in, one instance transform out, committed as a drag.
+  Assembly plans are session-free (two features in, one `setInstanceTransform` out); an exploded view moves drawn instances only: picks/edits read canonical placement.
 - Smart Paint is a validated, bounded proposal plus operator correction and one
   canonical transaction. Check per-provider/payload consent before sending data.
 - Wipe towers reserve their complete printed footprint against the printable rectangle's actual origin,

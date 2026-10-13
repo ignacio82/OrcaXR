@@ -211,14 +211,14 @@ class ProjectWorkspace(
          * The model tools the Project area offers where the browser does: its
          * menu's split, simplify and wipe-tower placement (`dom-menu`; split
          * and simplify are also an object's context actions), its toolbar's
-         * Measure and Brim Ears
-         * (`dom-toolbar`) and the Simplify, Measure and Brim ears panels'
-         * controls (`dom-inspector`).
+         * Measure, Assembly, Brim Ears, Emboss Text and SVG Part
+         * (`dom-toolbar`) and the Simplify, Measure (with its alignments and
+         * the exploded view) and Brim ears panels' controls (`dom-inspector`).
          */
         val MODEL_TOOL_MENU_ACTIONS = listOf("split_to_objects", "split_to_parts", "simplify_model", "auto_place_wipe")
-        val MODEL_TOOL_TOOLBAR_ACTIONS = listOf("tool_measure", "tool_brim_ears")
+        val MODEL_TOOL_TOOLBAR_ACTIONS = listOf("tool_measure", "tool_assembly", "tool_brim_ears", "add_emboss", "tool_svg")
         val MODEL_TOOL_INSPECTOR_ACTIONS = listOf(
-            "simplify_preview", "simplify_apply", "simplify_cancel", "measure_clear",
+            "simplify_preview", "simplify_apply", "simplify_cancel", "measure_clear", "assembly_align", "assembly_explode",
             "brim_ears_configure", "brim_ears_remove", "brim_ears_auto", "brim_ears_clear",
         )
         /** The browser's words for a Split to Objects whose confirmation no longer describes the project (`StaleCanonicalSplitToObjectsError`). */
@@ -2579,6 +2579,42 @@ class ProjectWorkspace(
     /** The measurement of two picks (`measureSurfaceFeatures`): distances, their X/Y/Z parts and the angle; null when it is not finite. */
     fun measure(first: MeasurePick, second: MeasurePick): ProjectIntents.MeasureResult? =
         (ProjectMeasureVolume.measure(ProjectIntents.MeasureRequest(first.feature, second.feature)) as? ProjectIntents.MeasureReply.Measured)?.value
+
+    // ---- Assembly: the browser workspace's alignments of two Measure picks ----
+
+    /**
+     * One assembly alignment of the Measure tool's [picks] (the browser's
+     * `applyAssemblyAlignment` over `planAssemblyStep`): refused before
+     * anything is read without two picks on two models
+     * ([ProjectAssemblies.refusal]); otherwise planned on the authority from
+     * the second pick's instance as the state the guard names places it — gone
+     * from the project, refused — by the core's pinned alignment of [kind]
+     * (with its [parameter]: a gap in millimetres, a turn in degrees), and a
+     * move committed as one guarded `setInstanceTransform` under the
+     * workspace's next `single:<n>` gesture, "Transform instance", as the
+     * browser's controller commits it; faces already aligned record nothing,
+     * and the plan's refusal answers in the core's words.
+     */
+    fun alignAssembly(picks: List<MeasurePick>, kind: AssemblyKind, parameter: Double?): CompletableFuture<AssemblyAligned> {
+        ProjectAssemblies.refusal(picks)?.let { return CompletableFuture.completedFuture(AssemblyAligned.Refused(it)) }
+        val (first, second) = picks
+        return answer { _, snapshot ->
+            val current = snapshot.query().use { root ->
+                ProjectFacts.objects(root).firstNotNullOfOrNull { o -> o.instances.firstOrNull { it.first == second.instanceId }?.second }
+            } ?: return@answer Answer<AssemblyAligned>(AssemblyAligned.Refused(AssemblyPairing.GONE))
+            when (val planned = ProjectAssemblies.plan(first, second, kind, parameter, current)) {
+                is AssemblyAligned.Moved -> Answer(
+                    planned,
+                    ProjectIntents.Command.SetInstanceTransform(
+                        ProjectIntents.SetInstanceTransform(
+                            units(planned.instanceId), planned.transform, units(PlacementGestures.single(transformSequence.incrementAndGet())),
+                        ),
+                    ),
+                )
+                else -> Answer(planned)
+            }
+        }
+    }
 
     // ---- Brim ears: the browser workspace's brim-ear tool over the shared core ----
 

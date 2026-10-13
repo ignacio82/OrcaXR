@@ -42,11 +42,11 @@ fn assembly_matches_the_browser() {
         counts,
         BTreeMap::from(
             [
-                ("alignment:planned", 246),
-                ("alignment:refused", 279),
-                ("availability:available", 51),
+                ("alignment:planned", 253),
+                ("alignment:refused", 282),
+                ("availability:available", 57),
                 ("availability:refused", 4),
-                ("explosion:exploded", 4),
+                ("explosion:exploded", 6),
                 ("explosion:refused", 3),
             ]
             .map(|(k, v)| (k.to_owned(), v))

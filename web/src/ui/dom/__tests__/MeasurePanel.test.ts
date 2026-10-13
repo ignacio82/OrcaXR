@@ -152,6 +152,7 @@ await test('alignment controls appear only with two picks and follow what the pa
     assembly: {
       canSetToParallel: true,
       canSetToCenterCoincidence: true,
+      canReverseFeature2: true,
       canRotateAroundFaceCenter: false,
       hasParallelDistance: false,
       parallelDistanceMm: 0,
@@ -181,6 +182,7 @@ await test('two picks on one model offer no alignment, and a gap commits its exa
     assembly: {
       canSetToParallel: false,
       canSetToCenterCoincidence: true,
+      canReverseFeature2: true,
       canRotateAroundFaceCenter: true,
       hasParallelDistance: true,
       parallelDistanceMm: 5,
@@ -193,6 +195,7 @@ await test('two picks on one model offer no alignment, and a gap commits its exa
     'align-center-coincidence',
     'align-reverse-rotation',
     'align-parallel-distance',
+    'align-around-face-center',
   ]) {
     assert.equal(
       sameModel.host.querySelector<HTMLButtonElement>(`[data-measure-action="${id}"]`)?.disabled,
@@ -215,6 +218,7 @@ await test('two picks on one model offer no alignment, and a gap commits its exa
     assembly: {
       canSetToParallel: false,
       canSetToCenterCoincidence: true,
+      canReverseFeature2: true,
       canRotateAroundFaceCenter: true,
       hasParallelDistance: true,
       parallelDistanceMm: 5,
@@ -228,6 +232,61 @@ await test('two picks on one model offer no alignment, and a gap commits its exa
   movable.host.querySelector<HTMLButtonElement>('[data-measure-action="align-parallel-distance"]')!.click();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(movable.calls, ['align:parallel-distance:2.5']);
+});
+
+await test('flip over is offered only about a plane, and a turn about the face centre commits its degrees', async () => {
+  // A circle second: the core can turn nothing over about it. The button used to stay enabled and fail.
+  const circle = mount({
+    active: true,
+    picks: [
+      { kind: 'plane', summary: 'plane facing (0, 0, 1)' },
+      { kind: 'circle', summary: 'circle ⌀10 mm', diameterMm: 10 },
+    ],
+    hint: 'Click another feature to start a new measurement.',
+    assembly: {
+      canSetToParallel: false,
+      canSetToCenterCoincidence: false,
+      canReverseFeature2: false,
+      canRotateAroundFaceCenter: false,
+      hasParallelDistance: false,
+      parallelDistanceMm: 0,
+      movable: true,
+      hint: 'Choose an alignment; it commits as one undoable move.',
+    },
+  });
+  const flip = circle.host.querySelector<HTMLButtonElement>('[data-measure-action="align-reverse-rotation"]');
+  assert.equal(flip?.disabled, true, 'nothing to flip over about a circle');
+
+  // Two parallel planes: the turn the core plans for them, by the field's degrees.
+  const parallel = mount({
+    active: true,
+    picks: [
+      { kind: 'plane', summary: 'plane facing (0, 0, 1)' },
+      { kind: 'plane', summary: 'plane facing (0, 0, 1)' },
+    ],
+    hint: 'Click another feature to start a new measurement.',
+    assembly: {
+      canSetToParallel: false,
+      canSetToCenterCoincidence: true,
+      canReverseFeature2: true,
+      canRotateAroundFaceCenter: true,
+      hasParallelDistance: true,
+      parallelDistanceMm: 0,
+      movable: true,
+      hint: 'Choose an alignment; it commits as one undoable move.',
+    },
+  });
+  const turn = parallel.host.querySelector<HTMLInputElement>('[data-measure-assembly-turn]')!;
+  assert.equal(turn.value, '90', 'a quarter turn to start with');
+  assert.equal(turn.disabled, false);
+  assert.equal(
+    parallel.host.querySelector<HTMLLabelElement>(`label[for="${turn.id}"]`)?.textContent?.startsWith('Turn (°)'),
+    true,
+  );
+  turn.value = '-45';
+  parallel.host.querySelector<HTMLButtonElement>('[data-measure-action="align-around-face-center"]')!.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(parallel.calls, ['align:around-face-center:-45']);
 });
 
 await test('no alignment controls render before two features are picked', () => {

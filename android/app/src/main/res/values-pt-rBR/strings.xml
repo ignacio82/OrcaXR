@@ -53,6 +53,7 @@
     <string name="vf_delete">Excluir</string>
     <string name="project_measure">Medir</string>
     <string name="simplify_apply">Aplicar</string>
+    <string name="workspace_assembly">Montagem</string>
     <string name="workspace_brim_ears">Orelhas da Borda</string>
     <string name="brim_ears_title">Orelhas da borda</string>
     <string name="svg_apply">Adicionar peça SVG</string>

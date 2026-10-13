@@ -51,6 +51,7 @@
     <string name="vf_delete">Smazat</string>
     <string name="project_measure">Měření</string>
     <string name="simplify_apply">Použít</string>
+    <string name="workspace_assembly">Sestavení</string>
     <string name="workspace_brim_ears">Uši Límce</string>
     <string name="brim_ears_title">Uši límce</string>
     <string name="svg_apply">Přidat SVG část</string>

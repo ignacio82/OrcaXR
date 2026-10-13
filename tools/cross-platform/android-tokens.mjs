@@ -74,6 +74,7 @@ const APP_ACTIONS = [
   "add_primitive_disc", "add_primitive_torus",
   "simplify_model", "add_plate", "delete_plate", "arrange_all", "duplicate_plate", "split_to_objects",
   "split_to_parts", "tool_support_paint", "tool_seam_paint", "tool_fuzzy_skin", "tool_measure",
+  "tool_assembly", "assembly_explode", "assembly_align",
   "tool_brim_ears", "brim_ears_auto", "brim_ears_clear", "auto_place_wipe",
   "add_emboss", "emboss_load_font", "emboss_apply", "tool_svg", "svg_load_drawing", "svg_apply",
   "add_modifier", "add_support_enforcer", "add_support_blocker", "set_negative_part",

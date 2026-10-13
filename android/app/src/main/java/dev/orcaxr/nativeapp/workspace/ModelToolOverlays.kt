@@ -4,7 +4,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -12,10 +15,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -29,20 +39,39 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import dev.orcaxr.core.AssemblyHint
+import dev.orcaxr.core.AssemblyKind
+import dev.orcaxr.core.AssemblyView
 import dev.orcaxr.core.MeasureAnnotation
 import dev.orcaxr.core.MeasureHint
 import dev.orcaxr.core.MeasureRowLabel
 import dev.orcaxr.core.ModelToolStatus
+import dev.orcaxr.core.ProjectAssemblies
+import dev.orcaxr.core.ProjectMeasures
 import dev.orcaxr.core.SimplifyPreview
 import dev.orcaxr.nativeapp.R
+import dev.orcaxr.nativeapp.project.ProjectEditing
 import dev.orcaxr.nativeapp.project.ProjectModel
+import dev.orcaxr.nativeapp.shell.focusRing
 import dev.orcaxr.renderer.OrbitCamera
 import dev.orcaxr.renderer.Point3
 import dev.orcaxr.renderer.RenderSpace
 import kotlin.math.roundToInt
+
+/**
+ * The measured line as the exploded view draws its parts: each end moved
+ * with the part it was picked on ([offsets], by instance, in millimetres), as
+ * the browser shifts its annotation; assembled, it is where it was measured.
+ */
+internal fun explodedAnnotation(annotation: MeasureAnnotation, firstInstance: String, secondInstance: String, offsets: Map<String, Point3>): MeasureAnnotation {
+    fun moved(point: List<Double>, instance: String) = offsets[instance]?.let { listOf(point[0] + it.x, point[1] + it.y, point[2] + it.z) } ?: point
+    return annotation.copy(from = moved(annotation.from, firstInstance), to = moved(annotation.to, secondInstance))
+}
 
 /** Where the measured line meets the screen: its two ends projected through [camera] into a [size] view, or null when either is behind it. */
 internal fun measureLine(annotation: MeasureAnnotation, camera: OrbitCamera, size: IntSize): Pair<Offset, Offset>? {
@@ -145,9 +174,103 @@ internal fun MeasureCard(model: ProjectModel, modifier: Modifier = Modifier) {
                 }
             }
             if (readout?.unsupported == true) Text(stringResource(R.string.measure_unsupported), style = MaterialTheme.typography.bodySmall)
+            model.assemblyView?.let { AssemblySection(model, it) }
+            if (model.assembling && ProjectEditing.enabled(model.view, "assembly_explode")) ExplodeSection(model)
         }
     }
 }
+
+/**
+ * The Measure panel's Align section (the browser's `renderAssembly`), once
+ * two features are picked: what to do — choose an alignment, or pick faces
+ * on two models — and every alignment the core plans for the pair, each
+ * enabled as the pair allows and only when the second pick's model can move:
+ * Parallel, Centre coincidence, Flip over (about the second face), Set gap
+ * with the Gap (mm) field (starting at the measured gap) and Turn about
+ * centre with the Turn (°) field. Each moves the second model as one
+ * undoable step; the fields hand over what was typed as a number input does.
+ */
+@Composable
+private fun AssemblySection(model: ProjectModel, view: AssemblyView) {
+    val available = view.available
+    val enabled = view.movable && !model.busy
+    val ring = MaterialTheme.colorScheme.primary
+    Text(stringResource(R.string.assembly_align_heading), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleSmall)
+    Text(
+        stringResource(
+            when (view.hint) {
+                AssemblyHint.PICK -> R.string.assembly_hint_pick
+                AssemblyHint.CHOOSE -> R.string.assembly_hint_choose
+                AssemblyHint.DIFFERENT_MODELS -> R.string.assembly_hint_different
+            },
+        ),
+        Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        style = MaterialTheme.typography.bodySmall,
+    )
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for ((kind, words, allowed) in listOf(
+            Triple(AssemblyKind.PARALLEL, R.string.assembly_parallel, available?.canSetToParallel == true),
+            Triple(AssemblyKind.CENTER_COINCIDENCE, R.string.assembly_center, available?.canSetToCenterCoincidence == true),
+            Triple(AssemblyKind.REVERSE_ROTATION, R.string.assembly_flip, available?.canReverseFeature2 == true),
+        )) {
+            OutlinedButton(onClick = { model.align(kind) }, enabled = enabled && allowed, modifier = Modifier.focusRing(ring)) { Text(stringResource(words)) }
+        }
+    }
+    val gap = ProjectMeasures.format(available?.parallelDistanceMm ?: 0.0)
+    AlignField(stringResource(R.string.assembly_gap), gap, stringResource(R.string.assembly_set_gap), enabled && available?.hasParallelDistance == true) {
+        model.align(AssemblyKind.PARALLEL_DISTANCE, it)
+    }
+    AlignField(stringResource(R.string.assembly_turn), "90", stringResource(R.string.assembly_turn_apply), enabled && available?.canRotateAroundFaceCenter == true) {
+        model.align(AssemblyKind.AROUND_FACE_CENTER, it)
+    }
+}
+
+/** One of the Align section's number fields, starting at [initial], and the button that aligns with what it holds. */
+@Composable
+private fun AlignField(label: String, initial: String, action: String, enabled: Boolean, apply: (Double) -> Unit) {
+    var typed by remember(initial) { mutableStateOf(initial) }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = typed,
+            onValueChange = { typed = it },
+            label = { Text(label) },
+            singleLine = true,
+            enabled = enabled,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.weight(1f).semantics { contentDescription = label },
+        )
+        OutlinedButton(onClick = { apply(HtmlNumberInput.value(typed)) }, enabled = enabled, modifier = Modifier.focusRing(MaterialTheme.colorScheme.primary)) {
+            Text(action)
+        }
+    }
+}
+
+/**
+ * Explode the assembly (`assembly_explode`): how far apart the Workspace
+ * draws the plate's models, from 1 (assembled) to 3, as upstream's assemble
+ * view slides it — the view alone; the project never moves.
+ */
+@Composable
+private fun ExplodeSection(model: ProjectModel) {
+    val label = stringResource(R.string.assembly_explode)
+    val factor = model.explosionFactor
+    val shown = ProjectMeasures.format(factor)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        Text(shown, style = MaterialTheme.typography.bodyMedium)
+    }
+    Slider(
+        value = factor.toFloat(),
+        // Continuous, as upstream's slider; the factor kept to a twentieth.
+        onValueChange = { model.explode(EXPLOSION_STEP * kotlin.math.round(it / EXPLOSION_STEP)) },
+        valueRange = 1f..ProjectAssemblies.MAX_EXPLOSION.toFloat(),
+        modifier = Modifier.fillMaxWidth().focusRing(MaterialTheme.colorScheme.primary)
+            .semantics { contentDescription = label; stateDescription = shown },
+    )
+}
+
+/** The explosion slider's step: a twentieth of the factor. */
+private const val EXPLOSION_STEP = 0.05
 
 /**
  * A simplify preview shown in the Workspace: the decimated parts are drawn in

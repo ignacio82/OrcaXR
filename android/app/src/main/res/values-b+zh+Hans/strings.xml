@@ -53,6 +53,7 @@
     <string name="vf_delete">删除</string>
     <string name="project_measure">测量</string>
     <string name="simplify_apply">应用</string>
+    <string name="workspace_assembly">组合体</string>
     <string name="workspace_brim_ears">耳状帽檐</string>
     <string name="brim_ears_title">圆盘</string>
     <string name="svg_apply">添加svg零件</string>

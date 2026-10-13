@@ -289,6 +289,8 @@ find("1 object", timeout=30)
 # Measure: a 20 mm cube moved beside the 10 mm cubes, then the two tops picked in the Workspace.
 tap("Workspace")
 time.sleep(4)
+screen.key(111)
+time.sleep(2)
 cubes = screen.screenshot()
 tap("Project")
 menu("Add", "Cube")
@@ -297,6 +299,9 @@ x0 = float(value(MOVE, "X"))
 type_field(MOVE, "X", f"{x0 + 40:.2f}")
 tap("Workspace")
 time.sleep(4)
+# Escape deselects: the transform gizmo leaves the cube, so its pixels are the cube's alone.
+screen.key(111)
+time.sleep(2)
 both = screen.screenshot()
 pair = set(changed_pixels(empty, cubes, *area))
 cube = [p for p in changed_pixels(empty, both, *area) if p not in pair]

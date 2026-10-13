@@ -53,6 +53,7 @@
     <string name="vf_delete">Esborrar</string>
     <string name="project_measure">Mesurar</string>
     <string name="simplify_apply">Aplicar</string>
+    <string name="workspace_assembly">Muntatge</string>
     <string name="workspace_brim_ears">Orelles de la Vora d\'Adherència</string>
     <string name="brim_ears_title">Orelles de la Vora d\'Adherència</string>
     <string name="svg_apply">Afegir una peça SVG</string>

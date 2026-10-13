@@ -280,7 +280,7 @@ if (isMainThread) {
         result.assemblyPlanned,
         result.assemblyExplosions,
       ],
-      [55, 525, 246, 7],
+      [61, 535, 253, 9],
     );
     // The Objects tree: pages, selections and refusals on captured projects.
     assert.deepEqual(

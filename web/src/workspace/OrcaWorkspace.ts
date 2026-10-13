@@ -124,12 +124,7 @@ import {
   transformSurfaceFeature,
   type SurfaceFeature,
 } from '../project/objects/measure';
-import {
-  inspectAssemblyActions,
-  planAssemblyAlignment,
-  type AssemblyAlignmentKind,
-  type AssemblyAvailability,
-} from '../project/objects/assembly';
+import type { AssemblyAlignmentKind } from '../project/objects/assembly';
 import { GEMINI_PAINT_PROVIDER_ID, LazyGeminiAiPaintPort } from '../features/aiPaintProvider';
 import { paintPaletteColors, type PaintPalette } from '../project/painting/paintPalette';
 import { channelOverlayColors, paintStateColor } from '../project/painting/paintOverlayColors';
@@ -177,6 +172,7 @@ import { xrBlocksUiAdapter } from '../ui/xr/XrUiAdapter';
 import { SceneGestureGuard, type SceneGestureSnapshot } from '../ui/xr/SceneGestureGuard';
 import { DEFAULT_BRIM_EAR_DETECTION, detectBrimEars } from '../project/objects/brimEarDetection';
 import { projectExplosion } from '../project/objects/assembly';
+import { assemblyFailedStatus, assemblySnapshot, planAssemblyStep, type AssemblySnapshot } from './AssemblyAlignment';
 import type { CalibrationJobPlan, CalibrationJobPrerequisites } from '../project/calibration/types';
 import { stepCalibrationValue } from '../project/calibration/stepper';
 import { pressureAdvanceLineProgram } from '../project/calibration/lineProgram';
@@ -659,24 +655,7 @@ export interface SvgPartSnapshot {
   readonly hint: string;
 }
 
-/** Read-only view an assembly surface renders. */
-export interface AssemblySnapshot {
-  readonly available: AssemblyAvailability;
-  /** True when the second pick belongs to a different, movable instance. */
-  readonly movable: boolean;
-  readonly hint: string;
-}
-
-const EMPTY_ASSEMBLY_AVAILABILITY: AssemblyAvailability = Object.freeze({
-  canSetToParallel: false,
-  canSetToCenterCoincidence: false,
-  canReverseFeature1: false,
-  canReverseFeature2: false,
-  canRotateAroundFaceCenter: false,
-  hasParallelDistance: false,
-  parallelDistanceMm: 0,
-  angleRadians: 0,
-});
+export type { AssemblySnapshot } from './AssemblyAlignment';
 
 /** Read-only view a measurement readout renders; every number is canonical. */
 export interface MeasureSnapshot {
@@ -960,6 +939,8 @@ export class OrcaWorkspace extends xb.Script {
           this.onPlatesChanged?.();
           this.queuePreflightRecompute();
           this.refreshPaintOverlays();
+          if (change.previous && change.previous.projectId !== change.current.projectId) this.projectReplaced();
+          else if (this.explosionFactor !== 1) this.applyExplosion();
         }
         if (change.sources.includes('selection') || change.sources.includes('project')) {
           if ([...this.transformGestureOwners].some((owner) => !owner.selectionCurrent()))
@@ -977,6 +958,23 @@ export class OrcaWorkspace extends xb.Script {
       { emitCurrent: false },
     );
     this.lifecycleDisposers.push(unsubscribeCanonical);
+  }
+
+  /**
+   * A new or opened project replaced the last one: its picks named the old
+   * project's parts and its exploded view the old assembly, so the Measure
+   * tool starts a fresh pair and the view is assembled again.
+   */
+  private projectReplaced(): void {
+    if (this.measurePicks.length > 0) {
+      this.measurePicks = [];
+      this.refreshMeasureAnnotation();
+      this.onMeasureStateChanged?.();
+    }
+    if (this.explosionFactor !== 1) {
+      this.explosionFactor = 1;
+      this.onExplosionChanged?.();
+    }
   }
 
   private queuePreflightRecompute(): void {
@@ -2463,8 +2461,24 @@ export class OrcaWorkspace extends xb.Script {
 
   public clearMeasureSelection(): void {
     this.measurePicks = [];
+    this.refreshMeasureAnnotation();
     this.setStatus(t('workspace.orcaWorkspace.measurementCleared', 'Measurement cleared.'));
     this.onMeasureStateChanged?.();
+  }
+
+  /**
+   * Draw the current pair's measured line, or take it away: it shows only
+   * while the Measure tool has two picks. It used to be drawn only by a
+   * snapshot of two picks and never taken away, so Clear, a finished
+   * alignment and leaving the tool all left the last line standing.
+   */
+  private refreshMeasureAnnotation(): void {
+    if (this.tool !== 'measure' || this.measurePicks.length < 2) {
+      this.drawMeasureAnnotation(null);
+      return;
+    }
+    const result = measureSurfaceFeatures(this.measurePicks[0].feature, this.measurePicks[1].feature);
+    this.drawMeasureAnnotation(result.distanceStrict ?? result.distanceInfinite ?? null);
   }
 
   public getMeasureSnapshot(): MeasureSnapshot {
@@ -2475,6 +2489,7 @@ export class OrcaWorkspace extends xb.Script {
       ...(feature.kind === 'circle' ? { diameterMm: feature.radius * 2 } : {}),
     }));
     if (this.measurePicks.length < 2) {
+      this.drawMeasureAnnotation(null);
       return Object.freeze({
         active,
         picks: Object.freeze(picks),
@@ -2543,11 +2558,18 @@ export class OrcaWorkspace extends xb.Script {
     }
     if (!distance) return;
 
-    // Printer millimetres into the workspace, as the surface root maps them.
+    // Printer millimetres into the workspace, as the surface root maps them;
+    // each end on its part as an exploded view draws it.
     const root = this.canonicalProject.surface.root;
     root.updateMatrix();
-    const from = new THREE.Vector3(...distance.from).applyMatrix4(root.matrix);
-    const to = new THREE.Vector3(...distance.to).applyMatrix4(root.matrix);
+    const shifted = (point: Vec3, pick: { instanceId?: InstanceId } | undefined) => {
+      const offset = pick?.instanceId ? this.explosionOffsetMm(pick.instanceId) : [0, 0, 0];
+      return new THREE.Vector3(point[0] + offset[0], point[1] + offset[1], point[2] + offset[2]).applyMatrix4(
+        root.matrix,
+      );
+    };
+    const from = shifted(distance.from, this.measurePicks[0]);
+    const to = shifted(distance.to, this.measurePicks[1]);
     const group = new THREE.Group();
     group.name = 'measureAnnotation';
     const line = new THREE.Line(
@@ -2569,78 +2591,40 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /**
-   * Which pinned assembly alignments the two picks allow. The second pick's
-   * instance is the one that would move, so a pair on one instance offers
-   * nothing to align.
+   * Which pinned assembly alignments the two picks allow (`assemblySnapshot`).
+   * The second pick's instance is the one that would move, so a pair on one
+   * instance offers nothing to align.
    */
   public getAssemblySnapshot(): AssemblySnapshot {
-    if (this.measurePicks.length < 2) {
-      return Object.freeze({
-        available: Object.freeze({ ...EMPTY_ASSEMBLY_AVAILABILITY }),
-        movable: false,
-        hint: 'Pick two faces — the second one moves.',
-      });
-    }
-    const [first, second] = this.measurePicks;
-    const availability = inspectAssemblyActions(first.feature, second.feature);
-    const movable = Boolean(second.instanceId) && second.instanceId !== first.instanceId;
-    return Object.freeze({
-      available: availability,
-      movable,
-      hint: movable
-        ? 'Choose an alignment; it commits as one undoable move.'
-        : 'Pick two faces on different models to align them.',
-    });
+    return assemblySnapshot(this.measurePicks);
   }
 
-  /** Commit one pinned alignment as a single undoable instance transform. */
+  /**
+   * Commit one pinned alignment as a single undoable instance transform: the
+   * flow's step (`planAssemblyStep`) for the two picks, committed through the
+   * guarded transform command when it moves the second pick's instance.
+   */
   public async applyAssemblyAlignment(kind: AssemblyAlignmentKind, parameter?: number): Promise<boolean> {
-    if (this.measurePicks.length < 2) {
-      this.setStatus(t('workspace.orcaWorkspace.pickTwoFacesBeforeAligning', 'Pick two faces before aligning.'));
-      return false;
-    }
     const picks = this.measurePicks;
-    const [first, second] = picks;
-    const target = second.instanceId;
-    if (!target || target === first.instanceId) {
-      this.setStatus(
-        t(
-          'workspace.orcaWorkspace.assemblyAlignmentNeedsTwoFaces',
-          'Assembly alignment needs two faces on different models.',
-        ),
-      );
-      return false;
-    }
-    const current = this.canonicalProject.getInstanceTransform(target);
-    if (!current) {
-      this.setStatus(t('workspace.orcaWorkspace.theModelToAlignIs', 'The model to align is no longer on this plate.'));
+    const step = planAssemblyStep(picks, kind, parameter, (id) => this.canonicalProject.getInstanceTransform(id));
+    if (step.outcome !== 'move') {
+      this.setStatus(step.status);
+      if (step.outcome === 'failed') this.onMeasureStateChanged?.();
       return false;
     }
     try {
-      const plan = planAssemblyAlignment({
-        kind,
-        first: first.feature,
-        second: second.feature,
-        movingTransform: current,
-        ...(parameter !== undefined ? { parameter } : {}),
-      });
-      if (plan.noop) {
-        this.setStatus(
-          t('workspace.orcaWorkspace.thoseFacesAreAlreadyAligned', 'Those faces are already aligned; nothing moved.'),
-        );
-        return false;
-      }
-      await this.canonicalProject.setInstanceTransform(target, plan.transform);
+      await this.canonicalProject.setInstanceTransform(step.instanceId, step.transform);
       if (this.disposed || this.measurePicks !== picks) return true;
       this.recomputePreflight();
       // The picks describe where the faces *were*; keep them honest.
       this.measurePicks = [];
-      this.setStatus(`Applied ${kind.replaceAll('-', ' ')}. Undo restores the previous placement.`);
+      this.refreshMeasureAnnotation();
+      this.setStatus(step.status);
       this.onMeasureStateChanged?.();
       return true;
     } catch (error) {
       if (this.disposed || this.measurePicks !== picks) return false;
-      this.setStatus(`Alignment failed: ${(error as Error).message}`);
+      this.setStatus(assemblyFailedStatus((error as Error).message));
       this.onMeasureStateChanged?.();
       return false;
     }
@@ -3408,10 +3392,15 @@ export class OrcaWorkspace extends xb.Script {
         const localFeature = extractor.featureAt(faceIndex, [local.x, local.y, local.z]);
         // Features measure in printer millimetres (the instance's and the
         // volume's own transforms): the surface root above them only maps
-        // printer space into the scaled, Y-up scene.
-        target.display.updateWorldMatrix(true, false);
-        const root = this.canonicalProject.surface.root;
-        const m = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(target.display.matrixWorld).elements;
+        // printer space into the scaled, Y-up scene. An exploded view moves
+        // the instance's group on screen alone, so the feature is placed where
+        // the project places the part: a measurement or an alignment read off
+        // the exploded positions would be off by the explosion.
+        const m = this.withAssembledInstance(target.display, () => {
+          target.display.updateWorldMatrix(true, false);
+          const root = this.canonicalProject.surface.root;
+          return new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(target.display.matrixWorld).elements;
+        });
         // Three stores column-major; the measure port takes row-major.
         const worldFeature = transformSurfaceFeature(localFeature, [
           m[0],
@@ -3445,6 +3434,7 @@ export class OrcaWorkspace extends xb.Script {
         if (this.measurePicks.length >= 2) this.measurePicks = [];
         // The instance the ray met: an object's instances share its volumes.
         this.measurePicks.push({ feature: worldFeature, instanceId: target.instanceId });
+        this.refreshMeasureAnnotation();
         this.setStatus(`Measure: picked ${describeSurfaceFeature(worldFeature)}.`);
         this.onMeasureStateChanged?.();
         return true;
@@ -5781,32 +5771,62 @@ export class OrcaWorkspace extends xb.Script {
     return true;
   }
 
-  /** Re-place every rendered instance for the current factor. */
+  /**
+   * Re-place every rendered instance for the current factor, from where the
+   * project places it now (upstream recomputes its exploded view from the
+   * current placement on every frame). The offsets used to compose from a
+   * baseline captured the first time a part was exploded and never renewed,
+   * so a part moved since — an alignment, a drag, an undo — jumped back to
+   * where it had been on the next adjustment, and every project change
+   * reassembled the view while the factor still read exploded.
+   */
   private applyExplosion(): void {
     const entries = this.models.filter((entry) => entry.viewer.parent);
-    if (entries.length === 0) return;
-    const inputs = entries.map((entry) => {
-      const base = this.explosionBaseline.get(entry.instanceId) ?? entry.viewer.position.clone();
-      this.explosionBaseline.set(entry.instanceId, base);
-      return { id: String(entry.instanceId), centerMm: [base.x, base.y, base.z] as Vec3 };
-    });
-    const offsets = new Map(projectExplosion(inputs, this.explosionFactor).map((o) => [o.id, o.offsetMm]));
+    const inputs: { id: string; centerMm: Vec3 }[] = [];
     for (const entry of entries) {
-      const base = this.explosionBaseline.get(entry.instanceId);
-      const offset = offsets.get(String(entry.instanceId));
-      if (!base || !offset) continue;
-      entry.viewer.position.set(base.x + offset[0], base.y + offset[1], base.z + offset[2]);
+      const transform = this.canonicalProject.getInstanceTransform(entry.instanceId);
+      if (transform) inputs.push({ id: String(entry.instanceId), centerMm: transform.translationMm });
     }
+    const offsets = new Map(projectExplosion(inputs, this.explosionFactor).map((o) => [o.id, o.offsetMm]));
+    for (const { id, centerMm } of inputs) {
+      const entry = entries.find((candidate) => String(candidate.instanceId) === id);
+      const offset = offsets.get(id);
+      if (!entry || !offset) continue;
+      entry.viewer.position.set(centerMm[0] + offset[0], centerMm[1] + offset[1], centerMm[2] + offset[2]);
+    }
+    if (this.measureAnnotation) this.refreshMeasureAnnotation();
+  }
+
+  /** How far the exploded view moves an instance's parts on screen (printer mm); zero when assembled. */
+  private explosionOffsetMm(instanceId: InstanceId): Vec3 {
+    if (this.explosionFactor === 1) return [0, 0, 0];
+    const viewer = this.canonicalProject.surface.getInstanceGroup(instanceId);
+    const transform = this.canonicalProject.getInstanceTransform(instanceId);
+    if (!viewer || !transform) return [0, 0, 0];
+    const [x, y, z] = transform.translationMm;
+    return [viewer.position.x - x, viewer.position.y - y, viewer.position.z - z];
   }
 
   /**
-   * Where each instance sits when assembled.
-   *
-   * Held separately so repeated factor changes compose from the assembled
-   * positions rather than from the last exploded ones, which would drift the
-   * parts further apart on every adjustment.
+   * Run [read] with [display]'s instance group where the project places it,
+   * then put it back where the exploded view draws it; assembled, nothing moves.
    */
-  private readonly explosionBaseline = new Map<InstanceId, THREE.Vector3>();
+  private withAssembledInstance<T>(display: THREE.Object3D, read: () => T): T {
+    const viewer = display.parent;
+    const instanceId = viewer ? getThreeProjectEntity(viewer)?.instanceId : undefined;
+    const transform = instanceId ? this.canonicalProject.getInstanceTransform(instanceId) : undefined;
+    if (this.explosionFactor === 1 || !viewer || !transform) return read();
+    const shown = viewer.position.clone();
+    viewer.position.fromArray(transform.translationMm);
+    viewer.updateMatrix();
+    try {
+      return read();
+    } finally {
+      viewer.position.copy(shown);
+      viewer.updateMatrix();
+      display.updateWorldMatrix(true, false);
+    }
+  }
 
   public onCalibrationParametersChanged: (() => void) | null = null;
 
@@ -8033,8 +8053,10 @@ export class OrcaWorkspace extends xb.Script {
     this.tool = tool;
     this.refreshToolButtons();
     // Before any of the early returns below: leaving the brim-ear tool has to
-    // take its discs with it, and every path out of it lands here.
+    // take its discs with it, and every path out of it lands here — and
+    // leaving the Measure tool its measured line.
     this.refreshBrimEarPreview();
+    this.refreshMeasureAnnotation();
     const channel = PAINT_TOOL_CHANNELS[tool];
     if (channel) {
       this.paintChannel = channel;

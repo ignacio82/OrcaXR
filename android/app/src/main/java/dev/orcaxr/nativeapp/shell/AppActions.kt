@@ -26,20 +26,25 @@ object AppActions {
 
     /** The model toolbar's tools: each takes the Workspace's touch until it is chosen again or ended. */
     val TOOLS = listOf(
-        "tool_lay_on_face", "tool_paint", "tool_support_paint", "tool_seam_paint", "tool_fuzzy_skin", "tool_measure", "tool_brim_ears",
-        "add_emboss", "tool_svg",
+        "tool_lay_on_face", "tool_paint", "tool_support_paint", "tool_seam_paint", "tool_fuzzy_skin", "tool_measure", "tool_assembly",
+        "tool_brim_ears", "add_emboss", "tool_svg",
     )
 
     /**
      * A tool panel's own actions the palette runs too: the Brim ears panel's
      * Place on corners, whose ears the Workspace draws (its tool opens), and
      * Clear all; the Emboss and SVG part panels' Load (their tool opens with
-     * its picker) and Add.
+     * its picker) and Add; the Measure panel's Align picked faces and Explode
+     * the assembly, which open the Assembly tool, where the faces are picked
+     * and the factor is chosen.
      */
-    val PANELS = listOf("brim_ears_auto", "brim_ears_clear", "emboss_load_font", "emboss_apply", "svg_load_drawing", "svg_apply")
+    val PANELS = listOf(
+        "brim_ears_auto", "brim_ears_clear", "emboss_load_font", "emboss_apply", "svg_load_drawing", "svg_apply",
+        "assembly_align", "assembly_explode",
+    )
 
-    /** Panel actions that open their tool on the Workspace: automatic brim ears, and choosing a font or a drawing. */
-    private val OPENS_TOOL = setOf("brim_ears_auto", "emboss_load_font", "svg_load_drawing")
+    /** Panel actions that open their tool on the Workspace: automatic brim ears, choosing a font or a drawing, and the assembly's. */
+    private val OPENS_TOOL = setOf("brim_ears_auto", "emboss_load_font", "svg_load_drawing", "assembly_align", "assembly_explode")
 
     /** The gizmo's Move, Rotate and Scale (G, R and S): each chooses what a drag of the gizmo's handles does. */
     val GIZMO = ProjectEditing.GIZMO_TOOLS

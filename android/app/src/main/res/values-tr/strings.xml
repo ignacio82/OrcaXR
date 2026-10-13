@@ -53,6 +53,7 @@
     <string name="vf_delete">Sil</string>
     <string name="project_measure">Ölçüm</string>
     <string name="simplify_apply">Uygula</string>
+    <string name="workspace_assembly">Birleştir</string>
     <string name="workspace_brim_ears">Kenar \u0020kulakları</string>
     <string name="brim_ears_title">Kenar \u0020kulakları</string>
     <string name="svg_apply">SVG parça ekle</string>

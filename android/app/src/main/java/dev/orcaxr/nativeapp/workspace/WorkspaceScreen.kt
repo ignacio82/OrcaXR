@@ -83,8 +83,10 @@ import dev.orcaxr.renderer.CameraView
 import dev.orcaxr.renderer.CameraViews
 import dev.orcaxr.renderer.OrbitCamera
 import dev.orcaxr.renderer.OrbitGestures
+import dev.orcaxr.renderer.Point3
 import dev.orcaxr.renderer.PreviewFraming
 import dev.orcaxr.renderer.ProjectScene
+import dev.orcaxr.renderer.SceneExplosion
 import dev.orcaxr.renderer.SceneMarker
 import dev.orcaxr.renderer.SceneSync
 import dev.orcaxr.renderer.TriangleMesh
@@ -169,6 +171,9 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     val earsShown = model.brimEaring
     val ears = model.brimEarState
     SideEffect { renderer.brimEars(earsShown, ears) }
+    // The Assembly tool's exploded view: the draws moved apart on screen, the project untouched.
+    val explosion = model.explosionFactor
+    SideEffect { renderer.explode(explosion) }
     // The wipe tower's ghost, read again whenever the project changes (the browser rebuilds it with the preflight).
     LaunchedEffect(view.revision) { model.refreshWipeTowerGhost() }
     val ghost = model.wipeTowerGhost
@@ -221,7 +226,14 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
         )
         // The gizmo's handles, then the measured line, under every panel.
         renderer.gizmoView?.let { TransformGizmoOverlay(it, gizmoMode, renderer.camera, renderer.size) }
-        if (model.measuring) model.measureReadout?.annotation?.let { MeasureAnnotationOverlay(it, renderer.camera, renderer.size) }
+        if (model.measuring) model.measureReadout?.let { readout ->
+            readout.annotation?.let { annotation ->
+                // Each end on its part as the exploded view draws it.
+                val drawn = if (readout.picks.size < 2) annotation
+                else explodedAnnotation(annotation, readout.picks[0].instanceId, readout.picks[1].instanceId, renderer.explosionOffsets)
+                MeasureAnnotationOverlay(drawn, renderer.camera, renderer.size)
+            }
+        }
         // Objects on every plate (the tree may show them collapsed).
         val objects = view.plateList.sumOf { it.objects }
         Column(Modifier.align(Alignment.TopStart).fillMaxWidth()) {
@@ -563,7 +575,7 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
 
     /** The markers again: the ghost, then the discs from the tool's state and the draws as they stand (an instance moved, added or removed). */
     private fun refreshMarkers() {
-        val next = ghostMarkers + if (earsShown) BrimEarDiscs.markers(ears, drawn) else emptyList()
+        val next = ghostMarkers + if (earsShown) BrimEarDiscs.markers(ears, drawn, explosionOffsets) else emptyList()
         if (next.isEmpty() && markers.isEmpty()) return
         markers = next
         scene?.setMarkers(markers)
@@ -592,6 +604,27 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         }
     }
 
+    // ---- The exploded view (the Assembly tool's) ----
+
+    private var explosion = 1.0
+    /** How far each instance of the active plate is drawn from where the project places it (mm); none when assembled. */
+    var explosionOffsets by mutableStateOf<Map<String, Point3>>(emptyMap())
+        private set
+
+    /** Draws the active plate's models [factor] apart ([SceneExplosion]); 1 assembles them. */
+    fun explode(factor: Double) {
+        if (factor == explosion) return
+        explosion = factor
+        redraw()
+    }
+
+    /** The draws again, exploded as the factor says, with the discs that follow their parts. */
+    private fun redraw() {
+        explosionOffsets = SceneExplosion.offsets(drawn, explosion)
+        scene?.setDraws(substituted(SceneExplosion.exploded(drawn, explosionOffsets)))
+        if (earsShown) refreshMarkers()
+    }
+
     /** A simplify preview's meshes, by volume, drawn in their volumes' place. */
     private var previewed: Map<String, TriangleMesh> = emptyMap()
 
@@ -609,7 +642,7 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         val renderer = scene ?: return
         before.keys.forEach { renderer.removeMesh(previewKey(it)) }
         meshes.forEach { (volumeId, mesh) -> renderer.setMesh(previewKey(volumeId), mesh) }
-        renderer.setDraws(substituted(drawn))
+        renderer.setDraws(substituted(SceneExplosion.exploded(drawn, explosionOffsets)))
         val restored = before.keys - meshes.keys
         if (restored.isNotEmpty()) model.sceneSnapshot { everything ->
             if (scene === renderer) everything.paint.filter { it.volumeId in restored && it.volumeId !in previewed }.forEach(renderer::setPaint)
@@ -715,7 +748,9 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         update.meshes.forEach { (asset, mesh) -> renderer.setMesh(asset, mesh) }
         drawn = update.draws
         draws = update.draws.associateBy { it.key }
-        renderer.setDraws(substituted(update.draws))
+        // The exploded view follows the project: its offsets from where the instances stand now.
+        explosionOffsets = SceneExplosion.offsets(drawn, explosion)
+        renderer.setDraws(substituted(SceneExplosion.exploded(drawn, explosionOffsets)))
         // The discs follow their object's instances.
         if (earsShown) refreshMarkers()
         // Paint changes colour bytes alone (a previewed volume's wait for its own mesh to show again).

@@ -35,10 +35,12 @@ SMOKES = ["android-smoke", "android-local-network-smoke", "android-device-smoke"
           "android-gizmo-smoke",
           # The Workspace's Brim Ears tool: its panel, ears on the corners and a tapped one, their discs, removal and clearing.
           "android-brimears-smoke",
-          # Auto-place Wipe Tower from the Edit menu, the palette and Prepare's switch.
+          # Auto-place Wipe Tower from the Edit menu, the palette and Prepare's switch, and the tower's ghost.
           "android-wipetower-smoke",
           # Emboss Text and SVG Part: a picked font and drawing, parts added and re-cut, a refusal, undo.
           "android-drawnparts-smoke",
+          # The Assembly tool: two cubes' tops aligned by a gap and centre coincidence, undo, the exploded view.
+          "android-assembly-smoke",
           # Night mode, font scale 2.0, rotation and animation scales, each restored as it ends.
           "android-accessibility-smoke",
           # Last: it resizes the display (restoring it as it ends) for the window-size layouts.
