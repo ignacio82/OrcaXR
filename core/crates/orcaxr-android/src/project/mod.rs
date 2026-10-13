@@ -16,6 +16,7 @@ mod archive;
 mod bindings;
 mod catalog;
 mod editor;
+mod exports;
 mod filaments;
 mod fresh;
 mod json_sink;
@@ -33,6 +34,7 @@ mod timestamps;
 use archive::*;
 use catalog::*;
 use editor::*;
+use exports::*;
 use filaments::*;
 use fresh::*;
 use jni::{

@@ -18,6 +18,18 @@ identifiers are taken from the corresponding published crate manifests.
 | adler2 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | [adler2](https://github.com/oyvindln/adler2) |
 | simd-adler32 | 0.3.10 | MIT | [simd-adler32](https://github.com/mcountryman/simd-adler32) |
 
+## Unicode normalization for export file names
+
+`orcaxr_archive::exports` offers a merged STL and a saved project under the
+browser's suggested names, which apply NFKC. It uses ICU4X's normalizer,
+pinned by `core/Cargo.lock` and already linked through the `url` crate's IDNA
+support: `icu_normalizer` 2.3.0 and `icu_normalizer_data` 2.3.0 (Unicode 17
+data), with `icu_collections`, `icu_provider`, `icu_properties`, `zerovec`,
+`yoke`, `zerofrom`, `zerotrie`, `tinystr`, `writeable`, `litemap` and
+`potential_utf`, all **Unicode-3.0**
+([ICU4X](https://github.com/unicode-org/icu4x)); `smallvec` and
+`stable_deref_trait` are MIT OR Apache-2.0, `utf8_iter` Apache-2.0 OR MIT.
+
 ## Unicode package casing
 
 `contracts/opc-lowercase.json` and its generated Rust/TypeScript tables pin

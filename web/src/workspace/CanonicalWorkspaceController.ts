@@ -199,8 +199,15 @@ import {
 } from '../project/objects/simplify';
 import { objectAssetIds } from '../project/objects/commands';
 import { computeCanonicalInstanceBounds, type CanonicalBounds3 } from '../project/objects/bounds';
-import { exportCanonicalInstancesAsBinaryStl, exportCanonicalVolumeAsBinaryStl } from '../project/objects/stlExport';
-import { DEFAULT_ZIP_LIMITS, writeDeterministicZip } from '../project/serialization/deterministicZip';
+import {
+  exportCanonicalInstancesAsBinaryStl,
+  exportCanonicalStlArchive,
+  exportCanonicalStlFile,
+  exportCanonicalVolumeAsBinaryStl,
+  selectedActivePlateInstanceIds,
+  stlExportInstanceIds,
+} from '../project/objects/stlExport';
+import { DEFAULT_ZIP_LIMITS } from '../project/serialization/deterministicZip';
 import { type InstanceTransformChange } from '../project/objects/transformCommands';
 import { cloneAndValidateTransform } from '../project/objects/transformValidation';
 import {
@@ -4232,16 +4239,10 @@ export class CanonicalWorkspaceController {
   exportCanonicalStl(instanceIds: readonly InstanceId[]): CanonicalStlExport {
     this.assertActive();
     const project = this.session.project.getSnapshot();
-    const exported = exportCanonicalInstancesAsBinaryStl(project.state, this.assets, instanceIds);
-    const single = instanceIds.length === 1 ? findInstance(project.state, instanceIds[0]) : undefined;
     return Object.freeze({
-      bytes: exported.bytes,
-      mediaType: 'model/stl',
-      suggestedFilename: suggestedStlFilename(single?.instance.name ?? single?.object.name ?? project.state.name),
+      ...exportCanonicalStlFile(project.state, this.assets, instanceIds),
       sourceRevision: project.revision,
       sourceHash: project.hash,
-      triangleCount: exported.triangleCount,
-      instanceCount: exported.instanceCount,
     });
   }
 
@@ -4249,48 +4250,23 @@ export class CanonicalWorkspaceController {
   exportCanonicalAllStls(instanceIds?: readonly InstanceId[]): CanonicalStlExport {
     this.assertActive();
     const project = this.session.project.getSnapshot();
-    const activePlate = findPlate(project.state, project.state.activePlateId);
-    const ids =
-      instanceIds && instanceIds.length > 0
-        ? instanceIds
-        : (activePlate?.objects.flatMap((obj) => obj.instances.map((i) => i.id)) ?? []);
-    if (ids.length === 0) throw new Error('No models to export');
-    if (ids.length === 1) {
-      return this.exportCanonicalStl(ids);
-    }
-    const files = new Map<string, Uint8Array>();
-    const usedNames = new Set<string>();
-    let totalTriangles = 0;
-    for (const id of ids) {
-      const found = findInstance(project.state, id);
-      if (!found) continue;
-      const baseName =
-        (found.instance.name || found.object.name || 'model')
-          .replace(/[^a-zA-Z0-9_-]+/g, '_')
-          .replace(/^_+|_+$/g, '') || 'model';
-      let filename = `${baseName}.stl`;
-      let counter = 2;
-      while (usedNames.has(filename.toLowerCase())) {
-        filename = `${baseName}_${counter}.stl`;
-        counter += 1;
-      }
-      usedNames.add(filename.toLowerCase());
-      const exported = exportCanonicalInstancesAsBinaryStl(project.state, this.assets, [id]);
-      totalTriangles += exported.triangleCount;
-      files.set(filename, exported.bytes);
-    }
-    const zipBytes = writeDeterministicZip(files);
-    const projectName =
-      (project.state.name || 'models').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'models';
     return Object.freeze({
-      bytes: zipBytes,
-      mediaType: 'application/zip',
-      suggestedFilename: `${projectName}_stls.zip`,
+      ...exportCanonicalStlArchive(project.state, this.assets, instanceIds),
       sourceRevision: project.revision,
       sourceHash: project.hash,
-      triangleCount: totalTriangles,
-      instanceCount: ids.length,
     });
+  }
+
+  /** File → Export as one STL…'s instances for [selectedInstanceIds]: those on the active plate, else the whole plate. */
+  stlExportInstanceIds(selectedInstanceIds: readonly InstanceId[]): InstanceId[] {
+    this.assertActive();
+    return stlExportInstanceIds(this.session.project.getSnapshot().state, selectedInstanceIds);
+  }
+
+  /** Export all objects as STLs…'s instances for [selectedInstanceIds]: those on the active plate (none takes the plate). */
+  selectedActivePlateInstanceIds(selectedInstanceIds: readonly InstanceId[]): InstanceId[] {
+    this.assertActive();
+    return selectedActivePlateInstanceIds(this.session.project.getSnapshot().state, selectedInstanceIds);
   }
 
   /** Promote an instance to its own independent object with isolated parts and parameters. */
@@ -5018,18 +4994,6 @@ function assertObjectsTreeEntityExists(state: ProjectState, ref: ObjectTreeEntit
             ? findInstance(state, ref.id)
             : findLayerRange(state, ref.id);
   if (!exists) throw new Error(`Unknown ${ref.kind} ${ref.id}`);
-}
-
-function suggestedStlFilename(name: string): string {
-  const withoutControls = [...name].map((character) => (character.codePointAt(0)! <= 0x1f ? '-' : character)).join('');
-  const stem = withoutControls
-    .normalize('NFKC')
-    .replace(/\.stl$/i, '')
-    .replace(/[<>:"/\\|?*]/g, '-')
-    .replace(/[. ]+$/g, '')
-    .trim()
-    .slice(0, 120);
-  return `${stem || 'OrcaXR-model'}.stl`;
 }
 
 function safelyNotify(subscriber: CanonicalWorkspaceSubscriber, change: CanonicalWorkspaceChange): void {

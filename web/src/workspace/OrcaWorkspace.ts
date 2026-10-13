@@ -29,6 +29,8 @@ import {
 } from '../project/objects/emboss';
 import { readTrueTypeOutlines } from '../project/objects/truetypeOutlines';
 import { DEFAULT_SVG_PART_DEPTH_MM, readSvgDrawing } from '../project/objects/svgCommands';
+import { stlExportedStatus } from '../project/objects/stlExport';
+import { CONFIG_EXPORT_FILENAME, plateGcodeFilename, toolpathObjFilename } from '../project/outputNames';
 import type { MagnetSpec } from '../features/MagnetOp';
 import { describeDiscovery, type DiscoveryOutcome } from '../printer/PrinterDirectory';
 import type { ProjectSummaryInput } from '../diagnostics/DiagnosticsBundle';
@@ -5196,7 +5198,7 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(t('workspace.orcaWorkspace.noActiveProfileToExport', 'No active profile to export.'));
       return;
     }
-    if (this.onDownloadFile) this.onDownloadFile('orcaxr_config.json', json, 'application/json');
+    if (this.onDownloadFile) this.onDownloadFile(CONFIG_EXPORT_FILENAME, json, 'application/json');
     this.setStatus(t('workspace.orcaWorkspace.exportedConfig', 'Exported config.'));
   }
 
@@ -9211,16 +9213,11 @@ export class OrcaWorkspace extends xb.Script {
 
   public exportPlateStl() {
     const summary = this.canonicalProject.getSummary();
-    const selected = summary.selectedInstanceIds.filter(
-      (instanceId) => this.canonicalProject.getInstance(instanceId)?.plateId === summary.activePlateId,
-    );
-    const instanceIds = selected.length > 0 ? selected : this.models.map((model) => model.instanceId);
+    const instanceIds = this.canonicalProject.stlExportInstanceIds(summary.selectedInstanceIds);
     try {
       const exported = this.canonicalProject.exportCanonicalStl(instanceIds);
       this.onDownloadFile?.(exported.suggestedFilename, ownedArrayBuffer(exported.bytes), exported.mediaType);
-      this.setStatus(
-        `Exported ${exported.instanceCount} model${exported.instanceCount === 1 ? '' : 's'} as ${exported.triangleCount.toLocaleString()} STL triangle${exported.triangleCount === 1 ? '' : 's'}.`,
-      );
+      this.setStatus(stlExportedStatus(exported.instanceCount, exported.triangleCount));
     } catch (error) {
       this.setStatus(`STL export failed: ${(error as Error).message}`);
       throw error;
@@ -9229,9 +9226,7 @@ export class OrcaWorkspace extends xb.Script {
 
   public exportAllObjectsAsStls() {
     const summary = this.canonicalProject.getSummary();
-    const selected = summary.selectedInstanceIds.filter(
-      (instanceId) => this.canonicalProject.getInstance(instanceId)?.plateId === summary.activePlateId,
-    );
+    const selected = this.canonicalProject.selectedActivePlateInstanceIds(summary.selectedInstanceIds);
     const instanceIds = selected.length > 0 ? selected : undefined;
     try {
       const exported = this.canonicalProject.exportCanonicalAllStls(instanceIds);
@@ -9254,8 +9249,7 @@ export class OrcaWorkspace extends xb.Script {
     try {
       const obj = exportToolpathsToObj(this.publishedGcode.gcode);
       const activePlate = this.canonicalProject.getSummary().plates.find((p) => p.id === this.activePlateId);
-      const name = (activePlate?.name ?? 'plate').replace(/[^A-Za-z0-9._-]+/g, '_');
-      this.onDownloadFile?.(`${name}_toolpaths.obj`, obj, 'model/obj');
+      this.onDownloadFile?.(toolpathObjFilename(activePlate?.name), obj, 'model/obj');
       this.setStatus(t('workspace.orcaWorkspace.toolpathsExportedAsObj', 'Sliced toolpaths exported as OBJ.'));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -9830,8 +9824,7 @@ export class OrcaWorkspace extends xb.Script {
     const names = new Map(this.canonicalProject.getSummary().plates.map((plate) => [plate.id, plate.name]));
     let downloaded = 0;
     for (const [plateId, entry] of published.plates) {
-      const label = (names.get(plateId) ?? 'plate').replace(/[^A-Za-z0-9._-]+/g, '_');
-      this.onDownloadFile?.(`${label}.gcode`, entry.gcode, 'text/plain');
+      this.onDownloadFile?.(plateGcodeFilename(names.get(plateId)), entry.gcode, 'text/plain');
       downloaded += 1;
     }
     this.setStatus(`Downloaded ${downloaded} plate G-code file(s).`);

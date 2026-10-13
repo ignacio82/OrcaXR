@@ -184,6 +184,12 @@ class ProjectWorkspace(
         /** The slicing actions ([sliceActions]): Slice and Cancel Slice on the browser's toolbar, Slice All Plates in its menu. */
         val SLICE_TOOLBAR_ACTIONS = listOf("slice_active_plate", "slice_cancel")
         val SLICE_MENU_ACTIONS = listOf("slice_all_plates")
+        /** The output actions ([sliceActions]): Download on the browser's toolbar, the File menu's exports and Download All Plates in its menu. */
+        val OUTPUT_TOOLBAR_ACTIONS = listOf("save_gcode_to_downloads")
+        val OUTPUT_MENU_ACTIONS = listOf(
+            "file_export_gcode", "file_export_all_plates", "file_export_stl", "file_export_all_stls", "file_export_3mf",
+            "file_export_config", "file_export_obj", "save_all_plate_gcode",
+        )
         /** The catalogue actions the Project area's Edit and Add menus offer for creation (`dom-menu`):
          * the clipboard, the bed fill, the primitives, the helper volumes and Set as Negative Part. */
         val CREATE_ACTIONS = listOf(
@@ -755,6 +761,24 @@ class ProjectWorkspace(
     }) { result -> if (result is ProjectOutcome.Exported) Unit else null }
 
     /**
+     * File → Export as one STL… ([archive] false: the selected instances on the
+     * active plate, else every one on it, merged) or Export all objects as
+     * STLs… ([archive] true: one STL per instance in a ZIP) of the project as
+     * it stands once every queued edit has settled, written to [output] — the
+     * browser's bytes ([ModelExports]) — or the browser's refusal, which never
+     * opens [output]. The project's saved state is untouched.
+     */
+    fun exportStl(archive: Boolean, output: ProjectDocumentOutput): CompletableFuture<StlExport> =
+        inspect { session -> whole(session).instances.toList() }.thenCompose { selected ->
+            var answer: StlExport? = null
+            run({ guard, record ->
+                actor.exportDocument(guard, EXPORT) { _, source ->
+                    capturing(record) { answer = ProjectDocuments.writeStl(source, ModelExports.stlRequest(archive, selected), output) }
+                }
+            }) { result -> if (result is ProjectOutcome.Exported) answer else null }
+        }
+
+    /**
      * The slice preflight of plate [plateId] as the project stands now (the
      * browser's `CanonicalSlicePreflightValidator`, in the shared core),
      * against the [target] made for the project's tool count: its own
@@ -792,19 +816,24 @@ class ProjectWorkspace(
     }
 
     /**
-     * The slice actions as the core enables them now (the browser's registry
-     * gate: `slice_active_plate`, `slice_all_plates`, `slice_cancel`), while a
-     * slice is or is not [slicing] and the active plate's preflight does or
-     * does not [block] it — the host facts only the slicing area knows.
+     * The slice and output actions as the core enables them now (the
+     * browser's registry gate: `slice_active_plate`, `slice_all_plates`,
+     * `slice_cancel`, and the File menu's exports and the Download actions),
+     * while a slice is or is not [slicing], the active plate's preflight does
+     * or does not [block] it and a published slice is or is not [gcodeReady]
+     * — the host facts only the slicing area knows.
      */
-    fun sliceActions(slicing: Boolean, block: Boolean): CompletableFuture<Map<String, ProjectActionState>> = inspect { session ->
+    fun sliceActions(slicing: Boolean, block: Boolean, gcodeReady: Boolean = false): CompletableFuture<Map<String, ProjectActionState>> = inspect { session ->
         val host = ProjectIntents.CapabilityHostState(
             ProjectIntents.OptionalStartupSnapshot.Absent(ProjectIntents.Empty), ProjectIntents.WorkspaceMode.Prepare,
             simplifyPreviewing = simplifyPreview != null, calibrationSessionOpen = false, projectionHealthy = true, hasClipboard = clipboard != null,
-            isSlicing = slicing, gcodeReady = false, preflightBlocked = block, printerJobState = ProjectIntents.PrinterJobUiState.Disconnected,
+            isSlicing = slicing, gcodeReady = gcodeReady, preflightBlocked = block, printerJobState = ProjectIntents.PrinterJobUiState.Disconnected,
         )
-        // Where the browser offers each: Slice and Cancel Slice on its toolbar, Slice All Plates in its menu.
-        listOf(ProjectIntents.ActionSurface.DomPrimary to SLICE_TOOLBAR_ACTIONS, ProjectIntents.ActionSurface.DomMenu to SLICE_MENU_ACTIONS)
+        // Where the browser offers each: Slice, Cancel Slice and Download on its toolbar, Slice All Plates and the exports in its menu.
+        listOf(
+            ProjectIntents.ActionSurface.DomPrimary to SLICE_TOOLBAR_ACTIONS + OUTPUT_TOOLBAR_ACTIONS,
+            ProjectIntents.ActionSurface.DomMenu to SLICE_MENU_ACTIONS + OUTPUT_MENU_ACTIONS,
+        )
             .flatMap { (surface, ids) ->
                 val query = ProjectIntents.CapabilityQuery.Actions(ProjectIntents.CapabilityActions(ids.map(::units)))
                 session.capabilities(ProjectIntents.CapabilityRequest(surface, host, query)).actions

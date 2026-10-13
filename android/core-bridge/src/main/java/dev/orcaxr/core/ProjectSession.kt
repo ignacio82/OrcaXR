@@ -601,6 +601,14 @@ class ProjectExportCapture internal constructor(handle: Long) : ProjectHandle(ha
      * from its active plate — a plate capture's only one — by the shared core
      * (`orcaxr_archive::thumbnail`). Synchronous; run it on the export worker. */
     fun thumbnails(): PlateThumbnails = read { GcodeThumbnails.read(NativeProject.exportThumbnails(it)) }
+    /** File → Export as one STL… or Export all objects as STLs… of this capture
+     * (`orcaxr_archive::exports`, the browser's bytes): [request] from
+     * [ModelExports.stlRequest]. The file streams to [destination] in chunks of
+     * at most 64 KiB; the reply says what was written, or is the browser's
+     * refusal, which writes nothing. Synchronous; run it on the export worker. */
+    fun writeStl(request: String, destination: java.io.OutputStream): StlExport = read {
+        ModelExports.stl(NativeProject.exportStl(it, request) { bytes -> destination.write(bytes) })
+    }
     /** Live slice preflight of exactly this frozen bundle. Synchronous; run it on
      * the export worker. Closing this capture cancels the native preflight. */
     fun preflight(request: ProjectIntents.PreflightRequest): ProjectPreflight = read {

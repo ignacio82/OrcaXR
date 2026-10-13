@@ -4,6 +4,8 @@
 pub mod archive_layout;
 pub mod bbs;
 pub mod canonical;
+pub mod exports;
+pub mod fflate;
 pub mod image;
 mod index;
 pub mod models;

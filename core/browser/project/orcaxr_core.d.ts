@@ -709,6 +709,13 @@ export class ProjectExport {
      */
     project(): CapturedProject;
     /**
+     * File → Export as one STL… or Export all objects as STLs… of this
+     * capture (`stlExportExchange`): `{"archive","selectedInstanceIds"}` →
+     * the reply and the file, byte for byte the browser's. Synchronous; run
+     * it on a worker.
+     */
+    stl_export(request: string): ProjectFileOutput;
+    /**
      * The pictures this capture's project asks for (its `thumbnails`),
      * drawn from its active plate — a plate capture's only one — by the
      * shared core (`orcaxr_archive::thumbnail`), each as the G-code block
@@ -722,6 +729,24 @@ export class ProjectExport {
      * never a save.
      */
     write_archive(version: number, policy: Float64Array): ProjectArchiveOutput;
+}
+
+/**
+ * A file the File menu exports, and what the menu says of it.
+ */
+export class ProjectFileOutput {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    length(): number;
+    /**
+     * Copies one bounded chunk into host-owned memory.
+     */
+    read(start: number, count: number): Uint8Array;
+    /**
+     * The exchange's reply: what was written, or the browser's refusal.
+     */
+    reply(): string;
 }
 
 export class ProjectGuard {
@@ -1455,6 +1480,11 @@ export function describe_transport_failure(request: string): string;
 export function evaluate(request: string): string;
 
 /**
+ * The name an output is offered under (`exportNameExchange`): `{"kind","name"}` → `{"filename"}`.
+ */
+export function export_name(request: string): string;
+
+/**
  * An `ExternalSlicerArtifactRead` (the facts its host streamed); the
  * `ExternalSlicerArtifact`: accepted, with the job to release, or refused.
  */
@@ -2044,6 +2074,7 @@ export interface InitOutput {
     readonly __wbg_projectemboss_free: (a: number, b: number) => void;
     readonly __wbg_projectembossfont_free: (a: number, b: number) => void;
     readonly __wbg_projectexport_free: (a: number, b: number) => void;
+    readonly __wbg_projectfileoutput_free: (a: number, b: number) => void;
     readonly __wbg_projectguard_free: (a: number, b: number) => void;
     readonly __wbg_projectimportbase_free: (a: number, b: number) => void;
     readonly __wbg_projectimportpreview_free: (a: number, b: number) => void;
@@ -2131,6 +2162,7 @@ export interface InitOutput {
     readonly credentials_save: (a: number, b: number) => [number, number, number, number];
     readonly describe_transport_failure: (a: number, b: number) => [number, number, number, number];
     readonly evaluate: (a: number, b: number) => [number, number];
+    readonly export_name: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_artifact: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_attestation: (a: number, b: number) => [number, number, number, number];
     readonly external_slicer_attestation_plan: (a: number, b: number) => [number, number, number, number];
@@ -2338,8 +2370,12 @@ export interface InitOutput {
     readonly projectexport_plate: (a: number, b: number, c: number) => [number, number, number];
     readonly projectexport_preflight: (a: number, b: number, c: number) => [number, number, number];
     readonly projectexport_project: (a: number) => number;
+    readonly projectexport_stl_export: (a: number, b: number, c: number) => [number, number, number];
     readonly projectexport_thumbnails: (a: number) => [number, number, number, number];
     readonly projectexport_write_archive: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly projectfileoutput_length: (a: number) => number;
+    readonly projectfileoutput_read: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectfileoutput_reply: (a: number) => [number, number];
     readonly projectimportbase_prepare_model: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number, number];
     readonly projectimportpreview_blocked: (a: number) => [number, number, number];
     readonly projectimportpreview_length: (a: number) => number;

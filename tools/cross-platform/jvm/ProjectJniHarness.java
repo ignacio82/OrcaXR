@@ -212,6 +212,15 @@ public final class ProjectJniHarness {
     public static long volumeRoleChecks(String corpus, byte[] cube) {
         return ProjectVolumeRoleChecks.run(corpus, cube);
     }
+    public static long modelExportChecks(String corpus, byte[] cube) {
+        return ProjectModelExportChecks.run(corpus, cube);
+    }
+    /** An export capture's STL export collected from its sink: the reply, a newline, the bytes in base64. */
+    public static String exportStlFile(long handle, String request) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        String reply = NativeProject.exportStl(handle, request, bytes::writeBytes);
+        return reply + "\n" + java.util.Base64.getEncoder().encodeToString(bytes.toByteArray());
+    }
 
     public static long documentOwnersChecks(byte[] cube) {
         return DocumentOwnersChecks.run(cube);
@@ -491,6 +500,8 @@ public final class ProjectJniHarness {
             if (name.equals("wipeTowerEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("settingsChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("volumeRoleChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
+            if (name.equals("modelExportChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
+            if (name.equals("exportStlFile")) method = ProjectJniHarness.class.getMethod(name, long.class, String.class);
             if (name.equals("primitiveChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("paintToolChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("paintChecks")) method = ProjectJniHarness.class.getMethod(name);

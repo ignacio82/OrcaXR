@@ -2,7 +2,7 @@
   "version": 1,
   "sources": {
     "tools/cross-platform/package-inputs.mjs": "642de6bc28a7e7cf32dfbd5150f44a9ed643a4aaa6827b7da06713dd8af700a9",
-    "web/src/project/serialization/Bbs3mfProjectSerializer.ts": "43d0d198e852d74ca82f30c56b667048620a77c1c0f27becb104c343268665c1",
+    "web/src/project/serialization/Bbs3mfProjectSerializer.ts": "b56884973e5900f00614e9b47a4f964d997a3b4d67834a2c7958d426e1ecd56c",
     "web/src/project/serialization/CanonicalEnvelope.ts": "8b0faf1d438e1b460dbdb56c783658ff737d2a1ab425e512113813048a217ee4",
     "web/src/project/serialization/bbsCore.ts": "c51122f801dcb71fa079c033d9400293774420ef6e24592f54c0931228a115dd",
     "web/src/project/serialization/bbsNumbers.ts": "21673b9e047996636e248c8b5907b42c641a3c1f668299ef2e06d59d0e0f5111",

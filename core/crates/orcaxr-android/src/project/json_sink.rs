@@ -3,7 +3,7 @@
 use super::*;
 use jni::objects::JValue;
 
-struct Sink<'env, 'local, 'target> {
+pub(super) struct Sink<'env, 'local, 'target> {
     env: &'env mut JNIEnv<'local>,
     target: JObject<'target>,
     handle: jlong,
@@ -66,25 +66,26 @@ impl Write for Sink<'_, '_, '_> {
         self.send()
     }
 }
-pub(super) fn write_json<'local, 'target>(
-    env: &mut JNIEnv<'local>,
-    handle: jlong,
-    max_bytes: jlong,
-    target: JObject<'target>,
-) -> Result<jlong> {
-    let limit = index(max_bytes)?;
-    if limit > layout::MAX_BUDGET {
-        return Err("invalid_options");
-    }
-    if target.is_null()
-        || !env
-            .is_instance_of(&target, "dev/orcaxr/core/ProjectJsonSink")
-            .map_err(|_| "export_service")?
-    {
-        return Err("export_service");
-    }
-    with_project(handle, |project| {
-        let mut sink = Sink {
+impl<'env, 'local, 'target> Sink<'env, 'local, 'target> {
+    /// A bounded writer of chunks to [target] (a `ProjectJsonSink`) while
+    /// [handle] stays open; [failure] names why a write stopped.
+    pub(super) fn open(
+        env: &'env mut JNIEnv<'local>,
+        handle: jlong,
+        limit: usize,
+        target: JObject<'target>,
+    ) -> Result<Self> {
+        if limit > layout::MAX_BUDGET {
+            return Err("invalid_options");
+        }
+        if target.is_null()
+            || !env
+                .is_instance_of(&target, "dev/orcaxr/core/ProjectJsonSink")
+                .map_err(|_| "export_service")?
+        {
+            return Err("export_service");
+        }
+        Ok(Self {
             env,
             target,
             handle,
@@ -92,7 +93,21 @@ pub(super) fn write_json<'local, 'target>(
             total: 0,
             bytes: Vec::with_capacity(layout::MAX_CHUNK_BYTES),
             failure: "export_failed",
-        };
+        })
+    }
+    pub(super) fn failure(&self) -> &'static str {
+        self.failure
+    }
+}
+pub(super) fn write_json<'local, 'target>(
+    env: &mut JNIEnv<'local>,
+    handle: jlong,
+    max_bytes: jlong,
+    target: JObject<'target>,
+) -> Result<jlong> {
+    let limit = index(max_bytes)?;
+    let mut sink = Sink::open(env, handle, limit, target)?;
+    with_project(handle, |project| {
         if project
             .state()
             .write_json(&mut sink)

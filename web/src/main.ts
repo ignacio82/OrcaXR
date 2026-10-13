@@ -12,6 +12,7 @@ import * as xb from 'xrblocks';
 import * as uikit from '@pmndrs/uikit';
 
 import { OrcaWorkspace, type WorkspacePresetOption } from './workspace/OrcaWorkspace';
+import { GCODE_DOWNLOAD_FILENAME } from './project/outputNames';
 import {
   TRANSFORM_FIELD_TITLES,
   transformFieldInput,
@@ -2006,7 +2007,7 @@ function setupDomUI(
     const blob = new Blob([gcode], { type: 'text/plain' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'orcaxr.gcode';
+    a.download = GCODE_DOWNLOAD_FILENAME;
     a.click();
     URL.revokeObjectURL(a.href);
   };

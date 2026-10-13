@@ -171,7 +171,10 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    and SVG), a sub-agent's.
 3. Phase 7, other surfaces: a Save/export action for slice output
    (`save_gcode_to_downloads`, `file_export_gcode`), model and project exports
-   (STL, OBJ, 3MF, configuration), geometry-only 3MF import, the View menu's
+   (STL, OBJ, 3MF, configuration; the shared core writes both STL exports
+   and the browser's own ZIP byte for byte, and names every output —
+   [§](engineering/native-core.md#android-exports) — with no Android UI yet;
+   in flight on local branch `exports`), geometry-only 3MF import, the View menu's
    display toggles, lighting and preview controls, handy and calibration
    models, preset management, the Help menu, the Android-only words still
    literal in Kotlin, and the in-app reduce-motion override. For the full gap,

@@ -93,6 +93,8 @@ export function startProjectJni(profile = "debug") {
   signatures.wipeTowerEditChecks = ["String", "byte[]"];
   signatures.settingsChecks = ["String", "byte[]"];
   signatures.volumeRoleChecks = ["String", "byte[]"];
+  signatures.exportStlFile = ["long", "String"];
+  signatures.modelExportChecks = ["String", "byte[]"];
   signatures.primitiveChecks = ["String"];
   signatures.paintToolChecks = ["String"];
   signatures.paintChecks = [];
@@ -594,6 +596,20 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     thumbnails() {
       return call("exportThumbnails", this.handle);
+    }
+    // The STL export streams through a ProjectJsonSink; the harness collects
+    // it and answers the reply and the bytes (base64) on two lines.
+    stl_export(request) {
+      const answer = call("exportStlFile", this.handle, request);
+      const split = answer.indexOf("\n");
+      const reply = answer.slice(0, split);
+      const bytes = Uint8Array.from(Buffer.from(answer.slice(split + 1), "base64"));
+      return {
+        reply: () => reply,
+        length: () => bytes.length,
+        read: (start, count) => bytes.subarray(start, start + count),
+        free() {},
+      };
     }
     // An export is never a save: its archive carries no checkpoint guard.
     write_archive(version, policy) {
@@ -1523,6 +1539,7 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     layer_range_split: (request) => call("layerRangeSplit", request),
     layer_range_messages: (request) => call("layerRangeMessages", request),
     volume_role_messages: (request) => call("volumeRoleMessages", request),
+    export_name: (request) => call("exportName", request),
     transform_field_edit: (request) => call("transformFieldEdit", request),
     transform_rotation: (request) => call("transformRotation", request),
     transform_gizmo_attach: (request) => call("transformGizmoAttach", request),

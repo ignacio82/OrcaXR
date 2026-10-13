@@ -124,6 +124,12 @@ final class NativeProject {
     static native String slicePlan(String request);
     static native String projectSlicePlan(long handle, String scope);
     static native String exportThumbnails(long handle);
+    // The File menu's model exports (orcaxr_archive::exports, the browser's
+    // modelExportExchange): an export capture's STL — one merged file, or one
+    // per instance in the browser's own ZIP — streamed to the sink in bounded
+    // chunks with the exchange's reply, and the names outputs are offered under.
+    static native String exportStl(long handle, String request, ProjectJsonSink sink);
+    static native String exportName(String request);
     // What binds a slice's output (orcaxr_project::slicing::sidecar, the
     // browser's SliceSidecarExchange): a plate's profile snapshot (of a state
     // document, or of a captured project with plateId as JSON text), an output

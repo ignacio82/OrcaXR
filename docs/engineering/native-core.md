@@ -7289,6 +7289,88 @@ stand-in build on the external slicer; it passes on both emulators. The
 send smoke now reads the published file's size from the device, since the
 file carries the plate's pictures.
 
+### Android exports
+
+The browser's File menu writes files the operator keeps: the sliced G-code
+(Download, Export G-code…, Download All Plates, Export All Plates…), the
+models (Export as one STL…, Export all objects as STLs…), the plated 3MF,
+the configuration and the toolpaths as OBJ. Android writes each one as the
+same bytes the browser downloads for the same project.
+
+The browser's compressor. Every ZIP the browser writes comes from
+`writeDeterministicZip`, which hands its members to fflate 0.8.3's
+`zipSync`. The native writer (`orcaxr_archive::write`, [§](#shared-archive-container-and-canonical-staging))
+writes equivalent archives whose compressed bytes differ (its DEFLATE is
+flate2's), which is enough for a project the browser reopens but not for a
+file that must be the browser's. `orcaxr_archive::fflate` ports fflate's
+`deflateSync` and `zipSync` exactly as the writer calls them: the LZ77 hash
+chains and the "rarest pair" match search, the hash width
+`ceil(1.5 · clamp(ln n, 8, 13))` bits, blocks ending at 7,000 matches or
+24,576 symbols unless fewer than 424 bytes remain, UZIP.js's two-queue
+Huffman merge and length-limiting debt walk, a stored block whenever it is no
+longer than either coding, and fflate's headers (the UTF-8 flag only for a
+non-ASCII name, Unix 0644, 1980-01-01, no extra fields), members in the
+browser's order (UTF-16, with array-index names first, as a JavaScript object
+enumerates its keys). The port first read `Math.ceil(clamp) * 1.5` for the
+width; the corpus caught it at 442,413 bytes, where the two differ.
+`browser-zip-vectors.mjs` records 238 deflate streams (random, low-entropy,
+run, periodic and G-code-like inputs at every hash-width step e^(2p/3),
+around the stored-block, window and block-size boundaries, every level) and 8
+archives (array-index names, stored suffixes in any case, non-ASCII names,
+`__proto__`, empty members) by SHA-256 and length; Rust writes them all byte
+for byte (`tests/fflate.rs`).
+
+Model exports. The browser kept the STL actions' choices in its workspace;
+they are production functions of `stlExport.ts` now, which the workspace and
+the controller call: Export as one STL… takes the selected instances on the
+active plate, else every instance on it (`stlExportInstanceIds`), merged into
+one binary STL (`exportCanonicalStlFile`, offered under
+`suggestedStlFilename` of the lone instance's, its object's or the project's
+name); Export all objects as STLs… writes one STL per instance into the
+browser's ZIP, its members named after the instances (each run outside
+`a–z A–Z 0–9 _ -` one `_`, none at either end, a repeat numbered from 2
+without regard to case) and a lone instance as its own STL
+(`exportCanonicalStlArchive`). `outputNames.ts` holds the names the other
+outputs are offered under (`orcaxr.gcode`, `<plate>.gcode`,
+`<plate>_toolpaths.obj`, `orcaxr_config.json`), and the serializer's
+`suggestedProjectFilename` the 3MF's. `orcaxr_archive::exports` ports them:
+each vertex through its part's and its instance's transforms in binary64
+(V8's `Math.hypot`, the quaternion normalized as `rotateVector` does) and
+stored as binary32, the winding reversed under an odd number of mirrors,
+modifiers and support volumes left out, a negative volume refused, every
+refusal in the browser's words and before the first byte, the merged file
+streamed and the archive written through the fflate port. Names are UTF-16:
+a lone surrogate passes through NFKC (ICU4X's, Unicode 17; the browser's is
+its runtime's ICU, and they agree on every character both encode), and the
+120-unit limit may split a pair, as `slice` does. Hosts reach them through
+`modelExportExchange.ts` — on an export capture `stl_export` (WASM
+`ProjectExport.stl_export`, the reply and the file; JNI `exportStl`, the file
+streamed through a `ProjectJsonSink` in chunks of at most 64 KiB) and
+`export_name` — read by Kotlin `ModelExports`
+(`ProjectExportCapture.writeStl`, `ProjectExportSource.writeStl`,
+`ProjectDocuments.writeStl`, which opens the destination on the first byte,
+so a refusal never touches it).
+
+`model-export-vectors.mjs` records 120 STL exports (85 files, 35 refused:
+a negative volume, an empty plate, a repeated selection) over six states
+built from the production controller's cube, cylinder and sphere and posed
+(unnormalized rotations, mirrors, non-uniform scale, parts with their own
+transforms, modifiers, support volumes; names empty, repeated in other
+cases, with controls, reserved characters, compatibility forms, emoji, lone
+surrogates and more than 120 units; selections empty, partial, reordered, on
+another plate, unknown and repeated), 78 names and 12 malformed requests.
+Rust (`tests/model_exports.rs`), WASM in Node and in a Chrome 150 worker, and
+JNI (`model-export-replay.mjs`: each state opened as a session, every export
+through an export capture) answer all of them byte for byte.
+`ProjectModelExportChecks` (466 host JNI checks) reads every reply and name
+through the Kotlin owners, writes every export through `writeStl`, and on a
+`ProjectWorkspace` opens the posed state (saved by the core as a 3MF) and
+exports it as one STL and as an archive with nothing, one and another
+instance selected — each the browser's file — without touching the history,
+then finds a negative volume refused in the browser's words without the
+destination opening, a destination that cannot open failing the export,
+an empty plate refused, and an imported cube exported as `cube.stl`.
+
 ### Android Device area
 
 The app's Device area is the first product area on Android, built only from

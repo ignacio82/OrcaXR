@@ -168,10 +168,11 @@ object ProjectOutputChecks {
                     check(done(workspace.applySlicingChoice(catalog, live)), "profile applied")
                     done(workspace.newProject())
                     // Enablement is the browser's registry gate: models on the active plate, no slice running, no blocking preflight.
+                    val slices = setOf("slice_active_plate", "slice_all_plates", "slice_cancel")
                     fun enabled(slicing: Boolean = false, block: Boolean = false) =
-                        done(workspace.sliceActions(slicing, block)).mapValues { it.value.enabled }
+                        done(workspace.sliceActions(slicing, block)).filterKeys { it in slices }.mapValues { it.value.enabled }
                     val empty = done(workspace.sliceActions(false, false))
-                    check(empty.keys == setOf("slice_active_plate", "slice_all_plates", "slice_cancel"), "slice actions ${empty.keys}")
+                    check(empty.keys == slices + ProjectWorkspace.OUTPUT_TOOLBAR_ACTIONS + ProjectWorkspace.OUTPUT_MENU_ACTIONS, "slice actions ${empty.keys}")
                     check(empty.getValue("slice_all_plates").label == "Slice All Plates" && !empty.getValue("slice_all_plates").enabled, "nothing to slice")
                     check(done(workspace.slicePlan(SliceScope.AllPlates)).second == SlicePlan.Refused("No printable plate has models to slice."), "no plate with models")
 

@@ -3658,6 +3658,23 @@ export class ProjectExport {
         return CapturedProject.__wrap(ret);
     }
     /**
+     * File → Export as one STL… or Export all objects as STLs… of this
+     * capture (`stlExportExchange`): `{"archive","selectedInstanceIds"}` →
+     * the reply and the file, byte for byte the browser's. Synchronous; run
+     * it on a worker.
+     * @param {string} request
+     * @returns {ProjectFileOutput}
+     */
+    stl_export(request) {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectexport_stl_export(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectFileOutput.__wrap(ret[0]);
+    }
+    /**
      * The pictures this capture's project asks for (its `thumbnails`),
      * drawn from its active plate — a plate capture's only one — by the
      * shared core (`orcaxr_archive::thumbnail`), each as the G-code block
@@ -3702,6 +3719,67 @@ export class ProjectExport {
     }
 }
 if (Symbol.dispose) ProjectExport.prototype[Symbol.dispose] = ProjectExport.prototype.free;
+
+/**
+ * A file the File menu exports, and what the menu says of it.
+ */
+export class ProjectFileOutput {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectFileOutput.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectFileOutputFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectFileOutputFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectfileoutput_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    length() {
+        const ret = wasm.projectfileoutput_length(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Copies one bounded chunk into host-owned memory.
+     * @param {number} start
+     * @param {number} count
+     * @returns {Uint8Array}
+     */
+    read(start, count) {
+        const ret = wasm.projectfileoutput_read(this.__wbg_ptr, start, count);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * The exchange's reply: what was written, or the browser's refusal.
+     * @returns {string}
+     */
+    reply() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.projectfileoutput_reply(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ProjectFileOutput.prototype[Symbol.dispose] = ProjectFileOutput.prototype.free;
 
 export class ProjectGuard {
     static __wrap(ptr) {
@@ -7118,6 +7196,32 @@ export function evaluate(request) {
 }
 
 /**
+ * The name an output is offered under (`exportNameExchange`): `{"kind","name"}` → `{"filename"}`.
+ * @param {string} request
+ * @returns {string}
+ */
+export function export_name(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.export_name(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * An `ExternalSlicerArtifactRead` (the facts its host streamed); the
  * `ExternalSlicerArtifact`: accepted, with the job to release, or refused.
  * @param {string} read
@@ -9842,6 +9946,9 @@ const ProjectEmbossFontFinalization = (typeof FinalizationRegistry === 'undefine
 const ProjectExportFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectexport_free(ptr, 1));
+const ProjectFileOutputFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectfileoutput_free(ptr, 1));
 const ProjectGuardFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectguard_free(ptr, 1));

@@ -41,6 +41,7 @@ class ProjectExportSource internal constructor(
     private var jsonWritten = false
     private var archiveWritten = false
     private var plateWritten = false
+    private var stlAnswered = false
     init {
         check(assetCount <= limits.assets) { "resource_limit" }
         var total = 0L
@@ -124,6 +125,19 @@ class ProjectExportSource internal constructor(
             ProjectPlateArchive(sourceHash, overrides, warnings, thumbnails = thumbnails, profiles = profiles)
         }
     }
+    /** Alternative for a File menu export: this capture's STL — one merged file,
+     * or one per instance in the browser's ZIP ([ModelExports.stlRequest]) — to
+     * [destination], or the browser's refusal, which writes nothing. Either
+     * completes an export, never a save. */
+    fun writeStl(request: String, destination: OutputStream): StlExport {
+        checkActive(); check(!jsonWritten && nextAsset == 0L && !archiveWritten && !plateWritten && !stlAnswered) { "already_written" }
+        val answer = capture.writeStl(request, object : OutputStream() {
+            override fun write(value: Int) { checkActive(); destination.write(value) }
+            override fun write(bytes: ByteArray, offset: Int, count: Int) { checkActive(); destination.write(bytes, offset, count) }
+        })
+        checkActive(); stlAnswered = true
+        return answer
+    }
     private fun copy(output: ProjectArchiveOutput, destination: OutputStream): List<CharArray> {
         val length = output.length()
         var offset = 0L
@@ -135,10 +149,10 @@ class ProjectExportSource internal constructor(
         return output.warnings()
     }
     /** Whether the callback consumed the capture: the complete bundle, or for
-     * an export (never a [save]) one plate's archive. */
+     * an export (never a [save]) one plate's archive or its STL's answer. */
     internal fun requireComplete(save: Boolean) {
         checkActive()
-        check(archiveWritten || (jsonWritten && nextAsset == assetCount) || (!save && plateWritten)) { "incomplete_export" }
+        check(archiveWritten || (jsonWritten && nextAsset == assetCount) || (!save && (plateWritten || stlAnswered))) { "incomplete_export" }
     }
     internal fun invalidate() { active.set(false) }
 }

@@ -10,6 +10,7 @@ orcaxr-contracts.workspace = true
 orcaxr-project.workspace = true
 flate2.workspace = true
 crc32fast.workspace = true
+icu_normalizer.workspace = true
 libm.workspace = true
 
 [dev-dependencies]

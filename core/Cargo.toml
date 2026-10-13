@@ -24,6 +24,7 @@ crc32fast = "=1.5.2"
 wasm-bindgen = "=0.2.129"
 jni = "=0.21.1"
 url = "=2.5.8"
+icu_normalizer = { version = "=2.3.0", default-features = false, features = ["compiled_data"] }
 
 [profile.release]
 lto = "thin"

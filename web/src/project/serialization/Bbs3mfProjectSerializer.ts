@@ -106,7 +106,7 @@ export class Bbs3mfProjectSerializer implements ProjectSerializerPort {
     return {
       bytes,
       mediaType: 'model/3mf',
-      suggestedFilename: suggestedFilename(snapshot.state.name),
+      suggestedFilename: suggestedProjectFilename(snapshot.state.name),
       sourceRevision: snapshot.sourceRevision,
       sourceHash: snapshot.sourceHash,
       warnings: uniqueSorted(warnings),
@@ -575,7 +575,8 @@ function uniqueImportedId<Kind extends string>(base: string, occupied: Set<strin
   return entityId<Kind>(value);
 }
 
-function suggestedFilename(name: string): string {
+/** The file name a saved project is offered under. */
+export function suggestedProjectFilename(name: string): string {
   const withoutControls = [...name].map((character) => (character.codePointAt(0)! <= 0x1f ? '-' : character)).join('');
   const stem = withoutControls
     .normalize('NFKC')

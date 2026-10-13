@@ -64,6 +64,7 @@ import { replayPrimitives } from "./primitive-replay.mjs";
 import { replaySplitSources } from "./split-source-replay.mjs";
 import { replayFilamentAssignment } from "./filament-assignment-replay.mjs";
 import { replayVolumeRoles } from "./volume-role-replay.mjs";
+import { replayModelExports } from "./model-export-replay.mjs";
 import { replayPaintTool } from "./paint-tool-replay.mjs";
 import { replayVirtualFilaments } from "./virtual-filament-replay.mjs";
 import { readFileSync } from "node:fs";
@@ -953,6 +954,27 @@ try {
     decodeBytes("stl-binary/cube"),
   );
   assert.equal(volumeRoleChecks, 846);
+  // The File menu's model exports through the JNI exports: every STL export of
+  // every recorded state (reply, length and SHA-256), names and refusals.
+  const modelExportFixture = await json("testdata/cross-platform/model-export-vectors.json");
+  const modelExports = await replayModelExports(
+    projectJniCore(jvm.call),
+    modelExportFixture,
+    layout,
+    fixture.generation,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    (text) => Buffer.from(text, "base64"),
+  );
+  assert.deepEqual(modelExports.modelExportAnswers, [85, 35, 78, 12]);
+  // Then the Kotlin readers and owners: every reply and name, every export
+  // through an export capture, and the workspace journey (selections, a
+  // refusal that never opens the destination, a failing destination).
+  const modelExportChecks = jvm.call(
+    "modelExportChecks",
+    await readFile(new URL("testdata/cross-platform/model-export-vectors.json", root), "utf8"),
+    decodeBytes("stl-binary/cube"),
+  );
+  assert.equal(modelExportChecks, 466);
   // Capability pages over live sessions, then the Kotlin wrapper.
   const capabilityFixture = JSON.parse(
     await readFile(
@@ -1982,6 +2004,8 @@ try {
     settingsChecks,
     volumeRoles,
     volumeRoleChecks,
+    modelExports,
+    modelExportChecks,
     ...primitives,
     primitiveChecks,
     ...paintTool,

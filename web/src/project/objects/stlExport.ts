@@ -2,8 +2,9 @@ import type { AssetRepository } from '../assets';
 import { canonicalStringify } from '../domain/canonical';
 import type { InstanceId, VolumeId } from '../domain/ids';
 import type { ProjectState, Transform, Vec3 } from '../domain/model';
-import { findInstance, findVolume } from '../domain/selectors';
+import { findInstance, findPlate, findVolume } from '../domain/selectors';
 import { decodeIndexedMeshAsset, type DecodedIndexedMesh } from '../meshCodec';
+import { writeDeterministicZip } from '../serialization/deterministicZip';
 
 export interface CanonicalBinaryStlExport {
   readonly bytes: Uint8Array;
@@ -18,6 +19,119 @@ interface PreparedVolume {
   readonly volumeTransform: Transform;
   readonly instanceTransform: Transform;
   readonly reverseWinding: boolean;
+}
+
+/** An exported model file: its bytes and what the File menu reports of it. */
+export interface CanonicalStlFile {
+  readonly bytes: Uint8Array;
+  readonly mediaType: 'model/stl' | 'application/zip';
+  readonly suggestedFilename: string;
+  readonly triangleCount: number;
+  readonly instanceCount: number;
+}
+
+/**
+ * The selected instances on the active plate, in selection order: what both
+ * File → Export as one STL… and Export all objects as STLs… take before
+ * falling back to the whole plate.
+ */
+export function selectedActivePlateInstanceIds(
+  state: ProjectState,
+  selectedInstanceIds: readonly InstanceId[],
+): InstanceId[] {
+  return selectedInstanceIds.filter((id) => findInstance(state, id)?.plate.id === state.activePlateId);
+}
+
+/** Every instance on the active plate, in plate order (the workspace's model order). */
+export function activePlateInstanceIds(state: ProjectState): InstanceId[] {
+  return findPlate(state, state.activePlateId)?.objects.flatMap((object) => object.instances.map((i) => i.id)) ?? [];
+}
+
+/** File → Export as one STL…: the selected instances on the active plate, else every one on it. */
+export function stlExportInstanceIds(state: ProjectState, selectedInstanceIds: readonly InstanceId[]): InstanceId[] {
+  const selected = selectedActivePlateInstanceIds(state, selectedInstanceIds);
+  return selected.length > 0 ? selected : activePlateInstanceIds(state);
+}
+
+/** The file name a merged STL is offered under: the instance's (or object's) name for one, else the project's. */
+export function suggestedStlFilename(name: string): string {
+  const withoutControls = [...name].map((character) => (character.codePointAt(0)! <= 0x1f ? '-' : character)).join('');
+  const stem = withoutControls
+    .normalize('NFKC')
+    .replace(/\.stl$/i, '')
+    .replace(/[<>:"/\\|?*]/g, '-')
+    .replace(/[. ]+$/g, '')
+    .trim()
+    .slice(0, 120);
+  return `${stem || 'OrcaXR-model'}.stl`;
+}
+
+/** File → Export as one STL…: [instanceIds] merged into one binary STL. */
+export function exportCanonicalStlFile(
+  state: ProjectState,
+  assets: AssetRepository,
+  instanceIds: readonly InstanceId[],
+): CanonicalStlFile {
+  const exported = exportCanonicalInstancesAsBinaryStl(state, assets, instanceIds);
+  const single = instanceIds.length === 1 ? findInstance(state, instanceIds[0]) : undefined;
+  return Object.freeze({
+    bytes: exported.bytes,
+    mediaType: 'model/stl',
+    suggestedFilename: suggestedStlFilename(single?.instance.name ?? single?.object.name ?? state.name),
+    triangleCount: exported.triangleCount,
+    instanceCount: exported.instanceCount,
+  });
+}
+
+/** A ZIP member's stem for an instance or project name: runs of other characters become `_`, none at either end. */
+function archiveStem(name: string, fallback: string): string {
+  return name.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || fallback;
+}
+
+/**
+ * File → Export all objects as STLs…: one binary STL per instance — [instanceIds],
+ * or every instance on the active plate — in a deterministic ZIP whose member
+ * names are the instances' (or objects') names, a repeated one numbered from 2;
+ * a single instance is its own STL instead.
+ */
+export function exportCanonicalStlArchive(
+  state: ProjectState,
+  assets: AssetRepository,
+  instanceIds?: readonly InstanceId[],
+): CanonicalStlFile {
+  const ids = instanceIds && instanceIds.length > 0 ? instanceIds : activePlateInstanceIds(state);
+  if (ids.length === 0) throw new Error('No models to export');
+  if (ids.length === 1) return exportCanonicalStlFile(state, assets, ids);
+  const files = new Map<string, Uint8Array>();
+  const usedNames = new Set<string>();
+  let totalTriangles = 0;
+  for (const id of ids) {
+    const found = findInstance(state, id);
+    if (!found) continue;
+    const baseName = archiveStem(found.instance.name || found.object.name || 'model', 'model');
+    let filename = `${baseName}.stl`;
+    let counter = 2;
+    while (usedNames.has(filename.toLowerCase())) {
+      filename = `${baseName}_${counter}.stl`;
+      counter += 1;
+    }
+    usedNames.add(filename.toLowerCase());
+    const exported = exportCanonicalInstancesAsBinaryStl(state, assets, [id]);
+    totalTriangles += exported.triangleCount;
+    files.set(filename, exported.bytes);
+  }
+  return Object.freeze({
+    bytes: writeDeterministicZip(files),
+    mediaType: 'application/zip',
+    suggestedFilename: `${archiveStem(state.name || 'models', 'models')}_stls.zip`,
+    triangleCount: totalTriangles,
+    instanceCount: ids.length,
+  });
+}
+
+/** What the status line says after Export as one STL… (`toLocaleString` grouping, the runtime's locale). */
+export function stlExportedStatus(instanceCount: number, triangleCount: number): string {
+  return `Exported ${instanceCount} model${instanceCount === 1 ? '' : 's'} as ${triangleCount.toLocaleString()} STL triangle${triangleCount === 1 ? '' : 's'}.`;
 }
 
 /**

@@ -484,6 +484,18 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_exportStl, export_stl, jstring,
+    handle: jlong,
+    request: JString<'local>,
+    sink: JObject<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_exportName, export_name, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sliceProfiles, slice_profiles, jstring,
     request: JString<'local>,
 }

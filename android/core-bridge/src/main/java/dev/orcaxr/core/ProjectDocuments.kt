@@ -122,6 +122,49 @@ object ProjectDocuments {
         return archive
     }
 
+    /** Callback body for [ProjectActor.exportDocument]: the capture's STL
+     * ([ProjectExportSource.writeStl]) into [document], opened on its first
+     * byte — a refused export never opens it — with [save]'s failure rules. */
+    fun writeStl(source: ProjectExportSource, request: String, document: ProjectDocumentOutput): StlExport {
+        val output = DeferredOutput(document)
+        val answer = try {
+            source.writeStl(request, output)
+        } catch (failure: Throwable) {
+            output.abandon(failure)
+            if (output.opened) throw written(failure) else throw failure
+        }
+        try { output.close() } catch (failure: Throwable) { throw written(failure) }
+        return answer
+    }
+
+    /** A file the app already holds (a sliced plate's G-code) copied into
+     * [document] — opened only once [source] is open — with [save]'s failure
+     * rules; answers the bytes copied. */
+    fun copy(source: java.io.File, document: ProjectDocumentOutput, cancelled: () -> Boolean = { false }): Long {
+        val input = provider("document_read_failed") { source.inputStream() }
+        return input.use { stream ->
+            val output = DeferredOutput(document)
+            var total = 0L
+            try {
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    if (cancelled()) throw java.util.concurrent.CancellationException("cancelled")
+                    val count = stream.read(buffer)
+                    if (count < 0) break
+                    output.write(buffer, 0, count)
+                    total += count
+                }
+                // An empty file still opens (and empties) its document.
+                if (total == 0L) output.write(ByteArray(0), 0, 0)
+            } catch (failure: Throwable) {
+                output.abandon(failure)
+                if (output.opened) throw written(failure) else throw failure
+            }
+            try { output.close() } catch (failure: Throwable) { throw written(failure) }
+            total
+        }
+    }
+
     private fun <T> provider(code: String, operation: () -> T): T = try { operation() } catch (failure: Throwable) {
         throw mapped(failure, code)
     }

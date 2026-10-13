@@ -192,6 +192,33 @@ impl ProjectSession {
     }
 }
 
+/// A file the File menu exports, and what the menu says of it.
+#[wasm_bindgen]
+pub struct ProjectFileOutput {
+    reply: String,
+    bytes: Vec<u8>,
+}
+#[wasm_bindgen]
+impl ProjectFileOutput {
+    /// The exchange's reply: what was written, or the browser's refusal.
+    pub fn reply(&self) -> String {
+        self.reply.clone()
+    }
+    pub fn length(&self) -> f64 {
+        self.bytes.len() as f64
+    }
+    /// Copies one bounded chunk into host-owned memory.
+    pub fn read(&self, start: f64, count: f64) -> Result<Vec<u8>, JsValue> {
+        Ok(self.bytes[range(start, count, self.bytes.len(), layout::MAX_CHUNK_BYTES)?].to_vec())
+    }
+}
+
+/// The name an output is offered under (`exportNameExchange`): `{"kind","name"}` → `{"filename"}`.
+#[wasm_bindgen]
+pub fn export_name(request: &str) -> Result<String, JsValue> {
+    orcaxr_archive::exports::export_name_json(request).map_err(error)
+}
+
 #[wasm_bindgen]
 impl ProjectExport {
     /// The pictures this capture's project asks for (its `thumbnails`),
@@ -201,6 +228,16 @@ impl ProjectExport {
     /// "format","height","width"}]}`. Synchronous; run it on a worker.
     pub fn thumbnails(&self) -> Result<String, JsValue> {
         orcaxr_archive::thumbnail::capture_json(&self.inner).map_err(|e| error(e.code()))
+    }
+    /// File → Export as one STL… or Export all objects as STLs… of this
+    /// capture (`stlExportExchange`): `{"archive","selectedInstanceIds"}` →
+    /// the reply and the file, byte for byte the browser's. Synchronous; run
+    /// it on a worker.
+    pub fn stl_export(&self, request: &str) -> Result<ProjectFileOutput, JsValue> {
+        let mut bytes = Vec::new();
+        let reply = orcaxr_archive::exports::stl_export_json(&self.inner, request, &mut bytes)
+            .map_err(error)?;
+        Ok(ProjectFileOutput { reply, bytes })
     }
     /// Write this frozen capture — a plate's, for an external slicer — as a
     /// complete 3MF package. It carries no checkpoint guard: an export is
