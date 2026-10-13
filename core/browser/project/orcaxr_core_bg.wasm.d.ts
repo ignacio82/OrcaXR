@@ -430,6 +430,7 @@ export const projectsession_stranded_brim_ears: (a: number, b: number, c: number
 export const projectsession_submit: (a: number, b: number, c: number) => number;
 export const projectsession_volume_simplify: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const projectsession_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const projectsession_wipe_tower_ghost: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_write_archive: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const projectsvgpart_mesh: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsvgpart_reply: (a: number) => [number, number, number, number];

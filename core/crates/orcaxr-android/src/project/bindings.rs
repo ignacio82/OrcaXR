@@ -1862,6 +1862,12 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sessionWipeTowerGhost, session_wipe_tower_ghost, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_volumeSplit, volume_split, jlong,
     handle: jlong,
     guard: jlong,

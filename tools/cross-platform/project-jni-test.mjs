@@ -1204,14 +1204,20 @@ try {
   const towerFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/wipe-tower-vectors.json", root)),
   );
-  assert.equal(replayWipeTowers(projectJniCore(jvm.call), towerFixture, layout).wipeTowers, 27);
+  assert.deepEqual(
+    Object.values(replayWipeTowers(projectJniCore(jvm.call), towerFixture, layout)),
+    [27, 13],
+  );
   const wipeTowerChecks = jvm.call(
     "wipeTowerChecks",
     towerFixture.stateJson,
     ...towerFixture.assets.map((a) => Uint8Array.from(a.bytes)),
-    towerFixture.cases.map((c) => `${c.request}\t${c.reply}`).join("\n"),
+    [
+      ...towerFixture.cases.map((c) => `${c.request}\t${c.reply}`),
+      ...towerFixture.ghosts.map((c) => `G\t${c.request}\t${c.reply}`),
+    ].join("\n"),
   );
-  assert.equal(wipeTowerChecks, 55);
+  assert.equal(wipeTowerChecks, 82);
   // Auto-place Wipe Tower as the Android app runs it, step by step against the
   // browser's journey through its production controller.
   const wipeTowerEditChecks = jvm.call(
@@ -1223,7 +1229,7 @@ try {
     }),
     Buffer.from(towerFixture.journey.archive, "base64"),
   );
-  assert.equal(wipeTowerEditChecks, 65);
+  assert.equal(wipeTowerEditChecks, 95);
   // Volume splits over a live session, staged and executed, then the Kotlin
   // wrapper.
   const splitFixture = JSON.parse(

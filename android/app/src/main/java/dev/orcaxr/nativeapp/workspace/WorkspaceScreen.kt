@@ -67,6 +67,7 @@ import dev.orcaxr.core.GizmoMode
 import dev.orcaxr.core.GizmoState
 import dev.orcaxr.core.PaintChannel
 import dev.orcaxr.core.PaintToolKind
+import dev.orcaxr.core.ProjectIntents
 import dev.orcaxr.core.ProjectSceneSummary
 import dev.orcaxr.core.TransformGizmo
 import dev.orcaxr.core.TransformProxy
@@ -168,6 +169,10 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     val earsShown = model.brimEaring
     val ears = model.brimEarState
     SideEffect { renderer.brimEars(earsShown, ears) }
+    // The wipe tower's ghost, read again whenever the project changes (the browser rebuilds it with the preflight).
+    LaunchedEffect(view.revision) { model.refreshWipeTowerGhost() }
+    val ghost = model.wipeTowerGhost
+    SideEffect { renderer.wipeTowerGhost(ghost) }
     // The Emboss and SVG part tools read what applying acts on again whenever the project or the selection changes.
     val drawn = model.drawn
     LaunchedEffect(view.revision, view.selection, drawn.embossing, drawn.svgCutting) {
@@ -530,10 +535,13 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         if (!gizmoPressed) stepGizmo(GizmoEventKind.HOVER, x, y)
     }
 
-    // ---- The Brim Ears tool's discs ----
+    // ---- Markers: the wipe tower's ghost and the Brim Ears tool's discs ----
 
     private var earsShown = false
     private var ears = BrimEarState()
+    /** The wipe tower's ghost as last read, and its markers. */
+    private var ghost: ProjectIntents.WipeTowerGhost? = null
+    private var ghostMarkers: List<SceneMarker> = emptyList()
     /** The markers drawn now, in every scene made later too. */
     private var markers: List<SceneMarker> = emptyList()
 
@@ -545,10 +553,19 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         refreshMarkers()
     }
 
-    /** The discs again, from the tool's state and the draws as they stand (an instance moved, added or removed). */
+    /** Draws the active plate's wipe tower as the browser's ghost ([WipeTowerGhosts]); none without an enabled tower. */
+    fun wipeTowerGhost(next: ProjectIntents.WipeTowerGhost?) {
+        if (next == ghost) return
+        ghost = next
+        ghostMarkers = WipeTowerGhosts.markers(next)
+        refreshMarkers()
+    }
+
+    /** The markers again: the ghost, then the discs from the tool's state and the draws as they stand (an instance moved, added or removed). */
     private fun refreshMarkers() {
-        if (!earsShown && markers.isEmpty()) return
-        markers = if (earsShown) BrimEarDiscs.markers(ears, drawn) else emptyList()
+        val next = ghostMarkers + if (earsShown) BrimEarDiscs.markers(ears, drawn) else emptyList()
+        if (next.isEmpty() && markers.isEmpty()) return
+        markers = next
         scene?.setMarkers(markers)
     }
 

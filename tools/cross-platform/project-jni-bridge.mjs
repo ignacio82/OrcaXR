@@ -444,6 +444,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     plan_wipe_tower(request) {
       return call("sessionWipeTower", this.handle, request);
     }
+    wipe_tower_ghost(request) {
+      return call("sessionWipeTowerGhost", this.handle, request);
+    }
     plan_arrangement(request) {
       return call("sessionArrangement", this.handle, request);
     }

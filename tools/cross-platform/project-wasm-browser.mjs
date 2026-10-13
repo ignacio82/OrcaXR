@@ -673,6 +673,7 @@ try {
           transformProxyAnswers: [result.proxySelections, result.proxyRefusals],
           arrangements: result.arrangements,
           wipeTowers: result.wipeTowers,
+          wipeTowerGhosts: result.ghosts,
           volumeSplitPreparations: result.volumeSplitPreparations,
           volumeSplitRefusals: result.volumeSplitRefusals,
           volumeSplitStages: result.volumeSplitStages,
@@ -987,7 +988,7 @@ try {
   // Where the transform gizmo stands over a live session: selections, refusals.
   assert.deepEqual(result.transformProxyAnswers, [19, 8]);
   assert.equal(result.arrangements, 35);
-  assert.equal(result.wipeTowers, 27);
+  assert.deepEqual([result.wipeTowers, result.wipeTowerGhosts], [27, 13]);
   assert.deepEqual(
     [
       result.volumeSplitPreparations,

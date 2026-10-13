@@ -800,6 +800,19 @@ pub(super) fn session_wipe_tower(
     })?;
     string(env, json)
 }
+/// The ghost the workspace draws for a plate's wipe tower.
+pub(super) fn session_wipe_tower_ghost(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_wipe_tower_ghost_request)?;
+    let json = with_session(handle, |s| {
+        let reply = s.wipe_tower_ghost(&request).map_err(|_| "disposed")?;
+        encoded(&reply, wire::encode_wipe_tower_ghost_reply)
+    })?;
+    string(env, json)
+}
 /// One plate's arrangement.
 pub(super) fn session_arrangement(
     env: &mut JNIEnv<'_>,

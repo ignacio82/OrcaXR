@@ -7,7 +7,7 @@
     },
     {
       "path": "web/src/project/slicing/preflight.ts",
-      "sha256": "96918981a7689394bdd20711c0cd1b8ef13183a2c042f35c66be5dada98e616f"
+      "sha256": "90cd39bc5b3d1e7e472c4488398e9985ee76817a277c0f9598e3238f5213110d"
     },
     {
       "path": "web/src/project/filaments/fullSpectrumCompatibility.ts",
@@ -15,7 +15,7 @@
     },
     {
       "path": "web/src/project/objects/wipeTowerPlacement.ts",
-      "sha256": "1ab8127a68e1157a424bfe680977c6df506deafad60c193d9aec0004a0b759b0"
+      "sha256": "828661cfc5ce1d68d511405269c90bd7c46cfdecb0e8aaa90888d8aaeea04f0b"
     },
     {
       "path": "web/src/project/objects/bounds.ts",

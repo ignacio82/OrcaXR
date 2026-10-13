@@ -440,6 +440,8 @@ final class NativeProject {
     static native String sessionBedFill(long handle, String request);
     // Wipe tower: the plate's tower auto-placed against its printable parts.
     static native String sessionWipeTower(long handle, String request);
+    // Its ghost: the box the workspace draws for the plate's enabled tower.
+    static native String sessionWipeTowerGhost(long handle, String request);
     // Volume splits: prepare one volume's components on a current guard, read
     // the parts or refusal, then stage them under host IDs as parts or objects.
     static native long volumeSplit(long handle, long guard, String request);

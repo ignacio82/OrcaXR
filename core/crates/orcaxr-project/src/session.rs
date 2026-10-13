@@ -560,6 +560,21 @@ impl<P: TimestampPolicy> ProjectSession<P> {
             request,
         ))
     }
+    /// The ghost the workspace draws for a plate's wipe tower, from the
+    /// acknowledged state (`WipeTowerGhostRequest` → `WipeTowerGhostReply`).
+    pub fn wipe_tower_ghost(
+        &self,
+        request: &wire::WipeTowerGhostRequest,
+    ) -> Result<wire::WipeTowerGhostReply, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        Ok(crate::placement::wipe_tower::ghost(
+            self.bus.snapshot().state(),
+            self.bus.assets(),
+            request,
+        ))
+    }
     /// One plate's arrangement, planned from the acknowledged state
     /// (`ArrangeRequest` → `ArrangeReply`).
     pub fn plan_arrangement(

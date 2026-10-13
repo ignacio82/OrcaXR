@@ -484,3 +484,79 @@ pub fn plan(
         },
     })
 }
+
+/// The ghost's height on a plate with no model part above the bed (mm).
+pub const GHOST_STAND_IN_MM: f64 = 30.0;
+/// The smallest side the ghost's body is drawn with (mm).
+pub const GHOST_MIN_WIDTH_MM: f64 = 1.0;
+
+/// The wipe tower the workspace draws on a plate before slicing
+/// (`wipeTowerGhost.ts`, through `wipeTowerGhostWire`): the plate's enabled
+/// tower as a square body at `wipe_tower_x/y`, as wide as the footprint the
+/// preflight checks ([`wipe_tower_footprint`](crate::slicing::preflight::wipe_tower_footprint))
+/// and at least [`GHOST_MIN_WIDTH_MM`], rising to the top of the plate's
+/// tallest model part (every instance's model parts as placed; an instance
+/// whose bounds cannot be read gives none) or [`GHOST_STAND_IN_MM`], with the
+/// margin the engine prints outside it. Nothing for a plate without an enabled
+/// tower; refused for an unknown plate or a box that is not finite.
+pub fn ghost(
+    state: &ProjectState,
+    assets: &AssetRepository,
+    request: &wire::WipeTowerGhostRequest,
+) -> wire::WipeTowerGhostReply {
+    let refuse = |code, message: String| {
+        wire::WipeTowerGhostReply::Refused(wire::WipeTowerGhostRefusal {
+            code,
+            message: message.encode_utf16().collect(),
+        })
+    };
+    let Some(plate) = state
+        .plates
+        .iter()
+        .find(|plate| plate.id.as_utf16() == request.plate_id.as_slice())
+    else {
+        return refuse(
+            wire::WipeTowerGhostRefusalCode::UnknownPlate,
+            format!("Unknown plate {}", text(&request.plate_id)),
+        );
+    };
+    let Some(tower) = plate.wipe_tower.as_deref().filter(|tower| tower.enabled) else {
+        return wire::WipeTowerGhostReply::None(wire::Empty {});
+    };
+    let (width, margin) = crate::slicing::preflight::wipe_tower_footprint(state, plate);
+    let snapshot = assets.capture_internal();
+    let mut top = f64::NEG_INFINITY;
+    for object in plate.objects.iter() {
+        for instance in object.instances.iter() {
+            if let Ok(bounds) = bounds_with(
+                state,
+                &snapshot,
+                &[instance.id.as_utf16().to_vec()],
+                None,
+                &[VolumeRole::Model],
+            ) {
+                top = js_max(top, bounds.max[2]);
+            }
+        }
+    }
+    // `!(top > 0)`: no part, or none above the bed.
+    let stand_in = top.is_nan() || top <= 0.0;
+    let [x, y] = tower.position_mm.map(|n| n.get());
+    let ghost = wire::WipeTowerGhost {
+        position_mm: vec![x, y],
+        width_mm: js_max(GHOST_MIN_WIDTH_MM, width),
+        height_mm: if stand_in { GHOST_STAND_IN_MM } else { top },
+        stand_in,
+        margin_mm: margin,
+    };
+    if ![x, y, ghost.width_mm, ghost.height_mm, ghost.margin_mm]
+        .iter()
+        .all(|value| value.is_finite())
+    {
+        return refuse(
+            wire::WipeTowerGhostRefusalCode::NonFinite,
+            "The wipe tower has no finite size to draw".to_owned(),
+        );
+    }
+    wire::WipeTowerGhostReply::Ghost(ghost)
+}

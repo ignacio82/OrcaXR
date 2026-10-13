@@ -1,6 +1,6 @@
 // Wipe-tower auto-placement through a binding: open the browser-authored scene
-// as a real session and plan every request, comparing each reply with the
-// TypeScript authority's own encoding. Runs unchanged over WASM in Node and a
+// as a real session and plan every request, then draw every plate's ghost,
+// comparing each reply with the TypeScript authority's own encoding. Runs unchanged over WASM in Node and a
 // browser worker, and over the JNI bridge.
 export function replayWipeTowers(core, fixture, layout) {
   const encode = new TextEncoder();
@@ -43,14 +43,20 @@ export function replayWipeTowers(core, fixture, layout) {
   }
   const session = upload.open(Float64Array.from([1, 2, 3, 4]));
   let wipeTowers = 0;
+  let ghosts = 0;
   try {
     for (const entry of fixture.cases) {
       if (session.plan_wipe_tower(entry.request) !== entry.reply)
         fail(`${entry.name}: reply differs`);
       wipeTowers++;
     }
+    for (const entry of fixture.ghosts) {
+      if (session.wipe_tower_ghost(entry.request) !== entry.reply)
+        fail(`${entry.name}: reply differs`);
+      ghosts++;
+    }
   } finally {
     session.free();
   }
-  return { wipeTowers };
+  return { wipeTowers, ghosts };
 }

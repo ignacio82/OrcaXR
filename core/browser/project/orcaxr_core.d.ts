@@ -1171,6 +1171,11 @@ export class ProjectSession {
      */
     volume_split(guard: ProjectGuard, request: string): ProjectVolumeSplit;
     /**
+     * The ghost the workspace draws for a plate's wipe tower: a
+     * `WipeTowerGhostRequest`; returns a `WipeTowerGhostReply`.
+     */
+    wipe_tower_ghost(request: string): string;
+    /**
      * Write the current immutable capture as a complete 3MF package. The guard
      * is captured with the same snapshot; writing never changes dirty state.
      */
@@ -2511,6 +2516,7 @@ export interface InitOutput {
     readonly projectsession_submit: (a: number, b: number, c: number) => number;
     readonly projectsession_volume_simplify: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly projectsession_wipe_tower_ghost: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_write_archive: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsvgpart_mesh: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsvgpart_reply: (a: number) => [number, number, number, number];

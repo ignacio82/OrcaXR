@@ -5463,6 +5463,69 @@ object ProjectIntents {
             is WipeTowerReply.Refused -> w.field("refused") { writeWipeTowerRefusal(w, v.value) }
         } }
     }
+    data class WipeTowerGhostRequest(val plateId: List<Int>)
+    private fun readWipeTowerGhostRequest(v: Any): WipeTowerGhostRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("plateId"), false)
+        return WipeTowerGhostRequest(readId(obj.get("plateId")))
+    }
+    private fun writeWipeTowerGhostRequest(w: ProjectIntentWriter, v: WipeTowerGhostRequest) {
+        w.obj {
+            w.field("plateId") { writeId(w, v.plateId) }
+        }
+    }
+    data class WipeTowerGhost(val positionMm: List<Double>, val widthMm: Double, val heightMm: Double, val standIn: Boolean, val marginMm: Double)
+    private fun readWipeTowerGhost(v: Any): WipeTowerGhost {
+        val obj = ProjectIntentJson.fields(v, setOf("positionMm", "widthMm", "heightMm", "standIn", "marginMm"), false)
+        return WipeTowerGhost(readPlanarPosition(obj.get("positionMm")), readFinite(obj.get("widthMm")), readFinite(obj.get("heightMm")), readFlag(obj.get("standIn")), readFinite(obj.get("marginMm")))
+    }
+    private fun writeWipeTowerGhost(w: ProjectIntentWriter, v: WipeTowerGhost) {
+        w.obj {
+            w.field("positionMm") { writePlanarPosition(w, v.positionMm) }
+            w.field("widthMm") { writeFinite(w, v.widthMm) }
+            w.field("heightMm") { writeFinite(w, v.heightMm) }
+            w.field("standIn") { writeFlag(w, v.standIn) }
+            w.field("marginMm") { writeFinite(w, v.marginMm) }
+        }
+    }
+    enum class WipeTowerGhostRefusalCode {UnknownPlate,NonFinite}
+    private fun readWipeTowerGhostRefusalCode(v: Any): WipeTowerGhostRefusalCode {
+        return when(v) {"unknownPlate" -> WipeTowerGhostRefusalCode.UnknownPlate;"nonFinite" -> WipeTowerGhostRefusalCode.NonFinite; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeWipeTowerGhostRefusalCode(w: ProjectIntentWriter, v: WipeTowerGhostRefusalCode) {
+        w.literal(when(v) {WipeTowerGhostRefusalCode.UnknownPlate -> "unknownPlate";WipeTowerGhostRefusalCode.NonFinite -> "nonFinite";})
+    }
+    data class WipeTowerGhostRefusal(val code: WipeTowerGhostRefusalCode, val message: List<Int>)
+    private fun readWipeTowerGhostRefusal(v: Any): WipeTowerGhostRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return WipeTowerGhostRefusal(readWipeTowerGhostRefusalCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writeWipeTowerGhostRefusal(w: ProjectIntentWriter, v: WipeTowerGhostRefusal) {
+        w.obj {
+            w.field("code") { writeWipeTowerGhostRefusalCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface WipeTowerGhostReply {
+        data class Ghost(val value: ProjectIntents.WipeTowerGhost) : WipeTowerGhostReply
+        data class None(val value: ProjectIntents.Empty) : WipeTowerGhostReply
+        data class Refused(val value: ProjectIntents.WipeTowerGhostRefusal) : WipeTowerGhostReply
+    }
+    private fun readWipeTowerGhostReply(v: Any): WipeTowerGhostReply {
+        val obj = ProjectIntentJson.fields(v, setOf("ghost", "none", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "ghost" -> WipeTowerGhostReply.Ghost(readWipeTowerGhost(obj.get(key)))
+            "none" -> WipeTowerGhostReply.None(readEmpty(obj.get(key)))
+            "refused" -> WipeTowerGhostReply.Refused(readWipeTowerGhostRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeWipeTowerGhostReply(w: ProjectIntentWriter, v: WipeTowerGhostReply) {
+        w.obj { when(v) {
+            is WipeTowerGhostReply.Ghost -> w.field("ghost") { writeWipeTowerGhost(w, v.value) }
+            is WipeTowerGhostReply.None -> w.field("none") { writeEmpty(w, v.value) }
+            is WipeTowerGhostReply.Refused -> w.field("refused") { writeWipeTowerGhostRefusal(w, v.value) }
+        } }
+    }
     data class VolumeSplitRequest(val volumeId: List<Int>)
     private fun readVolumeSplitRequest(v: Any): VolumeSplitRequest {
         val obj = ProjectIntentJson.fields(v, setOf("volumeId"), false)
@@ -11654,6 +11717,10 @@ object ProjectIntents {
     fun encodeWipeTowerRequest(value: WipeTowerRequest): String = ProjectIntentWriter().also { writeWipeTowerRequest(it, value) }.finish()
     fun decodeWipeTowerReply(text: String): WipeTowerReply = readWipeTowerReply(ProjectIntentJson.parse(text))
     fun encodeWipeTowerReply(value: WipeTowerReply): String = ProjectIntentWriter().also { writeWipeTowerReply(it, value) }.finish()
+    fun decodeWipeTowerGhostRequest(text: String): WipeTowerGhostRequest = readWipeTowerGhostRequest(ProjectIntentJson.parse(text))
+    fun encodeWipeTowerGhostRequest(value: WipeTowerGhostRequest): String = ProjectIntentWriter().also { writeWipeTowerGhostRequest(it, value) }.finish()
+    fun decodeWipeTowerGhostReply(text: String): WipeTowerGhostReply = readWipeTowerGhostReply(ProjectIntentJson.parse(text))
+    fun encodeWipeTowerGhostReply(value: WipeTowerGhostReply): String = ProjectIntentWriter().also { writeWipeTowerGhostReply(it, value) }.finish()
     fun decodeVolumeSplitRequest(text: String): VolumeSplitRequest = readVolumeSplitRequest(ProjectIntentJson.parse(text))
     fun encodeVolumeSplitRequest(value: VolumeSplitRequest): String = ProjectIntentWriter().also { writeVolumeSplitRequest(it, value) }.finish()
     fun decodeVolumeSplitReply(text: String): VolumeSplitReply = readVolumeSplitReply(ProjectIntentJson.parse(text))

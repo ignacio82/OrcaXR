@@ -3630,6 +3630,44 @@ const shapes = {
       "refused": "WipeTowerRefusal"
     }
   },
+  "WipeTowerGhostRequest": {
+    "kind": "object",
+    "fields": {
+      "plateId": "Id"
+    }
+  },
+  "WipeTowerGhost": {
+    "kind": "object",
+    "fields": {
+      "positionMm": "PlanarPosition",
+      "widthMm": "Finite",
+      "heightMm": "Finite",
+      "standIn": "Flag",
+      "marginMm": "Finite"
+    }
+  },
+  "WipeTowerGhostRefusalCode": {
+    "kind": "enum",
+    "values": [
+      "unknownPlate",
+      "nonFinite"
+    ]
+  },
+  "WipeTowerGhostRefusal": {
+    "kind": "object",
+    "fields": {
+      "code": "WipeTowerGhostRefusalCode",
+      "message": "EditText"
+    }
+  },
+  "WipeTowerGhostReply": {
+    "kind": "union",
+    "variants": {
+      "ghost": "WipeTowerGhost",
+      "none": "Empty",
+      "refused": "WipeTowerGhostRefusal"
+    }
+  },
   "VolumeSplitRequest": {
     "kind": "object",
     "fields": {
@@ -7834,6 +7872,11 @@ export interface ProjectWipeTowerPlanWire {readonly pick: ProjectWipeTowerPickWi
 export type ProjectWipeTowerRefusalCodeWire = "unknownPlate" | "invalidBed";
 export interface ProjectWipeTowerRefusalWire {readonly code: ProjectWipeTowerRefusalCodeWire;readonly message: ProjectEditTextWire;}
 export type ProjectWipeTowerReplyWire = {readonly plan:ProjectWipeTowerPlanWire} | {readonly refused:ProjectWipeTowerRefusalWire};
+export interface ProjectWipeTowerGhostRequestWire {readonly plateId: ProjectIdWire;}
+export interface ProjectWipeTowerGhostWire {readonly positionMm: ProjectPlanarPositionWire;readonly widthMm: ProjectFiniteWire;readonly heightMm: ProjectFiniteWire;readonly standIn: ProjectFlagWire;readonly marginMm: ProjectFiniteWire;}
+export type ProjectWipeTowerGhostRefusalCodeWire = "unknownPlate" | "nonFinite";
+export interface ProjectWipeTowerGhostRefusalWire {readonly code: ProjectWipeTowerGhostRefusalCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectWipeTowerGhostReplyWire = {readonly ghost:ProjectWipeTowerGhostWire} | {readonly none:ProjectEmptyWire} | {readonly refused:ProjectWipeTowerGhostRefusalWire};
 export interface ProjectVolumeSplitRequestWire {readonly volumeId: ProjectIdWire;}
 export interface ProjectVolumeSplitPartWire {readonly triangleCount: ProjectCounterWire;readonly vertexCount: ProjectCounterWire;readonly geometry: ProjectCounterWire;readonly transform: ProjectTransformWire;}
 export type ProjectVolumeSplitPartsWire = readonly ProjectVolumeSplitPartWire[];
@@ -8531,6 +8574,12 @@ export function encodeProjectWipeTowerRequest(value:ProjectWipeTowerRequestWire)
 export function captureProjectWipeTowerReply(value:unknown):ProjectWipeTowerReplyWire { return captureIntent("WipeTowerReply",value,shapes,limits) as ProjectWipeTowerReplyWire; }
 export function decodeProjectWipeTowerReply(text:string):ProjectWipeTowerReplyWire { return captureProjectWipeTowerReply(parseIntentJson(text,limits)); }
 export function encodeProjectWipeTowerReply(value:ProjectWipeTowerReplyWire):string { return JSON.stringify(captureProjectWipeTowerReply(value)); }
+export function captureProjectWipeTowerGhostRequest(value:unknown):ProjectWipeTowerGhostRequestWire { return captureIntent("WipeTowerGhostRequest",value,shapes,limits) as ProjectWipeTowerGhostRequestWire; }
+export function decodeProjectWipeTowerGhostRequest(text:string):ProjectWipeTowerGhostRequestWire { return captureProjectWipeTowerGhostRequest(parseIntentJson(text,limits)); }
+export function encodeProjectWipeTowerGhostRequest(value:ProjectWipeTowerGhostRequestWire):string { return JSON.stringify(captureProjectWipeTowerGhostRequest(value)); }
+export function captureProjectWipeTowerGhostReply(value:unknown):ProjectWipeTowerGhostReplyWire { return captureIntent("WipeTowerGhostReply",value,shapes,limits) as ProjectWipeTowerGhostReplyWire; }
+export function decodeProjectWipeTowerGhostReply(text:string):ProjectWipeTowerGhostReplyWire { return captureProjectWipeTowerGhostReply(parseIntentJson(text,limits)); }
+export function encodeProjectWipeTowerGhostReply(value:ProjectWipeTowerGhostReplyWire):string { return JSON.stringify(captureProjectWipeTowerGhostReply(value)); }
 export function captureProjectVolumeSplitRequest(value:unknown):ProjectVolumeSplitRequestWire { return captureIntent("VolumeSplitRequest",value,shapes,limits) as ProjectVolumeSplitRequestWire; }
 export function decodeProjectVolumeSplitRequest(text:string):ProjectVolumeSplitRequestWire { return captureProjectVolumeSplitRequest(parseIntentJson(text,limits)); }
 export function encodeProjectVolumeSplitRequest(value:ProjectVolumeSplitRequestWire):string { return JSON.stringify(captureProjectVolumeSplitRequest(value)); }

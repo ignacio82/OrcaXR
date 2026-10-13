@@ -3634,6 +3634,44 @@
         "refused": "WipeTowerRefusal"
       }
     },
+    "WipeTowerGhostRequest": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id"
+      }
+    },
+    "WipeTowerGhost": {
+      "kind": "object",
+      "fields": {
+        "positionMm": "PlanarPosition",
+        "widthMm": "Finite",
+        "heightMm": "Finite",
+        "standIn": "Flag",
+        "marginMm": "Finite"
+      }
+    },
+    "WipeTowerGhostRefusalCode": {
+      "kind": "enum",
+      "values": [
+        "unknownPlate",
+        "nonFinite"
+      ]
+    },
+    "WipeTowerGhostRefusal": {
+      "kind": "object",
+      "fields": {
+        "code": "WipeTowerGhostRefusalCode",
+        "message": "EditText"
+      }
+    },
+    "WipeTowerGhostReply": {
+      "kind": "union",
+      "variants": {
+        "ghost": "WipeTowerGhost",
+        "none": "Empty",
+        "refused": "WipeTowerGhostRefusal"
+      }
+    },
     "VolumeSplitRequest": {
       "kind": "object",
       "fields": {
@@ -7429,6 +7467,8 @@
     "BedFillReply",
     "WipeTowerRequest",
     "WipeTowerReply",
+    "WipeTowerGhostRequest",
+    "WipeTowerGhostReply",
     "VolumeSplitRequest",
     "VolumeSplitReply",
     "VolumeSplitStage",

@@ -275,6 +275,11 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun planWipeTower(request: ProjectIntents.WipeTowerRequest): ProjectIntents.WipeTowerReply = read {
         ProjectIntents.decodeWipeTowerReply(NativeProject.sessionWipeTower(it, ProjectIntents.encodeWipeTowerRequest(request)))
     }
+    /** The ghost the workspace draws for a plate's wipe tower: its box, height
+     * and printed margin, nothing without an enabled tower. */
+    fun wipeTowerGhost(request: ProjectIntents.WipeTowerGhostRequest): ProjectIntents.WipeTowerGhostReply = read {
+        ProjectIntents.decodeWipeTowerGhostReply(NativeProject.sessionWipeTowerGhost(it, ProjectIntents.encodeWipeTowerGhostRequest(request)))
+    }
     /** One plate's arrangement: the moves as one `setInstanceTransforms`
      * intent's changes, with what did not fit and what stayed locked. */
     fun planArrangement(request: ProjectIntents.ArrangeRequest): ProjectIntents.ArrangeReply = read {

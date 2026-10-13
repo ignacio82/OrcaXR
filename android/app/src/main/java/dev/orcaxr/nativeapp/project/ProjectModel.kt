@@ -1619,6 +1619,16 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         }
     }
 
+    /** The active plate's wipe tower as the Workspace draws it (the browser's ghost); none without an enabled tower. */
+    var wipeTowerGhost by mutableStateOf<ProjectIntents.WipeTowerGhost?>(null)
+        private set
+
+    /** Reads the ghost again ([ProjectWorkspace.wipeTowerGhost]), as the browser rebuilds it after every change of the project. */
+    fun refreshWipeTowerGhost() = quietly {
+        val ghost = workspace.wipeTowerGhost().await()
+        main.post { wipeTowerGhost = ghost }
+    }
+
     /** Renames an object or part (the Objects panel's Rename). */
     fun rename(entity: ProjectIntents.ObjectTreeEntity, name: String) = work {
         val id = when (entity) {

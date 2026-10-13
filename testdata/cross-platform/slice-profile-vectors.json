@@ -19,7 +19,7 @@
     },
     {
       "path": "web/src/project/slicing/preflight.ts",
-      "sha256": "96918981a7689394bdd20711c0cd1b8ef13183a2c042f35c66be5dada98e616f"
+      "sha256": "90cd39bc5b3d1e7e472c4488398e9985ee76817a277c0f9598e3238f5213110d"
     },
     {
       "path": "web/src/project/__tests__/fixtures.ts",
@@ -27,7 +27,7 @@
     },
     {
       "path": "contracts/project-intents.json",
-      "sha256": "136c3d4225031181adc4b9b251e282e302dcec63286c1bb46f41d3af0a943acd"
+      "sha256": "c32a2acc4c4ed0f07687b1ec8bd2b19d4e3abec779c7d2ac35fdb8648b2378ef"
     }
   ],
   "stringVectorKeys": [

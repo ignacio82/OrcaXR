@@ -4,7 +4,9 @@
 The app's data is cleared and a cube added from the Project area's Add menu. The Edit menu's Auto-place
 Wipe Tower (the browser's Tools menu entry) places the active plate's tower where it has the most room
 around its printed footprint: one "Auto-place wipe tower" step and the browser's "Auto-placed wipe
-tower."; undo takes it back. The command palette's entry does the same. In Prepare, the Process section's
+tower."; the Workspace draws the tower's ghost as the browser does — a translucent grey box where it
+stands, its brim's footprint outlined in amber on the bed — found among the pixels the placement
+changed; undo takes it back, ghost and all. The command palette's entry does the same. In Prepare, the Process section's
 "Auto-position wipe tower" switch (the browser's Process card checkbox) places it when switched on —
 the browser's "Auto-position wipe tower enabled." beneath it — and says it is disabled when switched off,
 leaving the tower where it is.
@@ -16,7 +18,7 @@ import argparse
 import re
 import time
 from artifacts import ROOT
-from smoke_ui import Screen
+from smoke_ui import Screen, changed_pixels
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--serial", required=True)
@@ -91,6 +93,24 @@ def edit(action, timeout=30):
         time.sleep(1)
 
 
+def settled(box, timeout=20):
+    """A screenshot once the Workspace stops changing."""
+    deadline = time.monotonic() + timeout
+    last = screen.screenshot()
+    while True:
+        time.sleep(1)
+        now = screen.screenshot()
+        if len(changed_pixels(last, now, *box)) < 20 or time.monotonic() > deadline:
+            return now
+        last = now
+
+
+def tinted(image, pixels, test):
+    """The [pixels] whose colour in [image] passes [test] (given red, green and blue)."""
+    _, _, rows = image
+    return [(x, y) for x, y in pixels if test(*rows[y][x * 4:x * 4 + 3])]
+
+
 def undo_placement():
     """The Project area's Undo of the placement, back to the cube alone."""
     find(PLACED, timeout=30)
@@ -130,12 +150,31 @@ find("Untitled project", timeout=30)
 menu("Add", "Cube")
 find(ADDED, timeout=30)
 
-# The Edit menu's Auto-place Wipe Tower: one step, the browser's status; undo takes it back.
+# The Edit menu's Auto-place Wipe Tower: one step, the browser's status.
 edit("Auto-place Wipe Tower")
 find(PLACED, timeout=60)
 find("Auto-placed wipe tower.", timeout=30)
 tap("Dismiss")
+
+# The Workspace draws the tower's ghost: the placement and its undo differ by it alone — a translucent grey
+# box (lighter than the dark viewport, its channels close) and the amber outline of its brim's footprint.
+tap("Workspace")
+time.sleep(3)
+box = (0, screen.below_toolbar(260), width, height - 220)
+placed_view = settled(box)
+tap("Project")
 undo_placement()
+tap("Workspace")
+time.sleep(3)
+bare_view = settled(box)
+ghost = changed_pixels(bare_view, placed_view, *box)
+grey = tinted(placed_view, ghost, lambda r, g, b: max(r, g, b) - min(r, g, b) <= 40 and max(r, g, b) >= 70)
+amber = tinted(placed_view, ghost, lambda r, g, b: r >= 140 and r - b >= 70 and g > b)
+print(f"ghost: {len(ghost)} pixels changed, {len(grey)} grey, {len(amber)} amber")
+assert len(ghost) > 300, f"The tower's ghost was not drawn ({len(ghost)} pixels changed)"
+assert len(grey) > 150, f"The ghost's grey body was not drawn ({len(grey)} pixels)"
+assert len(amber) > 20, f"The ghost's brim footprint was not outlined ({len(amber)} pixels)"
+tap("Project")
 
 # The command palette's entry does the same.
 adb("shell", "input", "keycombination", CTRL, K)

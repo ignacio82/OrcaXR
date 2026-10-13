@@ -83,8 +83,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         var leafEntity: Int? = null
     }
     private class Lines(val vertices: VertexBuffer, val indices: IndexBuffer, val entity: Int, val bytes: Long)
-    /** A marker shape on the GPU, shared by the markers drawing it. */
-    private class Shape(val vertices: VertexBuffer, val indices: IndexBuffer, val count: Int, val center: FloatArray, val extent: FloatArray)
+    /** A marker shape on the GPU, shared by the markers drawing it: facets, or line segments. */
+    private class Shape(val vertices: VertexBuffer, val indices: IndexBuffer, val count: Int, val center: FloatArray, val extent: FloatArray, val lines: Boolean)
     /** One marker drawn: its entity and its own material. */
     private class Marked(val entity: Int, val material: MaterialInstance)
     /** The viewport's vertical wash: a quad at the far end of the view, carried with the camera. */
@@ -718,7 +718,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
 
     /**
      * Draws [markers] in place of the ones drawn before: each its shape
-     * placed by its transform, unlit in its colour and opacity, with depth
+     * (facets, or line segments) placed by its transform, unlit in its
+     * colour — tinting the shape's baked shades — and opacity, with depth
      * test but without depth writes, after the models (three.js's
      * `MeshBasicMaterial` with `depthWrite: false` at a later render order).
      * Markers are never picked and never highlighted.
@@ -734,11 +735,15 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             material.setParameter("opacity", marker.opacity)
             material.setParameter("tint", ((marker.argb ushr 16) and 255) / 255f, ((marker.argb ushr 8) and 255) / 255f, (marker.argb and 255) / 255f, 1f)
             material.setParameter("highlight", 0f, 0f, 0f, 0f)
+            if (marker.frontOnly) material.setDoubleSided(false)
             val entity = engine.entityManager.create()
             try {
                 RenderableManager.Builder(1)
                     .boundingBox(Box(shape.center[0], shape.center[1], shape.center[2], shape.extent[0], shape.extent[1], shape.extent[2]))
-                    .geometry(0, RenderableManager.PrimitiveType.TRIANGLES, shape.vertices, shape.indices, 0, shape.count)
+                    .geometry(
+                        0, if (shape.lines) RenderableManager.PrimitiveType.LINES else RenderableManager.PrimitiveType.TRIANGLES,
+                        shape.vertices, shape.indices, 0, shape.count,
+                    )
                     .material(0, material)
                     .priority(MARKER_PRIORITY)
                     .culling(false).castShadows(false).receiveShadows(false)
@@ -755,21 +760,26 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         invalidate()
     }
 
-    /** [shape]'s facets on the GPU, in render space, every corner white so the marker's tint is its colour. */
+    /**
+     * [shape]'s facets or segments on the GPU, in render space, each corner
+     * its facet's baked shade (white without one, and on a line) so the
+     * marker's tint is its colour.
+     */
     private fun createShape(shape: MarkerShape): Shape {
-        val count = shape.facetCount * 3
+        val count = shape.pointCount
         val positions = MeshPacking.direct(count * 12)
         val colors = MeshPacking.direct(count * 4)
         val indices = MeshPacking.direct(count * 4)
         val low = FloatArray(3) { Float.POSITIVE_INFINITY }; val high = FloatArray(3) { Float.NEGATIVE_INFINITY }
-        for (facet in 0 until shape.facetCount) repeat(3) { corner ->
-            val point = RenderSpace.point(shape.corner(facet, corner))
+        for (index in 0 until count) {
+            val point = RenderSpace.point(shape.point(index))
             val coordinates = floatArrayOf(point.x.toFloat(), point.y.toFloat(), point.z.toFloat())
             for (axis in 0..2) {
                 positions.putFloat(coordinates[axis])
                 low[axis] = min(low[axis], coordinates[axis]); high[axis] = max(high[axis], coordinates[axis])
             }
-            colors.put(255.toByte()).put(255.toByte()).put(255.toByte()).put(255.toByte())
+            val shade = if (shape.lines) -1 else shape.shade(index / 3)
+            colors.put((shade ushr 16 and 255).toByte()).put((shade ushr 8 and 255).toByte()).put((shade and 255).toByte()).put(255.toByte())
             indices.putInt(indices.position() / 4)
         }
         positions.flip(); colors.flip(); indices.flip()
@@ -792,7 +802,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             shapeBuffers.add(buffer)
             upload(buffer, Runnable { shapeBuffers.remove(buffer) })
         }
-        return Shape(vertices, index, count, FloatArray(3) { (low[it] + high[it]) * .5f }, FloatArray(3) { max((high[it] - low[it]) * .5f, 1e-5f) })
+        return Shape(vertices, index, count, FloatArray(3) { (low[it] + high[it]) * .5f }, FloatArray(3) { max((high[it] - low[it]) * .5f, 1e-5f) }, shape.lines)
     }
 
     /** The print bed: its outline and a grid every 10 mm (coarser on a large bed), on z = 0 from the origin. */

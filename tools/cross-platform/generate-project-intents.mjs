@@ -130,6 +130,8 @@ assert.deepEqual(schema.roots, [
   "BedFillReply",
   "WipeTowerRequest",
   "WipeTowerReply",
+  "WipeTowerGhostRequest",
+  "WipeTowerGhostReply",
   "VolumeSplitRequest",
   "VolumeSplitReply",
   "VolumeSplitStage",

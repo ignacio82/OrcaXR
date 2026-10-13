@@ -1,6 +1,6 @@
 import type { AssetRepository } from '../assets';
 import type { PlateId } from '../domain/ids';
-import type { ProjectState, VolumeRole, WipeTowerState } from '../domain/model';
+import type { ProjectPlate, ProjectState, VolumeRole, WipeTowerState } from '../domain/model';
 import { computeCanonicalInstanceBounds } from './bounds';
 
 export const PRINTABLE_ROLES: readonly VolumeRole[] = Object.freeze(['model', 'support-enforcer', 'support-blocker']);
@@ -103,6 +103,44 @@ export function wipeTowerFootprintMarginMm(config: Readonly<Record<string, unkno
   const ribWidth = Math.max(0, numeric(config['wipe_tower_rib_width']) ?? 0);
   const extraRibLength = Math.max(0, numeric(config['wipe_tower_extra_rib_length']) ?? 0);
   return brim + ribWidth / 2 + extraRibLength / 2;
+}
+
+/** What an enabled tower occupies on the bed: its body's side and printed footprint. */
+export interface WipeTowerFootprint extends AabbXY {
+  /** The body's side: `prime_tower_width`, else `wipe_tower_width`, else 60 mm. */
+  readonly widthMm: number;
+  /** What the engine prints outside the body on every side ([wipeTowerFootprintMarginMm]). */
+  readonly marginMm: number;
+}
+
+/**
+ * What the prime tower actually occupies on the bed — the one footprint
+ * authority the slice preflight checks and the workspace's ghost draws.
+ *
+ * `wipe_tower_x/y` is the body's left-front corner; the engine prints the brim
+ * — and, for a rib wall, the diagonals it unions across the body — outside it.
+ * The same bound the auto-placer reserves is what this checks, so a placement
+ * the planner accepts is one preflight accepts. The plate's configuration wins
+ * over the project's, key by key.
+ */
+export function wipeTowerFootprint(
+  state: ProjectState,
+  plate: ProjectPlate,
+  positionMm: readonly [number, number] | readonly number[],
+): WipeTowerFootprint {
+  const config = { ...state.config, ...plate.config };
+  const width = Number(config.prime_tower_width ?? config.wipe_tower_width) || 60;
+  const margin = wipeTowerFootprintMarginMm(config);
+  const x = positionMm[0] ?? 0;
+  const y = positionMm[1] ?? 0;
+  return {
+    widthMm: width,
+    marginMm: margin,
+    xMin: x - margin,
+    yMin: y - margin,
+    xMax: x + width + margin,
+    yMax: y + width + margin,
+  };
 }
 
 function numeric(value: unknown): number | undefined {

@@ -77,18 +77,18 @@ physical-device gate below is still open.
 - **Phase 7, the adaptive Android application: largely done.** Workspace,
   Prepare, Preview, Device and Project areas; selection and object edits,
   creation, placement and the transform inspector, filaments and the virtual
-  filament library, painting, split, simplify, measure, brim ears and
-  wipe-tower auto-placement, emboss text and SVG parts, settings panels and
-  height ranges, the command palette, toolbar and context menus, generated
-  localization (19 languages) and design tokens, accessibility, adaptive
-  layouts, file drop, recovery and multi-window document ownership, the
-  Workspace's transform gizmo with its keys G, R and S, the semantic
-  editor's volume roles with Set as Negative Part, and the File menu's
-  exports (slice output, STLs, the 3MF, the configuration, the toolpaths as
-  OBJ and diagnostics) with Download (the emulator suites for the gizmo, the
-  roles, brim ears, the wipe tower, drawn parts and the exports pending).
-  Remains: *Resume here* items 1 to 4, and physical devices for the exit
-  gate.
+  filament library, painting, split, simplify, measure, brim ears,
+  wipe-tower auto-placement and the tower's ghost, emboss text and SVG
+  parts, settings panels and height ranges, the command palette, toolbar
+  and context menus, generated localization (19 languages) and design
+  tokens, accessibility, adaptive layouts, file drop, recovery and
+  multi-window document ownership, the Workspace's transform gizmo with its
+  keys G, R and S, the semantic editor's volume roles with Set as Negative
+  Part, and the File menu's exports (slice output, STLs, the 3MF, the
+  configuration, the toolpaths as OBJ and diagnostics) with Download (the
+  emulator suites for the gizmo, the roles, brim ears, the wipe tower, drawn
+  parts and the exports pending). Remains: *Resume here* items 1 to 4, and
+  physical devices for the exit gate.
 - **Phase 8, Android XR: not started.** Only Phase 2's SceneCore candidate
   (`android/renderer-scenecore`, `android/xr-experiment`) exists. Verification
   needs the user's Galaxy XR.
@@ -154,8 +154,10 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    Tower in the Edit menu, the palette and Prepare's switch, with
    `android-brimears-smoke.py` and `android-wipetower-smoke.py` passing on
    an API 34 iteration emulator; neither emulator suite has run them yet
-   (*Resume here* item 1). The Workspace does not draw the wipe tower yet
-   (the browser's ghost). Emboss Text and SVG Part are done too
+   (*Resume here* item 1). The Workspace draws the active plate's tower as
+   the browser's ghost, from a ghost plan ported to the core
+   ([§](engineering/native-core.md#wipe-tower-auto-placement)), and the
+   wipe-tower smoke finds it on screen. Emboss Text and SVG Part are done too
    ([§](engineering/native-core.md#android-emboss-text-and-svg-parts)):
    their toolbar tools and panels, a font or drawing picked through the
    system's picker and read by the core (the browser's TrueType reader and
@@ -1950,7 +1952,11 @@ painting, and FullSpectrum operations that can support real native projects.
     limits in the printable area by its corners (35 requests exact in every
     binding); two fill error codes fixed.
   - [x] Port wipe-tower auto-placement (`placement::wipe_tower`) with the
-    browser's configuration coercions (27 requests exact in every binding).
+    browser's configuration coercions (27 requests exact in every binding),
+    and the tower's ghost the workspace draws (`placement::wipe_tower::ghost`,
+    from the browser's new `wipeTowerGhost.ts`: its box from the footprint
+    authority the preflight shares, `slicing::preflight::wipe_tower_footprint`,
+    and the plate's tallest model part; 13 plates exact in every binding).
   - [x] Port the workspace bed (`placement::bed`, from the browser's new
     `WorkspaceBed.ts`): the bed size (the far corner of `printable_area`,
     else 200 mm), the printable rectangle, the printable height, the placement
@@ -2549,9 +2555,16 @@ storage journeys on phone, tablet, and desktop-sized windows.
   API 34 emulator. Auto-place Wipe Tower places the active plate's tower
   as the browser's does ([§](engineering/native-core.md#android-wipe-tower-auto-placement)),
   from the Edit menu, the palette and Prepare's "Auto-position wipe tower"
-  switch, one step with the browser's statuses; a 65-check JNI journey
-  matches the browser controller's pick, hash and label after all 10 steps,
-  and `android-wipetower-smoke.py` passes on an API 34 emulator.
+  switch, one step with the browser's statuses, and the Workspace draws the
+  tower as the browser's ghost (a translucent box from its corner, as wide
+  as the footprint the preflight checks and as tall as the plate's tallest
+  model part, its edges and its brim's footprint outlined), from a ghost
+  plan ported to the core for it — which fixed three browser ghost defects
+  (a plate's own width and brim drawn as the project's, a taller second part
+  or a first-listed modifier mis-setting the height, a thin body off its
+  corner); a 95-check JNI journey matches the browser controller's pick,
+  hash, label and ghost after all 14 steps, and `android-wipetower-smoke.py`
+  (which finds the ghost's pixels) passes on an API 34 emulator.
   Emboss Text and SVG Part embosses text and cuts drawings into parts as the
   browser's tools do ([§](engineering/native-core.md#android-emboss-text-and-svg-parts)):
   a font or drawing picked through the system's picker and read by the core
@@ -2568,9 +2581,8 @@ storage journeys on phone, tablet, and desktop-sized windows.
   5's kernel routing), with mesh Booleans; and the model tools with no
   Android UI yet — assembly, variable layer height, magnets and the
   wave-overhang card, with Cut, the face detector and hollow still to port
-  (*Resume here* items 2 and 4); the wipe tower's ghost in the Workspace;
-  both emulator suites' runs of the brim-ear, wipe-tower and drawn-part
-  smokes (*Resume here* item 1).
+  (*Resume here* items 2 and 4); both emulator suites' runs of the
+  brim-ear, wipe-tower and drawn-part smokes (*Resume here* item 1).
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
   large-file streaming. Validate incoming open/share intents as untrusted input.

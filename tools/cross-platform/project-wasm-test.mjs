@@ -176,8 +176,8 @@ if (isMainThread) {
     assert.deepEqual([result.proxySelections, result.proxyRefusals], [19, 8]);
     // Arrangement and bed fill over a live session.
     assert.equal(result.arrangements, 35);
-    // Wipe-tower auto-placement over a live session.
-    assert.equal(result.wipeTowers, 27);
+    // Wipe-tower auto-placement over a live session, and every plate's ghost.
+    assert.deepEqual([result.wipeTowers, result.ghosts], [27, 13]);
     // Volume splits over a live session, staged and executed.
     assert.deepEqual(
       [

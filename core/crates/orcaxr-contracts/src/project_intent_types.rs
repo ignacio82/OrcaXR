@@ -7575,6 +7575,87 @@ fn read_wipe_tower_reply(v: &Value) -> Result<WipeTowerReply, InvalidIntent> {
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WipeTowerGhostRequest {
+    pub plate_id: Id,
+}
+fn read_wipe_tower_ghost_request(v: &Value) -> Result<WipeTowerGhostRequest, InvalidIntent> {
+    let object = fields(v, &["plateId"], false)?;
+    Ok(WipeTowerGhostRequest {
+        plate_id: read_id(&object["plateId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WipeTowerGhost {
+    pub position_mm: PlanarPosition,
+    pub width_mm: Finite,
+    pub height_mm: Finite,
+    pub stand_in: Flag,
+    pub margin_mm: Finite,
+}
+fn read_wipe_tower_ghost(v: &Value) -> Result<WipeTowerGhost, InvalidIntent> {
+    let object = fields(
+        v,
+        &["positionMm", "widthMm", "heightMm", "standIn", "marginMm"],
+        false,
+    )?;
+    Ok(WipeTowerGhost {
+        position_mm: read_planar_position(&object["positionMm"])?,
+        width_mm: read_finite(&object["widthMm"])?,
+        height_mm: read_finite(&object["heightMm"])?,
+        stand_in: read_flag(&object["standIn"])?,
+        margin_mm: read_finite(&object["marginMm"])?,
+    })
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WipeTowerGhostRefusalCode {
+    UnknownPlate,
+    NonFinite,
+}
+fn read_wipe_tower_ghost_refusal_code(
+    v: &Value,
+) -> Result<WipeTowerGhostRefusalCode, InvalidIntent> {
+    match v.as_str() {
+        Some("unknownPlate") => Ok(WipeTowerGhostRefusalCode::UnknownPlate),
+        Some("nonFinite") => Ok(WipeTowerGhostRefusalCode::NonFinite),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WipeTowerGhostRefusal {
+    pub code: WipeTowerGhostRefusalCode,
+    pub message: EditText,
+}
+fn read_wipe_tower_ghost_refusal(v: &Value) -> Result<WipeTowerGhostRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(WipeTowerGhostRefusal {
+        code: read_wipe_tower_ghost_refusal_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WipeTowerGhostReply {
+    Ghost(WipeTowerGhost),
+    None(Empty),
+    Refused(WipeTowerGhostRefusal),
+}
+fn read_wipe_tower_ghost_reply(v: &Value) -> Result<WipeTowerGhostReply, InvalidIntent> {
+    let object = fields(v, &["ghost", "none", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "ghost" => Ok(WipeTowerGhostReply::Ghost(read_wipe_tower_ghost(value)?)),
+        "none" => Ok(WipeTowerGhostReply::None(read_empty(value)?)),
+        "refused" => Ok(WipeTowerGhostReply::Refused(read_wipe_tower_ghost_refusal(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VolumeSplitRequest {
     pub volume_id: Id,
 }
@@ -16330,6 +16411,24 @@ pub fn decode_wipe_tower_reply(text: &str) -> Result<WipeTowerReply, InvalidInte
 pub fn encode_wipe_tower_reply(value: &WipeTowerReply) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_wipe_tower_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_wipe_tower_ghost_request(text: &str) -> Result<WipeTowerGhostRequest, InvalidIntent> {
+    read_wipe_tower_ghost_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_wipe_tower_ghost_request(
+    value: &WipeTowerGhostRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_wipe_tower_ghost_request(&text)?;
+    Ok(text)
+}
+pub fn decode_wipe_tower_ghost_reply(text: &str) -> Result<WipeTowerGhostReply, InvalidIntent> {
+    read_wipe_tower_ghost_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_wipe_tower_ghost_reply(value: &WipeTowerGhostReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_wipe_tower_ghost_reply(&text)?;
     Ok(text)
 }
 pub fn decode_volume_split_request(text: &str) -> Result<VolumeSplitRequest, InvalidIntent> {

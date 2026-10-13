@@ -1,6 +1,7 @@
 //! Wipe-tower auto-placement against the browser: the browser-authored
-//! four-plate scene opens as a native session, and every placement request
-//! answers the browser's pick and tower or refusal, byte for byte.
+//! scene opens as a native session, and every placement request answers the
+//! browser's pick and tower or refusal, and every plate's ghost the box the
+//! browser's workspace draws, byte for byte.
 use orcaxr_contracts::{canonical::parse, project_intent_types as wire};
 use orcaxr_project::{assets::*, history::*, model::*, selection::*, session::*, validation::*};
 use serde_json::Value;
@@ -63,11 +64,35 @@ fn wipe_tower_placements_match_the_browser() {
         );
     }
     assert_eq!((plans, refusals), (24, 3));
+    let (mut ghosts, mut none, mut refused) = (0, 0, 0);
+    for case in f["ghosts"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let request =
+            wire::decode_wipe_tower_ghost_request(case["request"].as_str().unwrap()).unwrap();
+        let reply = session.wipe_tower_ghost(&request).unwrap();
+        match reply {
+            wire::WipeTowerGhostReply::Ghost(_) => ghosts += 1,
+            wire::WipeTowerGhostReply::None(_) => none += 1,
+            wire::WipeTowerGhostReply::Refused(_) => refused += 1,
+        }
+        assert_eq!(
+            wire::encode_wipe_tower_ghost_reply(&reply).unwrap(),
+            case["reply"].as_str().unwrap(),
+            "{name}"
+        );
+    }
+    assert_eq!((ghosts, none, refused), (5, 5, 3));
+    let ghost =
+        wire::decode_wipe_tower_ghost_request(f["ghosts"][0]["request"].as_str().unwrap()).unwrap();
     let request =
         wire::decode_wipe_tower_request(f["cases"][0]["request"].as_str().unwrap()).unwrap();
     session.dispose();
     assert_eq!(
         session.plan_wipe_tower(&request).map(|_| ()),
+        Err(wire::SessionError::Disposed)
+    );
+    assert_eq!(
+        session.wipe_tower_ghost(&ghost).map(|_| ()),
         Err(wire::SessionError::Disposed)
     );
 }

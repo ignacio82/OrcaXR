@@ -14,7 +14,7 @@ import { findPlate, resolveConfig, resolveFilament } from '../domain/selectors';
 import { validateProjectState } from '../domain/validation';
 import { inspectFullSpectrumCompatibility } from '../filaments/fullSpectrumCompatibility';
 import { computeCanonicalInstanceBounds, type CanonicalBounds3 } from '../objects/bounds';
-import { wipeTowerFootprintMarginMm } from '../objects/wipeTowerPlacement';
+import { wipeTowerFootprint } from '../objects/wipeTowerPlacement';
 import type { SelectionRef } from '../selection';
 import type { CanonicalProjectSliceSnapshot } from './types';
 
@@ -824,32 +824,6 @@ function checkTemperatures(
       ],
     });
   }
-}
-
-/**
- * What the prime tower actually occupies on the bed.
- *
- * `wipe_tower_x/y` is the body's left-front corner; the engine prints the brim
- * — and, for a rib wall, the diagonals it unions across the body — outside it.
- * The same bound the auto-placer reserves is what this checks, so a placement
- * the planner accepts is one preflight accepts.
- */
-function wipeTowerFootprint(
-  state: ProjectState,
-  plate: ProjectPlate,
-  positionMm: readonly [number, number] | readonly number[],
-): { xMin: number; yMin: number; xMax: number; yMax: number } {
-  const config = { ...state.config, ...plate.config };
-  const width = Number(config.prime_tower_width ?? config.wipe_tower_width) || 60;
-  const margin = wipeTowerFootprintMarginMm(config);
-  const x = positionMm[0] ?? 0;
-  const y = positionMm[1] ?? 0;
-  return {
-    xMin: x - margin,
-    yMin: y - margin,
-    xMax: x + width + margin,
-    yMax: y + width + margin,
-  };
 }
 
 function checkWipeTower(

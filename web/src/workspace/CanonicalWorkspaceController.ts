@@ -236,6 +236,7 @@ import {
   type WipeTowerPick,
   type WipeTowerPlanOptions,
 } from '../project/objects/wipeTowerPlacement';
+import { planWipeTowerGhost, type WipeTowerGhost } from '../project/objects/wipeTowerGhost';
 import {
   AddLayerRangeCommand,
   DeleteLayerRangeCommand,
@@ -2132,6 +2133,16 @@ export class CanonicalWorkspaceController {
     const targetPlateId = plateId ?? this.session.project.getSnapshot().state.activePlateId;
     const plate = findPlate(this.session.project.getSnapshot().state, targetPlateId);
     return plate?.wipeTower ? cloneJson(plate.wipeTower) : undefined;
+  }
+
+  /**
+   * The ghost the workspace draws for a plate's wipe tower (`wipeTowerGhost.ts`):
+   * its box, height and printed margin, or undefined without an enabled tower.
+   */
+  wipeTowerGhost(plateId?: PlateId): WipeTowerGhost | undefined {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    return planWipeTowerGhost(state, this.assets, plateId ?? state.activePlateId);
   }
 
   /** Replace base project/profile config while preserving explicit project overrides. */

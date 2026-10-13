@@ -32,6 +32,45 @@ class SceneMarkersTest {
         }
     }
 
+    @Test fun aBoxStandsOnTheBedWithItsFacesShaded() {
+        val box = MarkerShape.box("box") { normal -> PacketMeshes.shade(normal) }
+        assertEquals(12, box.facetCount)
+        assertEquals(36, box.pointCount)
+        assertEquals(false, box.lines)
+        for (facet in 0 until box.facetCount) {
+            val corners = (0 until 3).map { box.corner(facet, it) }
+            for (p in corners) assertTrue("inside the unit cube", listOf(p.x, p.y, p.z).all { it == 0.0 || it == 1.0 })
+            // Wound outward: the facet's normal points away from the cube's centre.
+            val normal = (corners[1] - corners[0]).cross(corners[2] - corners[0])
+            val middle = Point3(corners.sumOf { it.x } / 3 - .5, corners.sumOf { it.y } / 3 - .5, corners.sumOf { it.z } / 3 - .5)
+            assertTrue("facet $facet faces out", normal.dot(middle) > 0)
+            assertEquals(PacketMeshes.shade(normal.normalized()), box.shade(facet))
+        }
+        // The top is lit, the underside only by the ambient light.
+        assertEquals(PacketMeshes.shade(null), box.shade(0))
+    }
+
+    @Test fun aBoxsEdgesAndASquaresOutlineAreSegments() {
+        val edges = MarkerShape.boxEdges("edges")
+        assertTrue(edges.lines)
+        assertEquals(12, edges.segmentCount)
+        assertEquals(0, edges.facetCount)
+        val seen = HashSet<Pair<Point3, Point3>>()
+        for (segment in 0 until 12) {
+            val (a, b) = edges.end(segment, 0) to edges.end(segment, 1)
+            val d = b - a
+            assertEquals("one unit along one axis", 1.0, abs(d.x) + abs(d.y) + abs(d.z), 0.0)
+            assertTrue("each edge once", seen.add(a to b))
+        }
+        val square = MarkerShape.squareOutline("square")
+        assertEquals(4, square.segmentCount)
+        for (segment in 0 until 4) {
+            assertEquals(0.0, square.end(segment, 0).z, 0.0)
+            assertEquals(square.end(segment, 1), square.end((segment + 1) % 4, 0))
+        }
+        assertEquals(-1, square.shade(0))
+    }
+
     @Test fun decomposedScaleIsThrees() {
         assertEquals(Point3(1.0, 1.0, 1.0), decomposedScale(ModelTransform.scaledTranslated()))
         val turned = 0.4

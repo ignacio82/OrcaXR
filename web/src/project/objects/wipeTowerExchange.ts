@@ -9,6 +9,8 @@
  */
 import type {
   ProjectVolumeRoleNameWire,
+  ProjectWipeTowerGhostReplyWire,
+  ProjectWipeTowerGhostRequestWire,
   ProjectWipeTowerBiasNameWire,
   ProjectWipeTowerReplyWire,
   ProjectWipeTowerRequestWire,
@@ -24,6 +26,7 @@ import {
   type WipeTowerBias,
   type WipeTowerPlanOptions,
 } from './wipeTowerPlacement';
+import { WipeTowerGhostError, planWipeTowerGhost } from './wipeTowerGhost';
 
 const BIASES: Readonly<Record<ProjectWipeTowerBiasNameWire, WipeTowerBias>> = {
   backLeft: 'back_left',
@@ -92,4 +95,34 @@ export function planWipeTowerWire(
 
 function rectWire(rect: AabbXY) {
   return { xMin: rect.xMin, yMin: rect.yMin, xMax: rect.xMax, yMax: rect.yMax };
+}
+
+/** `WipeTowerGhostRequest` → `WipeTowerGhostReply` for the state's plate. */
+export function wipeTowerGhostWire(
+  state: ProjectState,
+  assets: AssetRepository,
+  request: ProjectWipeTowerGhostRequestWire,
+): ProjectWipeTowerGhostReplyWire {
+  let ghost;
+  try {
+    ghost = planWipeTowerGhost(state, assets, wireText(request.plateId) as PlateId);
+  } catch (error) {
+    if (!(error instanceof WipeTowerGhostError)) throw error;
+    return {
+      refused: {
+        code: error.code === 'unknown-plate' ? 'unknownPlate' : 'nonFinite',
+        message: wireUnits(error.message),
+      },
+    };
+  }
+  if (!ghost) return { none: {} };
+  return {
+    ghost: {
+      positionMm: [ghost.positionMm[0], ghost.positionMm[1]],
+      widthMm: ghost.widthMm,
+      heightMm: ghost.heightMm,
+      standIn: ghost.standIn,
+      marginMm: ghost.marginMm,
+    },
+  };
 }

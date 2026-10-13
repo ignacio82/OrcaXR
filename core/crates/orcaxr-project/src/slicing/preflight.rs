@@ -1914,6 +1914,23 @@ pub fn wipe_tower_footprint_margin_mm<'a>(get: impl Fn(&str) -> Option<&'a Value
     brim + rib_width / 2.0 + extra / 2.0
 }
 
+/// `wipeTowerFootprint`'s body side and margin: the one footprint authority
+/// the preflight checks, the auto-placer reserves and the workspace's ghost
+/// draws. `prime_tower_width ?? wipe_tower_width`, `Number(...) || 60`, from
+/// `{ ...state.config, ...plate.config }` (the plate's key wins, even null).
+pub fn wipe_tower_footprint(state: &ProjectState, plate: &ProjectPlate) -> (f64, f64) {
+    let get = |key: &str| config(&plate.config, key).or_else(|| config(&state.config, key));
+    let width = match get("prime_tower_width") {
+        None | Some(Value::Null) => get("wipe_tower_width"),
+        value => value,
+    };
+    let width = match value_to_number(width) {
+        n if n.is_nan() || n == 0.0 => 60.0,
+        n => n,
+    };
+    (width, wipe_tower_footprint_margin_mm(get))
+}
+
 fn check_wipe_tower(
     issues: &mut Vec<Issue>,
     state: &ProjectState,
@@ -1937,17 +1954,7 @@ fn check_wipe_tower(
         used_physical,
     );
     if let Some(volume) = &constraints.build_volume {
-        // `{ ...state.config, ...plate.config }`: the plate's key wins.
-        let get = |key: &str| config(&plate.config, key).or_else(|| config(&state.config, key));
-        let width = match get("prime_tower_width") {
-            None | Some(Value::Null) => get("wipe_tower_width"),
-            value => value,
-        };
-        let width = match value_to_number(width) {
-            n if n.is_nan() || n == 0.0 => 60.0,
-            n => n,
-        };
-        let margin = wipe_tower_footprint_margin_mm(get);
+        let (width, margin) = wipe_tower_footprint(state, plate);
         let [x, y] = tower.position_mm.map(|n| n.get());
         let (x_min, y_min) = (x - margin, y - margin);
         let (x_max, y_max) = (x + width + margin, y + width + margin);

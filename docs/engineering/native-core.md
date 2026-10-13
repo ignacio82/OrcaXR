@@ -4064,6 +4064,48 @@ refusals). Rust, WASM in Node and Chrome and JNI answer all 27 byte for byte;
 auto-placement through the production controller, which
 [the Android app](#android-wipe-tower-auto-placement) replays.
 
+The tower's ghost — the translucent box the browser's workspace draws on the
+plate before slicing (`OrcaWorkspace.rebuildWipeTowerGhost`) — is computed by
+`wipeTowerGhost.ts` and ported as `placement::wipe_tower::ghost` (through
+`wipeTowerGhostWire`). For a plate's enabled tower it answers the body's
+front-left corner (`wipe_tower_x/y`, the libslic3r frame, never clamped onto
+the bed), its side — the width of the footprint the slice preflight checks
+(`wipeTowerFootprint`, now exported from `wipeTowerPlacement.ts` and shared
+in Rust as `slicing::preflight::wipe_tower_footprint`: the plate's
+configuration over the project's, `Number(prime_tower_width ??
+wipe_tower_width) || 60`), drawn at least 1 mm — its height, the top of the
+tallest model part on the plate (every instance's model parts as placed, by
+the canonical bounds; modifiers, enforcers, blockers and negative parts print
+nothing of their own), or a 30 mm stand-in with `standIn` when no model part
+rises above the bed, and the margin the brim and rib wall print outside the
+body. A plate without an enabled tower answers `none`; an unknown plate or a
+box that is not finite (a width of `"1e400"`, a margin that overflows) is
+refused. Bindings: WASM `wipe_tower_ghost`, the JNI export
+`sessionWipeTowerGhost` and Kotlin `ProjectSession.wipeTowerGhost`.
+
+Porting it found three browser defects, each fixed by drawing the browser's
+ghost from the shared plan (`wipe-tower-ghost.test.ts` fails on the old code).
+The ghost read its width and margin from the profile's base configuration
+(`getSlicingConfiguration().config`), so a plate's own `prime_tower_width` and
+brim — which the preflight and the auto-placer honour — were drawn as the
+project's, contrary to the one footprint authority. Its height came from the
+first display mesh of each instance only, so a taller second part rose out of
+the ghost, and a modifier listed first set the height of a tower nothing
+prints. And its body was drawn at least 1 mm wide but centred on the
+configured width, so a thinner one stood off its corner. The legacy
+`activePlateWipeTower`/`projectPrimeTower` reader, which nothing used any more,
+is gone.
+
+`wipe-tower-vectors.mjs` adds 13 ghosts: plates whose enabled towers take
+width and margin from the plate, the project or neither (`??` past a null,
+arrays, a rib wall reading the project's rib width), drawn no thinner than
+1 mm, rising to a second model part above the first, turned and scaled
+instances and a mirrored open mesh (never a modifier), or standing at 30 mm
+over a model sunk below the bed; disabled and absent towers; two overflowing
+boxes and an unknown plate (5 drawn, 5 none, 3 refused). Rust, WASM in Node
+and Chrome and JNI answer all 13 byte for byte (27 Kotlin checks more), and
+the journey records the active plate's ghost after every step.
+
 ### Workspace bed
 
 `placement::bed` ports how the browser's workspace reads its bed from a
@@ -6255,10 +6297,22 @@ switch, named by its words, with the browser's title as its tooltip, and
 enabled as the core enables the action. The switch only records the choice,
 as the browser's does: nothing places the tower again by itself.
 
-The Workspace does not draw the tower yet (the browser's
-`rebuildWipeTowerGhost`: its body, edges and the brim's footprint): the
-placement shows in the undo label, the slice and the preflight until the
-ghost is ported.
+The Workspace draws the active plate's tower as the browser's ghost
+([wipe-tower auto-placement](#wipe-tower-auto-placement)):
+`ProjectWorkspace.wipeTowerGhost` reads the core's plan on the authority
+whenever the project changes (an edit, an undo, the active plate, a
+placement), and `WipeTowerGhosts` draws it with `FilamentScene.setMarkers` —
+a translucent grey box (`#9e9e9e` at 0.35, its outer sides only, as three.js
+draws a material's front side) from the tower's corner, as wide as its
+footprint and as tall as the plate's tallest model part, its twelve edges in
+`#cfd8dc` at 0.8, and, where the brim and rib wall print outside the body,
+that footprint outlined in amber (`#ffb74d` at 0.65) just above the bed's
+grid (the browser's 0.0005 scene units, 2/7 mm). Markers now draw line
+segments as well as facets (`MarkerShape.boxEdges`, `squareOutline`), and a
+facet may carry a baked shade (`MarkerShape.box`): the box's faces are shaded
+as the scene bakes a model's light (`PacketMeshes.shade`), where the
+browser's material is lit. A box beyond the scene's transform range (±10⁹ mm)
+draws nothing.
 
 `wipe-tower-vectors.mjs` also records a journey through the production
 `CanonicalWorkspaceController` on its project as a canonical 3MF (with a
@@ -6271,14 +6325,20 @@ and the empty plate (no clearance) — each with and without the profile's
 rectangle — recording the pick, the semantic hash and the undo label after
 every step, then undoing them all. `ProjectWipeTowerEditChecks` (65 checks over
 JNI on the host, via `project-jni-test.mjs`) takes the same steps through
-`ProjectWorkspace` and matches the browser's pick, hash and label after
-each, then undoes back to the opened project. `AppActionsTest` and
-`ProjectEditingTest` cover the action and the menu. `android-wipetower-smoke.py`,
-added to `emulator-smoke.py` after the brim-ear smoke, places the tower from
-the Edit menu and from the palette (each "Auto-place wipe tower", undone),
-then switches Prepare's switch on (placed, "enabled") and off ("disabled",
-the tower left where it is). It passes on a suite-sized API 34 emulator; the
-API 37 suite has yet to run it.
+`ProjectWorkspace` and matches the browser's pick, hash, label and the
+active plate's ghost after each, then undoes back to the opened project. The
+journey goes on to plates whose towers were already enabled, a part raised
+on one (the ghost grows with it) and a stand-in: 14 steps and 13 undo
+entries, 95 checks. `AppActionsTest` and `ProjectEditingTest` cover the
+action and the menu, `WipeTowerGhostTest` (app JVM) the ghost's markers and
+`SceneMarkersTest` (`renderer-api`) the box, its edges and the outline.
+`android-wipetower-smoke.py`, added to `emulator-smoke.py` after the brim-ear
+smoke, places the tower from the Edit menu, finds its ghost among the pixels
+the placement changed in the Workspace (grey body and amber brim outline)
+and undoes it, ghost and all; places it from the palette (each "Auto-place
+wipe tower", undone); then switches Prepare's switch on (placed, "enabled")
+and off ("disabled", the tower left where it is). It passes on a suite-sized
+API 34 emulator; the API 37 suite has yet to run it.
 
 ### Android emboss text and SVG parts
 

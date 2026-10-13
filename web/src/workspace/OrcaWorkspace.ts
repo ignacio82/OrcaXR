@@ -84,11 +84,8 @@ import {
 } from '../printer/PrinterStatusSummary';
 import { summarizeGcodeToolUsage } from '../printer/PrintToolMapping';
 import type { ArrangeRegion } from '../project/objects/arrange';
-import {
-  printableAreaRect,
-  wipeTowerFootprintMarginMm,
-  type WipeTowerPick,
-} from '../project/objects/wipeTowerPlacement';
+import { printableAreaRect, type WipeTowerPick } from '../project/objects/wipeTowerPlacement';
+import type { WipeTowerGhost } from '../project/objects/wipeTowerGhost';
 import { parseThumbnailList } from '../slicer/GcodeThumbnails';
 import type { SliceThumbnailPort } from '../slicer/CanonicalSlicerClientRoute';
 import { PlateThumbnailRenderer, plateThumbnailMeshes } from './PlateThumbnailRenderer';
@@ -244,7 +241,7 @@ import {
   type WorkspaceProfileSelectionRequest,
 } from './CatalogSlicingConfiguration';
 import { bedSizeFromProfile, ProfileCatalog, type SlicerProfile } from '../slicer/ProfileLoader';
-import { wipeTowerKeepOut, wipeTowerWidthMm, workspaceBed, type WorkspaceBed } from './WorkspaceBed';
+import { wipeTowerKeepOut, workspaceBed, type WorkspaceBed } from './WorkspaceBed';
 import { eulerFromQuaternion, withTransformFieldInput } from './TransformFields';
 import { SlicerClient, type AttestedProjectRoute } from '../slicer/SlicerClient';
 import { engineSupports } from '../slicer/pinnedEngineProvenance';
@@ -591,8 +588,6 @@ interface GeometryLoadOptions {
   deferPostAdd?: boolean;
   deferBoundsTree?: boolean;
 }
-
-type ProjectPrimeTower = { enabled: boolean; xMm: number; yMm: number; widthMm: number };
 
 export type WorkspaceGizmoTool =
   | 'move'
@@ -2031,8 +2026,6 @@ export class OrcaWorkspace extends xb.Script {
   /** Virtual (mixed) filaments adopted from the loaded FullSpectrum 3MF —
    *  read-only in the UI; their display colors match the desktop app. */
   public virtualFilaments: VirtualFilament[] = [];
-  /** Prime/purge tower setup adopted from the loaded 3MF (null = none). */
-  private projectPrimeTower: ProjectPrimeTower | null = null;
   private wipeTowerGhost: THREE.Group | null = null;
   private headFilaments: HeadFilamentSelection[] = [];
   private headNozzles: string[] = [];
@@ -4797,61 +4790,32 @@ export class OrcaWorkspace extends xb.Script {
     (this.workspace as unknown as { draggable: boolean }).draggable = skin.grabAffordances;
   }
 
-  /** Effective prime/purge tower on the active plate (null if none/disabled). */
-  public get activePlateWipeTower(): { enabled: boolean; xMm: number; yMm: number; widthMm: number } | null {
-    try {
-      const summary = this.canonicalProject.getSummary();
-      const activePlate = summary.plates.find((plate) => plate.id === this.activePlateId);
-      const tower = activePlate?.wipeTower;
-      if (!tower || !tower.enabled) {
-        return this.projectPrimeTower?.enabled ? this.projectPrimeTower : null;
-      }
-      return {
-        enabled: tower.enabled,
-        xMm: tower.positionMm[0],
-        yMm: tower.positionMm[1],
-        widthMm: wipeTowerWidthMm(this.canonicalProject.getSlicingConfiguration().config),
-      };
-    } catch {
-      return this.projectPrimeTower?.enabled ? this.projectPrimeTower : null;
-    }
-  }
-
   /**
-   * (Re)build the semi-transparent prime/purge tower ghost on the plate,
-   * mirroring the loaded project's `enable_prime_tower` + `wipe_tower_x/y` +
-   * `prime_tower_width` — the same frame libslic3r uses (mm, bed corner
-   * origin, the tower's front-left corner). The footprint is square (the real
-   * tower's depth depends on purge volumes; this is a placement ghost, like
-   * the desktop plate preview before slicing).
+   * (Re)build the semi-transparent prime/purge tower ghost on the active plate
+   * from the canonical tower (`wipeTowerGhost.ts`, the shared core's too): its
+   * square body at `wipe_tower_x/y` — the libslic3r frame, the body's
+   * front-left corner — as wide as the footprint the preflight checks, as tall
+   * as the plate's tallest model part (a stand-in on a plate with none), and
+   * the brim and rib wall outlined flat on the bed around it. A placement
+   * ghost, like the desktop plate before slicing: the real tower's depth
+   * depends on purge volumes.
    */
   public rebuildWipeTowerGhost() {
     if (this.wipeTowerGhost) {
       this.workspace.remove(this.wipeTowerGhost);
       this.wipeTowerGhost = null;
     }
-    const pt = this.activePlateWipeTower;
-    if (!pt || !pt.enabled) return;
+    let ghost: WipeTowerGhost | undefined;
+    try {
+      ghost = this.canonicalProject.wipeTowerGhost(this.activePlateId);
+    } catch {
+      return;
+    }
+    if (!ghost) return;
 
     const vis = MM * WORKSPACE_SCALE;
-    const w = Math.max(1, pt.widthMm) * vis;
-    // Tower height tracks the tallest plated model (printer mm), like the
-    // desktop ghost; a stand-in height when the plate is still empty.
-    let heightMm = 0;
-    for (const geo of this.printerGeometries()) {
-      geo.computeBoundingBox();
-      if (geo.boundingBox) heightMm = Math.max(heightMm, geo.boundingBox.max.z);
-      geo.dispose();
-    }
-    if (heightMm <= 0) heightMm = 30;
-    const h = heightMm * vis;
-
-    // Drawn exactly where the engine will print it. The ghost used to clamp
-    // itself onto the bed, so a tower whose brim hung off the edge still looked
-    // seated — the preview agreed with nothing and hid the defect until the
-    // first layer went down past the front left corner.
-    const xMm = pt.xMm;
-    const yMm = pt.yMm;
+    const w = ghost.widthMm * vis;
+    const h = ghost.heightMm * vis;
 
     const group = new THREE.Group();
     group.name = 'wipeTowerGhost';
@@ -4876,10 +4840,10 @@ export class OrcaWorkspace extends xb.Script {
     // The brim and the rib wall print outside the body, and the operator has no
     // other way to see how much bed they claim. Outlined flat on the plate so
     // an overhanging tower reads as overhanging.
-    const marginMm = wipeTowerFootprintMarginMm(this.canonicalProject.getSlicingConfiguration().config);
-    if (marginMm > 0) {
+    if (ghost.marginMm > 0) {
+      const side = w + 2 * ghost.marginMm * vis;
       const footprint = new THREE.LineSegments(
-        new THREE.EdgesGeometry(new THREE.PlaneGeometry(w + 2 * marginMm * vis, w + 2 * marginMm * vis)),
+        new THREE.EdgesGeometry(new THREE.PlaneGeometry(side, side)),
         new THREE.LineBasicMaterial({ color: 0xffb74d, transparent: true, opacity: 0.65 }),
       );
       footprint.rotation.x = -Math.PI / 2;
@@ -4888,12 +4852,13 @@ export class OrcaWorkspace extends xb.Script {
       group.add(footprint);
     }
 
-    // Bed corner-origin (xMm, yMm) → workspace: bed centre at origin,
-    // printer +Y toward the back (world -Z). Position the box's CENTER.
+    // Bed corner-origin (x, y) → workspace: bed centre at origin, printer +Y
+    // toward the back (world -Z). The box's centre, so its corner is (x, y).
+    const [xMm, yMm] = ghost.positionMm;
     group.position.set(
-      (xMm + pt.widthMm / 2 - this.bedMm.x / 2) * vis,
+      (xMm + ghost.widthMm / 2 - this.bedMm.x / 2) * vis,
       h / 2,
-      (this.bedMm.y / 2 - (yMm + pt.widthMm / 2)) * vis,
+      (this.bedMm.y / 2 - (yMm + ghost.widthMm / 2)) * vis,
     );
     this.wipeTowerGhost = group;
     this.workspace.add(group);
@@ -9486,7 +9451,6 @@ export class OrcaWorkspace extends xb.Script {
         ...slicing.config,
         filament_colour: physical.map((filament) => filament.color),
       });
-      this.projectPrimeTower = null;
       if (physical.length > 0) this.palette.replace(slots.palette);
       this.synchronizePrinterMappingFromCanonicalConfig();
       this.unselectModel();

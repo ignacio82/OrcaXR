@@ -13,8 +13,9 @@ import java.util.concurrent.TimeUnit
  * activated, a model moved, and [ProjectWorkspace.autoPlaceWipeTower] with
  * and without the profile's printable rectangle — its pick the browser's,
  * one "Auto-place wipe tower" step, nothing when the tower is already there.
- * After each step the semantic hash and the undo label are the browser's;
- * then every entry is undone back to the opened project.
+ * After each step the semantic hash, the undo label and the active plate's
+ * ghost ([ProjectWorkspace.wipeTowerGhost]: none, or the browser's box) are
+ * the browser's; then every entry is undone back to the opened project.
  */
 object ProjectWipeTowerEditChecks {
     private const val WAIT_S = 60L
@@ -87,6 +88,8 @@ object ProjectWipeTowerEditChecks {
                 val view = workspace.view
                 check(view.revision?.semanticHash == step.get("semanticHash"), label("hash $kind"))
                 check(view.undo == step.get("undoLabel") as? String, label("undo ${view.undo}"))
+                val ghost = ProjectIntents.decodeWipeTowerGhostReply(step.get("ghost") as String)
+                check(done(workspace.wipeTowerGhost()) == (ghost as? ProjectIntents.WipeTowerGhostReply.Ghost)?.value, label("ghost"))
             }
             val undo = reference.get("undo") as ProjectJsonArray
             for (index in 0 until undo.length()) {

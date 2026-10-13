@@ -2883,6 +2883,24 @@ class ProjectWorkspace(
         }
     }
 
+    /**
+     * The ghost the Workspace draws for the active plate's wipe tower (the
+     * browser's `rebuildWipeTowerGhost` over `wipeTowerGhost.ts`), read on the
+     * authority: the tower's square body at its position, as wide as the
+     * footprint the preflight checks, as tall as the plate's tallest model part
+     * (or the stand-in), and the margin its brim and rib wall print outside it.
+     * Null without an active plate or an enabled tower; a tower the core will
+     * not draw (a box that is not finite) draws nothing, as in the browser.
+     */
+    fun wipeTowerGhost(): CompletableFuture<ProjectIntents.WipeTowerGhost?> = inspect { session ->
+        val plate = session.snapshot().use { snapshot ->
+            snapshot.query().use { root -> ProjectFacts.plates(root).firstOrNull { it.active } }
+        }
+        // An inspection answers something: no active plate draws no ghost.
+        plate?.let { session.wipeTowerGhost(ProjectIntents.WipeTowerGhostRequest(units(it.id))) }
+            ?: ProjectIntents.WipeTowerGhostReply.None(ProjectIntents.Empty)
+    }.thenApply { reply -> (reply as? ProjectIntents.WipeTowerGhostReply.Ghost)?.value }
+
     override fun close() {
         synchronized(lock) { timer?.close() }
         cancelSimplifyPreview()
