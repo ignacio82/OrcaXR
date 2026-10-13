@@ -162,6 +162,20 @@ export class GcodeSession {
         }
     }
     /**
+     * File → Export Toolpaths as OBJ… of the sealed source: the browser's
+     * `exportToolpathsToObj` file, whole (the browser holds it whole too).
+     * @returns {Uint8Array}
+     */
+    toolpathObj() {
+        const ret = wasm.gcodesession_toolpathObj(this.__wbg_ptr);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
      * @param {string} request
      * @returns {Uint8Array}
      */

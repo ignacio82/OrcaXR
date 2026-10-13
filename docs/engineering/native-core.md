@@ -7428,12 +7428,48 @@ text, every file found by profile ID) write all 1,491 byte for byte, and
 `ProjectCatalogChecks` reads profile 0's through Kotlin (and the same file
 from a catalog built with a reversed collator).
 
+Export Toolpaths as OBJ…. The browser writes the published G-code's
+extrusions (`exportToolpathsAsObj`, offered once the slice is the project's;
+"Slice the plate before exporting toolpaths." otherwise) as
+`exportToolpathsToObj` in `GcodeToolpath.ts`: the G-code parsed with no
+options, its path sidecar checked, a header line, every extrusion record's
+segments as two `v` lines each (a direct move unless it starts where it ends,
+`===` on the coordinates; an arc's every interpolation edge and its final
+edge, even an empty one), each coordinate `toFixed(4)` of its binary32
+column, then one `l` line per segment, joined by `\n` with none after the
+last, named `<active plate>_toolpaths.obj` (`model/obj`).
+`orcaxr_gcode::toolpath_obj` writes the same file as a stream (the `l` lines
+only count; `toFixed` is ryu-js's, ties away from zero, signed zeros kept,
+`String(x)` from 1e21) over the parser's own model — the parse the browser
+makes, whatever a session's own options (`Session::toolpath_obj` parses the
+sealed source again with none). WASM `GcodeSession.toolpathObj` (the
+computation set, the file whole), JNI `NativeGcode.toolpathObj` (streamed
+through a `ProjectJsonSink` in chunks of at most 64 KiB, stopping when its
+session closes) and Kotlin `ToolpathObj.write` (a session of its own over
+the file's bytes, decoded as the browser decodes a file; a destination's own
+failure rethrown as thrown). `toolpath-obj-vectors.mjs` records 39 cases
+(26,012 segments): direct and arc extrusions (I/J and R arcs, full circles,
+relative and inch modes, G92 resets), travel, retraction and wipe moves,
+moves that go nowhere, coordinates whose `toFixed(4)` ties, rounds to a
+signed zero or passes 1e21, a byte-order mark and CRLF, roles and tool
+changes, the parity fixtures, 24 seeded random paths and a long one (whole up
+to 16 KiB, else by SHA-256 and length). Rust (`tests/toolpath_obj.rs`, also
+through a session whose limits would truncate its windows), WASM in Node and
+in a Chrome worker (`toolpath-obj-replay.mjs`, in `wasm-smoke.mjs`) and JNI
+(`ToolpathObjChecks`, 81 host checks: every case from its text and from its
+bytes, a failing destination, a session closed mid-stream, an unsealed one)
+write all of them byte for byte. The browser's validation of the parser's
+own output, which no G-code fails, is the core's `invalid-model` code; past
+the parser's 256 Mi-unit input the core refuses (`resource_limit`) where
+the browser would export the truncated parse, and the browser's own failure
+past V8's longest string has no Android counterpart.
+
 On Android the exports are the browser's File menu entries and its Download
 actions: the Project area's Export menu (beside Share) lists Export G-code…,
 Export All Plates…, Export as one STL…, Export all objects as STLs…, Export
-as 3MF…, Export Config… and Download All Plates; Prepare's result card offers Download beside Preview and
+as 3MF…, Export Config…, Export Toolpaths as OBJ… and Download All Plates; Prepare's result card offers Download beside Preview and
 Send to Printer, and Download All Plates under every plate's result; the
-command palette lists all eight. Each is enabled as the browser's registry
+command palette lists all nine. Each is enabled as the browser's registry
 gate judges it — the core's capability rules read with the Prepare area's
 facts (`ProjectWorkspace.sliceActions` now takes the published slice's
 `gcodeReady` and reads the output actions too) — and not while another
@@ -7448,7 +7484,9 @@ failed: …" with the core's reason) and the configuration (the profile the
 project worker holds once every choice asked before has applied,
 `SlicingProfiles.configExport`, found among the catalog's profiles by its
 three presets; "No active profile to export." while an opened project slices
-with its own), the G-code is the published
+with its own) and the toolpaths (`ToolpathObj.write` over the published
+G-code, still the project's when chosen, named after the active plate;
+"Export OBJ failed: …" with the core's reason), the G-code is the published
 file, whose currency is checked again once a place is picked. The picker
 creates the document under the browser's name with the type the device
 associates with its extension (else `application/octet-stream`): a provider
@@ -7466,15 +7504,15 @@ left for …", "OrcaXR can no longer write to …") and the half-written documen
 is removed. Outcomes are the browser's status words in the shell's snackbar
 ("Saved orcaxr.gcode.", "Downloaded 2 plate G-code file(s).", "Exported 1
 model as 12 STL triangles.", "Plated geometry exported as 3MF.", "Exported
-config."), the
+config.", "Sliced toolpaths exported as OBJ."), the
 catalogued ones in the operator's language. One deviation: the browser's
 Export as 3MF… is its Save, so it also marks the project saved; on Android a
 project's document is its own (Save writes it, Save as rebinds it), so the
 export is a copy and the project's saved state is untouched, as Share's.
 
-`ExportCommandsTest` (4 JVM tests: the eight and where they run, the gate
+`ExportCommandsTest` (4 JVM tests: the nine and where they run, the gate
 and the one-at-a-time rule, the browser's words, the providers' failures and
-the document type), `AppActionsTest` (73 performed actions with their
+the document type), `AppActionsTest` (74 performed actions with their
 glyphs, words and hints). `android-exports-smoke.py` (in `emulator-smoke.py` after
 the outputs smoke) drives them through the system's picker on the engine-less
 APK and reads every file back: `cube.stl` (the browser's header, 12 facets,
@@ -7487,10 +7525,13 @@ browser's file of the chosen bundled profile byte for byte (its SHA-256 and
 length among the corpus's, the profile the one its names give) — a negative
 part refused with no picker, then on the external slicer stand-in Download and the
 palette's Export G-code… (`orcaxr.gcode`, `orcaxr (1).gcode`, each the
-published file byte for byte), Download All Plates refused before a Slice All
+published file byte for byte), `Plate_1_toolpaths.obj` (byte for byte the
+OBJ the browser's own `exportToolpathsToObj` writes from that G-code),
+Download All Plates refused before a Slice All
 Plates, and Export All Plates… slicing both plates and writing `Plate_1.gcode`
 and `Plate_2.gcode` into a picked folder, each its plate's published file; an
-edit withdraws them. It passes on the iteration emulator (API 34, x86_64);
+edit withdraws them (neither Export G-code… nor Export Toolpaths as OBJ… is
+offered). It passes on the iteration emulator (API 34, x86_64);
 the two suites have not run it.
 
 ### Android Device area

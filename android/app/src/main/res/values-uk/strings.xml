@@ -76,4 +76,5 @@
     <string name="export_stl">Експортувати як один STL…</string>
     <string name="export_all_stls">Експортувати всі об’єкти як файли STL…</string>
     <string name="export_download">Завантажити</string>
+    <string name="export_obj">Експорт траєкторій як OBJ…</string>
 </resources>

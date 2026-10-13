@@ -233,6 +233,24 @@ impl Session {
         )?)
         .map_err(|_| SessionError::InvalidState)
     }
+    /// File → Export Toolpaths as OBJ… of the sealed source, parsed as the
+    /// browser's `exportToolpathsToObj` parses it (no options, whatever the
+    /// session's), written to [out] ([crate::toolpath_obj]).
+    pub fn toolpath_obj(
+        &self,
+        out: &mut dyn std::io::Write,
+    ) -> Result<crate::toolpath_obj::Written, SessionError> {
+        let index = self.index()?;
+        crate::toolpath_obj::write(&index.source, out, &self.cancellation).map_err(|failure| {
+            match failure {
+                crate::toolpath_obj::Failure::Cancelled => SessionError::Cancelled,
+                crate::toolpath_obj::Failure::Invalid(_) => {
+                    SessionError::Computation("invalid-model")
+                }
+                crate::toolpath_obj::Failure::Io(_) => SessionError::Computation("output-failed"),
+            }
+        })
+    }
     fn load(&mut self, window: Window) -> Result<(), SessionError> {
         let index = self.index()?;
         if let Window::Entries(first, last) = window

@@ -26,6 +26,11 @@ export class GcodeSession {
      * UTF-16 code units. Non-finite or nonpositive counts return no lines.
      */
     textWindow(from: number, count: number): string;
+    /**
+     * File → Export Toolpaths as OBJ… of the sealed source: the browser's
+     * `exportToolpathsToObj` file, whole (the browser holds it whole too).
+     */
+    toolpathObj(): Uint8Array;
     view(request: string): Uint8Array;
     whole(): Uint8Array;
     window(first: number, last: number): Uint8Array;
@@ -49,6 +54,7 @@ export interface InitOutput {
     readonly gcodesession_summary: (a: number) => [number, number, number, number];
     readonly gcodesession_textSearch: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly gcodesession_textWindow: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly gcodesession_toolpathObj: (a: number) => [number, number, number, number];
     readonly gcodesession_view: (a: number, b: number, c: number) => [number, number, number, number];
     readonly gcodesession_whole: (a: number) => [number, number, number, number];
     readonly gcodesession_window: (a: number, b: number, c: number) => [number, number, number, number];

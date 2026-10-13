@@ -76,4 +76,5 @@
     <string name="export_stl">Exportar como STL único…</string>
     <string name="export_all_stls">Exportar todos los objetos como varios STL…</string>
     <string name="export_download">Descargar</string>
+    <string name="export_obj">Exportar Movimientos como OBJ (T)…</string>
 </resources>

@@ -10,6 +10,20 @@ const corpus = JSON.parse(await readFile(new URL('testdata/cross-platform/canoni
 const schema = JSON.parse(await readFile(new URL('contracts/core-protocol.json', root)));
 const packets = await build({entryPoints:[new URL('web/src/slicer/core/GcodePackets.ts',root).pathname],bundle:true,format:'esm',platform:'browser',write:false});
 const sourceOwner = await build({entryPoints:[new URL('web/src/slicer/core/CoreGcodeSource.ts',root).pathname],bundle:true,format:'esm',platform:'browser',write:false});
+// The OBJ replay over the same module in Node first.
+const TOOLPATH_OBJ_ANSWERS = [39, 26012];
+const nodeToolpaths = await (async () => {
+  const glue = await import(new URL('core/dist/wasm/orcaxr_core.js', root).href);
+  glue.initSync({ module: await readFile(new URL('core/dist/wasm/orcaxr_core_bg.wasm', root)) });
+  const { replayToolpathObjs } = await import(new URL('tools/cross-platform/toolpath-obj-replay.mjs', root).href);
+  const { createHash } = await import('node:crypto');
+  const answers = await replayToolpathObjs(glue.GcodeSession,
+    JSON.parse(await readFile(new URL('testdata/cross-platform/toolpath-obj-vectors.json', root))),
+    JSON.parse(await readFile(new URL('contracts/gcode-buffer.json', root))),
+    async (bytes) => createHash('sha256').update(bytes).digest('hex'));
+  assert.deepEqual(answers.toolpathObjAnswers, TOOLPATH_OBJ_ANSWERS);
+  return answers.toolpathObjAnswers;
+})();
 const workerSource = `
 import initialize, { core_info, evaluate, GcodeSession } from '/wasm/orcaxr_core.js';
 import { replayGcode } from '/gcode-replay.mjs';
@@ -17,6 +31,7 @@ import { replayViews } from '/view-replay.mjs';
 import { replayRequests } from '/request-replay.mjs';
 import { replayDocuments } from '/document-replay.mjs';
 import { replaySummaries } from '/summary-replay.mjs';
+import { replayToolpathObjs } from '/toolpath-obj-replay.mjs';
 const exports = await initialize({ module_or_path: new URL(self.location.href).searchParams.has('missing')
   ? '/missing.wasm' : '/wasm/orcaxr_core_bg.wasm' });
 self.onmessage = async ({data}) => {
@@ -45,10 +60,13 @@ self.onmessage = async ({data}) => {
       const requests = await replayRequests(GcodeSession);
       const documents = await replayDocuments(GcodeSession);
       const summaries = await replaySummaries(GcodeSession);
+      const toolpaths = await replayToolpathObjs(GcodeSession, await (await fetch('/toolpath-obj-vectors.json')).json(),
+        await (await fetch('/gcode-buffer.json')).json(),
+        async (b) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', b)), (x) => x.toString(16).padStart(2, '0')).join(''));
       const session = new GcodeSession(1, 0, '{}');
       let packet;
       try { session.seal(); packet = session.whole(); } finally { session.free(); }
-      self.postMessage({result: {requestId: data.requestId, type: 'gcode-tested', metrics, views: views.metrics, requests, documents, summaries, viewPacket: views.owned, packet}, memoryBytes: exports.memory.buffer.byteLength}, [packet.buffer, views.owned.buffer]);
+      self.postMessage({result: {requestId: data.requestId, type: 'gcode-tested', metrics, views: views.metrics, requests, documents, summaries, toolpaths, viewPacket: views.owned, packet}, memoryBytes: exports.memory.buffer.byteLength}, [packet.buffer, views.owned.buffer]);
     } catch (error) {
       self.postMessage({result: {requestId: data.requestId, type: 'gcode-failed', message: String(error)}});
     }
@@ -67,7 +85,7 @@ const server = createServer(async (request, response) => {
     else if (path === '/worker.mjs') { response.setHeader('Content-Type', 'text/javascript'); response.end(workerSource); }
     else if (path === '/gcode-packets.mjs') { response.setHeader('Content-Type','text/javascript'); response.end(packets.outputFiles[0].text); }
     else if (path === '/gcode-source.mjs') { response.setHeader('Content-Type','text/javascript'); response.end(sourceOwner.outputFiles[0].text); }
-    else if (['/gcode-replay.mjs', '/view-replay.mjs', '/request-replay.mjs', '/document-replay.mjs', '/summary-replay.mjs', '/packet-snapshot.mjs', '/gcode-vectors.json', '/gcode-document-vectors.json', '/gcode-summary-vectors.json', '/view-vectors.json', '/request-vectors.json', '/canonical-requests.json', '/gcode-buffer.json', '/gcode-view-buffer.json'].includes(path)) {
+    else if (['/gcode-replay.mjs', '/view-replay.mjs', '/request-replay.mjs', '/document-replay.mjs', '/summary-replay.mjs', '/toolpath-obj-replay.mjs', '/packet-snapshot.mjs', '/gcode-vectors.json', '/gcode-document-vectors.json', '/gcode-summary-vectors.json', '/toolpath-obj-vectors.json', '/view-vectors.json', '/request-vectors.json', '/canonical-requests.json', '/gcode-buffer.json', '/gcode-view-buffer.json'].includes(path)) {
       const file = path.endsWith('.mjs') ? 'tools/cross-platform'+path : path.endsWith('-buffer.json') ? 'contracts'+path : 'testdata/cross-platform'+path;
       response.setHeader('Content-Type', path.endsWith('.mjs') ? 'text/javascript' : 'application/json');
       response.end(await readFile(new URL(file,root)));
@@ -190,10 +208,13 @@ try {
       check(await start({missing: true}).then(client => {client.close(); return false;}, () => true), 'Missing WASM accepted');
       check(clients.size === 0, 'Worker owners retained');
       return {vectors: corpus.vectors.length, invalid: corpus.invalid.length, canonicalRequests: envelopes.result.cases, largePayloadRepeats: 40,
-        wasmLinearMemoryBytes: finalBytes, disposalCycles: 10, crossOriginIsolated, gcode: gcode.result.metrics, views: gcode.result.views, requests: gcode.result.requests, documents: gcode.result.documents, summaries: gcode.result.summaries};
+        wasmLinearMemoryBytes: finalBytes, disposalCycles: 10, crossOriginIsolated, gcode: gcode.result.metrics, views: gcode.result.views, requests: gcode.result.requests, documents: gcode.result.documents, summaries: gcode.result.summaries, toolpaths: gcode.result.toolpaths};
     } finally { for (const close of clients) close(); }
   }, {corpus, schema});
   assert.equal(result.vectors, corpus.vectors.length);
+  // File → Export Toolpaths as OBJ…: every case, and every segment, the browser's — in Chrome and in Node.
+  assert.deepEqual(result.toolpaths.toolpathObjAnswers, TOOLPATH_OBJ_ANSWERS);
+  result.nodeToolpaths = nodeToolpaths;
   const output = new URL('tools/cross-platform/results/', root);
   await mkdir(output, {recursive: true});
   await writeFile(new URL('wasm-smoke.json', output), JSON.stringify({browser: await browser.version(), ...result}, null, 2) + '\n');

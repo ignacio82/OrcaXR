@@ -17,6 +17,8 @@ final class NativeGcode {
     static native void copy(long handle, ByteBuffer target);
     static native void close(long handle);
     static native char[] decodeUtf8(byte[] bytes);
+    // File → Export Toolpaths as OBJ… of the sealed source, streamed to the sink; its length in bytes.
+    static native long toolpathObj(long handle, ProjectJsonSink sink);
     // What the status line says of a finished slice and the engine's totals in it, streamed through (SliceStatusTally).
     static native long tallyOpen();
     static native void tallyPush(long handle, byte[] bytes, int length);

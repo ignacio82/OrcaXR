@@ -824,6 +824,25 @@ try {
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
   );
   assert.deepEqual(configExports.configExportAnswers, [1482, 9]);
+  // File → Export Toolpaths as OBJ… through the Kotlin owner and the G-code
+  // session's JNI export: every case's file from its text and its bytes.
+  const toolpathObjFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/toolpath-obj-vectors.json", root)),
+  );
+  const toolpathObjChecks = jvm.call(
+    "toolpathObjChecks",
+    toolpathObjFixture.cases
+      .map((c) => {
+        const obj = c.obj === undefined ? undefined : Buffer.from(c.obj, "utf8");
+        return [
+          Buffer.from(c.source, "utf8").toString("base64"),
+          obj ? obj.length : c.bytes,
+          obj ? createHash("sha256").update(obj).digest("hex") : c.sha256,
+        ].join("\t");
+      })
+      .join("\n"),
+  );
+  assert.equal(toolpathObjChecks, 81);
   const bundled = catalogFixture.exchanges.bundled;
   const catalogChecks = jvm.call(
     "catalogChecks",
@@ -2024,6 +2043,7 @@ try {
     modelExports,
     modelExportChecks,
     configExports,
+    toolpathObjChecks,
     ...primitives,
     primitiveChecks,
     ...paintTool,

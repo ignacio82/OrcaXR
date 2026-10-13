@@ -1,12 +1,13 @@
 use jni::{
     JNIEnv,
-    objects::{JByteArray, JByteBuffer, JCharArray, JClass, JString},
+    objects::{JByteArray, JByteBuffer, JCharArray, JClass, JObject, JString, JValue},
     sys::{jcharArray, jdouble, jint, jlong, jstring},
 };
 use orcaxr_gcode::{Cancellation, Session, SessionError, artifact::SliceTally, layout};
 use orcaxr_project::slicing::thumbnails::{Anchor, Insertion};
 use std::{
     collections::HashMap,
+    io,
     panic::{AssertUnwindSafe, catch_unwind},
     ptr,
     sync::{
@@ -378,6 +379,103 @@ pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_copy(
         }
         Ok(())
     });
+}
+/// Chunks of a toolpath OBJ to a `ProjectJsonSink`, stopping once the session closes.
+struct ObjSink<'env, 'local, 'target> {
+    env: &'env mut JNIEnv<'local>,
+    target: JObject<'target>,
+    cancellation: Cancellation,
+    bytes: Vec<u8>,
+    failure: Option<&'static str>,
+}
+const OBJ_CHUNK_BYTES: usize = 64 * 1024;
+impl ObjSink<'_, '_, '_> {
+    fn fail(&mut self, code: &'static str) -> io::Error {
+        self.failure = Some(code);
+        io::Error::other(code)
+    }
+    fn send(&mut self) -> io::Result<()> {
+        if self.cancellation.is_cancelled() {
+            return Err(self.fail("cancelled"));
+        }
+        if self.bytes.is_empty() {
+            return Ok(());
+        }
+        let sent = (|| -> jni::errors::Result<()> {
+            let bytes = self.env.byte_array_from_slice(&self.bytes)?;
+            let bytes = self.env.auto_local(bytes);
+            self.env.call_method(
+                &self.target,
+                "write",
+                "([B)V",
+                &[JValue::Object(bytes.as_ref())],
+            )?;
+            Ok(())
+        })();
+        if sent.is_err() {
+            // The destination's own failure text never crosses back.
+            let _ = self.env.exception_clear();
+            return Err(self.fail("export_service"));
+        }
+        self.bytes.clear();
+        Ok(())
+    }
+}
+impl io::Write for ObjSink<'_, '_, '_> {
+    fn write(&mut self, value: &[u8]) -> io::Result<usize> {
+        let mut rest = value;
+        while !rest.is_empty() {
+            let count = rest.len().min(OBJ_CHUNK_BYTES - self.bytes.len());
+            self.bytes.extend_from_slice(&rest[..count]);
+            rest = &rest[count..];
+            if self.bytes.len() == OBJ_CHUNK_BYTES {
+                self.send()?;
+            }
+        }
+        Ok(value.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.send()
+    }
+}
+/// File → Export Toolpaths as OBJ… of the sealed source, the browser's file,
+/// streamed to `sink` (a `ProjectJsonSink`) in chunks of at most 64 KiB;
+/// answers its length in bytes.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_toolpathObj(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+    handle: jlong,
+    sink: JObject<'_>,
+) -> jlong {
+    boundary(&mut env, |env| {
+        let owner = owner(handle)?;
+        if sink.is_null()
+            || !env
+                .is_instance_of(&sink, "dev/orcaxr/core/ProjectJsonSink")
+                .map_err(|_| "export_service")?
+        {
+            return Err("export_service");
+        }
+        let work = owner.work.lock().map_err(|_| "invalid_state")?;
+        let mut out = ObjSink {
+            env,
+            target: sink,
+            cancellation: owner.cancellation.clone(),
+            bytes: Vec::with_capacity(OBJ_CHUNK_BYTES),
+            failure: None,
+        };
+        let written = work.session.toolpath_obj(&mut out);
+        let flushed = written.is_ok() && io::Write::flush(&mut out).is_ok();
+        if let Some(code) = out.failure {
+            return Err(code);
+        }
+        let written = written.map_err(code)?;
+        if !flushed {
+            return Err("export_service");
+        }
+        Ok(written.bytes as jlong)
+    })
 }
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_close(

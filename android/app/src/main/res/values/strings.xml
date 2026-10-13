@@ -699,4 +699,9 @@
     <string name="action_hint_file_export_config">Export the active printer / process / filament config</string>
     <string name="export_config_done">Exported config.</string>
     <string name="export_config_no_profile">No active profile to export.</string>
+    <string name="export_obj">Export Toolpaths as OBJ…</string>
+    <string name="action_hint_file_export_obj">Export the sliced toolpaths as a Wavefront OBJ</string>
+    <string name="export_obj_done">Sliced toolpaths exported as OBJ.</string>
+    <string name="export_obj_failed">Export OBJ failed</string>
+    <string name="export_obj_slice_first">Slice the plate before exporting toolpaths.</string>
 </resources>

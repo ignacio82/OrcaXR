@@ -76,4 +76,5 @@
     <string name="export_stl">匯出為單一 STL…</string>
     <string name="export_all_stls">將所有物件匯出為 STL 檔案…</string>
     <string name="export_download">下載</string>
+    <string name="export_obj">將工具路徑匯出為 OBJ 格式…</string>
 </resources>

@@ -96,6 +96,7 @@ export function startProjectJni(profile = "debug") {
   signatures.exportStlFile = ["long", "String"];
   signatures.exportProjectArchiveFile = ["long", "int", "double[]"];
   signatures.modelExportChecks = ["String", "byte[]"];
+  signatures.toolpathObjChecks = ["String"];
   signatures.primitiveChecks = ["String"];
   signatures.paintToolChecks = ["String"];
   signatures.paintChecks = [];

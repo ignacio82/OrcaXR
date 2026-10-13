@@ -19,6 +19,7 @@ import dev.orcaxr.core.ProjectArchiveExport
 import dev.orcaxr.core.ProjectDocumentOutput
 import dev.orcaxr.core.ProjectDocuments
 import dev.orcaxr.core.StlExport
+import dev.orcaxr.core.ToolpathObj
 import dev.orcaxr.nativeapp.prepare.PrepareModel
 import dev.orcaxr.nativeapp.project.ProjectModel
 import java.io.File
@@ -50,8 +51,9 @@ data class ExportStatus(val words: ExportWords, val serial: Int)
  * and [ExportCommands.EXPORT_ALL_PLATES], which first slices every plate when
  * their results are not the project's), the STLs
  * ([ExportCommands.EXPORT_STL], [ExportCommands.EXPORT_ALL_STLS]), the project
- * as a 3MF ([ExportCommands.EXPORT_3MF]) and the chosen profile's
- * configuration ([ExportCommands.EXPORT_CONFIG]) — each the same bytes the
+ * as a 3MF ([ExportCommands.EXPORT_3MF]), the chosen profile's
+ * configuration ([ExportCommands.EXPORT_CONFIG]) and the published slice's
+ * toolpaths as OBJ ([ExportCommands.EXPORT_OBJ]) — each the same bytes the
  * browser downloads, under its name.
  *
  * What is written is fixed when the action is chosen, as the browser's
@@ -131,6 +133,11 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
                 val slice = prepare.sendable() ?: return show(ExportCommands.STALE)
                 ask(Pending.Gcode(id, slice.file, slice.isCurrent), document(id, ModelExports.GCODE_FILENAME))
             }
+            id == ExportCommands.EXPORT_OBJ -> {
+                // As the browser's exportToolpathsAsObj: the published slice, still the project's, named after the active plate.
+                val slice = prepare.sendable() ?: return show(ExportCommands.OBJ_SLICE_FIRST)
+                stage(id, Toolpaths(slice.file, project.view.activePlate?.name))
+            }
             id == ExportCommands.DOWNLOAD_ALL -> downloadAll(id)
             id == ExportCommands.EXPORT_ALL_PLATES -> when {
                 project.view.plateList.sumOf { it.objects } == 0 -> show(ExportCommands.NOTHING_TO_SLICE)
@@ -193,8 +200,11 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
     /** What a model export staged: the name to offer and what to say once saved, or the browser's refusal. */
     private class Staging(val filename: String?, val words: ExportWords)
 
+    /** Export Toolpaths as OBJ…'s source: the published G-code, and the active plate's name the file is named after. */
+    private class Toolpaths(val gcode: File, val plate: String?)
+
     /** A model export: written by the core into a staging file first, then offered under the browser's name. */
-    private fun stage(id: String) {
+    private fun stage(id: String, toolpaths: Toolpaths? = null) {
         busy = true
         val file = File(staging, "staged-${++serial}")
         val output = object : ProjectDocumentOutput {
@@ -204,13 +214,17 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
             when (id) {
                 ExportCommands.EXPORT_3MF -> ExportCommands.failed3mf(message)
                 ExportCommands.EXPORT_CONFIG -> ExportWords(text = message)
+                ExportCommands.EXPORT_OBJ -> ExportCommands.failedObj(message)
                 else -> ExportCommands.stlRefused(id, message)
             }
         }
         task = worker.submit {
             val staged = try {
                 staging.mkdirs()
-                if (id == ExportCommands.EXPORT_CONFIG) {
+                if (toolpaths != null) {
+                    file.outputStream().use { ToolpathObj.write(toolpaths.gcode.readBytes(), it) }
+                    Staging(ModelExports.filename(ExportNameKind.TOOLPATH_OBJ, toolpaths.plate), ExportCommands.EXPORTED_OBJ)
+                } else if (id == ExportCommands.EXPORT_CONFIG) {
                     // The chosen profile's file as the project worker holds it, after every choice asked before.
                     when (val json = project.exportConfig().get()) {
                         null -> Staging(null, ExportCommands.NO_PROFILE)

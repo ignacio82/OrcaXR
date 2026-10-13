@@ -116,4 +116,12 @@ impl GcodeSession {
     pub fn summary(&self) -> Result<String, JsValue> {
         self.inner.summary().map_err(gcode_error)
     }
+    /// File → Export Toolpaths as OBJ… of the sealed source: the browser's
+    /// `exportToolpathsToObj` file, whole (the browser holds it whole too).
+    #[wasm_bindgen(js_name = toolpathObj)]
+    pub fn toolpath_obj(&self) -> Result<Vec<u8>, JsValue> {
+        let mut out = Vec::new();
+        self.inner.toolpath_obj(&mut out).map_err(gcode_error)?;
+        Ok(out)
+    }
 }

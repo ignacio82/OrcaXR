@@ -25,16 +25,21 @@ Then on the external slicer (the real server on the host, its engine a
 stand-in writing the reference G-code), once connected and agreed to:
 "Download" beside the slice's result writes `orcaxr.gcode` — the published
 file byte for byte, the browser's name kept — and "Export G-code…" from the
-command palette writes it again. "Download All Plates" without a Slice All
+command palette writes it again. "Export Toolpaths as OBJ…" writes
+`Plate_1_toolpaths.obj`, byte for byte the OBJ the browser's own
+`exportToolpathsToObj` writes from the published G-code (decoded as the
+browser decodes it). "Download All Plates" without a Slice All
 Plates says so in the browser's words; "Export All Plates…" slices every plate
 first and writes `Plate_1.gcode` and `Plate_2.gcode` into a folder the
 operator picks, each its plate's published file byte for byte. After an edit
-the published G-code is no longer the project's and Download is not offered.
+the published G-code is no longer the project's: neither Download, Export
+G-code… nor Export Toolpaths as OBJ… is offered.
 
 Statuses are the browser's (the shell's snackbar): "Exported 1 model as 12 STL
 triangles.", "Exported all models as separate STL files.", "STL export
 failed: …", "Plated geometry exported as 3MF.", "Exported config.", "Saved
-orcaxr.gcode.", "Downloaded 2 plate G-code file(s).".
+orcaxr.gcode.", "Sliced toolpaths exported as OBJ.", "Downloaded 2 plate
+G-code file(s).".
 """
 import argparse
 import base64
@@ -76,6 +81,13 @@ const serializer = new Bbs3mfProjectSerializer();
 const parsed = await serializer.deserialize(new Uint8Array(Buffer.concat(chunks)));
 const saved = await serializer.serialize({{ state: parsed.state, assets: parsed.assets, sourceRevision: 0, sourceHash: "" }});
 process.stdout.write(saved.bytes);
+"""
+# The browser's exportToolpathsToObj over G-code bytes from stdin (decoded as the browser decodes a file), the OBJ to stdout.
+BROWSER_OBJ = f"""
+import {{ exportToolpathsToObj }} from {json.dumps(str(ROOT / "web/src/slicer/GcodeToolpath.ts"))};
+const chunks = [];
+for await (const chunk of process.stdin) chunks.push(chunk);
+process.stdout.write(exportToolpathsToObj(new TextDecoder().decode(Buffer.concat(chunks))));
 """
 FOLDER = "orcaxr-plates"
 
@@ -168,7 +180,8 @@ try:
         "(_display_name LIKE 'cube%' OR _display_name LIKE 'orcaxr%' OR _display_name LIKE 'Untitled_project_stls%' "
         "OR _display_name LIKE 'Untitled project%' "
         "OR _display_name LIKE 'Plate_%')\"")
-    adb("shell", f"rm -rf {DOWNLOAD}/cube*.stl {DOWNLOAD}/Untitled_project_stls*.zip '{DOWNLOAD}/orcaxr'* '{DOWNLOAD}/Untitled project'*.3mf")
+    adb("shell", f"rm -rf {DOWNLOAD}/cube*.stl {DOWNLOAD}/Untitled_project_stls*.zip '{DOWNLOAD}/orcaxr'* '{DOWNLOAD}/Untitled project'*.3mf "
+        f"{DOWNLOAD}/Plate_1_toolpaths*.obj")
     adb("shell", f"mkdir -p {DOWNLOAD}/{FOLDER}")
     screen.launch(PACKAGE)
     find("Import a model in the Project area to see it here.")
@@ -297,6 +310,20 @@ try:
     find("Saved orcaxr (1).gcode.", timeout=30)
     assert pull(f"{DOWNLOAD}/orcaxr (1).gcode") == gcode, "Export G-code… wrote other bytes"
 
+    # Export Toolpaths as OBJ…: the published G-code's toolpaths, named after the active plate, the browser's OBJ byte for byte.
+    tap("Project")
+    find("Untitled project", timeout=30)
+    menu("Export", "Export Toolpaths as OBJ…")
+    save_as("Plate_1_toolpaths.obj")
+    find("Sliced toolpaths exported as OBJ.", timeout=60)
+    toolpaths = pull(f"{DOWNLOAD}/Plate_1_toolpaths.obj")
+    browser = subprocess.check_output(
+        ["node", "--import", "./web/node_modules/tsx/dist/loader.mjs", "--input-type=module", "-e", BROWSER_OBJ],
+        input=gcode, cwd=ROOT, timeout=120)
+    assert browser == toolpaths, f"The OBJ is not the browser's: {len(toolpaths)} bytes, the browser's {len(browser)}"
+    assert toolpaths.startswith(b"# Sliced Toolpaths exported by OrcaXR\nv ") and b"\nl 1 2" in toolpaths, toolpaths[:80]
+    written["Plate_1_toolpaths.obj"] = len(toolpaths)
+
     # Download All Plates before any Slice All Plates: the browser's words, no picker.
     tap("Project")
     find("Untitled project", timeout=30)
@@ -334,6 +361,7 @@ try:
     tap("Project")
     tap("Export")
     assert not enabled("Export G-code…"), "Export G-code… offered for a withdrawn slice"
+    assert not enabled("Export Toolpaths as OBJ…"), "Export Toolpaths as OBJ… offered for a withdrawn slice"
     screen.key(4)
 finally:
     try:

@@ -76,4 +76,5 @@
     <string name="export_stl">Esporta come STL unico…</string>
     <string name="export_all_stls">Esporta tutti gli oggetti come STL multipli…</string>
     <string name="export_download">Scarica</string>
+    <string name="export_obj">Esporta percorso strumento come OBJ…</string>
 </resources>

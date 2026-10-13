@@ -76,4 +76,5 @@
     <string name="export_stl">Exporta com un STL…</string>
     <string name="export_all_stls">Exportar tots els objectes com a diferents STLs…</string>
     <string name="export_download">Descarregar</string>
+    <string name="export_obj">Exportar Trajectòries d\'eina com OBJ…</string>
 </resources>

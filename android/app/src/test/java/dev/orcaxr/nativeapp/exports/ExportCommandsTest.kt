@@ -18,7 +18,7 @@ class ExportCommandsTest {
         assertEquals(
             listOf(
                 "file_export_gcode", "file_export_all_plates", "file_export_stl", "file_export_all_stls", "file_export_3mf",
-                "file_export_config", "save_gcode_to_downloads", "save_all_plate_gcode",
+                "file_export_config", "file_export_obj", "save_gcode_to_downloads", "save_all_plate_gcode",
             ),
             ExportCommands.IDS,
         )
@@ -84,6 +84,11 @@ class ExportCommandsTest {
         assertEquals("orcaxr_config.json", ExportCommands.CONFIG_FILENAME)
         assertEquals(ExportWords(R.string.export_config_done), ExportCommands.EXPORTED_CONFIG)
         assertEquals(ExportWords(R.string.export_config_no_profile), ExportCommands.NO_PROFILE)
+        // Export Toolpaths as OBJ…: the browser's words, its failure's prefix catalogued and the reason after it.
+        assertEquals(ExportWords(R.string.export_obj_done), ExportCommands.EXPORTED_OBJ)
+        assertEquals(ExportWords(R.string.export_obj_slice_first), ExportCommands.OBJ_SLICE_FIRST)
+        assertEquals("Export OBJ failed: The G-code is too large for this device.", ExportCommands.text(ExportCommands.failedObj("source_length")) { "Export OBJ failed" })
+        assertEquals(ExportWords(R.string.export_obj_failed, ": The toolpaths could not be written."), ExportCommands.failedObj("invalid-model"))
     }
 
     @Test fun aProvidersFailureIsSaidInWords() {

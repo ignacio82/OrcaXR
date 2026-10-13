@@ -79,7 +79,7 @@ const APP_ACTIONS = [
   "add_modifier", "add_support_enforcer", "add_support_blocker", "set_negative_part",
   "slice_active_plate", "slice_all_plates", "slice_cancel", "send_to_printer",
   "file_export_gcode", "file_export_all_plates", "file_export_stl", "file_export_all_stls", "file_export_3mf",
-  "file_export_config", "save_gcode_to_downloads", "save_all_plate_gcode",
+  "file_export_config", "file_export_obj", "save_gcode_to_downloads", "save_all_plate_gcode",
 ];
 
 const problems = [];

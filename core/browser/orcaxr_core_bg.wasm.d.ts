@@ -11,6 +11,7 @@ export const gcodesession_seal: (a: number) => [number, number, number, number];
 export const gcodesession_summary: (a: number) => [number, number, number, number];
 export const gcodesession_textSearch: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const gcodesession_textWindow: (a: number, b: number, c: number) => [number, number, number, number];
+export const gcodesession_toolpathObj: (a: number) => [number, number, number, number];
 export const gcodesession_view: (a: number, b: number, c: number) => [number, number, number, number];
 export const gcodesession_whole: (a: number) => [number, number, number, number];
 export const gcodesession_window: (a: number, b: number, c: number) => [number, number, number, number];

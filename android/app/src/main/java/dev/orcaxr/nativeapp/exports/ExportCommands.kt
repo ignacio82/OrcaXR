@@ -29,12 +29,13 @@ object ExportCommands {
     const val EXPORT_ALL_STLS = "file_export_all_stls"
     const val EXPORT_3MF = "file_export_3mf"
     const val EXPORT_CONFIG = "file_export_config"
+    const val EXPORT_OBJ = "file_export_obj"
 
     /** The exports the app performs, in the catalogue's order. */
-    val IDS = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, EXPORT_CONFIG, DOWNLOAD, DOWNLOAD_ALL)
+    val IDS = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, EXPORT_CONFIG, EXPORT_OBJ, DOWNLOAD, DOWNLOAD_ALL)
 
     /** The File menu's export section as the browser's menu lists it (Download All Plates is in its file section too). */
-    val MENU = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, EXPORT_CONFIG, DOWNLOAD_ALL)
+    val MENU = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, EXPORT_CONFIG, EXPORT_OBJ, DOWNLOAD_ALL)
 
     /** Export Config…'s file name (`CONFIG_EXPORT_FILENAME`). */
     const val CONFIG_FILENAME = "orcaxr_config.json"
@@ -113,6 +114,22 @@ object ExportCommands {
 
     /** `exportActiveConfig` with no catalog profile chosen (an opened project slicing with its own configuration). */
     val NO_PROFILE = ExportWords(R.string.export_config_no_profile)
+
+    /** `exportToolpathsAsObj`'s status once written. */
+    val EXPORTED_OBJ = ExportWords(R.string.export_obj_done)
+
+    /** `exportToolpathsAsObj` without a published slice that is still the project's. */
+    val OBJ_SLICE_FIRST = ExportWords(R.string.export_obj_slice_first)
+
+    /** `exportToolpathsAsObj`'s failure: `Export OBJ failed: ` and why, from the core's code. */
+    fun failedObj(code: String) = ExportWords(
+        R.string.export_obj_failed,
+        ": " + when (code) {
+            "resource_limit", "source_length" -> "The G-code is too large for this device."
+            "cancelled" -> "Cancelled."
+            else -> "The toolpaths could not be written."
+        },
+    )
 
     /** What the status line says when [id]'s STL export was refused for [message]. */
     fun stlRefused(id: String, message: String): ExportWords =

@@ -76,4 +76,5 @@
     <string name="export_stl">Exportieren als eine STL…</string>
     <string name="export_all_stls">Exportiere alle Objekte als STLs…</string>
     <string name="export_download">Herunterladen</string>
+    <string name="export_obj">Werkzeugwege als OBJ exportieren…</string>
 </resources>

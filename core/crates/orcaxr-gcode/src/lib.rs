@@ -15,6 +15,7 @@ pub mod preview;
 pub mod request_types;
 mod session;
 mod text;
+pub mod toolpath_obj;
 pub mod utf8;
 pub mod view_layout;
 mod view_packet;
