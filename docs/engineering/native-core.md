@@ -7395,12 +7395,45 @@ destination opening, a destination that cannot open failing the export,
 an empty plate refused (an empty project still exports as a 3MF, as the
 browser saves one), and an imported cube exported as `cube.stl`.
 
+Export Config…. The browser writes the active catalog profile
+(`OrcaWorkspace.profile`, none while an opened project slices with its own
+configuration: "No active profile to export.") as
+`exportProfileConfigJson` in `ConfigIO.ts` — `JSON.stringify({orcaxr_config:
+1, machineName, processName, filamentName, config}, null, 2)`, the names the
+profile's own (`getProfileOptions` read them from it; the workspace now
+calls the shared function). The bytes hang on `config`'s key order:
+`{...machine, ...process, ...filament}` of the three presets' flattened
+configurations, each `{...parentEffective, ...raw}` in the order its
+catalog JSON object lists its keys (a repeated key keeps its first place and
+its last value; array-index keys first, as JavaScript enumerates them). The
+compiled catalog keeps configurations as sorted maps, so the order is
+recovered from the catalog's own JSON: `JsonInput::record_orders` makes the
+streaming parser note the property order of every object in a vendor's
+`machine`/`process`/`filament` list as it parses (no second parse, nothing
+recorded for other callers), `settings::config_export::KeyOrders` keys them
+by vendor, kind and name (the first of two equal names, as the preset graph
+keeps), and `config_json` walks each preset's parents for the effective
+order, keeps the keys the flattened part holds and writes the values with the
+browser's `JSON.stringify` quoting. `HostCatalog::config_json(i)` is profile
+`i`'s file; WASM `ProfileCatalog.config_export`, JNI `catalogConfigExport`,
+Kotlin `ProfileCatalog.configExport`. `config-export-vectors.mjs` records
+every one of the 1,482 bundled profiles' files (SHA-256 and length; 18 MB of
+JSON otherwise) and 9 profiles of two synthetic catalogs written whole
+(repeated keys, a child's and a later preset's keys after the ones they
+share, quotes, controls, line breaks, non-ASCII, emoji, an escaped lone
+surrogate, numbers, booleans, arrays and nulls, an empty-config profile);
+Rust (`tests/config_export.rs`), WASM in Node and in a Chrome worker and JNI
+(`config-export-replay.mjs`, each catalog streamed and built from the same
+text, every file found by profile ID) write all 1,491 byte for byte, and
+`ProjectCatalogChecks` reads profile 0's through Kotlin (and the same file
+from a catalog built with a reversed collator).
+
 On Android the exports are the browser's File menu entries and its Download
 actions: the Project area's Export menu (beside Share) lists Export G-code…,
 Export All Plates…, Export as one STL…, Export all objects as STLs…, Export
-as 3MF… and Download All Plates; Prepare's result card offers Download beside Preview and
+as 3MF…, Export Config… and Download All Plates; Prepare's result card offers Download beside Preview and
 Send to Printer, and Download All Plates under every plate's result; the
-command palette lists all seven. Each is enabled as the browser's registry
+command palette lists all eight. Each is enabled as the browser's registry
 gate judges it — the core's capability rules read with the Prepare area's
 facts (`ProjectWorkspace.sliceActions` now takes the published slice's
 `gcodeReady` and reads the output actions too) — and not while another
@@ -7411,7 +7444,11 @@ fixed when the action is chosen, as the browser's download is — an STL is
 written by the core, after every queued edit settles, into a private staging
 file before the picker is asked for a place (a refusal asks for none and says
 "STL export failed: …" or "STL export failed."), as is the 3MF ("Export 3MF
-failed: …" with the core's reason), the G-code is the published
+failed: …" with the core's reason) and the configuration (the profile the
+project worker holds once every choice asked before has applied,
+`SlicingProfiles.configExport`, found among the catalog's profiles by its
+three presets; "No active profile to export." while an opened project slices
+with its own), the G-code is the published
 file, whose currency is checked again once a place is picked. The picker
 creates the document under the browser's name with the type the device
 associates with its extension (else `application/octet-stream`): a provider
@@ -7428,15 +7465,16 @@ run on one worker; a provider failure is said in words ("There is no room
 left for …", "OrcaXR can no longer write to …") and the half-written document
 is removed. Outcomes are the browser's status words in the shell's snackbar
 ("Saved orcaxr.gcode.", "Downloaded 2 plate G-code file(s).", "Exported 1
-model as 12 STL triangles.", "Plated geometry exported as 3MF."), the
+model as 12 STL triangles.", "Plated geometry exported as 3MF.", "Exported
+config."), the
 catalogued ones in the operator's language. One deviation: the browser's
 Export as 3MF… is its Save, so it also marks the project saved; on Android a
 project's document is its own (Save writes it, Save as rebinds it), so the
 export is a copy and the project's saved state is untouched, as Share's.
 
-`ExportCommandsTest` (4 JVM tests: the seven and where they run, the gate
+`ExportCommandsTest` (4 JVM tests: the eight and where they run, the gate
 and the one-at-a-time rule, the browser's words, the providers' failures and
-the document type), `AppActionsTest` (72 performed actions with their
+the document type), `AppActionsTest` (73 performed actions with their
 glyphs, words and hints). `android-exports-smoke.py` (in `emulator-smoke.py` after
 the outputs smoke) drives them through the system's picker on the engine-less
 APK and reads every file back: `cube.stl` (the browser's header, 12 facets,
@@ -7444,8 +7482,10 @@ unit normals, the 20 mm cube on the bed), `Untitled_project_stls.zip` with
 `cube_stl.stl` and `cube_stl_2.stl` — byte for byte the archive the browser's
 own `writeDeterministicZip` writes from those members — `Untitled
 project.3mf`, which the browser, reopening and saving it again, writes byte
-for byte the same, the project still unsaved, a negative part refused with no
-picker, then on the external slicer stand-in Download and the
+for byte the same, the project still unsaved, `orcaxr_config.json` — the
+browser's file of the chosen bundled profile byte for byte (its SHA-256 and
+length among the corpus's, the profile the one its names give) — a negative
+part refused with no picker, then on the external slicer stand-in Download and the
 palette's Export G-code… (`orcaxr.gcode`, `orcaxr (1).gcode`, each the
 published file byte for byte), Download All Plates refused before a Slice All
 Plates, and Export All Plates… slicing both plates and writing `Plate_1.gcode`

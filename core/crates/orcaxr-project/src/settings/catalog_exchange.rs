@@ -6,6 +6,7 @@
 //! with its diagnostics and no profiles, as the browser's catalog does.
 use super::{
     catalog::{CatalogError, Diagnostic, DiagnosticCode, ProfileCatalog},
+    config_export::{self, KeyOrders},
     presets::{Collation, Kind, PresetNode, SelectionRequest, Source, SubstitutionReason},
 };
 use crate::{
@@ -35,9 +36,10 @@ impl<E: fmt::Debug> fmt::Display for LoadError<E> {
 }
 impl CatalogUpload {
     pub fn new(bytes: usize, limits: JsonLimits) -> Result<Self, JsonInputError> {
-        Ok(Self {
-            input: JsonInput::new(bytes, limits)?,
-        })
+        let mut input = JsonInput::new(bytes, limits)?;
+        // Export Config… writes a profile's keys in the order the catalog's JSON lists them.
+        input.record_orders();
+        Ok(Self { input })
     }
     pub fn append(&mut self, offset: usize, bytes: &[u8]) -> Result<(), JsonInputError> {
         self.input.append(offset, bytes)
@@ -49,8 +51,10 @@ impl CatalogUpload {
         self,
         collation: &mut C,
     ) -> Result<HostCatalog, LoadError<C::Error>> {
-        let value = self.finish().map_err(LoadError::Json)?;
-        HostCatalog::from_value(&value, collation)
+        let (value, orders) = self.input.finish_with_orders().map_err(LoadError::Json)?;
+        let mut catalog = HostCatalog::from_value(&value, collation)?;
+        catalog.orders = Some(KeyOrders::new(orders));
+        Ok(catalog)
     }
     /// The parsed catalog document, for a preset library to compose.
     pub fn finish(self) -> Result<Value, JsonInputError> {
@@ -62,6 +66,8 @@ impl CatalogUpload {
 pub struct HostCatalog {
     catalog: Option<ProfileCatalog>,
     diagnostics: Vec<Diagnostic>,
+    /// The property orders of the JSON it was built from (none when composed from values).
+    orders: Option<KeyOrders>,
 }
 
 fn optional_units(units: Option<&[u16]>) -> wire::OptionalText {
@@ -110,10 +116,12 @@ impl HostCatalog {
             Ok(catalog) => Self {
                 diagnostics: catalog.diagnostics().to_vec(),
                 catalog: Some(catalog),
+                orders: None,
             },
             Err(CatalogError::Invalid(diagnostics)) => Self {
                 catalog: None,
                 diagnostics,
+                orders: None,
             },
             Err(CatalogError::Collation(e)) => return Err(LoadError::Collation(e)),
         })
@@ -196,6 +204,17 @@ impl HostCatalog {
             process_preset_id: id(&p.process_preset_id),
             filament_preset_id: id(&p.filament_preset_id),
         })
+    }
+    /// File → Export Config… of profile [index]: the browser's file
+    /// (`exportConfigJson`), its keys in the browser's order.
+    pub fn config_json(&self, index: usize) -> Option<String> {
+        let catalog = self.catalog.as_ref()?;
+        let profile = catalog.profiles().get(index)?;
+        Some(config_export::config_json(
+            profile,
+            catalog.graph(),
+            self.orders.as_ref(),
+        ))
     }
     /// A profile's engine wire configuration, keys in UTF-16 order.
     pub fn profile_config(&self, index: usize) -> Option<wire::CatalogConfig> {

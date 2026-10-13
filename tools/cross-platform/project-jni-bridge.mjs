@@ -1136,6 +1136,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     profile_config(i) {
       return call("catalogProfileConfig", this.handle, i);
     }
+    config_export(i) {
+      return call("catalogConfigExport", this.handle, i);
+    }
     reconcile(request) {
       return call("catalogReconcile", this.handle, request);
     }

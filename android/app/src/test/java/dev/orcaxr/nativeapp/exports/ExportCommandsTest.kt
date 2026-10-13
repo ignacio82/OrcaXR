@@ -18,7 +18,7 @@ class ExportCommandsTest {
         assertEquals(
             listOf(
                 "file_export_gcode", "file_export_all_plates", "file_export_stl", "file_export_all_stls", "file_export_3mf",
-                "save_gcode_to_downloads", "save_all_plate_gcode",
+                "file_export_config", "save_gcode_to_downloads", "save_all_plate_gcode",
             ),
             ExportCommands.IDS,
         )
@@ -80,6 +80,10 @@ class ExportCommandsTest {
             ExportCommands.text(failed) { "Export 3MF failed" },
         )
         assertEquals("Échec: The project is too large for this device.", ExportCommands.text(ExportCommands.failed3mf("resource_limit")) { "Échec" })
+        // Export Config…: the browser's file name and its two catalogued statuses.
+        assertEquals("orcaxr_config.json", ExportCommands.CONFIG_FILENAME)
+        assertEquals(ExportWords(R.string.export_config_done), ExportCommands.EXPORTED_CONFIG)
+        assertEquals(ExportWords(R.string.export_config_no_profile), ExportCommands.NO_PROFILE)
     }
 
     @Test fun aProvidersFailureIsSaidInWords() {

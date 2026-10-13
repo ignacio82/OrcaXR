@@ -10,6 +10,7 @@ import dev.orcaxr.core.ProjectIntents
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
 import dev.orcaxr.core.SelectionSeverity
+import dev.orcaxr.core.SlicingProfile
 import dev.orcaxr.core.SlicingSlots
 import dev.orcaxr.core.SlotEdit
 import dev.orcaxr.core.SlotEditResult
@@ -179,6 +180,32 @@ class SlicingProfiles(context: Context, private val publish: (ProfilesView) -> U
         val loaded = catalog
         if (authored || loaded == null) return ProjectWorkspace.AUTHORED
         return ProfileCatalogs.preflightTarget(loaded, live, toolCount) ?: ProjectWorkspace.AUTHORED
+    }
+
+    /** The catalog's profiles by their presets, for the catalog they were read from. */
+    private var positions: Pair<ProfileCatalog, Map<SlicingProfile, Long>>? = null
+
+    /**
+     * File → Export Config… (`OrcaWorkspace.exportActiveConfig`): the chosen
+     * catalog profile's `orcaxr_config.json` as the browser writes it, or
+     * null when there is none — an opened project slicing with its own
+     * printer and filaments, as the browser's profile is then none.
+     */
+    fun configExport(): String? {
+        val loaded = catalog ?: return null
+        val profile = live.profile.takeUnless { authored } ?: return null
+        val known = positions?.takeIf { it.first === loaded }?.second ?: run {
+            fun text(units: List<Int>) = String(CharArray(units.size) { units[it].toChar() })
+            val byPresets = HashMap<SlicingProfile, Long>()
+            for (position in 0 until loaded.profileCount()) {
+                val entry = loaded.profile(position)
+                // The first of two equal triples, as the browser's lookup finds it.
+                byPresets.putIfAbsent(SlicingProfile(text(entry.machinePresetId), text(entry.processPresetId), text(entry.filamentPresetId)), position)
+            }
+            positions = loaded to byPresets
+            byPresets
+        }
+        return known[profile]?.let(loaded::configExport)
     }
 
     /** The choice as the browser's `orcaxr.profiles` keeps it: the presets, and their names to fall back on. */

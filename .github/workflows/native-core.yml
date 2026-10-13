@@ -143,6 +143,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/volume-role-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/browser-zip-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/model-export-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/config-export-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/paint-palette-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/facet-region-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/facet-region-exchange-vectors.mjs

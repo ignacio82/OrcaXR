@@ -37,6 +37,34 @@ impl fmt::Display for JsonInputError {
 }
 impl std::error::Error for JsonInputError {}
 
+/// The keys of one object at `$.<group>.<list>[i]` (a profile catalog's
+/// preset), in the order `JSON.parse` gives its properties: each key where it
+/// first occurs (a repeated key keeps its place and takes the later value),
+/// array-index keys first in numeric order. With the object's `name`, when it
+/// is a string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectOrder {
+    pub group: Vec<u16>,
+    pub list: Vec<u16>,
+    pub name: Option<Vec<u16>>,
+    pub keys: Vec<Vec<u16>>,
+}
+
+/// JavaScript's own-property order: array-index keys (canonical decimal
+/// integers below 2^32 − 1) ascending, then the others as given.
+pub fn js_property_order(keys: Vec<Vec<u16>>) -> Vec<Vec<u16>> {
+    let index = |key: &[u16]| -> Option<u32> {
+        let text = String::from_utf16(key).ok()?;
+        let value: u32 = text.parse().ok()?;
+        (value != u32::MAX && value.to_string() == text).then_some(value)
+    };
+    let (mut indices, others): (Vec<_>, Vec<_>) =
+        keys.into_iter().partition(|k| index(k).is_some());
+    indices.sort_by_key(|k| index(k));
+    indices.extend(others);
+    indices
+}
+
 /// Own in an import task, not in the live authority. Append never retains source
 /// chunks; decoded values are staged until finish. Syntax/resource failures drop
 /// all staged data and make this input terminal. A refused offset/chunk leaves
@@ -64,8 +92,16 @@ impl JsonInput {
                 stack: vec![],
                 token: Token::None,
                 root: None,
+                orders: None,
             }),
         })
+    }
+    /// Also records the property order of every object at `$.<group>.<list>[i]`
+    /// ([`ObjectOrder`]), which [`Self::finish_with_orders`] returns.
+    pub fn record_orders(&mut self) {
+        if let Some(parser) = self.parser.as_mut() {
+            parser.orders = Some(Orders::default());
+        }
     }
     pub fn received_bytes(&self) -> usize {
         self.received
@@ -91,6 +127,10 @@ impl JsonInput {
         Ok(())
     }
     pub fn finish(self) -> Result<Value, JsonInputError> {
+        self.finish_with_orders().map(|(value, _)| value)
+    }
+    /// [`Self::finish`], and the orders [`Self::record_orders`] asked for (none otherwise).
+    pub fn finish_with_orders(self) -> Result<(Value, Vec<ObjectOrder>), JsonInputError> {
         let mut parser = self.parser.ok_or(JsonInputError::Failed)?;
         if self.received != self.expected {
             return Err(JsonInputError::Incomplete);
@@ -103,7 +143,8 @@ impl JsonInput {
         if !parser.stack.is_empty() {
             return Err(JsonInputError::InvalidJson);
         }
-        parser.root.ok_or(JsonInputError::InvalidJson)
+        let orders = parser.orders.take().map(|o| o.done).unwrap_or_default();
+        Ok((parser.root.ok_or(JsonInputError::InvalidJson)?, orders))
     }
 }
 impl fmt::Debug for JsonInput {
@@ -123,6 +164,14 @@ struct Parser {
     stack: Vec<Frame>,
     token: Token,
     root: Option<Value>,
+    orders: Option<Orders>,
+}
+/// Recording state: each open object's keys in first-occurrence order, and the
+/// finished orders of the objects at depth three.
+#[derive(Default)]
+struct Orders {
+    open: Vec<Vec<Vec<u16>>>,
+    done: Vec<ObjectOrder>,
 }
 #[derive(Default)]
 enum Token {
@@ -174,6 +223,29 @@ enum ObjectState {
     Separator,
 }
 impl Parser {
+    /// A closing object's order, kept when it is `$.<group>.<list>[i]`.
+    fn record(&mut self, values: &BTreeMap<Vec<u16>, Value>) {
+        let Some(orders) = self.orders.as_mut() else {
+            return;
+        };
+        let keys = orders.open.pop().unwrap_or_default();
+        if let [
+            Frame::Object(_, ObjectState::Value(group)),
+            Frame::Object(_, ObjectState::Value(list)),
+            Frame::Array(..),
+        ] = self.stack.as_slice()
+        {
+            orders.done.push(ObjectOrder {
+                group: group.clone(),
+                list: list.clone(),
+                name: match values.get(&"name".encode_utf16().collect::<Vec<_>>()) {
+                    Some(Value::String(name)) => Some(name.clone()),
+                    _ => None,
+                },
+                keys: js_property_order(keys),
+            });
+        }
+    }
     fn begin_value(&mut self) -> Result<(), JsonInputError> {
         let allowed = match self.stack.last() {
             None => self.root.is_none(),
@@ -203,6 +275,12 @@ impl Parser {
                     unreachable!()
                 };
                 // Persisted JSON follows JSON.parse: the last property wins.
+                if let Some(orders) = self.orders.as_mut()
+                    && !values.contains_key(&key)
+                    && let Some(open) = orders.open.last_mut()
+                {
+                    open.push(key.clone());
+                }
                 values.insert(key, value);
             }
             _ => return Err(JsonInputError::InvalidJson),
@@ -398,7 +476,10 @@ impl Parser {
                 }
                 let value = match self.stack.pop().expect("checked frame") {
                     Frame::Array(v, _) => Value::Array(v),
-                    Frame::Object(v, _) => Value::Object(v),
+                    Frame::Object(v, _) => {
+                        self.record(&v);
+                        Value::Object(v)
+                    }
                 };
                 self.value(value)?;
             }
@@ -413,9 +494,13 @@ impl Parser {
                 self.begin_value()?;
                 match byte {
                     b'[' => self.stack.push(Frame::Array(vec![], ArrayState::First)),
-                    b'{' => self
-                        .stack
-                        .push(Frame::Object(BTreeMap::new(), ObjectState::First)),
+                    b'{' => {
+                        if let Some(orders) = self.orders.as_mut() {
+                            orders.open.push(Vec::new());
+                        }
+                        self.stack
+                            .push(Frame::Object(BTreeMap::new(), ObjectState::First))
+                    }
                     b'"' => self.token = Token::String(vec![], StringState::Plain, false),
                     b'n' => self.token = Token::Literal(b"null", 1),
                     b't' => self.token = Token::Literal(b"true", 1),

@@ -65,6 +65,7 @@ import { replaySplitSources } from "./split-source-replay.mjs";
 import { replayFilamentAssignment } from "./filament-assignment-replay.mjs";
 import { replayVolumeRoles } from "./volume-role-replay.mjs";
 import { replayModelExports } from "./model-export-replay.mjs";
+import { replayConfigExports } from "./config-export-replay.mjs";
 import { replayPaintTool } from "./paint-tool-replay.mjs";
 import { replayVirtualFilaments } from "./virtual-filament-replay.mjs";
 import { readFileSync } from "node:fs";
@@ -811,6 +812,18 @@ try {
     [catalogs.catalogReplies, catalogs.catalogRefusals],
     [506, 12],
   );
+  // File → Export Config… through the raw exports: every profile's file.
+  const configExportFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/config-export-vectors.json", root)),
+  );
+  const configExports = await replayConfigExports(
+    projectJniCore(jvm.call),
+    configExportFixture,
+    catalogBytes,
+    undefined,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
+  assert.deepEqual(configExports.configExportAnswers, [1482, 9]);
   const bundled = catalogFixture.exchanges.bundled;
   const catalogChecks = jvm.call(
     "catalogChecks",
@@ -824,9 +837,12 @@ try {
       bundled.selections[0].resultJson,
       bundled.targets[0].requestJson,
       bundled.targets[0].resultJson,
+      configExportFixture.bundled.profiles.find(
+        (p) => p.id === String.fromCharCode(...JSON.parse(bundled.profiles[0].profileJson).id),
+      ).sha256,
     ].join("\n"),
   );
-  assert.equal(catalogChecks, 15);
+  assert.equal(catalogChecks, 19);
   // The preset library through the raw exports, then the Kotlin wrapper.
   const libraryFixture = JSON.parse(
     await readFile(
@@ -2007,6 +2023,7 @@ try {
     volumeRoleChecks,
     modelExports,
     modelExportChecks,
+    configExports,
     ...primitives,
     primitiveChecks,
     ...paintTool,

@@ -254,6 +254,7 @@ export const printworkflow_resolve: (a: number, b: number, c: number, d: number)
 export const printworkflow_resolve_reply: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const printworkflow_run: (a: number, b: number, c: number) => [number, number, number, number];
 export const printworkflow_start_stored: (a: number, b: number, c: number) => [number, number, number, number];
+export const profilecatalog_config_export: (a: number, b: number) => [number, number, number, number];
 export const profilecatalog_diagnostic: (a: number, b: number) => [number, number, number, number];
 export const profilecatalog_diagnostic_count: (a: number) => number;
 export const profilecatalog_preflight_target: (a: number, b: number, c: number, d: number) => [number, number, number, number];

@@ -865,6 +865,13 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun export3mf(output: ProjectDocumentOutput): CompletableFuture<ProjectArchiveExport> =
         started.thenCompose { it.export3mf(output) }
 
+    /**
+     * File → Export Config…: the chosen profile's `orcaxr_config.json`
+     * ([SlicingProfiles.configExport]) once every choice asked before it has
+     * applied, or null when none is chosen (the project slices with its own).
+     */
+    fun exportConfig(): CompletableFuture<String?> = CompletableFuture.supplyAsync({ profiles.configExport() }, worker)
+
     fun undo() = work { workspace.undo().await() }
     fun redo() = work { workspace.redo().await() }
 

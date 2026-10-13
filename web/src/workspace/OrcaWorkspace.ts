@@ -255,7 +255,7 @@ import {
   type FilamentPresetCandidate,
   type ReportedFilamentSlot,
 } from '../slicer/filamentPresetMatch';
-import { exportConfigJson, parseConfigJson } from '../features/ConfigIO';
+import { exportProfileConfigJson, parseConfigJson } from '../features/ConfigIO';
 import { virtualFilamentsFromConfig, type VirtualFilament } from '../features/MixedFilamentPreview';
 import { xrIcon } from '../ui/icons';
 import { domThemes, tokens, type DomThemeName } from '../ui/tokens';
@@ -5181,14 +5181,8 @@ export class OrcaWorkspace extends xb.Script {
   // --- Import / Export Config (Orca File → Import / Export Config) -----
   /** Serialise the active profile's config to a JSON bundle string (or null). */
   public buildConfigJson(): string | null {
-    if (!this.profile) return null;
-    const opts = this.getProfileOptions();
-    return exportConfigJson({
-      machineName: opts.machine,
-      processName: opts.process,
-      filamentName: opts.filament,
-      config: this.profile.config,
-    });
+    // The picker's names are the profile's own (`getProfileOptions`).
+    return this.profile ? exportProfileConfigJson(this.profile) : null;
   }
 
   /** Download the active config as JSON (File → Export Config). */

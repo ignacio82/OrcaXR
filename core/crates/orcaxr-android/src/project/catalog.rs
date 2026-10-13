@@ -216,6 +216,16 @@ pub(super) fn catalog_profile(
         wire::encode_catalog_profile,
     )
 }
+/// File → Export Config… of profile [position]: the browser's `orcaxr_config.json`.
+pub(super) fn catalog_config_export(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    position: jlong,
+) -> Result<jstring> {
+    let position = index(position)?;
+    let json = with_catalog(handle, |c| c.config_json(position).ok_or("invalid_range"))?;
+    string(env, json)
+}
 pub(super) fn catalog_profile_config(
     env: &mut JNIEnv<'_>,
     handle: jlong,

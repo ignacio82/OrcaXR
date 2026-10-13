@@ -41,6 +41,24 @@ export function exportConfigJson(b: ConfigBundle): string {
   );
 }
 
+/** The profile fields Export Config… writes: a catalog profile's names and its configuration. */
+export interface ExportableProfile {
+  machineName: string;
+  processName: string;
+  filamentName: string;
+  config: Readonly<Record<string, string>>;
+}
+
+/** File → Export Config…'s file for the active [profile] (`orcaxr_config.json`). */
+export function exportProfileConfigJson(profile: ExportableProfile): string {
+  return exportConfigJson({
+    machineName: profile.machineName,
+    processName: profile.processName,
+    filamentName: profile.filamentName,
+    config: profile.config as Record<string, string>,
+  });
+}
+
 export function parseConfigJson(text: string): ConfigBundle | null {
   let obj: unknown;
   try {

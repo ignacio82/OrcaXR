@@ -57,6 +57,9 @@ class ProfileCatalog internal constructor(handle: Long) : ProjectHandle(handle) 
     fun profile(position: Long): ProjectIntents.CatalogProfile = read {
         ProjectIntents.decodeCatalogProfile(NativeProject.catalogProfile(it, position))
     }
+    /** File → Export Config… of profile [position]: the browser's `orcaxr_config.json`
+     * (`exportConfigJson`), its keys in the browser's order. */
+    fun configExport(position: Long): String = read { NativeProject.catalogConfigExport(it, position) }
     /** The profile's engine wire configuration, keys in UTF-16 order. */
     fun profileConfig(position: Long): ProjectIntents.CatalogConfig = read {
         ProjectIntents.decodeCatalogConfig(NativeProject.catalogProfileConfig(it, position))

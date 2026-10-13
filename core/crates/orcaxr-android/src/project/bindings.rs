@@ -309,6 +309,12 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_catalogConfigExport, catalog_config_export, jstring,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_catalogReconcile, catalog_reconcile, jstring,
     handle: jlong,
     request: JString<'local>,

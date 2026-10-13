@@ -429,6 +429,11 @@ export class ProfileCatalog {
     private constructor();
     free(): void;
     [Symbol.dispose](): void;
+    /**
+     * File → Export Config… of profile [position]: the browser's
+     * `orcaxr_config.json` (`exportConfigJson`), keys in its order.
+     */
+    config_export(position: number): string;
     diagnostic(position: number): string;
     diagnostic_count(): number;
     /**
@@ -2308,6 +2313,7 @@ export interface InitOutput {
     readonly printworkflow_resolve_reply: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly printworkflow_run: (a: number, b: number, c: number) => [number, number, number, number];
     readonly printworkflow_start_stored: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly profilecatalog_config_export: (a: number, b: number) => [number, number, number, number];
     readonly profilecatalog_diagnostic: (a: number, b: number) => [number, number, number, number];
     readonly profilecatalog_diagnostic_count: (a: number) => number;
     readonly profilecatalog_preflight_target: (a: number, b: number, c: number, d: number) => [number, number, number, number];

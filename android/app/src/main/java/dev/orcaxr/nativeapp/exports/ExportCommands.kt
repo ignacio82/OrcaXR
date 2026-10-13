@@ -28,12 +28,16 @@ object ExportCommands {
     const val EXPORT_STL = "file_export_stl"
     const val EXPORT_ALL_STLS = "file_export_all_stls"
     const val EXPORT_3MF = "file_export_3mf"
+    const val EXPORT_CONFIG = "file_export_config"
 
     /** The exports the app performs, in the catalogue's order. */
-    val IDS = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, DOWNLOAD, DOWNLOAD_ALL)
+    val IDS = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, EXPORT_CONFIG, DOWNLOAD, DOWNLOAD_ALL)
 
     /** The File menu's export section as the browser's menu lists it (Download All Plates is in its file section too). */
-    val MENU = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, DOWNLOAD_ALL)
+    val MENU = listOf(EXPORT_GCODE, EXPORT_ALL_PLATES, EXPORT_STL, EXPORT_ALL_STLS, EXPORT_3MF, EXPORT_CONFIG, DOWNLOAD_ALL)
+
+    /** Export Config…'s file name (`CONFIG_EXPORT_FILENAME`). */
+    const val CONFIG_FILENAME = "orcaxr_config.json"
 
     /** The G-code a download writes: the published slice (the single Download and Export G-code…). */
     fun isGcode(id: String): Boolean = id == DOWNLOAD || id == EXPORT_GCODE
@@ -103,6 +107,12 @@ object ExportCommands {
             else -> "This project cannot be written as a 3MF (the browser's Save refuses it too)."
         },
     )
+
+    /** `exportActiveConfig`'s status once written. */
+    val EXPORTED_CONFIG = ExportWords(R.string.export_config_done)
+
+    /** `exportActiveConfig` with no catalog profile chosen (an opened project slicing with its own configuration). */
+    val NO_PROFILE = ExportWords(R.string.export_config_no_profile)
 
     /** What the status line says when [id]'s STL export was refused for [message]. */
     fun stlRefused(id: String, message: String): ExportWords =

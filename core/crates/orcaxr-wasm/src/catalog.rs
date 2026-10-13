@@ -161,6 +161,13 @@ impl ProfileCatalog {
             wire::encode_catalog_profile,
         )
     }
+    /// File → Export Config… of profile [position]: the browser's
+    /// `orcaxr_config.json` (`exportConfigJson`), keys in its order.
+    pub fn config_export(&self, position: f64) -> Result<String, JsValue> {
+        self.inner
+            .config_json(index(position)?)
+            .ok_or_else(|| error("invalid_range"))
+    }
     pub fn profile_config(&self, position: f64) -> Result<String, JsValue> {
         contract(
             self.inner.profile_config(index(position)?),

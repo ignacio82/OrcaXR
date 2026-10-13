@@ -2444,6 +2444,30 @@ export class ProfileCatalog {
         wasm.__wbg_profilecatalog_free(ptr, 0);
     }
     /**
+     * File → Export Config… of profile [position]: the browser's
+     * `orcaxr_config.json` (`exportConfigJson`), keys in its order.
+     * @param {number} position
+     * @returns {string}
+     */
+    config_export(position) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.profilecatalog_config_export(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
      * @param {number} position
      * @returns {string}
      */

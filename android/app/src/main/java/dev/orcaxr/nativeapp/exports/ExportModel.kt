@@ -48,9 +48,11 @@ data class ExportStatus(val words: ExportWords, val serial: Int)
  * published G-code ([ExportCommands.DOWNLOAD], [ExportCommands.EXPORT_GCODE]),
  * every sliced plate's G-code into a folder ([ExportCommands.DOWNLOAD_ALL],
  * and [ExportCommands.EXPORT_ALL_PLATES], which first slices every plate when
- * their results are not the project's), and the STLs
- * ([ExportCommands.EXPORT_STL], [ExportCommands.EXPORT_ALL_STLS]) — each the
- * same bytes the browser downloads, under its name.
+ * their results are not the project's), the STLs
+ * ([ExportCommands.EXPORT_STL], [ExportCommands.EXPORT_ALL_STLS]), the project
+ * as a 3MF ([ExportCommands.EXPORT_3MF]) and the chosen profile's
+ * configuration ([ExportCommands.EXPORT_CONFIG]) — each the same bytes the
+ * browser downloads, under its name.
  *
  * What is written is fixed when the action is chosen, as the browser's
  * download is: a model export is written by the shared core, after every
@@ -198,11 +200,26 @@ class ExportModel(application: Application) : AndroidViewModel(application) {
         val output = object : ProjectDocumentOutput {
             override fun openOutput() = file.outputStream()
         }
-        val refused = { message: String -> if (id == ExportCommands.EXPORT_3MF) ExportCommands.failed3mf(message) else ExportCommands.stlRefused(id, message) }
+        val refused = { message: String ->
+            when (id) {
+                ExportCommands.EXPORT_3MF -> ExportCommands.failed3mf(message)
+                ExportCommands.EXPORT_CONFIG -> ExportWords(text = message)
+                else -> ExportCommands.stlRefused(id, message)
+            }
+        }
         task = worker.submit {
             val staged = try {
                 staging.mkdirs()
-                if (id == ExportCommands.EXPORT_3MF) {
+                if (id == ExportCommands.EXPORT_CONFIG) {
+                    // The chosen profile's file as the project worker holds it, after every choice asked before.
+                    when (val json = project.exportConfig().get()) {
+                        null -> Staging(null, ExportCommands.NO_PROFILE)
+                        else -> {
+                            file.writeText(json, Charsets.UTF_8)
+                            Staging(ExportCommands.CONFIG_FILENAME, ExportCommands.EXPORTED_CONFIG)
+                        }
+                    }
+                } else if (id == ExportCommands.EXPORT_3MF) {
                     when (val answer = project.export3mf(output).get()) {
                         is ProjectArchiveExport.Written -> Staging(answer.filename, ExportCommands.EXPORTED_3MF)
                         is ProjectArchiveExport.Refused -> Staging(null, ExportCommands.failed3mf(answer.code))

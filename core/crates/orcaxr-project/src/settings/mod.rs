@@ -3,6 +3,7 @@
 //! copy. They neither validate option values nor execute project commands.
 pub mod catalog;
 pub mod catalog_exchange;
+pub mod config_export;
 pub mod editor;
 mod generated;
 pub mod library;

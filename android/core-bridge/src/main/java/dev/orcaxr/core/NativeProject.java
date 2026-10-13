@@ -71,6 +71,8 @@ final class NativeProject {
     static native long catalogProfileCount(long handle);
     static native String catalogProfile(long handle, long position);
     static native String catalogProfileConfig(long handle, long position);
+    // File → Export Config… of a profile: the browser's orcaxr_config.json, keys in its order.
+    static native String catalogConfigExport(long handle, long position);
     static native String catalogReconcile(long handle, String request);
     static native String catalogTarget(long handle, String request, long maxTools);
     // Slicing configuration from catalog profiles: canonical JSON requests and

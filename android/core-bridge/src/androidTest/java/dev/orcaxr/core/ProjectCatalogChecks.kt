@@ -1,8 +1,9 @@
 package dev.orcaxr.core
 
 /** The profile catalog through the Kotlin wrapper: the browser's contract
- * replies decode and re-encode exactly, a host collator orders presets, a
- * failing one refuses the build, and uploads are consumed and budgeted. */
+ * replies decode and re-encode exactly, Export Config… writes the browser's
+ * file, a host collator orders presets, a failing one refuses the build, and
+ * uploads are consumed and budgeted. */
 object ProjectCatalogChecks {
     private fun failure(block: () -> Unit) = runCatching(block).exceptionOrNull()?.message
     private val limits = ProfileCatalogLimits(8L shl 20, 1L shl 20, 8L shl 20, 64, 64)
@@ -12,11 +13,14 @@ object ProjectCatalogChecks {
             upload.append(start.toLong(), bytes.copyOfRange(start, minOf(start + ProjectHost.MAX_CHUNK_BYTES, bytes.size)))
         return upload
     }
+    private fun sha256(text: String) = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(text.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     /** [expected] lines: diagnostic 0, preset 0, profile 0, config 0, a
-     * selection request and its result, a target request and its result. */
+     * selection request and its result, a target request and its result, and
+     * the SHA-256 of profile 0's Export Config… file. */
     @JvmStatic fun run(catalog: ByteArray, expected: String): Long {
         val lines = expected.split("\n")
-        check(lines.size == 8)
+        check(lines.size == 9)
         var checks = 0L
         ProjectPreparation().use { scope ->
             val input = upload(scope, catalog)
@@ -33,6 +37,11 @@ object ProjectCatalogChecks {
             check(target == ProjectIntents.decodeCatalogPreflightTarget(lines[7])); checks++
             check(failure { loaded.profile(loaded.profileCount()) } == "invalid_range"); checks++
             check(failure { loaded.preflightTarget(ProjectIntents.decodeCatalogTargetRequest(lines[6]), 0) } == "resource_limit"); checks++
+            // File → Export Config…: the browser's orcaxr_config.json, byte for byte.
+            val file = loaded.configExport(0)
+            check(sha256(file) == lines[8]); checks++
+            check(file.startsWith("{\n  \"orcaxr_config\": 1,\n") && file.endsWith("\n}")); checks++
+            check(failure { loaded.configExport(loaded.profileCount()) } == "invalid_range"); checks++
 
             // A host collator decides preset order; kinds still lead.
             val reversed = scope.own(upload(scope, catalog).build(PresetCollator { left, right -> java.util.Arrays.compare(right, left) }))
@@ -40,6 +49,10 @@ object ProjectCatalogChecks {
             check(reversed.preset(0).kind == ProjectIntents.CatalogPresetKind.Filament); checks++
             check(reversed.preset(0).name != loaded.preset(0).name); checks++
             check(reversed.profileCount() == loaded.profileCount()); checks++
+            // The file is the profile's whatever the collation: found by its ID.
+            val first = loaded.profile(0).id
+            val same = (0 until reversed.profileCount()).first { reversed.profile(it).id == first }
+            check(reversed.configExport(same) == file); checks++
             // A failing collator refuses the build without exposing its text.
             check(failure { upload(scope, catalog).build(PresetCollator { _, _ -> error("PRIVATE collator detail") }) } == "collation_failed"); checks++
             check(failure { ProfileCatalogUpload(catalog.size.toLong(), limits.copy(maxBytes = 16)) } == "input_limit"); checks++

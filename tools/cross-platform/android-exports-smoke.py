@@ -14,8 +14,12 @@ stores them (DEFLATE, no UTF-8 flag, 0644, 1980-01-01) — and the browser's own
 negative part makes the STL export refuse in the browser's words, and no
 picker opens. "Export as 3MF…" writes `Untitled project.3mf`, which the
 browser, reopening it and saving it again, writes byte for byte the same (its
-Save is the export), while the project's own saved state is untouched. Each document is saved in Downloads, chosen from the picker's
-roots (it reopens where it was last used).
+Save is the export), while the project's own saved state is untouched.
+"Export Config…" writes `orcaxr_config.json`: the browser's file of the
+chosen catalog profile, byte for byte (its SHA-256 and length among the
+bundled profiles' recorded by `config-export-vectors.mjs`, the profile the
+one its printer names). Each document is saved in Downloads, chosen from the
+picker's roots (it reopens where it was last used).
 
 Then on the external slicer (the real server on the host, its engine a
 stand-in writing the reference G-code), once connected and agreed to:
@@ -29,10 +33,12 @@ the published G-code is no longer the project's and Download is not offered.
 
 Statuses are the browser's (the shell's snackbar): "Exported 1 model as 12 STL
 triangles.", "Exported all models as separate STL files.", "STL export
-failed: …", "Saved orcaxr.gcode.", "Downloaded 2 plate G-code file(s).".
+failed: …", "Plated geometry exported as 3MF.", "Exported config.", "Saved
+orcaxr.gcode.", "Downloaded 2 plate G-code file(s).".
 """
 import argparse
 import base64
+import hashlib
 import json
 import math
 import struct
@@ -231,6 +237,18 @@ try:
         assert "3D/3dmodel.model" in names and "[Content_Types].xml" in names, names
     find("Unsaved changes", timeout=10)
     written["Untitled project.3mf"] = len(project)
+
+    # Export Config…: the chosen catalog profile's configuration, the browser's file for it byte for byte.
+    menu("Export", "Export Config…")
+    save_as("orcaxr_config.json")
+    find("Exported config.", timeout=30)
+    config = pull(f"{DOWNLOAD}/orcaxr_config.json")
+    corpus = json.loads((ROOT / "testdata/cross-platform/config-export-vectors.json").read_text())
+    chosen = {p["sha256"]: p for p in corpus["bundled"]["profiles"]}.get(hashlib.sha256(config).hexdigest())
+    assert chosen and chosen["bytes"] == len(config), "orcaxr_config.json is not the browser's file of a bundled profile"
+    fields = json.loads(config)
+    assert fields["orcaxr_config"] == 1 and chosen["id"].startswith(f"{fields['machineName']}|{fields['processName']}|"), chosen["id"]
+    written["orcaxr_config.json"] = len(config)
 
     # A negative part: refused in the browser's words; no picker opens.
     menu("Edit", "Select All")

@@ -385,6 +385,10 @@ impl Profile {
             .find_map(|part| part.get(&key))
             .map(Vec::as_slice)
     }
+    /// The machine, process and filament flattenings, in that order.
+    pub fn parts(&self) -> &[Arc<WireConfig>; 3] {
+        &self.parts
+    }
     /// `{ ...machine, ...process, ...filament }`.
     pub fn config(&self) -> WireConfig {
         let mut merged = WireConfig::new();
