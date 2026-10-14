@@ -83,6 +83,7 @@ import dev.orcaxr.core.VirtualFilamentSearch
 import dev.orcaxr.core.VirtualFilaments
 import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.device.PreferencesTextStore
+import dev.orcaxr.nativeapp.engine.LocalEngineClient
 import dev.orcaxr.nativeapp.exports.DiagnosticsLog
 import dev.orcaxr.nativeapp.prepare.PlateSource
 import dev.orcaxr.nativeapp.shell.AppActions
@@ -146,6 +147,8 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     private val recentStore = RecentDocuments(PreferencesTextStore(application, "orcaxr.projects", "recent"))
     /** Unsaved work kept for a session the system ends; in private storage, excluded from backups. */
     private val recovery = ProjectRecovery(File(application.filesDir, "recovery"))
+    private val engine = LocalEngineClient(application)
+    private val engineJobs = File(application.noBackupFilesDir, "engine_jobs")
     private lateinit var workspace: ProjectWorkspace
     /** The workspace, once the worker made it. */
     private val started = CompletableFuture<ProjectWorkspace>()
@@ -1010,6 +1013,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "set_negative_part" -> setNegativePart()
             "split_to_parts" -> splitToParts()
             "simplify_model" -> simplifyNow()
+            "repair_model" -> repairNow()
+            "mesh_boolean_union" -> booleanNow("UNION")
+            "mesh_boolean_subtract" -> booleanNow("A_NOT_B")
+            "mesh_boolean_intersection" -> booleanNow("INTERSECTION")
             "tool_measure" -> if (measuring && !assembling) measure(false) else measure(true)
             "tool_assembly" -> if (measuring && assembling) measure(false) else assembly()
             // The palette's Align and Explode: the Assembly tool's panel holds their faces and factor.
@@ -1509,6 +1516,38 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             }
         } catch (failure: Throwable) {
             ModelToolStatus.simplifyFailed(cause(failure).message)
+        }
+        main.post { message = status }
+    }
+
+    /** The menu's Repair mesh (`repair_model`): repairs the selected model part via the engine. */
+    fun repairNow() = work {
+        val status = try {
+            val applied = workspace.repairSelected({ job ->
+                engine.runRepair(job, { _, _ -> }, { false })
+            }, engineJobs).await()
+            when {
+                applied == null -> words(R.string.repair_select_model)
+                else -> words(R.string.repair_completed)
+            }
+        } catch (failure: Throwable) {
+            words(R.string.repair_failed) + " " + ModelToolStatus.reason(cause(failure).message)
+        }
+        main.post { message = status }
+    }
+
+    /** The menu's Boolean operation (`mesh_boolean_union`, `mesh_boolean_subtract`, `mesh_boolean_intersection`). */
+    fun booleanNow(op: String) = work {
+        val status = try {
+            val applied = workspace.booleanSelected(op, { job ->
+                engine.runBoolean(job, { _, _ -> }, { false })
+            }, engineJobs).await()
+            when {
+                applied == null -> words(R.string.boolean_select_models)
+                else -> words(R.string.boolean_completed)
+            }
+        } catch (failure: Throwable) {
+            words(R.string.boolean_failed) + " " + ModelToolStatus.reason(cause(failure).message)
         }
         main.post { message = status }
     }
@@ -2152,6 +2191,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             pendingImport?.candidate?.close()
             if (::workspace.isInitialized) workspace.close()
             profiles.close()
+            engine.close()
         }
         worker.shutdown()
         searches.shutdownNow()

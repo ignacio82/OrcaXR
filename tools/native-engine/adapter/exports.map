@@ -7,6 +7,8 @@
     orcaxr_engine_identity;
     orcaxr_engine_file_sha256;
     orcaxr_engine_check_defaults;
+    orcaxr_engine_repair;
+    orcaxr_engine_boolean;
   local:
     *;
 };

@@ -6,7 +6,7 @@ use super::{Record, Result, Timestamps, capture, index, option_values, range, re
 use jni::{
     JNIEnv,
     objects::{JByteArray, JCharArray, JDoubleArray, JLongArray, JObject, JString},
-    sys::{jboolean, jbyteArray, jint, jlong},
+    sys::{jboolean, jbyteArray, jint, jlong, jobjectArray},
 };
 use orcaxr_archive::{
     models::{
@@ -370,4 +370,62 @@ pub(super) fn commit_import(
         Ok(_) => reserved.insert(Record::Effects(outcome.events)),
         Err(_) => Err("import_failed"),
     }
+}
+
+pub(super) fn decode_stl_mesh<'local>(
+    env: &mut JNIEnv<'local>,
+    stl_bytes: JByteArray<'_>,
+    asset_id: JString<'_>,
+) -> Result<jobjectArray> {
+    let asset_id_str = super::printer::bounded_text(env, &asset_id, 256)?;
+    let asset_id = orcaxr_project::ids::AssetId::try_from_str(&asset_id_str).map_err(|_| "invalid_asset_id")?;
+    let length = env.get_array_length(&stl_bytes).map_err(|_| "invalid_input")?;
+    if length < 0 || (length as usize) > (512 << 20) {
+        return Err("input_limit");
+    }
+    let bytes = env.convert_byte_array(&stl_bytes).map_err(|_| "invalid_input")?;
+    let limits = orcaxr_archive::models::Limits::default();
+    let mut cancel = || false;
+    let decoded = orcaxr_archive::models::decode(&bytes, &[], &limits, &mut cancel).map_err(|e| match e {
+        orcaxr_archive::models::Error::Unsupported(u, _) => failure_code(host::Failure::Unsupported(u)),
+        orcaxr_archive::models::Error::Malformed(m, _) => failure_code(host::Failure::Malformed(m)),
+        orcaxr_archive::models::Error::Cancelled => "cancelled",
+    })?;
+    let Some(object) = decoded.objects.first() else {
+        return Err("no_geometry");
+    };
+    let Some(volume) = object.volumes.first() else {
+        return Err("no_geometry");
+    };
+    let encode_limits = orcaxr_project::mesh::Limits {
+        asset_bytes: 512 << 20,
+        vertices: 24_000_000,
+        indices: 24_000_000,
+    };
+    let payload = orcaxr_project::mesh::encode(
+        orcaxr_project::mesh::EncodeOptions {
+            id: asset_id,
+            source_filename: None,
+            provenance: None,
+            metadata_bytes: usize::MAX,
+        },
+        orcaxr_project::mesh::Coordinates::Float32(&volume.mesh.positions),
+        Some(&volume.mesh.indices),
+        encode_limits,
+        || false,
+    ).map_err(|_| "mesh_encoding_failed")?;
+    let mut descriptor_json = Vec::new();
+    payload
+        .descriptor
+        .write_canonical(&mut descriptor_json)
+        .map_err(|_| "encoding")?;
+    let descriptor_str = String::from_utf8(descriptor_json).map_err(|_| "encoding")?;
+
+    let class = env.find_class("java/lang/Object").map_err(|_| "jni_failure")?;
+    let array = env.new_object_array(2, &class, JObject::null()).map_err(|_| "allocation_failed")?;
+    let j_descriptor = env.new_string(descriptor_str).map_err(|_| "allocation_failed")?;
+    let j_bytes = env.byte_array_from_slice(&payload.bytes).map_err(|_| "allocation_failed")?;
+    env.set_object_array_element(&array, 0, &j_descriptor).map_err(|_| "jni_failure")?;
+    env.set_object_array_element(&array, 1, &j_bytes).map_err(|_| "jni_failure")?;
+    Ok(array.into_raw())
 }

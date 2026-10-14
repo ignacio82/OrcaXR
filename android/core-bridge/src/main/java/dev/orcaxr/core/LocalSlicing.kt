@@ -48,10 +48,35 @@ class LocalSliceJob internal constructor(
     val profiles: SliceProfiles? = null,
 )
 
+/** One repair job's private inputs and output. */
+class LocalRepairJob internal constructor(
+    val id: String,
+    val directory: File,
+    val input: LocalSliceInput,
+    val output: File,
+    val volumeId: String,
+    val revision: ProjectRevision?,
+)
+
+/** One mesh boolean job's private inputs, operation and output. */
+class LocalBooleanJob internal constructor(
+    val id: String,
+    val directory: File,
+    val inputA: LocalSliceInput,
+    val inputB: LocalSliceInput,
+    val op: String,
+    val output: File,
+    val targetInstanceId: String,
+    val otherInstanceId: String,
+    val revision: ProjectRevision?,
+)
+
 /** What the engine reported of one job ([LocalSlicing.result]): its own result document, read strictly. */
 sealed interface LocalEngineResult {
     /** The G-code is written and closed: its length and SHA-256 as the engine read them back. */
     data class Completed(val objects: Long, val gcodeBytes: Long, val gcodeSha256: String, val rejectedOverrides: Long) : LocalEngineResult
+    /** The mesh (from repair or boolean) is written and closed: its length and SHA-256 as the engine read them back. */
+    data class MeshCompleted(val outputBytes: Long, val outputSha256: String) : LocalEngineResult
     /** The engine refused or failed at [stage], with a stable [code] and its bounded words. */
     data class Failed(val stage: String, val code: String, val message: String, val option: String?) : LocalEngineResult
     /** The engine stopped cooperatively at [stage], as asked. */
@@ -122,6 +147,7 @@ object LocalSlicing {
     const val MAX_ARCHIVE_BYTES = 1L shl 30
     const val MAX_OVERRIDES_BYTES = 1L shl 20
     const val MAX_GCODE_BYTES = 2L shl 30
+    const val MAX_MESH_BYTES = 512L shl 20
     /** The largest result or status document either process accepts. */
     const val MAX_DOCUMENT_CHARS = 4096
     /** The browser's boundedMessage length. */
@@ -172,6 +198,55 @@ object LocalSlicing {
             return LocalSliceJob(id, directory, archiveInput, overridesInput, File(directory, "output.gcode"),
                 archive.sourceHash, archive.revision, archive.warnings.size, archive.thumbnails, archive.warnings.map { String(it) },
                 archive.profiles)
+        } catch (failure: Throwable) {
+            deleteTree(directory.toPath())
+            throw failure
+        }
+    }
+
+    /** Stages one repair job under [root]: private directory, input STL, sealed. */
+    fun stageRepair(root: File, id: String, volumeId: String, revision: ProjectRevision?, write: (OutputStream) -> Unit): LocalRepairJob {
+        require(JOB.matches(id)) { "invalid_job" }
+        val base = root.toPath()
+        Files.createDirectories(base)
+        check(Files.isDirectory(base, LinkOption.NOFOLLOW_LINKS)) { "invalid_job_root" }
+        val directory = Files.createDirectory(base.resolve(id)).toFile()
+        try {
+            val inputFile = File(directory, "input.stl")
+            SyncedOutput(FileOutputStream(inputFile)).use(write)
+            val input = sealed(inputFile, MAX_MESH_BYTES)
+            return LocalRepairJob(id, directory, input, File(directory, "output.stl"), volumeId, revision)
+        } catch (failure: Throwable) {
+            deleteTree(directory.toPath())
+            throw failure
+        }
+    }
+
+    /** Stages one mesh boolean job under [root]: private directory, inputs A and B, sealed. */
+    fun stageBoolean(
+        root: File,
+        id: String,
+        targetInstanceId: String,
+        otherInstanceId: String,
+        op: String,
+        revision: ProjectRevision?,
+        writeA: (OutputStream) -> Unit,
+        writeB: (OutputStream) -> Unit,
+    ): LocalBooleanJob {
+        require(JOB.matches(id)) { "invalid_job" }
+        require(op == "UNION" || op == "A_NOT_B" || op == "INTERSECTION") { "invalid_op" }
+        val base = root.toPath()
+        Files.createDirectories(base)
+        check(Files.isDirectory(base, LinkOption.NOFOLLOW_LINKS)) { "invalid_job_root" }
+        val directory = Files.createDirectory(base.resolve(id)).toFile()
+        try {
+            val fileA = File(directory, "input_a.stl")
+            SyncedOutput(FileOutputStream(fileA)).use(writeA)
+            val inputA = sealed(fileA, MAX_MESH_BYTES)
+            val fileB = File(directory, "input_b.stl")
+            SyncedOutput(FileOutputStream(fileB)).use(writeB)
+            val inputB = sealed(fileB, MAX_MESH_BYTES)
+            return LocalBooleanJob(id, directory, inputA, inputB, op, File(directory, "output.stl"), targetInstanceId, otherInstanceId, revision)
         } catch (failure: Throwable) {
             deleteTree(directory.toPath())
             throw failure
@@ -241,14 +316,23 @@ object LocalSlicing {
         if (!keys.contains("schemaVersion") || ProjectIntentJson.integer(obj.get("schemaVersion"), 1, 1) != 1L) throw InvalidProjectIntent()
         return when (obj.get("outcome")) {
             "completed" -> {
-                exact(keys, "schemaVersion", "outcome", "stage", "objects", "gcodeBytes", "gcodeSha256", "rejectedOverrides")
-                if (obj.get("stage") != "output") throw InvalidProjectIntent()
-                LocalEngineResult.Completed(
-                    ProjectIntentJson.integer(obj.get("objects"), 1, Int.MAX_VALUE.toLong()),
-                    ProjectIntentJson.integer(obj.get("gcodeBytes"), 1, MAX_GCODE_BYTES),
-                    digest(obj.get("gcodeSha256")),
-                    ProjectIntentJson.integer(obj.get("rejectedOverrides"), 0, 4096),
-                )
+                if (keys.contains("outputBytes")) {
+                    exact(keys, "schemaVersion", "outcome", "stage", "outputBytes", "outputSha256")
+                    if (obj.get("stage") != "output") throw InvalidProjectIntent()
+                    LocalEngineResult.MeshCompleted(
+                        ProjectIntentJson.integer(obj.get("outputBytes"), 1, MAX_MESH_BYTES),
+                        digest(obj.get("outputSha256")),
+                    )
+                } else {
+                    exact(keys, "schemaVersion", "outcome", "stage", "objects", "gcodeBytes", "gcodeSha256", "rejectedOverrides")
+                    if (obj.get("stage") != "output") throw InvalidProjectIntent()
+                    LocalEngineResult.Completed(
+                        ProjectIntentJson.integer(obj.get("objects"), 1, Int.MAX_VALUE.toLong()),
+                        ProjectIntentJson.integer(obj.get("gcodeBytes"), 1, MAX_GCODE_BYTES),
+                        digest(obj.get("gcodeSha256")),
+                        ProjectIntentJson.integer(obj.get("rejectedOverrides"), 0, 4096),
+                    )
+                }
             }
             "failed" -> {
                 val option = keys.contains("option")
@@ -332,6 +416,7 @@ object LocalSlicing {
     fun outcome(end: LocalEngineEnd): LocalSliceOutcome = when (end) {
         is LocalEngineEnd.Reported -> when (val result = end.result) {
             is LocalEngineResult.Completed -> LocalSliceOutcome.Output(result)
+            is LocalEngineResult.MeshCompleted -> LocalSliceOutcome.Failed(failed("Unexpected mesh result"))
             is LocalEngineResult.Cancelled -> LocalSliceOutcome.Cancelled(terminated = false)
             LocalEngineResult.Busy -> LocalSliceOutcome.Failed(failed(BUSY))
             // The browser engine's own wording for a refused print, then the engine's words.
@@ -369,6 +454,32 @@ object LocalSlicing {
         } catch (failure: Throwable) {
             Files.deleteIfExists(target)
             throw failure
+        }
+    }
+
+    /**
+     * Claims the engine's output mesh (repaired or boolean): moved out of the job directory
+     * to [part], checked as a regular file of exactly the reported length and SHA-256.
+     * Answers the byte array and SHA-256 digest. Anything else is refused and [part] removed.
+     */
+    fun claimMesh(jobOutputFile: File, result: LocalEngineResult.MeshCompleted, part: File): Pair<ByteArray, String> {
+        val source = jobOutputFile.toPath()
+        if (!Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) throw LocalSliceRefusal("The engine wrote no output mesh.")
+        val target = part.toPath()
+        Files.createDirectories(target.parent)
+        Files.move(source, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        try {
+            if (!Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS) || Files.size(target) != result.outputBytes) {
+                throw LocalSliceRefusal("The mesh on the disk is not what the engine reported; it was discarded.")
+            }
+            val (bytes, sha) = digest(target, MAX_MESH_BYTES, null)
+            if (bytes != result.outputBytes || sha != result.outputSha256) {
+                throw LocalSliceRefusal("The mesh on the disk does not match the engine's reported digest; it was discarded.")
+            }
+            val data = Files.readAllBytes(target)
+            return data to sha
+        } finally {
+            Files.deleteIfExists(target)
         }
     }
 

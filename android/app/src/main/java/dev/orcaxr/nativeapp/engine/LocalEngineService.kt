@@ -194,12 +194,11 @@ class LocalEngineService : Service() {
             }
         }
 
-        override fun start(id: String, archiveBytes: Long, archiveSha256: String, overridesBytes: Long, overridesSha256: String, owner: IBinder): Boolean {
+        private fun enqueue(id: String, owner: IBinder, name: String, run: (Load.Ready, File) -> String): Boolean {
             owned()
             val ready = load() as? Load.Ready ?: return false
             require(LocalEngineFiles.validJob(id)) { "invalid job" }
             val directory = File(jobs, id)
-            // The editor staged it; a link in its place is refused.
             require(Files.isDirectory(directory.toPath(), LinkOption.NOFOLLOW_LINKS)) { "invalid job" }
             val job = Job(id, directory, owner)
             synchronized(lock) {
@@ -207,7 +206,6 @@ class LocalEngineService : Service() {
                 running = job
             }
             job.death = IBinder.DeathRecipient {
-                // The editor that owns the job is gone: nobody will claim its output.
                 job.ownerGone = true
                 NativeEngine.nativeCancel()
             }
@@ -217,23 +215,15 @@ class LocalEngineService : Service() {
                 job.ownerGone = true
             }
             main.post {
-                // The editor started the foreground before submitting; this keeps a job that raced it covered.
                 try {
                     promote()
                 } catch (_: IllegalStateException) {
                 }
             }
             Thread(null, {
-                // An owner gone before the engine started: nothing to slice for. (A job resets the
-                // engine's cancel flag as it starts, so a cancel sent earlier would be lost.)
                 val result = if (job.ownerGone) OWNER_GONE else try {
-                    NativeEngine.nativeSlice(
-                        directory.absolutePath,
-                        File(directory, "input.3mf").absolutePath, archiveBytes, archiveSha256,
-                        File(directory, "overrides.json").absolutePath, overridesBytes, overridesSha256,
-                        ready.resources.absolutePath, File(directory, "output.gcode").absolutePath,
-                    )
-                } catch (failure: Throwable) {
+                    run(ready, directory)
+                } catch (_: Throwable) {
                     ENGINE_FAILED
                 }
                 job.result = try {
@@ -243,9 +233,38 @@ class LocalEngineService : Service() {
                     ENGINE_FAILED
                 }
                 main.post { finished(job) }
-            }, "orcaxr-engine", STACK_BYTES).start()
+            }, name, STACK_BYTES).start()
             return true
         }
+
+        override fun start(id: String, archiveBytes: Long, archiveSha256: String, overridesBytes: Long, overridesSha256: String, owner: IBinder): Boolean =
+            enqueue(id, owner, "orcaxr-engine") { ready, directory ->
+                NativeEngine.nativeSlice(
+                    directory.absolutePath,
+                    File(directory, "input.3mf").absolutePath, archiveBytes, archiveSha256,
+                    File(directory, "overrides.json").absolutePath, overridesBytes, overridesSha256,
+                    ready.resources.absolutePath, File(directory, "output.gcode").absolutePath,
+                )
+            }
+
+        override fun startRepair(id: String, inputBytes: Long, inputSha256: String, owner: IBinder): Boolean =
+            enqueue(id, owner, "orcaxr-engine-repair") { _, directory ->
+                NativeEngine.nativeRepair(
+                    directory.absolutePath,
+                    File(directory, "input.stl").absolutePath, inputBytes, inputSha256,
+                    File(directory, "output.stl").absolutePath,
+                )
+            }
+
+        override fun startBoolean(id: String, aBytes: Long, aSha256: String, bBytes: Long, bSha256: String, op: String, owner: IBinder): Boolean =
+            enqueue(id, owner, "orcaxr-engine-boolean") { _, directory ->
+                NativeEngine.nativeBoolean(
+                    directory.absolutePath,
+                    File(directory, "input_a.stl").absolutePath, aBytes, aSha256,
+                    File(directory, "input_b.stl").absolutePath, bBytes, bSha256,
+                    op, File(directory, "output.stl").absolutePath,
+                )
+            }
 
         override fun poll(id: String): String {
             owned()

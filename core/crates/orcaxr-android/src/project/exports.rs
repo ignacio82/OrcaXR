@@ -41,6 +41,36 @@ pub(super) fn export_stl<'local>(
     string(env, reply)
 }
 
+/// Write a single volume as a binary STL (in volume-local space) from export capture [handle] to [target] (a ProjectJsonSink).
+pub(super) fn export_volume_stl<'local>(
+    env: &mut JNIEnv<'local>,
+    handle: jlong,
+    volume_id: JString<'_>,
+    target: JObject<'_>,
+) -> Result<jstring> {
+    let volume_id = bounded_text(env, &volume_id, MAX_INPUT_BYTES)?;
+    let volume_id_units: Vec<u16> = volume_id.encode_utf16().collect();
+    let capture = with_export(handle, |e| Ok(e.clone()))?;
+    let reply = {
+        let mut sink = Sink::open(env, handle, layout::MAX_BUDGET, target)?;
+        let outcome = exports::write_volume_binary_stl(
+            capture.project().state(),
+            &|id| capture.asset_by_id(id),
+            &volume_id_units,
+            &mut sink,
+        );
+        match exports::volume_stl_reply(&outcome) {
+            Some(reply) if outcome.is_ok() => {
+                sink.flush().map_err(|_| sink.failure())?;
+                reply
+            }
+            Some(reply) => reply,
+            None => return Err(sink.failure()),
+        }
+    };
+    string(env, reply)
+}
+
 /// Export as 3MF… of export capture [handle] under the archive policy
 /// [options]: the browser's package streamed to [target] and the reply, or
 /// the refusal (a reply too, before the first byte). A destination's failure

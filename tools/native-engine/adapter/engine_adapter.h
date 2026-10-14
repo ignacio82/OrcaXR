@@ -29,6 +29,29 @@ typedef struct orcaxr_engine_request {
     const char* output;
 } orcaxr_engine_request;
 
+typedef struct orcaxr_repair_request {
+    /** An existing private directory holding nothing but the inputs. */
+    const char* job_directory;
+    const char* input_stl;
+    unsigned long long input_bytes;
+    const char* input_sha256;
+    const char* output_stl;
+} orcaxr_repair_request;
+
+typedef struct orcaxr_boolean_request {
+    /** An existing private directory holding nothing but the inputs. */
+    const char* job_directory;
+    const char* input_a_stl;
+    unsigned long long input_a_bytes;
+    const char* input_a_sha256;
+    const char* input_b_stl;
+    unsigned long long input_b_bytes;
+    const char* input_b_sha256;
+    /** "UNION", "A_NOT_B", or "INTERSECTION". */
+    const char* op;
+    const char* output_stl;
+} orcaxr_boolean_request;
+
 enum {
     ORCAXR_ENGINE_COMPLETED = 0,
     ORCAXR_ENGINE_FAILED = 1,
@@ -47,6 +70,14 @@ enum {
 /** Slices [request] on the calling thread and writes one ASCII JSON result
  * document (NUL-terminated) to [result]. Returns one of the codes above. */
 int orcaxr_engine_slice(const orcaxr_engine_request* request, char* result, size_t capacity);
+
+/** Repairs [request] on the calling thread and writes one ASCII JSON result
+ * document (NUL-terminated) to [result]. Returns one of the codes above. */
+int orcaxr_engine_repair(const orcaxr_repair_request* request, char* result, size_t capacity);
+
+/** Performs boolean operation [request] on the calling thread and writes one ASCII JSON result
+ * document (NUL-terminated) to [result]. Returns one of the codes above. */
+int orcaxr_engine_boolean(const orcaxr_boolean_request* request, char* result, size_t capacity);
 
 /** Requests a cooperative stop of the running job, from any thread. A request
  * made while no job runs is dropped when the next job starts. */
@@ -71,3 +102,4 @@ int orcaxr_engine_check_defaults(void);
 #ifdef __cplusplus
 }
 #endif
+

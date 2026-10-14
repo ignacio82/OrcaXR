@@ -497,6 +497,13 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_exportVolumeStl, export_volume_stl, jstring,
+    handle: jlong,
+    volume_id: JString<'local>,
+    sink: JObject<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_exportProjectArchive, export_project_archive, jstring,
     handle: jlong,
     version: jint,
@@ -2143,6 +2150,12 @@ export! {
     handle: jlong,
     preview: jlong,
     acknowledged: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_decodeStlMesh, decode_stl_mesh, jobjectArray,
+    stl_bytes: JByteArray<'local>,
+    asset_id: JString<'local>,
 }
 
 export! {

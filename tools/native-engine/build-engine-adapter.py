@@ -40,7 +40,8 @@ DRIVER = "orcaxr_engine_driver"
 RUNTIME = ("libtbb.so", "libtbbmalloc.so", "libc++_shared.so")
 PACKAGED = (LIBRARY, *RUNTIME)
 EXPORTS = sorted(["JNI_OnLoad", "orcaxr_engine_slice", "orcaxr_engine_cancel", "orcaxr_engine_progress",
-                  "orcaxr_engine_identity", "orcaxr_engine_file_sha256", "orcaxr_engine_check_defaults"])
+                  "orcaxr_engine_identity", "orcaxr_engine_file_sha256", "orcaxr_engine_check_defaults",
+                  "orcaxr_engine_repair", "orcaxr_engine_boolean"])
 LIBRARY_SOURCES = [ADAPTER / "engine_adapter.cpp", ADAPTER / "engine_jni.cpp", PROBE / "defaults_probe.cpp"]
 DRIVER_SOURCES = [ADAPTER / "engine_driver.cpp"]
 PLATFORM = base.PLATFORM_LIBRARIES | {"liblog.so", "libandroid.so", "libz.so"}

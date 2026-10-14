@@ -30,7 +30,8 @@ use orcaxr_project::{
     js_math::{self, convert::trim_utf16},
     mesh::{IndexedMesh, decode_indexed},
     model::{
-        Encode, ProjectInstance, ProjectObject, ProjectPlate, ProjectState, Transform, VolumeRole,
+        Encode, ProjectInstance, ProjectObject, ProjectPlate, ProjectState, ProjectVolume,
+        Transform, VolumeRole,
     },
 };
 use std::{
@@ -188,6 +189,21 @@ fn find<'a>(
                 .iter()
                 .find(|i| i.id.as_utf16() == id)
                 .map(|i| (&**plate, &**object, &**i))
+        })
+    })
+}
+
+fn find_volume<'a>(
+    state: &'a ProjectState,
+    id: &[u16],
+) -> Option<(&'a ProjectPlate, &'a ProjectObject, &'a ProjectVolume)> {
+    state.plates.iter().find_map(|plate| {
+        plate.objects.iter().find_map(|object| {
+            object
+                .volumes
+                .iter()
+                .find(|v| v.id.as_utf16() == id)
+                .map(|v| (&**plate, &**object, &**v))
         })
     })
 }
@@ -477,6 +493,89 @@ pub fn write_binary_stl(
     Ok(triangles)
 }
 
+/// Write a single volume's canonical mesh as a binary STL in volume-local coordinates
+/// (no volume or instance transforms applied). Answers its triangle count.
+pub fn write_volume_binary_stl(
+    state: &ProjectState,
+    assets: &dyn Fn(&AssetId) -> Option<AssetLease>,
+    volume_id: &[u16],
+    out: &mut dyn Write,
+) -> Result<u64, Failure> {
+    let Some((_, _object, volume)) = find_volume(state, volume_id) else {
+        return Err(refused(&[&units("Unknown volume "), volume_id]));
+    };
+    if volume.role == VolumeRole::NegativeVolume {
+        return Err(refused(&[
+            &units("Volume "),
+            volume.id.as_utf16(),
+            &units(" requires canonical CSG before STL export"),
+        ]));
+    }
+    if volume.role != VolumeRole::Model {
+        return Err(refuse("Repair requires a model volume"));
+    }
+    let asset_id = &volume.source.asset_id;
+    let descriptors: HashMap<&[u16], _> = state
+        .source_assets
+        .iter()
+        .map(|d| (d.id.as_utf16(), d))
+        .collect();
+    let descriptor = descriptors.get(asset_id.as_utf16());
+    let payload = assets(asset_id);
+    let (Some(descriptor), Some(payload)) = (descriptor, payload) else {
+        return Err(refused(&[
+            &units("Volume "),
+            volume.id.as_utf16(),
+            &units(" references missing asset "),
+            asset_id.as_utf16(),
+        ]));
+    };
+    if descriptor.to_value().ok().as_ref() != Some(payload.descriptor()) {
+        return Err(refused(&[
+            &units("Asset repository metadata differs for "),
+            asset_id.as_utf16(),
+        ]));
+    }
+    let mesh = decode_indexed(&payload)
+        .map_err(|message| Failure::Refused(units(&message)))?;
+    let triangles = (mesh.indices.len() / 3) as u64;
+    if triangles as f64 != volume.source.triangle_count.get() {
+        return Err(refused(&[
+            &units("Volume "),
+            volume.id.as_utf16(),
+            &units(" triangle count differs from its canonical mesh"),
+        ]));
+    }
+    if triangles == 0 {
+        return Err(refuse("Volume contains no positive model triangles"));
+    }
+    if triangles > 0xffff_ffff {
+        return Err(refuse("Binary STL triangle count exceeds the format limit"));
+    }
+    let mut buffer = Vec::with_capacity(65_536);
+    let mut header = [0u8; 84];
+    header[..HEADER.len()].copy_from_slice(HEADER);
+    header[80..].copy_from_slice(&(triangles as u32).to_le_bytes());
+    buffer.extend_from_slice(&header);
+    for triangle in mesh.indices.chunks_exact(3) {
+        let a = mesh.positions[triangle[0] as usize];
+        let b = mesh.positions[triangle[1] as usize];
+        let c = mesh.positions[triangle[2] as usize];
+        for vector in [normal(a, b, c), a, b, c] {
+            for value in vector {
+                buffer.extend_from_slice(&(value as f32).to_le_bytes());
+            }
+        }
+        buffer.extend_from_slice(&[0, 0]);
+        if buffer.len() >= 65_536 - 50 {
+            out.write_all(&buffer)?;
+            buffer.clear();
+        }
+    }
+    out.write_all(&buffer)?;
+    Ok(triangles)
+}
+
 /// File → Export as one STL…: [instance_ids] as one STL under the browser's name.
 pub fn write_stl_file(
     state: &ProjectState,
@@ -688,6 +787,20 @@ pub fn stl_reply(outcome: &Result<Exported, Failure>) -> Option<String> {
                 "triangleCount",
                 Value::Number(exported.triangle_count as f64),
             ),
+        ]))),
+        Err(Failure::Refused(message)) => Some(canonical(&object([(
+            "error",
+            Value::String(message.clone()),
+        )]))),
+        Err(Failure::Io(_)) => None,
+    }
+}
+
+/// The exchange's reply for volume STL export: `{"triangleCount":...}` or `{"error":"..."}`.
+pub fn volume_stl_reply(outcome: &Result<u64, Failure>) -> Option<String> {
+    match outcome {
+        Ok(triangles) => Some(canonical(&object([
+            ("triangleCount", Value::Number(*triangles as f64)),
         ]))),
         Err(Failure::Refused(message)) => Some(canonical(&object([(
             "error",

@@ -19,6 +19,19 @@ interface ILocalEngine {
      */
     boolean start(String job, long archiveBytes, String archiveSha256, long overridesBytes, String overridesSha256, IBinder owner);
 
+    /**
+     * Starts repair job [job] whose staged input STL has [inputBytes] and [inputSha256].
+     * [owner] is the editor's token: its death cancels the job. False when a job is already running.
+     */
+    boolean startRepair(String job, long inputBytes, String inputSha256, IBinder owner);
+
+    /**
+     * Starts mesh boolean job [job] with operation [op] ("UNION", "A_NOT_B", "INTERSECTION")
+     * whose staged inputs A and B have their respective lengths and digests. [owner] is the
+     * editor's token: its death cancels the job. False when a job is already running.
+     */
+    boolean startBoolean(String job, long aBytes, String aSha256, long bBytes, String bSha256, String op, IBinder owner);
+
     /** The job's status document: running with progress, done with the engine's result, or unknown. */
     String poll(String job);
 

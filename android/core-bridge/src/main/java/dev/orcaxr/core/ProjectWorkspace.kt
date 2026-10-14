@@ -1,5 +1,6 @@
 package dev.orcaxr.core
 
+import java.io.File
 import java.time.ZoneId
 import java.util.concurrent.CompletableFuture
 
@@ -219,7 +220,10 @@ class ProjectWorkspace(
          * (`dom-toolbar`) and the Simplify, Measure (with its alignments and
          * the exploded view) and Brim ears panels' controls (`dom-inspector`).
          */
-        val MODEL_TOOL_MENU_ACTIONS = listOf("split_to_objects", "split_to_parts", "simplify_model", "variable_layer_height", "auto_place_wipe")
+        val MODEL_TOOL_MENU_ACTIONS = listOf(
+            "split_to_objects", "split_to_parts", "simplify_model", "variable_layer_height", "auto_place_wipe",
+            "repair_model", "mesh_boolean_union", "mesh_boolean_subtract", "mesh_boolean_intersection",
+        )
         val MODEL_TOOL_TOOLBAR_ACTIONS = listOf("tool_measure", "tool_assembly", "tool_brim_ears", "add_emboss", "tool_svg", "variable_layer_height")
         val MODEL_TOOL_INSPECTOR_ACTIONS = listOf(
             "simplify_preview", "simplify_apply", "simplify_cancel", "measure_clear", "assembly_align", "assembly_explode",
@@ -3109,6 +3113,182 @@ class ProjectWorkspace(
         )
         return execute(command)
     }
+
+    /**
+     * The menu's Repair mesh (`repair_model`): runs ADMesh repair on the
+     * selected model part's volume-local STL mesh via the background engine,
+     * and installs the repaired mesh under a [TopologyGuard] matching the
+     * volume's topology before the run. Answers true when repaired, or null
+     * with nothing selected.
+     */
+    fun repairSelected(runJob: (LocalRepairJob) -> LocalEngineEnd, jobsRoot: File): CompletableFuture<Boolean?> = refreshed(
+        query().thenCompose { (state, guard) ->
+            inspect { session ->
+                session.snapshot().use { snapshot ->
+                    if (snapshot.revision() != state.guard.revision) throw ProjectFailure("The project changed meanwhile; try again.")
+                    val refs = whole(session).refs
+                    if (refs.isEmpty()) return@use null
+                    snapshot.query().use { root ->
+                        ProjectFacts.selectedModelParts(root, refs).firstOrNull()
+                    }
+                }
+            }.thenCompose { target ->
+                if (target == null) return@thenCompose CompletableFuture.completedFuture<Boolean?>(null)
+                val jobId = "repair_${System.currentTimeMillis()}_${ids.next()}"
+                var assetDigest: String? = null
+                var job: LocalRepairJob? = null
+                var cause: Throwable? = null
+                outcome(actor.exportDocument(guard, EXPORT) { _, source ->
+                    capturing({ cause = it }) {
+                        job = LocalSlicing.stageRepair(jobsRoot, jobId, target.id, revision(state.guard)) { out ->
+                            source.writeVolumeStl(target.id, out)
+                        }
+                        assetDigest = source.assetDigest(target.assetId)
+                    }
+                }).thenCompose { result ->
+                    if (result !is ProjectOutcome.Exported) throw failure(result, cause)
+                    val digest = checkNotNull(assetDigest) { "missing_asset_digest" }
+                    val stagedJob = checkNotNull(job) { "missing_staged_job" }
+                    CompletableFuture.supplyAsync {
+                        try {
+                            val end = runJob(stagedJob)
+                            val meshResult = when (end) {
+                                is LocalEngineEnd.Reported -> end.result as? LocalEngineResult.MeshCompleted
+                                is LocalEngineEnd.Died -> throw ProjectFailure("Engine stopped unexpectedly")
+                                LocalEngineEnd.Lost -> throw ProjectFailure("Engine connection lost")
+                            } ?: throw ProjectFailure(
+                                when (end) {
+                                    is LocalEngineEnd.Reported -> when (val r = end.result) {
+                                        is LocalEngineResult.Failed -> r.message
+                                        is LocalEngineResult.Cancelled -> "Cancelled"
+                                        LocalEngineResult.Busy -> "Engine busy"
+                                        else -> "Repair failed"
+                                    }
+                                    else -> "Repair failed"
+                                }
+                            )
+                            val (outputBytes, _) = LocalSlicing.claimMesh(stagedJob.output, meshResult, File(stagedJob.directory, "claimed.stl"))
+                            val decoded = NativeProject.decodeStlMesh(outputBytes, ids.next())
+                            val payload = StagedPayload(decoded[0] as String, decoded[1] as ByteArray)
+                            val topologyGuard = TopologyGuard(
+                                volumeId = target.id,
+                                assetId = target.assetId,
+                                assetDigest = digest,
+                                topologyRevision = target.topologyRevision.toLong(),
+                                triangleCount = target.triangleCount,
+                            )
+                            StagedCommand.ReplaceVolumeMesh(topologyGuard, payload)
+                        } finally {
+                            LocalSlicing.discard(stagedJob.directory)
+                        }
+                    }.thenCompose { command ->
+                        stage(guard, StagedWork.Single(command), null).thenApply { true }
+                    }
+                }
+            }
+        }
+    )
+
+    /**
+     * The menu's Mesh Boolean (`mesh_boolean_union`, `mesh_boolean_subtract`,
+     * `mesh_boolean_intersection`): runs CGAL boolean operation [op] on the
+     * two selected instances (or one selected instance and the single other instance
+     * on the active plate) in world bed coordinates, and installs the result
+     * on the target volume under a [BooleanGuard] while deleting the other instance.
+     * Answers true when completed, or null with insufficient selection.
+     */
+    fun booleanSelected(op: String, runJob: (LocalBooleanJob) -> LocalEngineEnd, jobsRoot: File): CompletableFuture<Boolean?> = refreshed(
+        query().thenCompose { (state, guard) ->
+            inspect { session ->
+                session.snapshot().use { snapshot ->
+                    if (snapshot.revision() != state.guard.revision) throw ProjectFailure("The project changed meanwhile; try again.")
+                    snapshot.query().use { root ->
+                        val plate = ProjectFacts.plates(root).firstOrNull { it.active } ?: return@use null
+                        val placedObjects = ProjectFacts.objects(root, plate.id).filter { it.instances.isNotEmpty() && it.volumes.any { v -> v.model } }
+                        val allPlateInstances = placedObjects.flatMap { it.instances.map { inst -> inst.first } }
+                        val selectedInstances = whole(session).instances.filter { id -> allPlateInstances.contains(id) }
+                        val targetId: String
+                        val otherId: String
+                        if (selectedInstances.size == 2) {
+                            targetId = selectedInstances.elementAt(0)
+                            otherId = selectedInstances.elementAt(1)
+                        } else if (selectedInstances.size == 1) {
+                            targetId = selectedInstances.first()
+                            val others = allPlateInstances.filter { it != targetId }
+                            if (others.size == 1) {
+                                otherId = others[0]
+                            } else {
+                                return@use null
+                            }
+                        } else {
+                            return@use null
+                        }
+                        val targetObj = placedObjects.first { it.instances.any { inst -> inst.first == targetId } }
+                        val vol = targetObj.volumes.firstOrNull { it.model } ?: return@use null
+                        Triple(targetId, otherId, vol)
+                    }
+                }
+            }.thenCompose { targets ->
+                if (targets == null) return@thenCompose CompletableFuture.completedFuture<Boolean?>(null)
+                val (targetInstance, otherInstance, targetVolume) = targets
+                val jobId = "boolean_${System.currentTimeMillis()}_${ids.next()}"
+                var targetAssetDigest: String? = null
+                var job: LocalBooleanJob? = null
+                var cause: Throwable? = null
+                outcome(actor.exportDocument(guard, EXPORT) { _, source ->
+                    capturing({ cause = it }) {
+                        job = LocalSlicing.stageBoolean(
+                            jobsRoot, jobId, targetInstance, otherInstance, op, revision(state.guard),
+                            { out -> source.writeStl(ModelExports.stlRequest(archive = false, selected = listOf(targetInstance)), out) },
+                            { out -> source.writeStl(ModelExports.stlRequest(archive = false, selected = listOf(otherInstance)), out) },
+                        )
+                        targetAssetDigest = source.assetDigest(targetVolume.assetId)
+                    }
+                }).thenCompose { result ->
+                    if (result !is ProjectOutcome.Exported) throw failure(result, cause)
+                    val digest = checkNotNull(targetAssetDigest) { "missing_asset_digest" }
+                    val stagedJob = checkNotNull(job) { "missing_staged_job" }
+                    CompletableFuture.supplyAsync {
+                        try {
+                            val end = runJob(stagedJob)
+                            val meshResult = when (end) {
+                                is LocalEngineEnd.Reported -> end.result as? LocalEngineResult.MeshCompleted
+                                is LocalEngineEnd.Died -> throw ProjectFailure("Engine stopped unexpectedly")
+                                LocalEngineEnd.Lost -> throw ProjectFailure("Engine connection lost")
+                            } ?: throw ProjectFailure(
+                                when (end) {
+                                    is LocalEngineEnd.Reported -> when (val r = end.result) {
+                                        is LocalEngineResult.Failed -> r.message
+                                        is LocalEngineResult.Cancelled -> "Cancelled"
+                                        LocalEngineResult.Busy -> "Engine busy"
+                                        else -> "Boolean failed"
+                                    }
+                                    else -> "Boolean failed"
+                                }
+                            )
+                            val (outputBytes, _) = LocalSlicing.claimMesh(stagedJob.output, meshResult, File(stagedJob.directory, "claimed.stl"))
+                            val decoded = NativeProject.decodeStlMesh(outputBytes, ids.next())
+                            val payload = StagedPayload(decoded[0] as String, decoded[1] as ByteArray)
+                            val booleanGuard = BooleanGuard(
+                                targetInstanceId = targetInstance,
+                                targetVolumeId = targetVolume.id,
+                                targetAssetId = targetVolume.assetId,
+                                targetAssetDigest = digest,
+                                targetTopologyRevision = targetVolume.topologyRevision.toLong(),
+                                targetTriangleCount = targetVolume.triangleCount,
+                                otherInstanceId = otherInstance,
+                            )
+                            StagedCommand.MeshBoolean(booleanGuard, payload, op)
+                        } finally {
+                            LocalSlicing.discard(stagedJob.directory)
+                        }
+                    }.thenCompose { command ->
+                        stage(guard, StagedWork.Single(command), null).thenApply { true }
+                    }
+                }
+            }
+        }
+    )
 
     override fun close() {
         synchronized(lock) { timer?.close() }

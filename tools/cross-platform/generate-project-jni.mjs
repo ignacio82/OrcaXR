@@ -35,6 +35,7 @@ const output = {
   "byte[]": "jbyteArray",
   "char[]": "jcharArray",
   "double[]": "jdoubleArray",
+  "Object[]": "jobjectArray",
 };
 const snake = (name) => name.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase());
 let rust =

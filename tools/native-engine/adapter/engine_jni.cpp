@@ -61,6 +61,53 @@ jstring slice(JNIEnv* env, jclass, jstring job, jstring archive, jlong archive_b
     return env->NewStringUTF(result);
 }
 
+jstring repair(JNIEnv* env, jclass, jstring job, jstring input_stl, jlong input_bytes, jstring input_sha256, jstring output_stl) {
+    std::string paths[4];
+    const jstring values[4] = {job, input_stl, input_sha256, output_stl};
+    for (int i = 0; i < 4; ++i) {
+        if (!ascii(env, values[i], paths[i]) || input_bytes < 0) {
+            return env->NewStringUTF(R"({"schemaVersion":1,"outcome":"failed","stage":"inputs","code":"invalid-input","message":"The repair request is not valid."})");
+        }
+    }
+    orcaxr_repair_request request{};
+    request.job_directory = paths[0].c_str();
+    request.input_stl = paths[1].c_str();
+    request.input_bytes = static_cast<unsigned long long>(input_bytes);
+    request.input_sha256 = paths[2].c_str();
+    request.output_stl = paths[3].c_str();
+    char result[ORCAXR_ENGINE_RESULT_BYTES];
+    if (orcaxr_engine_repair(&request, result, sizeof result) == ORCAXR_ENGINE_INVALID) {
+        return env->NewStringUTF(R"({"schemaVersion":1,"outcome":"failed","stage":"output","code":"invalid-result","message":"The engine's result did not fit."})");
+    }
+    return env->NewStringUTF(result);
+}
+
+jstring boolean_mesh(JNIEnv* env, jclass, jstring job, jstring a_stl, jlong a_bytes, jstring a_sha256,
+                     jstring b_stl, jlong b_bytes, jstring b_sha256, jstring op, jstring output_stl) {
+    std::string paths[7];
+    const jstring values[7] = {job, a_stl, a_sha256, b_stl, b_sha256, op, output_stl};
+    for (int i = 0; i < 7; ++i) {
+        if (!ascii(env, values[i], paths[i]) || a_bytes < 0 || b_bytes < 0) {
+            return env->NewStringUTF(R"({"schemaVersion":1,"outcome":"failed","stage":"inputs","code":"invalid-input","message":"The boolean request is not valid."})");
+        }
+    }
+    orcaxr_boolean_request request{};
+    request.job_directory = paths[0].c_str();
+    request.input_a_stl = paths[1].c_str();
+    request.input_a_bytes = static_cast<unsigned long long>(a_bytes);
+    request.input_a_sha256 = paths[2].c_str();
+    request.input_b_stl = paths[3].c_str();
+    request.input_b_bytes = static_cast<unsigned long long>(b_bytes);
+    request.input_b_sha256 = paths[4].c_str();
+    request.op = paths[5].c_str();
+    request.output_stl = paths[6].c_str();
+    char result[ORCAXR_ENGINE_RESULT_BYTES];
+    if (orcaxr_engine_boolean(&request, result, sizeof result) == ORCAXR_ENGINE_INVALID) {
+        return env->NewStringUTF(R"({"schemaVersion":1,"outcome":"failed","stage":"output","code":"invalid-result","message":"The engine's result did not fit."})");
+    }
+    return env->NewStringUTF(result);
+}
+
 void cancel(JNIEnv*, jclass) {
     orcaxr_engine_cancel();
 }
@@ -79,6 +126,12 @@ const JNINativeMethod METHODS[] = {
      const_cast<char*>("(Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;JLjava/lang/String;"
                        "Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"),
      reinterpret_cast<void*>(slice)},
+    {const_cast<char*>("nativeRepair"),
+     const_cast<char*>("(Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;)Ljava/lang/String;"),
+     reinterpret_cast<void*>(repair)},
+    {const_cast<char*>("nativeBoolean"),
+     const_cast<char*>("(Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"),
+     reinterpret_cast<void*>(boolean_mesh)},
     {const_cast<char*>("nativeCancel"), const_cast<char*>("()V"), reinterpret_cast<void*>(cancel)},
     {const_cast<char*>("nativeProgress"), const_cast<char*>("()Ljava/lang/String;"), reinterpret_cast<void*>(progress)},
 };

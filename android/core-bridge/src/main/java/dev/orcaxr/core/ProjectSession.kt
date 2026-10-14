@@ -620,6 +620,11 @@ class ProjectExportCapture internal constructor(handle: Long) : ProjectHandle(ha
     fun writeStl(request: String, destination: java.io.OutputStream): StlExport = read {
         ModelExports.stl(NativeProject.exportStl(it, request) { bytes -> destination.write(bytes) })
     }
+    /** Writes a single volume's canonical mesh as a binary STL in volume-local coordinates
+     * to [destination]. Answers its triangle count. Synchronous; run it on the export worker. */
+    fun writeVolumeStl(volumeId: String, destination: java.io.OutputStream): Long = read {
+        ModelExports.volumeStl(NativeProject.exportVolumeStl(it, volumeId) { bytes -> destination.write(bytes) })
+    }
     /** Export Diagnostics…'s shape of this capture's project
      * (`diagnosticsProjectSummaryOf`): counts and object names, never geometry. */
     fun diagnosticsSummary(): Diagnostics.ProjectShape = read { Diagnostics.projectShape(NativeProject.exportDiagnosticsSummary(it)) }

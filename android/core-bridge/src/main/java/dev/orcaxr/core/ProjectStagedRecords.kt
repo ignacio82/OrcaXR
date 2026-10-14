@@ -98,6 +98,46 @@ sealed interface StagedCommand {
 
     /** `addObjectWithAsset`: an object on [plateId] and the payload its part names. */
     class AddObjectWithAsset(val plateId: String, val record: StagedRecord, val payload: StagedPayload) : StagedCommand
+
+    /** `replaceVolumeMesh`: replaces a volume's mesh under [guard] with [payload]. */
+    class ReplaceVolumeMesh(val guard: TopologyGuard, val payload: StagedPayload) : StagedCommand
+
+    /** `meshBoolean`: merges or subtracts under [guard] with [payload] and [operation]. */
+    class MeshBoolean(val guard: BooleanGuard, val payload: StagedPayload, val operation: String) : StagedCommand
+}
+
+data class TopologyGuard(
+    val volumeId: String,
+    val assetId: String,
+    val assetDigest: String,
+    val topologyRevision: Long,
+    val triangleCount: Long,
+) {
+    internal fun json(): String =
+        "{\"assetDigest\":" + CanonicalJson.quote(assetDigest) +
+            ",\"assetId\":" + CanonicalJson.quote(assetId) +
+            ",\"topologyRevision\":$topologyRevision" +
+            ",\"triangleCount\":$triangleCount" +
+            ",\"volumeId\":" + CanonicalJson.quote(volumeId) + "}"
+}
+
+data class BooleanGuard(
+    val targetInstanceId: String,
+    val targetVolumeId: String,
+    val targetAssetId: String,
+    val targetAssetDigest: String,
+    val targetTopologyRevision: Long,
+    val targetTriangleCount: Long,
+    val otherInstanceId: String,
+) {
+    internal fun json(): String =
+        "{\"otherInstanceId\":" + CanonicalJson.quote(otherInstanceId) +
+            ",\"targetAssetDigest\":" + CanonicalJson.quote(targetAssetDigest) +
+            ",\"targetAssetId\":" + CanonicalJson.quote(targetAssetId) +
+            ",\"targetInstanceId\":" + CanonicalJson.quote(targetInstanceId) +
+            ",\"targetTopologyRevision\":$targetTopologyRevision" +
+            ",\"targetTriangleCount\":$targetTriangleCount" +
+            ",\"targetVolumeId\":" + CanonicalJson.quote(targetVolumeId) + "}"
 }
 
 /** A staged work: one command, or several as one undoable step labelled [label]. */
@@ -136,6 +176,10 @@ object ProjectStagedRecords {
             "[${ProjectStaging.COMMAND_ADD_VOLUME},${text(command.objectId)},${command.record.json},${command.payload.descriptor.json}]"
         is StagedCommand.AddObjectWithAsset ->
             "[${ProjectStaging.COMMAND_ADD_OBJECT_WITH_ASSET},${text(command.plateId)},${command.record.json},${command.payload.descriptor.json}]"
+        is StagedCommand.ReplaceVolumeMesh ->
+            "[${ProjectStaging.COMMAND_REPLACE_VOLUME_MESH},${command.guard.json()},${command.payload.descriptor.json}]"
+        is StagedCommand.MeshBoolean ->
+            "[${ProjectStaging.COMMAND_MESH_BOOLEAN},${command.guard.json()},${command.payload.descriptor.json},${text(command.operation)}]"
     }
 
     /** The records of [work] as the bytes a command upload takes. */
@@ -154,6 +198,8 @@ object ProjectStagedRecords {
             val payload = when (command) {
                 is StagedCommand.AddVolume -> command.payload
                 is StagedCommand.AddObjectWithAsset -> command.payload
+                is StagedCommand.ReplaceVolumeMesh -> command.payload
+                is StagedCommand.MeshBoolean -> command.payload
                 else -> null
             } ?: continue
             val first = seen.getOrPut(payload.id) { payload }

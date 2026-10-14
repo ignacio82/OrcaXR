@@ -62,9 +62,7 @@ physical-device gate below is still open.
   trips, and the geometry ports (picking, regions, paint, placement, arrange,
   split, simplify, measure, brim ears, emboss and its fonts, SVG, assembly,
   mesh packets).
-  Remains: geometry-only 3MF import into an open project in the app, device
-  round trips, mesh packets in a spatial renderer, retained C++ geometry
-  kernels (Repair, mesh Booleans) through the engine's job service, and
+  Remains: device round trips, mesh packets in a spatial renderer, and
   Rust-backed browser sessions.
 - **Phase 6, native slicing: implemented and emulator-verified.** Slicing on
   the packaged engine in its own `:engine` process, the attested external
@@ -216,10 +214,16 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    the toolpaths as OBJ and diagnostics, each byte for byte the browser's,
    and Download, with `android-exports-smoke.py` passing on an API 34
    iteration emulator (neither emulator suite has run it yet, item 1).
-4. Phase 5 and 7: Repair and mesh Booleans, which the browser computes with
-   libslic3r in its slicing engine (`OrcaWorkspace.booleanModels` calls
-   `slicer.boolean`), through the `:engine` job service with the slicing job's
-   identity and cancellation checks; until then Android offers neither.
+4. Phase 5 and 7: Repair and mesh Booleans are done
+   ([§](engineering/native-core.md#android-model-repair-and-mesh-booleans)):
+   `liborcaxr_engine.so` exports ADMesh `repair` and CGAL `boolean_mesh` in both
+   ABIs, routed across Binder in `ILocalEngine.aidl` (`startRepair`/`startBoolean`)
+   to the `:engine` process with owner-death cancellation. `ProjectWorkspace`
+   exports volume-local binary STL for repair and world-coordinate STLs for booleans
+   under `TopologyGuard` and `BooleanGuard`, decoding output meshes into `AssetPayload`s
+   and committing undoable `ReplaceVolumeMesh` and `MeshBoolean` commands. Wired to
+   `repair_model`, `mesh_boolean_union`, `mesh_boolean_subtract`, and
+   `mesh_boolean_intersection`, raising `AppActions.PERFORMED` to 120 actions.
 5. Phase 6, emulator-reachable qualification: task switching, screen lock,
    notification denial, Doze, the `dataSync` limit and reopening an interrupted
    job; the engine-feature matrix (CC profiles, FullSpectrum modes, seam and
@@ -2158,13 +2162,19 @@ painting, and FullSpectrum operations that can support real native projects.
   slice preflight (`slicing::preflight`) reports instances outside the build
   volume or below the plate, overlapping instance bounds and an out-of-volume
   wipe tower from the same bounds, as the browser does.
-- [ ] Route retained C++ geometry-kernel operations through the owned native job
+- [x] Route retained C++ geometry-kernel operations through the owned native job
   service, with the same input identity and cancellation checks as slicing.
   Serialize incompatible kernel/slice jobs and bound their shared resource use;
   do not load a second unbudgeted engine into the editor process.
-  Status (2026-10-12): not started. Until it is, Android offers neither Repair
-  (native-core *Android model tools*) nor mesh Booleans, which the browser
-  computes in its slicing engine.
+  Status (2026-10-14): implemented and verified ([§](engineering/native-core.md#android-model-repair-and-mesh-booleans)).
+  `liborcaxr_engine.so` exports ADMesh `repair` and CGAL `boolean_mesh` in both
+  ABIs (x86_64 and arm64-v8a); `ILocalEngine.aidl` exposes `startRepair` and
+  `startBoolean` with owner-death cancellation; `LocalEngineService` runs in `:engine`
+  with private staged inputs; `LocalEngineClient` manages execution, polling, and
+  cancellation; `LocalSlicing.claimMesh` validates output length and SHA-256;
+  `ProjectWorkspace` routes `repairSelected` and `booleanSelected` under `TopologyGuard`
+  and `BooleanGuard`; wired to `repair_model` and `mesh_boolean_*` in `ProjectModel`
+  (120 performed actions), localized across 19 languages.
 - [x] Run hostile-file and fuzz corpora against both native and WASM archive
   paths. Keep import failures transactional and diagnostics bounded.
   `hostile-archive-vectors` holds 469 cases: seeded byte edits of three
@@ -2623,11 +2633,11 @@ storage journeys on phone, tablet, and desktop-sized windows.
   snapshots, outcomes, statuses, transforms, hashes and labels after all 37
   steps and undoes them, 30 scene checks match its explosions, and
   `android-assembly-smoke.py` passes on an API 34 emulator.
-  Status (2026-10-13): remains: lighting and preview controls; Repair (Phase
-  5's kernel routing), with mesh Booleans; and the model tools with no
-  Android UI yet — Cut, the face detector and hollow (*Resume here*
-  items 2 and 4); both emulator suites' runs of the brim-ear, wipe-tower,
-  drawn-part and assembly smokes (*Resume here* item 1).
+  Status (2026-10-14): remains: lighting and preview controls; and the model
+  tools with no Android UI yet — Cut, the face detector and hollow (*Resume here*
+  item 2); both emulator suites' runs of the brim-ear, wipe-tower,
+  drawn-part and assembly smokes (*Resume here* item 1). Repair and mesh Booleans
+  are done ([§](engineering/native-core.md#android-model-repair-and-mesh-booleans)).
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
   large-file streaming. Validate incoming open/share intents as untrusted input.

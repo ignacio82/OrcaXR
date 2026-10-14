@@ -33,6 +33,28 @@ internal object NativeEngine {
         output: String,
     ): String
 
+    /** Repairs one staged STL mesh on the calling thread; answers the engine's result document. */
+    @JvmStatic external fun nativeRepair(
+        job: String,
+        input: String,
+        inputBytes: Long,
+        inputSha256: String,
+        output: String,
+    ): String
+
+    /** Computes mesh boolean on two staged STL meshes on the calling thread; answers the engine's result document. */
+    @JvmStatic external fun nativeBoolean(
+        job: String,
+        inputA: String,
+        inputABytes: Long,
+        inputASha256: String,
+        inputB: String,
+        inputBBytes: Long,
+        inputBSha256: String,
+        op: String,
+        output: String,
+    ): String
+
     /** Asks the running job to stop at the engine's next cancellation point; callable from any thread. */
     @JvmStatic external fun nativeCancel()
 

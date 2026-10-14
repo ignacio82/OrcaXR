@@ -142,13 +142,36 @@ class ProjectExportSource internal constructor(
      * [destination], or the browser's refusal, which writes nothing. Either
      * completes an export, never a save. */
     fun writeStl(request: String, destination: OutputStream): StlExport {
-        checkActive(); check(!jsonWritten && nextAsset == 0L && !archiveWritten && !plateWritten && !answered) { "already_written" }
+        checkActive(); check(!jsonWritten && nextAsset == 0L && !archiveWritten && !plateWritten) { "already_written" }
         val answer = capture.writeStl(request, object : OutputStream() {
             override fun write(value: Int) { checkActive(); destination.write(value) }
             override fun write(bytes: ByteArray, offset: Int, count: Int) { checkActive(); destination.write(bytes, offset, count) }
         })
         checkActive(); answered = true
         return answer
+    }
+    /** Alternative for repairing a model: write volume [volumeId]'s canonical
+     * mesh as a binary STL (in volume-local space) to [destination]. Answers
+     * its triangle count. Completes an export, never a save. */
+    fun writeVolumeStl(volumeId: String, destination: OutputStream): Long {
+        checkActive(); check(!jsonWritten && nextAsset == 0L && !archiveWritten && !plateWritten) { "already_written" }
+        val triangles = capture.writeVolumeStl(volumeId, object : OutputStream() {
+            override fun write(value: Int) { checkActive(); destination.write(value) }
+            override fun write(bytes: ByteArray, offset: Int, count: Int) { checkActive(); destination.write(bytes, offset, count) }
+        })
+        checkActive(); answered = true
+        return triangles
+    }
+    /** Returns the digest of asset [assetId] in this capture, or null when absent. */
+    fun assetDigest(assetId: String): String? {
+        checkActive()
+        for (i in 0 until capture.assetCount()) {
+            capture.asset(i).use { asset ->
+                val id = String(asset.id(0, asset.idLength()))
+                if (id == assetId) return asset.digest()
+            }
+        }
+        return null
     }
     /** Alternative for Export Diagnostics…: this capture's project shape
      * (counts and object names, never geometry); completes an export, never a save. */

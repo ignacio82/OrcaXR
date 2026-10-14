@@ -83,6 +83,13 @@ object ModelExports {
         return ProjectArchiveExport.Written(obj.get("filename") as String, obj.get("mediaType") as String, List(warnings.length()) { warnings.get(it) as String })
     }
 
+    /** A volume STL export's reply: answers triangle count, or throws on refusal. */
+    internal fun volumeStl(json: String): Long {
+        val obj = CanonicalJson.read(json) as ProjectJsonObject
+        if (obj.keys().asSequence().any { it == "error" }) throw IllegalStateException(obj.get("error") as String)
+        return (obj.get("triangleCount") as Number).toLong()
+    }
+
     /** The name an output of [kind] is offered under, after [name] (a plate the project no longer has: null). */
     fun filename(kind: ExportNameKind, name: String?): String {
         require(name != null || kind == ExportNameKind.PLATE_GCODE || kind == ExportNameKind.TOOLPATH_OBJ) { "invalid_request" }

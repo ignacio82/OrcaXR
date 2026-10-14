@@ -33,11 +33,14 @@
 #include <vector>
 
 #include "libslic3r/Format/bbs_3mf.hpp"
+#include "libslic3r/Format/STL.hpp"
 #include "libslic3r/GCode/GCodeProcessor.hpp"
+#include "libslic3r/MeshBoolean.hpp"
 #include "libslic3r/Model.hpp"
 #include "libslic3r/Preset.hpp"
 #include "libslic3r/Print.hpp"
 #include "libslic3r/PrintConfig.hpp"
+#include "libslic3r/TriangleMesh.hpp"
 #include "libslic3r/Utils.hpp"
 
 #ifndef ORCAXR_ENGINE_COMMIT
@@ -59,6 +62,7 @@ constexpr unsigned long long MAX_ARCHIVE_BYTES = 1ULL << 30;
 constexpr unsigned long long MAX_OVERRIDES_BYTES = 1ULL << 20;
 constexpr size_t MAX_OVERRIDES = 4096;
 constexpr unsigned long long MAX_GCODE_BYTES = 2ULL << 30;
+constexpr unsigned long long MAX_MESH_BYTES = 512ULL << 20;
 // The browser's boundedMessage: 240 characters, line breaks as spaces.
 constexpr size_t MAX_MESSAGE = 240;
 
@@ -360,6 +364,173 @@ Completed slice(const orcaxr_engine_request& request, Stage& stage) {
     return {model.objects.size(), bytes, hex, rejected};
 }
 
+struct CompletedMesh {
+    unsigned long long bytes;
+    std::string sha256;
+};
+
+CompletedMesh repair(const orcaxr_repair_request& request, Stage& stage) {
+    stage = Stage::Inputs;
+    if (!request.job_directory || !request.input_stl || !request.output_stl)
+        throw Failure("invalid-input", "The repair request is incomplete.");
+    const fs::path job(request.job_directory);
+    const fs::path input(request.input_stl);
+    const fs::path output(request.output_stl);
+    std::error_code error;
+    if (!job.is_absolute() || !output.is_absolute() || fs::is_symlink(job, error) || !fs::is_directory(job, error) ||
+        input.parent_path() != job || output.parent_path() != job || fs::exists(fs::symlink_status(output, error)))
+        throw Failure("invalid-input", "The repair job directory is not usable.");
+    verify_input(request.input_stl, request.input_bytes, request.input_sha256, MAX_MESH_BYTES, "repair STL input");
+    check_cancel();
+
+    stage = Stage::Processing;
+    report(0, "Reading mesh");
+    Slic3r::Model model;
+    if (!Slic3r::load_stl(request.input_stl, &model)) {
+        throw Failure("engine", "Failed to load input STL.");
+    }
+    if (model.objects.empty()) {
+        throw Failure("engine", "The model contains no objects.");
+    }
+    Slic3r::ModelObject* mo = model.objects.front();
+    Slic3r::TriangleMesh mesh = mo->mesh();
+    if (mesh.empty()) {
+        throw Failure("engine", "The mesh is empty.");
+    }
+    if (!mo->instances.empty()) {
+        mesh.transform(mo->instances.front()->get_matrix());
+    }
+    check_cancel();
+
+    report(20, "Repairing vertices and faces");
+    Slic3r::its_merge_vertices(mesh.its);
+    Slic3r::its_remove_degenerate_faces(mesh.its);
+    Slic3r::its_compactify_vertices(mesh.its);
+    if (mesh.its.indices.empty()) {
+        throw Failure("engine", "The mesh was consumed by the cleanup pass.");
+    }
+    check_cancel();
+
+    report(50, "Checking self-intersection");
+    const size_t open_edges = Slic3r::its_num_open_edges(mesh.its);
+    bool self_intersect = false;
+    try {
+        self_intersect = Slic3r::MeshBoolean::cgal::does_self_intersect(mesh);
+    } catch (...) {
+        self_intersect = true;
+    }
+    check_cancel();
+
+    if (open_edges > 0 || self_intersect) {
+        report(70, "Performing self-union");
+        Slic3r::TriangleMesh attempt = mesh;
+        try {
+            Slic3r::MeshBoolean::self_union(attempt);
+            if (!attempt.empty()) {
+                mesh = std::move(attempt);
+            }
+        } catch (...) {
+            // Keep cleanup result on failure
+        }
+    }
+    check_cancel();
+
+    stage = Stage::Export;
+    report(90, "Saving repaired mesh");
+    if (!Slic3r::store_stl(output.string().c_str(), &mesh, true)) {
+        throw Failure("engine", "Failed to write repaired STL.");
+    }
+    check_cancel();
+
+    stage = Stage::Output;
+    char hex[65];
+    unsigned long long bytes = 0;
+    if (digest_file(output.c_str(), MAX_MESH_BYTES, hex, &bytes) != 0 || bytes == 0)
+        throw Failure("output", "The engine wrote no output mesh.");
+    report(100, "Done");
+    return {bytes, hex};
+}
+
+CompletedMesh boolean_mesh(const orcaxr_boolean_request& request, Stage& stage) {
+    stage = Stage::Inputs;
+    if (!request.job_directory || !request.input_a_stl || !request.input_b_stl || !request.output_stl || !request.op)
+        throw Failure("invalid-input", "The boolean request is incomplete.");
+    const std::string op(request.op);
+    if (op != "UNION" && op != "A_NOT_B" && op != "INTERSECTION")
+        throw Failure("invalid-input", "The boolean operation is not supported.");
+    const fs::path job(request.job_directory);
+    const fs::path input_a(request.input_a_stl);
+    const fs::path input_b(request.input_b_stl);
+    const fs::path output(request.output_stl);
+    std::error_code error;
+    if (!job.is_absolute() || !output.is_absolute() || fs::is_symlink(job, error) || !fs::is_directory(job, error) ||
+        input_a.parent_path() != job || input_b.parent_path() != job || output.parent_path() != job ||
+        fs::exists(fs::symlink_status(output, error)))
+        throw Failure("invalid-input", "The boolean job directory is not usable.");
+    verify_input(request.input_a_stl, request.input_a_bytes, request.input_a_sha256, MAX_MESH_BYTES, "boolean STL input A");
+    verify_input(request.input_b_stl, request.input_b_bytes, request.input_b_sha256, MAX_MESH_BYTES, "boolean STL input B");
+    check_cancel();
+
+    stage = Stage::Processing;
+    report(0, "Reading input meshes");
+    Slic3r::Model modelA, modelB;
+    if (!Slic3r::load_stl(request.input_a_stl, &modelA)) {
+        throw Failure("engine", "Failed to load input STL A.");
+    }
+    if (!Slic3r::load_stl(request.input_b_stl, &modelB)) {
+        throw Failure("engine", "Failed to load input STL B.");
+    }
+    if (modelA.objects.empty() || modelB.objects.empty()) {
+        throw Failure("engine", "One or both models are empty.");
+    }
+    Slic3r::TriangleMesh meshA = modelA.objects.front()->mesh();
+    Slic3r::TriangleMesh meshB = modelB.objects.front()->mesh();
+    if (!modelA.objects.front()->instances.empty()) {
+        meshA.transform(modelA.objects.front()->instances.front()->get_matrix());
+    }
+    if (!modelB.objects.front()->instances.empty()) {
+        meshB.transform(modelB.objects.front()->instances.front()->get_matrix());
+    }
+    check_cancel();
+
+    report(30, "Computing mesh boolean");
+    std::vector<Slic3r::TriangleMesh> result_meshes;
+    try {
+        Slic3r::MeshBoolean::mcut::make_boolean(meshA, meshB, result_meshes, op.c_str());
+    } catch (const std::exception& e) {
+        throw Failure("engine", std::string("Boolean computation failed: ") + e.what());
+    }
+    if (result_meshes.empty()) {
+        throw Failure("engine", "Boolean operation produced an empty result.");
+    }
+    check_cancel();
+
+    report(70, "Merging result meshes");
+    Slic3r::TriangleMesh merged = result_meshes.front();
+    for (size_t i = 1; i < result_meshes.size(); ++i) {
+        merged.merge(result_meshes[i]);
+    }
+    if (merged.empty()) {
+        throw Failure("engine", "Merged boolean result is empty.");
+    }
+    check_cancel();
+
+    stage = Stage::Export;
+    report(90, "Saving boolean result");
+    if (!Slic3r::store_stl(output.string().c_str(), &merged, true)) {
+        throw Failure("engine", "Failed to write boolean STL.");
+    }
+    check_cancel();
+
+    stage = Stage::Output;
+    char hex[65];
+    unsigned long long bytes = 0;
+    if (digest_file(output.c_str(), MAX_MESH_BYTES, hex, &bytes) != 0 || bytes == 0)
+        throw Failure("output", "The engine wrote no output mesh.");
+    report(100, "Done");
+    return {bytes, hex};
+}
+
 bool write_result(const nlohmann::json& document, char* result, size_t capacity) {
     // ensure_ascii: the host reads one ASCII document; nothing here is raw engine text.
     const auto text = document.dump(-1, ' ', true, nlohmann::json::error_handler_t::replace);
@@ -428,6 +599,92 @@ extern "C" int orcaxr_engine_slice(const orcaxr_engine_request* request, char* r
         document = failure(stage, "engine", "The slicing engine failed.");
     }
     // A cancel that raced completion: the job's work is done but it was not wanted.
+    if (code == ORCAXR_ENGINE_COMPLETED && cancel_requested.load(std::memory_order_acquire)) {
+        document = {{"schemaVersion", 1}, {"outcome", "cancelled"}, {"stage", stage_name(stage)}};
+        code = ORCAXR_ENGINE_CANCELLED;
+    }
+    if (!write_result(document, result, capacity)) return ORCAXR_ENGINE_INVALID;
+    return code;
+}
+
+extern "C" int orcaxr_engine_repair(const orcaxr_repair_request* request, char* result, size_t capacity) {
+    if (!request || !result || capacity < ORCAXR_ENGINE_RESULT_BYTES) return ORCAXR_ENGINE_INVALID;
+    std::unique_lock<std::mutex> owner(job_mutex, std::try_to_lock);
+    if (!owner.owns_lock()) {
+        write_result(nlohmann::json{{"schemaVersion", 1}, {"outcome", "busy"}}, result, capacity);
+        return ORCAXR_ENGINE_BUSY;
+    }
+    cancel_requested.store(false, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(progress.mutex);
+        progress.percent = -1;
+        progress.message.clear();
+        progress.sequence = 0;
+    }
+    boost::log::core::get()->set_logging_enabled(false);
+    Stage stage = Stage::Inputs;
+    nlohmann::json document;
+    int code = ORCAXR_ENGINE_FAILED;
+    try {
+        const auto done = repair(*request, stage);
+        document = {{"schemaVersion", 1}, {"outcome", "completed"}, {"stage", stage_name(stage)},
+            {"outputBytes", done.bytes}, {"outputSha256", done.sha256}};
+        code = ORCAXR_ENGINE_COMPLETED;
+    } catch (const Cancelled&) {
+        document = {{"schemaVersion", 1}, {"outcome", "cancelled"}, {"stage", stage_name(stage)}};
+        code = ORCAXR_ENGINE_CANCELLED;
+    } catch (const Failure& refused) {
+        document = failure(stage, refused.code, refused.message, refused.option);
+    } catch (const std::bad_alloc&) {
+        document = failure(stage, "memory", "The slicing engine ran out of memory.");
+    } catch (const std::exception& thrown) {
+        document = failure(stage, "engine", thrown.what());
+    } catch (...) {
+        document = failure(stage, "engine", "The repair operation failed.");
+    }
+    if (code == ORCAXR_ENGINE_COMPLETED && cancel_requested.load(std::memory_order_acquire)) {
+        document = {{"schemaVersion", 1}, {"outcome", "cancelled"}, {"stage", stage_name(stage)}};
+        code = ORCAXR_ENGINE_CANCELLED;
+    }
+    if (!write_result(document, result, capacity)) return ORCAXR_ENGINE_INVALID;
+    return code;
+}
+
+extern "C" int orcaxr_engine_boolean(const orcaxr_boolean_request* request, char* result, size_t capacity) {
+    if (!request || !result || capacity < ORCAXR_ENGINE_RESULT_BYTES) return ORCAXR_ENGINE_INVALID;
+    std::unique_lock<std::mutex> owner(job_mutex, std::try_to_lock);
+    if (!owner.owns_lock()) {
+        write_result(nlohmann::json{{"schemaVersion", 1}, {"outcome", "busy"}}, result, capacity);
+        return ORCAXR_ENGINE_BUSY;
+    }
+    cancel_requested.store(false, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(progress.mutex);
+        progress.percent = -1;
+        progress.message.clear();
+        progress.sequence = 0;
+    }
+    boost::log::core::get()->set_logging_enabled(false);
+    Stage stage = Stage::Inputs;
+    nlohmann::json document;
+    int code = ORCAXR_ENGINE_FAILED;
+    try {
+        const auto done = boolean_mesh(*request, stage);
+        document = {{"schemaVersion", 1}, {"outcome", "completed"}, {"stage", stage_name(stage)},
+            {"outputBytes", done.bytes}, {"outputSha256", done.sha256}};
+        code = ORCAXR_ENGINE_COMPLETED;
+    } catch (const Cancelled&) {
+        document = {{"schemaVersion", 1}, {"outcome", "cancelled"}, {"stage", stage_name(stage)}};
+        code = ORCAXR_ENGINE_CANCELLED;
+    } catch (const Failure& refused) {
+        document = failure(stage, refused.code, refused.message, refused.option);
+    } catch (const std::bad_alloc&) {
+        document = failure(stage, "memory", "The slicing engine ran out of memory.");
+    } catch (const std::exception& thrown) {
+        document = failure(stage, "engine", thrown.what());
+    } catch (...) {
+        document = failure(stage, "engine", "The boolean operation failed.");
+    }
     if (code == ORCAXR_ENGINE_COMPLETED && cancel_requested.load(std::memory_order_acquire)) {
         document = {{"schemaVersion", 1}, {"outcome", "cancelled"}, {"stage", stage_name(stage)}};
         code = ORCAXR_ENGINE_CANCELLED;

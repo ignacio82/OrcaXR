@@ -62,6 +62,10 @@ class ModelToolsTest {
         assertEquals("Simplify failed: Unknown volume v", ModelToolStatus.simplifyFailed("Unknown volume v"))
         assertEquals("Measure: picked plane facing (0, 0, 1).", ModelToolStatus.measurePicked("plane facing (0, 0, 1)"))
         assertEquals("Measure failed: Unknown face 99", ModelToolStatus.measureFailed("Unknown face 99"))
+        assertEquals("Model repaired successfully. Painting was reset; undo restores both.", ModelToolStatus.REPAIR_COMPLETED)
+        assertEquals("Repair failed: Non-manifold mesh", ModelToolStatus.repairFailed("Non-manifold mesh"))
+        assertEquals("Boolean operation completed. Painting was reset; undo restores both.", ModelToolStatus.BOOLEAN_COMPLETED)
+        assertEquals("Boolean operation failed: Empty result", ModelToolStatus.booleanFailed("Empty result"))
     }
 
     @Test

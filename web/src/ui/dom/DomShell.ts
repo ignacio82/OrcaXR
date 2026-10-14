@@ -103,11 +103,19 @@ export class DomShell {
   private menuHosts: HTMLElement[] = [];
   private sliceButton: HTMLButtonElement | null = null;
 
+  private readonly registry: ActionRegistry;
+  private readonly ctx: ActionContext;
+  private readonly ui: UiState;
+
   constructor(
-    private readonly registry: ActionRegistry,
-    private readonly ctx: ActionContext,
-    private readonly ui: UiState,
-  ) {}
+    registry: ActionRegistry,
+    ctx: ActionContext,
+    ui: UiState,
+  ) {
+    this.registry = registry;
+    this.ctx = ctx;
+    this.ui = ui;
+  }
 
   mount(hosts: Hosts): void {
     this.dispose();

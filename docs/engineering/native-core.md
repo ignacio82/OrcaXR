@@ -6652,6 +6652,56 @@ Reduce motion (`MotionPreference.kt`):
 - `MotionPreference` persists in-app animation preference in `orcaxr.motion`.
 - `OrcaMotionScope` exposes `LocalReduceMotion`, allowing animation suppression across the UI.
 
+### Android model repair and mesh Booleans
+
+The Android application provides model repair and CSG mesh Boolean operations
+matching the browser's tools (`OrcaWorkspace.repairModel` and
+`OrcaWorkspace.booleanModels`), routed through the isolated `:engine` service
+and executed against `libslic3r`'s native C++ geometry kernels.
+
+Engine adapter and package. `liborcaxr_engine.so` exports ADMesh `repair`
+and CGAL `boolean_mesh` in both Android ABIs (`x86_64` and `arm64-v8a`), bound to JNI
+via `NativeEngine.nativeRepair` and `nativeBoolean` in `tools/native-engine/adapter/engine_jni.cpp`.
+Repair loads binary STL input, runs `admesh_repair` (filling holes, fixing normals,
+repairing facets), and writes binary STL output. Mesh Boolean loads two binary STL
+inputs (placed in world bed coordinates), runs `libslic3r::MeshBoolean::cgal::boolean_mesh`
+with operation `UNION`, `A_NOT_B` (subtract), or `INTERSECTION`, and writes binary STL output.
+Both ABIs are built, stripped, and packaged with their manifest into `android/app/src/main/assets/engine/`.
+Verified by `tools/native-engine/test-engine-adapter.py` passing 8/8 tests across both ABIs.
+
+Process and IPC. `ILocalEngine.aidl` declares `startRepair` and `startBoolean`
+with caller `IBinder` owner death links. `LocalEngineService` runs in the isolated
+`:engine` process, executing jobs asynchronously in private staged directories under
+`noBackupFilesDir`. Cancellation, cooperative termination, and process death tracking
+are enforced by `LocalEngineClient`, matching slicing lifecycle guarantees.
+Input STLs are sealed and verified by `LocalSlicing.stageRepair` and `stageBoolean`.
+Output meshes are claimed and verified against the engine's reported length and SHA-256
+via `LocalSlicing.claimMesh` (`LocalEngineResult.MeshCompleted`).
+
+Core export, decoding, and topology guards. In `orcaxr-archive`, `exports::find_volume`
+and `write_volume_binary_stl` export a volume's raw geometry in volume-local space
+without instance/volume transforms, ensuring ADMesh repair preserves placement and annotations
+are reset atomically. In `orcaxr-android`, `export_volume_stl` streams the local STL, and
+`decode_stl_mesh` decodes resulting binary STL bytes directly into an `AssetPayload`
+without round-tripping through disk files.
+In `core-bridge`, `ProjectWorkspace.repairSelected` executes under a `TopologyGuard`
+(asserting `volumeId`, `assetId`, `assetDigest`, `topologyRevision`, and `triangleCount`),
+installing the repaired mesh via `StagedCommand.ReplaceVolumeMesh`.
+`ProjectWorkspace.booleanSelected` exports both instances in world coordinates, executes
+under a `BooleanGuard` (asserting `targetInstanceId`, `targetVolumeId`, `targetAssetId`,
+`targetAssetDigest`, `targetTopologyRevision`, `targetTriangleCount`, and `otherInstanceId`),
+installing the result via `StagedCommand.MeshBoolean` (which resets volume and instance
+transforms since output is in bed space, and removes the second instance and its object if empty).
+
+UI, actions, and localization. Actions `repair_model`, `mesh_boolean_union`,
+`mesh_boolean_subtract`, and `mesh_boolean_intersection` join `ProjectEditing.TOOLS_MENU`,
+`MODEL_TOOL_MENU_ACTIONS`, and `ProjectModel.perform()`, raising `AppActions.PERFORMED` to 120 actions.
+Icons map to Material symbols `healing`, `merge`, and `join_inner`. All 4 actions and their
+status/error strings are localized into 19 languages in `contracts/android-strings.json` and
+generated `values-*/strings.xml` (0 refused).
+Verified by `cargo test --all`, `./gradlew testDebugUnitTest`, `android-local-slice-smoke`,
+and `android-modeltools-smoke` on an API 34 emulator.
+
 ### Android filaments
 
 The app lists and assigns the project's filaments as the browser's

@@ -130,7 +130,27 @@ class LocalEngineClient(private val context: Context) : AutoCloseable {
      * polls. Refusals before the job reached the engine throw
      * [LocalSliceRefusal] with the status line's words.
      */
-    fun run(job: LocalSliceJob, progress: (String, Double?) -> Unit, cancelled: () -> Boolean): LocalEngineEnd {
+    fun run(job: LocalSliceJob, progress: (String, Double?) -> Unit, cancelled: () -> Boolean): LocalEngineEnd =
+        executeJob(job.id, { gen, owner ->
+            gen.engine.start(job.id, job.archive.bytes, job.archive.sha256, job.overrides.bytes, job.overrides.sha256, owner)
+        }, progress, cancelled)
+
+    fun runRepair(job: dev.orcaxr.core.LocalRepairJob, progress: (String, Double?) -> Unit, cancelled: () -> Boolean): LocalEngineEnd =
+        executeJob(job.id, { gen, owner ->
+            gen.engine.startRepair(job.id, job.input.bytes, job.input.sha256, owner)
+        }, progress, cancelled)
+
+    fun runBoolean(job: dev.orcaxr.core.LocalBooleanJob, progress: (String, Double?) -> Unit, cancelled: () -> Boolean): LocalEngineEnd =
+        executeJob(job.id, { gen, owner ->
+            gen.engine.startBoolean(job.id, job.inputA.bytes, job.inputA.sha256, job.inputB.bytes, job.inputB.sha256, job.op, owner)
+        }, progress, cancelled)
+
+    private inline fun executeJob(
+        jobId: String,
+        startJob: (generation: Generation, owner: IBinder) -> Boolean,
+        progress: (String, Double?) -> Unit,
+        cancelled: () -> Boolean,
+    ): LocalEngineEnd {
         val generation = connect(CONNECT_DEADLINE_MS) ?: throw LocalSliceRefusal(LocalSlicing.failed(LocalEngineWords.NOT_STARTED))
         val identity = try {
             generation.engine.identity()
@@ -147,7 +167,7 @@ class LocalEngineClient(private val context: Context) : AutoCloseable {
         }
         val owner = Binder()
         val started = try {
-            generation.engine.start(job.id, job.archive.bytes, job.archive.sha256, job.overrides.bytes, job.overrides.sha256, owner)
+            startJob(generation, owner)
         } catch (_: RemoteException) {
             return if (awaitDeath(generation, DEATH_DEADLINE_MS)) LocalEngineEnd.Died(false) else terminate(generation, false)
         }
@@ -157,12 +177,12 @@ class LocalEngineClient(private val context: Context) : AutoCloseable {
             if (cancelAt == 0L && cancelled()) {
                 cancelAt = SystemClock.elapsedRealtime()
                 try {
-                    generation.engine.cancel(job.id)
+                    generation.engine.cancel(jobId)
                 } catch (_: RemoteException) {
                 }
             }
             val status = try {
-                LocalSlicing.status(generation.engine.poll(job.id))
+                LocalSlicing.status(generation.engine.poll(jobId))
             } catch (_: RemoteException) {
                 null
             } catch (_: IllegalArgumentException) {

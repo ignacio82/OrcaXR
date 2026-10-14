@@ -143,6 +143,10 @@ object ModelToolStatus {
 
     fun measurePicked(summary: String) = "Measure: picked $summary."
     fun measureFailed(message: String?) = "Measure failed: ${message.orEmpty()}"
+    const val REPAIR_COMPLETED = "Model repaired successfully. Painting was reset; undo restores both."
+    fun repairFailed(message: String?) = "Repair failed: ${reason(message)}"
+    const val BOOLEAN_COMPLETED = "Boolean operation completed. Painting was reset; undo restores both."
+    fun booleanFailed(message: String?) = "Boolean operation failed: ${reason(message)}"
 
     /** `Math.round`: the nearest integer, a half toward +∞. */
     fun jsRound(value: Double): Double {

@@ -40,7 +40,7 @@ use fresh::*;
 use jni::{
     JNIEnv,
     objects::{JByteArray, JCharArray, JClass, JDoubleArray, JLongArray, JObject, JString},
-    sys::{jboolean, jbyteArray, jcharArray, jdouble, jdoubleArray, jint, jlong, jstring},
+    sys::{jboolean, jbyteArray, jcharArray, jdouble, jdoubleArray, jint, jlong, jobjectArray, jstring},
 };
 use library::*;
 use model::*;

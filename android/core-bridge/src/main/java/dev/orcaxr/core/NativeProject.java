@@ -131,6 +131,7 @@ final class NativeProject {
     // per instance in the browser's own ZIP — streamed to the sink in bounded
     // chunks with the exchange's reply, and the names outputs are offered under.
     static native String exportStl(long handle, String request, ProjectJsonSink sink);
+    static native String exportVolumeStl(long handle, String volumeId, ProjectJsonSink sink);
     static native String exportProjectArchive(long handle, int version, double[] options, ProjectJsonSink sink);
     static native String exportName(String request);
     // File → Export Diagnostics… (orcaxr_printer::diagnostics, the browser's
@@ -512,6 +513,7 @@ final class NativeProject {
     static native boolean importPreviewBlocked(long handle);
     // A refused confirmation keeps the candidate; success consumes it.
     static native long commitImport(long handle, long preview, String acknowledged);
+    static native Object[] decodeStlMesh(byte[] stlBytes, String assetId);
     // Import or output warnings: the browser's sorted, unique UTF-16 texts.
     static native long archiveWarningCount(long handle);
     static native long archiveWarningLength(long handle, long position);

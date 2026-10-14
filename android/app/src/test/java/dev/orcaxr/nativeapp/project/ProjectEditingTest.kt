@@ -161,7 +161,8 @@ class ProjectEditingTest {
         // then its Tools menu's wipe-tower placement: performed, with the core's enablement.
         assertEquals(
             listOf(
-                "split_to_objects", "split_to_parts", "simplify_model", "variable_layer_height", "tool_measure", "tool_assembly", "tool_brim_ears", "add_emboss", "tool_svg",
+                "split_to_objects", "split_to_parts", "simplify_model", "repair_model", "mesh_boolean_union", "mesh_boolean_subtract", "mesh_boolean_intersection",
+                "variable_layer_height", "tool_measure", "tool_assembly", "tool_brim_ears", "add_emboss", "tool_svg",
                 "auto_place_wipe",
             ),
             ProjectEditing.TOOLS_MENU,
