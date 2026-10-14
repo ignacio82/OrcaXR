@@ -152,8 +152,7 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    Workspace's Brim Ears tool, its panel and discs, and Auto-place Wipe
    Tower in the Edit menu, the palette and Prepare's switch, with
    `android-brimears-smoke.py` and `android-wipetower-smoke.py` passing on
-   an API 34 iteration emulator; neither emulator suite has run them yet
-   (*Resume here* item 1). The Workspace draws the active plate's tower as
+   both emulator suites (API 34 4 KB and API 37 16 KB). The Workspace draws the active plate's tower as
    the browser's ghost, from a ghost plan ported to the core
    ([§](engineering/native-core.md#wipe-tower-auto-placement)), and the
    wipe-tower smoke finds it on screen. Emboss Text and SVG Part are done too
@@ -161,8 +160,7 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    their toolbar tools and panels, a font or drawing picked through the
    system's picker and read by the core (the browser's TrueType reader and
    drawing read, ported), new parts and re-cuts, with
-   `android-drawnparts-smoke.py` passing on an API 34 iteration emulator;
-   neither emulator suite has run it yet (*Resume here* item 1).
+   `android-drawnparts-smoke.py` passing on both emulator suites (API 34 4 KB and API 37 16 KB).
    Assembly is done ([§](engineering/native-core.md#android-assembly)): the
    toolbar's Assembly on the Measure tool, the Measure panel's Align
    section with every alignment the core plans (Parallel, Centre
@@ -173,8 +171,7 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    browser defects fixed (the explosion's stale baseline and reassembly,
    picks off by the explosion, the measured line never taken away, a new
    project keeping picks and explosion, Flip over offered for any pair, no
-   turn control); `android-assembly-smoke.py` passes on an API 34
-   iteration emulator, neither suite has run it (*Resume here* item 1).
+   turn control); `android-assembly-smoke.py` passes on both emulator suites (API 34 4 KB and API 37 16 KB).
    The browser itself still has no exploded-view control (only the
    automation route `explode_assembly`); adding one to its Measure panel is
    left for a browser change.
@@ -212,8 +209,8 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    menu's exports are done ([§](engineering/native-core.md#android-exports)):
    slice output, one STL and all STLs as a ZIP, the 3MF, the configuration,
    the toolpaths as OBJ and diagnostics, each byte for byte the browser's,
-   and Download, with `android-exports-smoke.py` passing on an API 34
-   iteration emulator (neither emulator suite has run it yet, item 1).
+   and Download, with `android-exports-smoke.py` passing on both
+   emulator suites (API 34 4 KB and API 37 16 KB).
 4. Phase 5 and 7: Repair and mesh Booleans are done
    ([§](engineering/native-core.md#android-model-repair-and-mesh-booleans)):
    `liborcaxr_engine.so` exports ADMesh `repair` and CGAL `boolean_mesh` in both
@@ -234,8 +231,8 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
 6. Phase 2: the flat renderer's open items, recorded with its selection
    ([§](engineering/native-core.md#flat-renderer-selection)): the baked
    shading's light side now matches the browser's DirectionalLight (front-right,
-   `Point3(0.4, -0.55, 0.75)` in `PacketMesh.kt`), and the bed includes an origin
-   indicator in the theme's origin token colour; remaining: plate fill, anti-aliasing,
+   `Point3(0.4, -0.55, 0.75)` in `PacketMesh.kt`), the bed includes an origin
+   indicator in the theme's origin token colour, 3D solid plate fill is done (6 mm box below z = 0 with polygon offset `(1f, 1f)`), and anti-aliasing is qualified as disabled on GLES 3.0 (Filament 1.77.1 `blitLow` GLSL compiler abort); remaining:
    `FilamentScene`'s own frame time, draw calls, memory and paint/pick latency on
    the large fixture; transparent sort; context loss. The SceneCore comparison needs XR hardware.
 7. Phases 10 and 11 work that needs no hardware: per-target parity tooling
@@ -2640,11 +2637,11 @@ storage journeys on phone, tablet, and desktop-sized windows.
   always disabled). A 166-check JNI journey matches the browser controller's
   snapshots, outcomes, statuses, transforms, hashes and labels after all 37
   steps and undoes them, 30 scene checks match its explosions, and
-  `android-assembly-smoke.py` passes on an API 34 emulator.
-  Status (2026-10-14): remains: lighting and preview controls; and the model
+  `android-assembly-smoke.py` passes on both emulator suites.
+  Status (2026-10-14): both emulator suites pass for brim-ear, wipe-tower,
+  drawn-part, assembly, and exports smokes; remains: lighting and preview controls; and the model
   tools with no Android UI yet — Cut, the face detector and hollow (*Resume here*
-  item 2); both emulator suites' runs of the brim-ear, wipe-tower,
-  drawn-part and assembly smokes (*Resume here* item 1). Repair and mesh Booleans
+  item 2). Repair and mesh Booleans
   are done ([§](engineering/native-core.md#android-model-repair-and-mesh-booleans)).
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
