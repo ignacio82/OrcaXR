@@ -236,8 +236,8 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    `FilamentScene`'s own frame time, draw calls, memory and paint/pick latency on
    the large fixture; transparent sort; context loss. The SceneCore comparison needs XR hardware.
 7. Phases 10 and 11 work that needs no hardware: per-target parity tooling
-   (web DOM, WebXR, Android flat, Android XR), calibration and Smart Paint
-   ports, and the release checklist items that are not device-bound.
+   (web DOM, WebXR, Android flat, Android XR), Smart Paint port (calibration is landed
+   in commit 986a0a63), and the release checklist items that are not device-bound.
 
 ### Needs the user
 
