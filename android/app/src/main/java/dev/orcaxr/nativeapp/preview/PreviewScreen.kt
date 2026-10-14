@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -172,6 +173,9 @@ fun PreviewScreen(
             ModeChooser(state.mode, enabled = !state.loading, onChoose = model::setMode)
             LayerControls(state, bounds, model, project)
             MoveFilters(state, model)
+            if (state.ticks.isNotEmpty()) {
+                TicksSection(state.ticks, state.layerRange?.second ?: bounds.second, model::jumpToLayer)
+            }
             state.unsupportedReason?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
             state.summary?.let { Summary(it) }
             state.layerCount?.let { Text(stringResource(R.string.preview_layers, it), style = MaterialTheme.typography.bodyMedium) }
@@ -324,6 +328,53 @@ private fun MoveFilters(state: PreviewState, model: PreviewModel) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (filter in GcodeMoveFilter.entries) {
             LabelledCheckbox(filter.label, filter in state.moves, !state.loading) { model.setMoveVisible(filter, it) }
+        }
+    }
+}
+
+/** Events the artifact contains, located by layer and height (the browser panel's `renderTicks`). */
+@Composable
+private fun TicksSection(
+    ticks: List<PreviewTick>,
+    currentLayer: Int,
+    onSelectLayer: (Int) -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val heading = if (ticks.size == 1) {
+                stringResource(R.string.preview_ticks_heading_single)
+            } else {
+                stringResource(R.string.preview_ticks_heading, ticks.size)
+            }
+            Text(heading, style = MaterialTheme.typography.titleSmall)
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 200.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                for (tick in ticks) {
+                    val active = currentLayer == tick.layer
+                    OutlinedButton(
+                        onClick = { onSelectLayer(tick.layer) },
+                        modifier = Modifier.fillMaxWidth().focusRing(MaterialTheme.colorScheme.primary),
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "${tick.label} — layer ${tick.layer}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Text(
+                                String.format(Locale.ROOT, "%.2f mm", tick.zMm),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

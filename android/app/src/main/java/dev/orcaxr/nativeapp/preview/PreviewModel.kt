@@ -15,6 +15,7 @@ import dev.orcaxr.core.GcodePacket
 import dev.orcaxr.core.GcodePreviewModes
 import dev.orcaxr.core.GcodeRequests
 import dev.orcaxr.core.GcodeSession
+import dev.orcaxr.core.GcodeViewLayout
 import dev.orcaxr.core.GcodeViewPacket
 import dev.orcaxr.core.ProjectRevision
 import dev.orcaxr.nativeapp.prepare.PrepareWords
@@ -42,6 +43,9 @@ class PreviewToolpath(val geometry: ToolpathGeometry, val generation: Long)
 /** One legend entry as the browser's panel lists it (`code · label`), with its colour. */
 data class PreviewLegend(val code: String, val label: String, val accessibleLabel: String, val argb: Int)
 
+/** One event in the G-code artifact as the viewer's ticks section lists it. */
+data class PreviewTick(val id: String, val kind: String, val label: String, val layer: Int, val zMm: Double)
+
 /** What the Preview area shows: a projection of the shared G-code preview, never a parse of its own. */
 data class PreviewState(
     val loading: Boolean = false,
@@ -58,6 +62,7 @@ data class PreviewState(
     val topZMm: Double? = null,
     val moves: Set<GcodeMoveFilter> = GcodeMoveFilter.defaults,
     val legend: List<PreviewLegend> = emptyList(),
+    val ticks: List<PreviewTick> = emptyList(),
     /** A numeric mode's value range, as the browser's panel writes it. */
     val range: String? = null,
     /** Why the chosen mode cannot be drawn for this file (the shared preview's missing metadata). */
@@ -381,11 +386,30 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
         }
         val selection = inspection.metadata.optJSONObject("layerSelection")
         val limitations = listOfNotNull(shown.windowNotice()) + messages(preview) + messages(inspection)
+        val ticks = if (inspection.tickCount <= 0) emptyList() else {
+            val labels = inspection.metadata.optJSONArray("tickLabels") ?: JSONArray()
+            val kindBuf = inspection.column("tickKind")
+            val layerBuf = inspection.column("tickLayer").asIntBuffer()
+            val zMmBuf = inspection.column("tickZMm").asFloatBuffer()
+            val labelIdxBuf = inspection.column("tickLabel").asIntBuffer()
+            val recordBuf = inspection.column("tickRecord").asIntBuffer()
+            val count = minOf(inspection.tickCount, MAX_TICKS_SHOWN)
+            (0 until count).map { i ->
+                val kindNum = kindBuf.get(i).toInt() and 0xFF
+                val kindStr = GcodeViewLayout.tickKinds[kindNum] ?: "event"
+                val record = recordBuf.get(i)
+                val labelIdx = labelIdxBuf.get(i)
+                val label = if (labelIdx in 0 until labels.length()) labels.getString(labelIdx) else kindStr
+                val layer = layerBuf.get(i)
+                val z = zMmBuf.get(i).toDouble()
+                PreviewTick(id = "$kindStr:$record", kind = kindStr, label = label, layer = layer, zMm = z)
+            }
+        }
         val next = PreviewState(
             source = name, mode = view.mode, layerBounds = shown.layerBounds, layerRange = view.layerRange,
             singleLayer = view.singleLayer, layerLabel = selection?.getString("accessibleLabel"),
             bottomZMm = selection?.getDouble("firstZMm"), topZMm = selection?.getDouble("lastZMm"), moves = view.moves,
-            legend = legend, range = numeric, unsupportedReason = unsupportedReason, layerCount = layerCount, summary = summary,
+            legend = legend, ticks = ticks, range = numeric, unsupportedReason = unsupportedReason, layerCount = layerCount, summary = summary,
             limitations = limitations, windowed = shown.window != null, hasPrevious = shown.hasPrevious,
             hasNext = shown.hasNext, toolpath = toolpath, generation = generation, slice = currency.origin,
             withdrawn = currency.withdrawn,
@@ -449,6 +473,11 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
 
     fun setSingleLayer(single: Boolean) = change { it.update(singleLayer = single) }
 
+    /** Jumps the view to show only [layer], as clicking a tick in the browser does. */
+    fun jumpToLayer(layer: Int) = change { plan ->
+        plan.update(layerRange = layer to layer, singleLayer = true)
+    }
+
     fun setMoveVisible(filter: GcodeMoveFilter, visible: Boolean) = change { plan ->
         plan.update(moves = if (visible) plan.view.moves + filter else plan.view.moves - filter)
     }
@@ -474,6 +503,7 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
         private const val READ_CHUNK = 64 * 1024
         private const val MAX_INDEX_ENTRIES = 1_000_000
         private const val MAX_LEGEND_SHOWN = 64
+        private const val MAX_TICKS_SHOWN = 500
         /** `ToolpathGeometry.from`'s refusal of a view past its segment budget. */
         private const val SEGMENT_BUDGET = "Toolpath exceeds the renderer segment budget"
 

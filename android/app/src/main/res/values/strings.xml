@@ -77,6 +77,8 @@
     <string name="preview_previous_moves">Previous moves</string>
     <string name="preview_next_moves">Next moves</string>
     <string name="preview_layers">%1$d layers</string>
+    <string name="preview_ticks_heading">%1$d events in this G-code</string>
+    <string name="preview_ticks_heading_single">1 event in this G-code</string>
     <string name="project_saved">No unsaved changes</string>
     <string name="project_unsaved">Unsaved changes</string>
     <!-- The browser's action names (web/src/actions/groups/file.ts). -->

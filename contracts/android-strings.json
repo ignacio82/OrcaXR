@@ -634,6 +634,8 @@
     "preview_z_mm",
     "preview_moves",
     "preview_layers",
+    "preview_ticks_heading",
+    "preview_ticks_heading_single",
     "project_saved",
     "project_guard_save",
     "project_share",
