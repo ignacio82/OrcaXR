@@ -169,6 +169,10 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     LaunchedEffect(view.bed.widthMm, view.bed.depthMm) { renderer.bed(view.bed.widthMm, view.bed.depthMm) }
     val printableBoxOn = model.printableBoxOn
     SideEffect { renderer.printableBox(printableBoxOn) }
+    val wireframeOn = model.wireframeOn
+    SideEffect { renderer.wireframe(wireframeOn) }
+    val perspectiveOn = model.perspectiveOn
+    SideEffect { renderer.perspective(perspectiveOn) }
     // The Brim Ears tool reads what it shows again whenever the project or the selection changes, and draws its discs.
     LaunchedEffect(view.revision, view.selection, model.brimEaring) { if (model.brimEaring) model.refreshBrimEars() }
     val earsShown = model.brimEaring
@@ -714,11 +718,25 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
     }
 
     private var printableBoxOn = false
+    private var wireframeOn = false
+    private var perspectiveOn = true
 
     fun printableBox(on: Boolean) {
         if (printableBoxOn == on) return
         printableBoxOn = on
         scene?.setPrintableBox(bed.first, bed.second, visible = on)
+    }
+
+    fun wireframe(on: Boolean) {
+        if (wireframeOn == on) return
+        wireframeOn = on
+        scene?.setWireframe(on)
+    }
+
+    fun perspective(on: Boolean) {
+        if (perspectiveOn == on) return
+        perspectiveOn = on
+        scene?.setPerspective(on)
     }
 
     /** Draws the project's bed of [widthMm] × [depthMm] and frames it when it changes. */
@@ -751,6 +769,8 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         theme?.let { dress(renderer, it) }
         renderer.setBed(bed.first, bed.second)
         if (printableBoxOn) renderer.setPrintableBox(bed.first, bed.second, visible = true)
+        if (wireframeOn) renderer.setWireframe(true)
+        if (!perspectiveOn) renderer.setPerspective(false)
         renderer.frame(bed.first, bed.second)
         camera = renderer.cameraState()
         pendingView?.let { move(renderer, CameraViews.of(it, bed.first, bed.second)) }

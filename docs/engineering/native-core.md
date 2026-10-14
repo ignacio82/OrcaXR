@@ -6628,6 +6628,8 @@ in the Project area's menu bar:
 - Printable boundary box: `FilamentScene.setPrintableBox(widthMm, depthMm, heightMm, visible)` renders
   the 12 bounding edges of the printable volume in cyan (`#4fc3f7`) with GPU lines geometry and
   invalidates the scene; `WorkspaceRenderer` synchronizes visibility with the model's state.
+- Wireframe overlay: `FilamentScene.setWireframe(visible)` dynamically allocates an index buffer for line edges (`RenderableManager.PrimitiveType.LINES`, 6 line indices per facet triangle) sharing the chunk's packed vertex buffer, drawn using `wireframeMaterial` with priority 4 and `setPolygonOffset(-1f, -1f)` to avoid z-fighting against the shaded surface; `WorkspaceRenderer` synchronizes wireframe state with `ProjectModel.wireframeOn`.
+- Perspective / orthographic toggle: `FilamentScene.setPerspective(enabled)` switches the Filament camera projection between perspective (`setProjection(FIELD_OF_VIEW, aspect, .001, 10.0, Camera.Fov.VERTICAL)`) and orthographic (`setProjection(Camera.Projection.ORTHO, -halfWidth, halfWidth, -halfHeight, halfHeight, .001, 10.0)` where `halfHeight = orbit.distance * tan(FIELD_OF_VIEW / 2)` and `halfWidth = halfHeight * aspect`). `OrbitCamera.ray` and `project` in `MeshPicking.kt` support orthographic ray casting with parallel rays scaled by `orbit.distance * extent`, verified by `OrbitGesturesTest`; `WorkspaceRenderer` synchronizes perspective state with `ProjectModel.perspectiveOn`.
 
 Add menu calibration and library models (`ADD_MENU` in `ProjectEditing.kt`):
 - "Calibration cube" (`add_calibration_cube`): generates a 20 mm calibration cube via `PrimitiveShape.CUBE`.

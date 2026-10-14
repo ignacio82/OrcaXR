@@ -67,4 +67,16 @@ class OrbitGesturesTest {
         val lift = 2 * 40.0 * .5 * tan(PI / 8) / height
         assertEquals((camera.target + up * lift).y, raised.target.y, 1e-12)
     }
+
+    @Test fun anOrthographicRayCastsParallelRays() {
+        val width = 800; val height = 600
+        val center = camera.ray(400.0, 300.0, width, height, perspective = false)
+        val corner = camera.ray(0.0, 0.0, width, height, perspective = false)
+        assertEquals(center.direction.x, corner.direction.x, 1e-12)
+        assertEquals(center.direction.y, corner.direction.y, 1e-12)
+        assertEquals(center.direction.z, corner.direction.z, 1e-12)
+        val projected = camera.project(camera.target, width, height, perspective = false)
+        assertEquals(400.0, projected!!.first, 1e-6)
+        assertEquals(300.0, projected.second, 1e-6)
+    }
 }

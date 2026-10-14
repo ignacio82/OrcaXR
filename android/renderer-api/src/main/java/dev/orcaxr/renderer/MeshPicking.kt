@@ -124,23 +124,29 @@ data class OrbitCamera(val yaw: Double=.65, val pitch: Double=.8, val distance: 
     val target: Point3=Point3(0.0,.03,0.0)) {
     init {require(yaw.isFinite() && pitch > -PI/2 && pitch < PI/2 && distance in .03..5.0 && target.finite())}
     val eye get()=target+Point3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch))*distance
-    fun ray(x: Double,y: Double,width: Int,height: Int): PickRay {
-        require(width>0 && height>0 && x.isFinite() && y.isFinite())
-        val forward=(target-eye).normalized();val right=forward.cross(Point3(0.0,1.0,0.0)).normalized()
-        val up=right.cross(forward)
-        val extent=tan(Math.toRadians(45.0)/2)
-        return PickRay(eye,(forward+right*((2*x/width-1)*extent*width/height)+up*((1-2*y/height)*extent)).normalized())
+    fun ray(x: Double, y: Double, width: Int, height: Int, perspective: Boolean = true): PickRay {
+        require(width > 0 && height > 0 && x.isFinite() && y.isFinite())
+        val forward = (target - eye).normalized(); val right = forward.cross(Point3(0.0, 1.0, 0.0)).normalized()
+        val up = right.cross(forward)
+        val extent = tan(Math.toRadians(45.0) / 2)
+        return if (perspective) {
+            PickRay(eye, (forward + right * ((2 * x / width - 1) * extent * width / height) + up * ((1 - 2 * y / height) * extent)).normalized())
+        } else {
+            val origin = eye + right * ((2 * x / width - 1) * extent * distance * width / height) + up * ((1 - 2 * y / height) * extent * distance)
+            PickRay(origin, forward)
+        }
     }
     /** Where render-space [point] (metres) shows in a [width] × [height] view: the inverse of [ray];
      * null for a point not in front of the camera. */
-    fun project(point: Point3, width: Int, height: Int): Pair<Double, Double>? {
-        require(width>0 && height>0 && point.finite())
-        val forward=(target-eye).normalized();val right=forward.cross(Point3(0.0,1.0,0.0)).normalized()
-        val up=right.cross(forward)
-        val offset=point-eye;val depth=offset.dot(forward)
-        if(depth<=1e-9) return null
-        val extent=tan(Math.toRadians(45.0)/2)
-        val x=offset.dot(right)/(depth*extent*width/height);val y=offset.dot(up)/(depth*extent)
-        return (x+1)/2*width to (1-y)/2*height
+    fun project(point: Point3, width: Int, height: Int, perspective: Boolean = true): Pair<Double, Double>? {
+        require(width > 0 && height > 0 && point.finite())
+        val forward = (target - eye).normalized(); val right = forward.cross(Point3(0.0, 1.0, 0.0)).normalized()
+        val up = right.cross(forward)
+        val offset = point - eye; val depth = offset.dot(forward)
+        if (depth <= 1e-9) return null
+        val extent = tan(Math.toRadians(45.0) / 2)
+        val divisor = if (perspective) depth * extent else distance * extent
+        val x = offset.dot(right) / (divisor * width / height); val y = offset.dot(up) / divisor
+        return (x + 1) / 2 * width to (1 - y) / 2 * height
     }
 }

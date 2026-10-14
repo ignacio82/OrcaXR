@@ -61,7 +61,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         @Volatile var cancelled = false
     }
     private class Chunk(val vertices: VertexBuffer, val indices: IndexBuffer, val count: Int, val firstFacet: Int,
-        val facetCount: Int, val center: FloatArray, val extent: FloatArray, val bytes: Long)
+        val facetCount: Int, val center: FloatArray, val extent: FloatArray, val bytes: Long,
+        var wireframeIndices: IndexBuffer? = null, var wireframeIndexCount: Int = 0)
     /** One drawn volume on the GPU: its mesh's chunks with colour bytes of its own, shared by its draws. */
     private class Geometry(val volumeId: String, val mesh: Mesh) {
         val chunks = mutableListOf<Chunk>()
@@ -78,6 +79,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         val center: FloatArray, val extent: FloatArray, val bytes: Long)
     private class Placed(var draw: ProjectScene.Draw, var material: MaterialInstance) {
         val entities = IdentityHashMap<Chunk, Int>()
+        val wireframeEntities = IdentityHashMap<Chunk, Int>()
         /** The leaves drawn over this draw, with their own offset material. */
         var leafMaterial: MaterialInstance? = null
         var leafEntity: Int? = null
@@ -103,6 +105,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private val bedMaterial: MaterialInstance
     private val plateMaterial: MaterialInstance
     private val toolpathMaterial: MaterialInstance
+    private val wireframeMaterial: MaterialInstance
     private val helper = UiHelper(UiHelper.ContextErrorPolicy.DONT_CHECK)
     private val display = DisplayHelper(surface.context)
     private val scheduler = Choreographer.getInstance()
@@ -136,6 +139,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     /** Buffers Filament still copies for marker shapes: kept alive until each copy completes. */
     private val shapeBuffers = Collections.newSetFromMap(IdentityHashMap<ByteBuffer, Boolean>())
     private var selected: Set<String> = emptySet()
+    private var wireframe = false
+    private var perspective = true
     private var busy = false
     private var pending = 0L
     private var peakPending = 0L
@@ -181,6 +186,12 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             toolpathMaterial.setParameter("opacity", 1f)
             toolpathMaterial.setParameter("tint", 1f, 1f, 1f, 1f)
             toolpathMaterial.setParameter("highlight", 0f, 0f, 0f, 0f)
+            wireframeMaterial = opaque.createInstance()
+            wireframeMaterial.setParameter("clipHeight", clipHeight)
+            wireframeMaterial.setParameter("opacity", 0.4f)
+            wireframeMaterial.setParameter("tint", 0.12f, 0.15f, 0.18f, 1f)
+            wireframeMaterial.setParameter("highlight", 0f, 0f, 0f, 0f)
+            wireframeMaterial.setPolygonOffset(-1f, -1f)
             view.scene = scene
             view.camera = camera
             view.isPostProcessingEnabled = false
@@ -208,7 +219,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
                 override fun onResized(width: Int, height: Int) {
                     if (width <= 0 || height <= 0) return
                     view.viewport = Viewport(0, 0, width, height)
-                    camera.setProjection(FIELD_OF_VIEW, width.toDouble() / height, .001, 10.0, Camera.Fov.VERTICAL)
+                    updateProjection()
                     FilamentHelper.synchronizePendingFrames(engine)
                     updateCamera()
                 }
@@ -285,10 +296,17 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         val geometry = geometries.remove(volumeId) ?: return
         geometry.cancelled = true
         for (each in placed.values) {
-            for (chunk in geometry.chunks) each.entities.remove(chunk)?.let(::destroyEntity)
+            for (chunk in geometry.chunks) {
+                each.entities.remove(chunk)?.let(::destroyEntity)
+                each.wireframeEntities.remove(chunk)?.let(::destroyEntity)
+            }
             if (each.draw.volumeId == volumeId) detachLeaves(each)
         }
-        geometry.chunks.forEach { engine.destroyVertexBuffer(it.vertices); engine.destroyIndexBuffer(it.indices) }
+        geometry.chunks.forEach {
+            engine.destroyVertexBuffer(it.vertices)
+            engine.destroyIndexBuffer(it.indices)
+            it.wireframeIndices?.let(engine::destroyIndexBuffer)
+        }
         geometry.chunks.clear()
         geometry.leaves?.let(::destroyLeaves)
         geometry.leaves = null
@@ -322,6 +340,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             if (reshaped) {
                 current.entities.values.forEach(::destroyEntity)
                 current.entities.clear()
+                current.wireframeEntities.values.forEach(::destroyEntity)
+                current.wireframeEntities.clear()
                 detachLeaves(current)
             }
             if (before.printable != draw.printable) {
@@ -339,6 +359,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             val matrix = draw.transform.renderMatrix()
             if (!before.transform.renderMatrix().contentEquals(matrix)) {
                 for (entity in current.entities.values) place(entity, matrix)
+                for (entity in current.wireframeEntities.values) place(entity, matrix)
                 current.leafEntity?.let { place(it, matrix) }
             }
             if (reshaped) {
@@ -372,22 +393,82 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     }
 
     private fun attach(target: Placed, chunk: Chunk) {
-        if (target.entities.containsKey(chunk)) return
+        if (!target.entities.containsKey(chunk)) {
+            val entity = engine.entityManager.create()
+            try {
+                RenderableManager.Builder(1)
+                    .boundingBox(Box(chunk.center[0], chunk.center[1], chunk.center[2], chunk.extent[0], chunk.extent[1], chunk.extent[2]))
+                    .geometry(0, RenderableManager.PrimitiveType.TRIANGLES, chunk.vertices, chunk.indices, 0, chunk.count)
+                    .material(0, target.material)
+                    .culling(false).castShadows(false).receiveShadows(false)
+                    .build(engine, entity)
+                place(entity, target.draw.transform.renderMatrix())
+                scene.addEntity(entity)
+                target.entities[chunk] = entity
+            } catch (failure: Throwable) {
+                destroyEntity(entity)
+                throw failure
+            }
+        }
+        if (wireframe) attachWireframe(target, chunk)
+    }
+
+    private fun getOrCreateWireframeIndexBuffer(chunk: Chunk): IndexBuffer {
+        chunk.wireframeIndices?.let { return it }
+        val lineIndexCount = chunk.facetCount * 6
+        val buffer = MeshPacking.direct(lineIndexCount * 4)
+        for (f in 0 until chunk.facetCount) {
+            val base = f * 3
+            buffer.putInt(base).putInt(base + 1)
+            buffer.putInt(base + 1).putInt(base + 2)
+            buffer.putInt(base + 2).putInt(base)
+        }
+        buffer.flip()
+        val index = IndexBuffer.Builder().indexCount(lineIndexCount).bufferType(IndexBuffer.Builder.IndexType.UINT).build(engine)
+        submit(buffer) { callback -> index.setBuffer(engine, buffer, 0, buffer.remaining(), handler, callback) }
+        engine.flush()
+        chunk.wireframeIndices = index
+        chunk.wireframeIndexCount = lineIndexCount
+        return index
+    }
+
+    private fun attachWireframe(target: Placed, chunk: Chunk) {
+        if (target.wireframeEntities.containsKey(chunk)) return
+        val wireIndexBuffer = getOrCreateWireframeIndexBuffer(chunk)
         val entity = engine.entityManager.create()
         try {
             RenderableManager.Builder(1)
                 .boundingBox(Box(chunk.center[0], chunk.center[1], chunk.center[2], chunk.extent[0], chunk.extent[1], chunk.extent[2]))
-                .geometry(0, RenderableManager.PrimitiveType.TRIANGLES, chunk.vertices, chunk.indices, 0, chunk.count)
-                .material(0, target.material)
+                .geometry(0, RenderableManager.PrimitiveType.LINES, chunk.vertices, wireIndexBuffer, 0, chunk.wireframeIndexCount)
+                .material(0, wireframeMaterial)
+                .priority(4)
                 .culling(false).castShadows(false).receiveShadows(false)
                 .build(engine, entity)
             place(entity, target.draw.transform.renderMatrix())
             scene.addEntity(entity)
-            target.entities[chunk] = entity
+            target.wireframeEntities[chunk] = entity
         } catch (failure: Throwable) {
             destroyEntity(entity)
             throw failure
         }
+    }
+
+    private fun detachWireframe(target: Placed, chunk: Chunk) {
+        target.wireframeEntities.remove(chunk)?.let(::destroyEntity)
+    }
+
+    /** Controls wireframe line overlay on all drawn model chunks. */
+    fun setWireframe(value: Boolean) {
+        checkOpen()
+        if (wireframe == value) return
+        wireframe = value
+        for (each in placed.values) {
+            val geometry = geometries[each.draw.volumeId] ?: continue
+            for (chunk in geometry.chunks) {
+                if (value) attachWireframe(each, chunk) else detachWireframe(each, chunk)
+            }
+        }
+        invalidate()
     }
 
     private fun destroyEntity(entity: Int) {
@@ -397,6 +478,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private fun destroyPlaced(value: Placed) {
         value.entities.values.forEach(::destroyEntity)
         value.entities.clear()
+        value.wireframeEntities.values.forEach(::destroyEntity)
+        value.wireframeEntities.clear()
         detachLeaves(value)
         engine.destroyMaterialInstance(value.material)
     }
@@ -1095,6 +1178,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         bedMaterial.setParameter("clipHeight", clipHeight)
         plateMaterial.setParameter("clipHeight", clipHeight)
         toolpathMaterial.setParameter("clipHeight", clipHeight)
+        wireframeMaterial.setParameter("clipHeight", clipHeight)
         for (each in placed.values) {
             each.material.setParameter("clipHeight", clipHeight)
             each.leafMaterial?.setParameter("clipHeight", clipHeight)
@@ -1127,7 +1211,30 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         updateCamera()
     }
 
+    fun setPerspective(value: Boolean) {
+        checkOpen()
+        if (perspective == value) return
+        perspective = value
+        updateProjection()
+        updateCamera()
+    }
+
+    private fun updateProjection() {
+        val width = view.viewport.width.takeIf { it > 0 } ?: surface.width
+        val height = view.viewport.height.takeIf { it > 0 } ?: surface.height
+        if (width <= 0 || height <= 0) return
+        val aspect = width.toDouble() / height
+        if (perspective) {
+            camera.setProjection(FIELD_OF_VIEW, aspect, .001, 10.0, Camera.Fov.VERTICAL)
+        } else {
+            val halfHeight = orbit.distance * tan(Math.toRadians(FIELD_OF_VIEW / 2))
+            val halfWidth = halfHeight * aspect
+            camera.setProjection(Camera.Projection.ORTHO, -halfWidth, halfWidth, -halfHeight, halfHeight, .001, 10.0)
+        }
+    }
+
     private fun updateCamera() {
+        if (!perspective) updateProjection()
         val eye = orbit.eye; val target = orbit.target
         camera.lookAt(eye.x, eye.y, eye.z, target.x, target.y, target.z, 0.0, 1.0, 0.0)
         // The backdrop rides with the camera, so the wash stays put on the screen.
@@ -1143,7 +1250,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     fun pick(x: Double, y: Double, only: String? = null): Pick? {
         checkOpen()
         if (view.viewport.width <= 0 || view.viewport.height <= 0) return null
-        val world = RenderSpace.rayToMillimetres(orbit.ray(x, y, view.viewport.width, view.viewport.height))
+        val world = RenderSpace.rayToMillimetres(orbit.ray(x, y, view.viewport.width, view.viewport.height, perspective))
         var closest: Pick? = null
         for ((key, each) in placed) {
             if (only != null && key != only) continue
@@ -1202,6 +1309,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         engine.destroyMaterialInstance(bedMaterial)
         engine.destroyMaterialInstance(plateMaterial)
         engine.destroyMaterialInstance(toolpathMaterial)
+        engine.destroyMaterialInstance(wireframeMaterial)
         engine.destroyMaterial(opaque); engine.destroyMaterial(transparent)
         engine.destroyView(view); engine.destroyScene(scene); engine.destroyRenderer(renderer)
         val cameraEntity = camera.entity

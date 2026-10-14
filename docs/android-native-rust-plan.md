@@ -192,7 +192,7 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    The View menu's display toggles (`view_show_wireframe`,
    `view_show_printable_box`, `view_show_labels`, `view_show_overhang`,
    `view_show_navigator`, `view_show_outline`, `view_perspective_toggle`), the
-   printable boundary box in `FilamentScene`, the Add menu's calibration and
+   printable boundary box, wireframe overlay and perspective/orthographic toggle in `FilamentScene`, the Add menu's calibration and
    library models (`add_calibration_cube`, `add_calibration_tower`,
    `add_handy_model`), the Help menu and its dialogs (`help_shortcuts`,
    `help_docs`, `help_report_bug`, `help_about`, `help_language`, `help_tutorial`,
