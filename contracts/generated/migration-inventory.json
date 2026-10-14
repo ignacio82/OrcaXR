@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "sourceCommit": "744cb21a5dd8fd1764567e2b0d492e5db8d443a5",
+  "sourceCommit": "f782d2fb414bcfc3822be34de92e08517d3fd892",
   "sources": {
-    "docs/parity/release-report.json": "6da865e5720fb9cbb2ccf36fc310c97dffed94b2c279aedd7df8f58b1fafc49a",
+    "docs/parity/release-report.json": "6d1291ca3afbf912c22ff8f7401698f23e6f54f8ef8cdca69a50d1ece216dd3a",
     "web/public/profiles/catalog.json": "19cfbf414f4b2c770b047da152b9b9e2e2101909d92f8fae3166685e7bf58fda",
     "web/public/profiles/manifest.json": "980db93551c0541928061f0edc35d61b434f82161a6db55a352b8e67dee0b958",
     "web/src/actions/ActionContext.ts": "968d0a9f63ad8ea44b4225a75d0a147a5d048e4ab20c94d59a42eb6871a9a5e8",
