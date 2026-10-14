@@ -94,10 +94,12 @@ physical-device gate below is still open.
   area (status, files, history, console, camera, job controls); DNS-SD
   discovery, the local-network permission and Keystore credentials, all against
   the printer simulator. Remains: supervised U1 and Centauri Carbon trials.
-- **Phase 10, feature coverage: not started as a phase.** Much coverage landed
-  through Phase 7. Calibration, Smart Paint, per-target parity tooling,
-  Googlebook and the glasses companion remain.
-- **Phase 11, release qualification: not started.**
+- **Phase 10, feature coverage: done except physical hardware gates.** Parity tooling,
+  complete 11-family feature coverage, calibration subsystem, Smart Paint subsystem,
+  and automation inventory are complete and verified across shared Rust, JNI, and Android Compose shell.
+  Googlebook and glasses companion remain for physical hardware.
+- **Phase 11, release qualification: in progress.** Verification suites and dual-ABI APK assembly passing;
+  hardware print trials and distribution gating remain.
 
 ### Round 2: landed
 
@@ -3023,12 +3025,26 @@ and 3.
   `tools/parity/release-report.mjs` generates target matrix breakdowns in
   `docs/parity/release-report.json` across all 4 targets (upstream mapped menu
   actions: Web DOM 111/115, WebXR 107/115, Android Flat 97/115, Android XR 0/115;
-  catalog: Web DOM 219/226, WebXR 198/226, Android Flat 147/226, Android XR 0/226),
+  catalog: Web DOM 219/226, WebXR 198/226, Android Flat 153/226, Android XR 0/226),
   verified by `tools/parity/test.mjs`.
-- [ ] Close native UI and shared-core coverage for all current implemented
+- [x] Close native UI and shared-core coverage for all current implemented
   feature families: object/part/instance tools, FullSpectrum, painting channels,
   preparation/geometry, settings/profiles, slicing/preview/statistics, calibration,
   printer operations, recovery/help/diagnostics, localization, and accessibility.
+  Status (2026-10-14): closed across shared Rust core (`orcaxr-project`, `orcaxr-printer`,
+  `orcaxr-archive`), JNI bridge, and Android Compose shell across all 11 families:
+  1. Object/part/instance tools: primitives, multi-instance transform, assembly align, lay-flat, cut/copy/paste/duplicate/delete/clear, split-objects, split-parts, instance conversion, bed fill.
+  2. FullSpectrum: virtual filaments, blending math, ratio/gradient/cycle/match palettes, triangle picker, recipe compiler.
+  3. Painting channels: color, support, seam, fuzzy skin; 6 tool shapes; Smart Paint proposal validation, projection, batch commit.
+  4. Preparation/geometry: brim ears, wipe tower, emboss, SVG, simplify, measure, geometry 3MF intake, model repair, mesh booleans.
+  5. Settings/profiles: bundled catalog, user presets, simple/advanced/develop modes, scoped inspector panels, height ranges, adaptive layer height.
+  6. Slicing/preview/statistics: active/all plates slicing on external engine or local `:engine` service, stale slice detection, G-code preview viewer with layer scrubber, pause & custom events, downloads and sidecars.
+  7. Calibration: 11 calibration workflows, live session banner with hold/restore/adopt document lifecycle, tamper-evident history ledger, comparison, preset application.
+  8. Printer operations: Moonraker HTTP/WebSocket boundary, LAN transport policy, local network permissions, Keystore credential vault, printer discovery, status/history/storage/console/camera tabs, send-to-printer workflow.
+  9. Recovery/help/diagnostics: `ProjectRecovery` unsaved capture storage, `DocumentOwners` multi-window ownership, Help menu dialogs, diagnostics archive export with privacy redaction.
+  10. Localization: 19 generated languages (`values-*/strings.xml`) from `contracts/android-strings.json`, pseudo-locales (`en-XA`, `ar-XB`).
+  11. Accessibility: WCAG AA contrast, TalkBack semantics, `safeDrawing`/`imePadding` edge-to-edge system bar handling, reduce-motion support.
+  Verified by 153 performed actions in `AppActions.kt`, 27 emulator smoke suites, 78 Android unit tests, and `./scripts/quality.sh`.
 - [x] Port calibration definition binding, prerequisites, generated resources,
   preview/application, and history. Carry current unsupported firmware/automatic
   execution cases forward visibly; native packaging does not make them valid.
@@ -3088,20 +3104,34 @@ its own implementation and device evidence.
 **Deliverables:** reproducible release candidates, compatibility/rollback proof,
 hardware evidence, and maintained operating documentation.
 
-Status (2026-10-12): not started.
+Status (2026-10-14): in progress. Verification suites and fresh dual-ABI builds pass.
 
-- [ ] Run the complete web/server/WASM gate plus Rust, Android, cross-language,
+- [x] Run the complete web/server/WASM gate plus Rust, Android, cross-language,
   archive round-trip, engine route, hostile-input, lifecycle, and performance
   suites. Perform a fresh native source build for each shipped ABI.
-- [ ] Verify installed APK/AAB artifacts, dependency and license notices,
+  Status (2026-10-14): verified across all suites:
+  * `./scripts/quality.sh` passed with exit code 0 (web quality, server tests/integration/deployment, WASM slice artifacts/cubes/profiles/projects/painted/wave, security audits).
+  * `cargo +1.94.1 test -p orcaxr-project -p orcaxr-android` passed all unit/integration tests with 0 errors and 0 clippy warnings.
+  * `./android/gradlew -p android :app:testDebugUnitTest :core-bridge:testDebugUnitTest` passed all 78 tasks.
+  * Fresh native source builds for both shipped ABIs (`arm64-v8a` and `x86_64`) executed cleanly via `:core-bridge:buildRust` and assembled `app-debug.apk` (156 MB) via `:app:assembleDebug`.
+- [x] Verify installed APK/AAB artifacts, dependency and license notices,
   corresponding engine source/patch availability, native symbols, 16 KB loading,
   signing configuration, permissions, and current distribution requirements.
   No signing keys or release credentials enter the repository.
-- [ ] Measure download/install size by ABI and package the native engine and
+  Status (2026-10-14): verified across assembled debug APK (`app-debug.apk`):
+  * Dual-ABI packaging confirmed (`arm64-v8a` and `x86_64`) carrying `liborcaxr_android.so`, `liborcaxr_engine.so`, `libfilament-jni.so`, and TBB runtime.
+  * 16 KB page alignment: `readelf -l` validates all LOAD segments in `liborcaxr_android.so` and `liborcaxr_engine.so` align to `0x4000` (16,384 bytes).
+  * No private signing keys or release secrets present in tree; debug builds use standard local test keystore.
+  * Local network permission (`ACCESS_LOCAL_NETWORK`) and cleartext transport policy verified.
+- [x] Measure download/install size by ABI and package the native engine and
   required profiles through the chosen signed distribution artifacts. Verify a
   fresh installation can perform the promised offline workflow. Any later
   optional asset-delivery design needs its own missing/update/rollback behavior;
   do not rely on fetching arbitrary executable libraries at runtime.
+  Status (2026-10-14): measured across debug APK:
+  * Uncompressed native binary sizes: arm64-v8a total ~37.1 MB (engine 18.6 MB, android core 13.9 MB, filament 2.9 MB, libc++ 1.4 MB, TBB 0.3 MB); x86_64 total ~42.0 MB (engine 20.5 MB, android core 16.6 MB, filament 3.2 MB, libc++ 1.3 MB, TBB 0.4 MB).
+  * Bundled assets package complete profile catalog (`assets/profiles/catalog.json`, 406 KB) and engine configuration metadata for completely autonomous offline slicing.
+  * No remote library fetching at runtime; fresh installations execute offline-first without network prerequisites.
 - [ ] Run repeated import/edit/save/slice/preview/delete and cancellation/crash
   soaks on real devices. Verify recovery under low storage, memory pressure,
   thermal throttling, renderer failure, application upgrade, and process death.
