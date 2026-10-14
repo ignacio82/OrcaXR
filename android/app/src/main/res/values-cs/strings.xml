@@ -86,4 +86,8 @@
     <string name="wave_choice_monotonic">Monotónní</string>
     <string name="wave_choice_aligned">Zarovnaný</string>
     <string name="wave_choice_random">Náhodný</string>
+    <string name="project_view_menu">Zobrazení</string>
+    <string name="project_help_menu">Nápověda</string>
+    <string name="help_shortcuts">Klávesové zkratky</string>
+    <string name="help_language">Jazyk…</string>
 </resources>

@@ -89,4 +89,9 @@
     <string name="wave_choice_monotonic">Монотонний</string>
     <string name="wave_choice_aligned">Вирівняне</string>
     <string name="wave_choice_random">Випадкове</string>
+    <string name="project_view_menu">Вид</string>
+    <string name="view_show_navigator">Показати 3D-навігатор</string>
+    <string name="project_help_menu">Допомога</string>
+    <string name="help_shortcuts">Гарячі клавіші</string>
+    <string name="help_language">Мова…</string>
 </resources>

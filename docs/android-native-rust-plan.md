@@ -185,10 +185,18 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    the device (`SystemFonts`, which the browser cannot read), and the
    recipe's `useSurface` projection onto the model and `boldnessMm` and
    `perGlyph`, which the browser's cut ignores too.
-3. Phase 7, other surfaces: geometry-only 3MF import, the View menu's
-   display toggles, lighting and preview controls, handy and calibration
-   models, preset management, the Help menu, the Android-only words still
-   literal in Kotlin, and the in-app reduce-motion override. For the full gap,
+3. Phase 7, other surfaces: geometry-only 3MF import, lighting and preview
+   controls, preset management, and the Android-only words still literal in
+   Kotlin. The View menu's display toggles (`view_show_wireframe`,
+   `view_show_printable_box`, `view_show_labels`, `view_show_overhang`,
+   `view_show_navigator`, `view_show_outline`, `view_perspective_toggle`), the
+   printable boundary box in `FilamentScene`, the Add menu's calibration and
+   library models (`add_calibration_cube`, `add_calibration_tower`,
+   `add_handy_model`), the Help menu and its dialogs (`help_shortcuts`,
+   `help_docs`, `help_report_bug`, `help_about`, `help_language`), and the in-app
+   reduce-motion override (`MotionPreference`, `OrcaMotionScope`) are done
+   ([§](engineering/native-core.md#android-view-menu-help-menu-calibration-models-and-reduce-motion)),
+   raising `AppActions.PERFORMED` to 105 actions. For the full gap,
    compare `AppActions.PERFORMED` (`android/app/.../shell/AppActions.kt`, the
    actions the app performs) with the catalogue in
    `core/crates/orcaxr-contracts/src/capabilities/generated.rs`; some catalogue

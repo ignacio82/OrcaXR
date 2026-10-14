@@ -85,4 +85,8 @@
     <string name="wave_choice_monotonic">Monoton</string>
     <string name="wave_choice_aligned">Linjerad</string>
     <string name="wave_choice_random">Slumpmässig</string>
+    <string name="project_view_menu">Vy</string>
+    <string name="project_help_menu">Hjälp</string>
+    <string name="help_shortcuts">Kortkommando</string>
+    <string name="help_language">Språk…</string>
 </resources>

@@ -829,4 +829,48 @@
     <string name="wave_problem_integer">Enter a whole number.</string>
     <string name="wave_problem_number">Enter a number.</string>
     <string name="wave_reset_applied">Wave overhangs reset.</string>
+    <!-- The View menu (web/src/actions/groups/view.ts) and its display toggles. -->
+    <string name="project_view_menu">View</string>
+    <string name="view_show_wireframe">Show Wireframe</string>
+    <string name="action_hint_view_show_wireframe">Draw model wireframes in the 3D scene</string>
+    <string name="view_show_printable_box">Show Printable Box</string>
+    <string name="action_hint_view_show_printable_box">Show the printable build volume box</string>
+    <string name="view_show_labels">Show Object Labels</string>
+    <string name="action_hint_view_show_labels">Show object name labels in the 3D scene</string>
+    <string name="view_show_overhang">Show Overhangs</string>
+    <string name="action_hint_view_show_overhang">Highlight overhang faces that will need support</string>
+    <string name="view_show_navigator">Show 3D Navigator</string>
+    <string name="action_hint_view_show_navigator">Show the orientation navigator gizmo</string>
+    <string name="view_show_outline">Show Selected Outline</string>
+    <string name="action_hint_view_show_outline">Draw an outline around the selected object</string>
+    <string name="view_perspective_toggle">Perspective / Orthographic</string>
+    <string name="action_hint_view_perspective_toggle">Toggle between perspective and orthographic projection</string>
+    <!-- The Help menu (web/src/actions/groups/help.ts). -->
+    <string name="project_help_menu">Help</string>
+    <string name="help_shortcuts">Keyboard Shortcuts</string>
+    <string name="action_hint_help_shortcuts">Show the list of keyboard shortcuts</string>
+    <string name="help_docs">Documentation</string>
+    <string name="action_hint_help_docs">Open the OrcaXR website</string>
+    <string name="help_report_bug">Report a Bug</string>
+    <string name="action_hint_help_report_bug">File an issue on the OrcaXR GitHub tracker</string>
+    <string name="help_about">About OrcaXR</string>
+    <string name="action_hint_help_about">Version and credits</string>
+    <string name="help_language">Language…</string>
+    <string name="action_hint_help_language">Choose the language OrcaXR is shown in</string>
+    <!-- Calibration and handy models (web/src/actions/groups/scene.ts). -->
+    <string name="add_calibration_cube">Calibration cube</string>
+    <string name="action_hint_add_calibration_cube">Add a 20 mm XYZ calibration cube</string>
+    <string name="add_calibration_tower">Calibration tower</string>
+    <string name="action_hint_add_calibration_tower">Add a temperature / overhang test tower</string>
+    <string name="add_handy_model">Add from library</string>
+    <string name="action_hint_add_handy_model">Drop in a built-in model (Benchy, cube…)</string>
+    <!-- Dialog and motion strings. -->
+    <string name="shortcuts_title">Keyboard shortcuts</string>
+    <string name="shortcuts_close">Close</string>
+    <string name="about_title">About OrcaXR</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_engine">Computational core: Snapmaker OrcaSlicer v2.3.4</string>
+    <string name="about_close">Close</string>
+    <string name="motion_reduce">Reduce motion</string>
+    <string name="motion_reduce_hint">Suppress animations across the app</string>
 </resources>

@@ -19,7 +19,7 @@ class AppActionsTest {
         assertTrue(AppActions.TOOLBAR.all { it in AppActions.PERFORMED })
         assertTrue(AppActions.QUICK.all { it in AppActions.PERFORMED })
         assertTrue(AppActions.PANELS.all { it in AppActions.PERFORMED })
-        assertEquals(90, AppActions.PERFORMED.size)
+        assertEquals(105, AppActions.PERFORMED.size)
     }
 
     @Test fun everyCatalogueGroupHeadsItsSectionsInTheAppsLanguage() {
@@ -74,7 +74,7 @@ class AppActionsTest {
             ProjectActionState("tool_cut", "Cut (Plane)", false, "Plane cutting is disabled"),
             ProjectActionState("help_about", "About OrcaXR", true),
         )
-        assertEquals(listOf("tool_move", "tool_lay_on_face", "tool_paint", "drop_to_bed"), AppActions.performed(listed).map { it.id })
+        assertEquals(listOf("tool_move", "tool_lay_on_face", "tool_paint", "drop_to_bed", "help_about"), AppActions.performed(listed).map { it.id })
     }
 
     @Test fun aPickTheCoreRefusesSaysWhyAsTheBrowsersStatus() {

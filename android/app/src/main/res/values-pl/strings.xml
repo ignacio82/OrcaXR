@@ -89,4 +89,9 @@
     <string name="wave_choice_monotonic">Monotoniczny</string>
     <string name="wave_choice_aligned">Wyrównany</string>
     <string name="wave_choice_random">Losowo</string>
+    <string name="project_view_menu">Widok</string>
+    <string name="view_show_navigator">Wyświetlanie nawigatora 3D</string>
+    <string name="project_help_menu">Pomoc</string>
+    <string name="help_shortcuts">Skróty klawiszowe</string>
+    <string name="help_language">Język…</string>
 </resources>

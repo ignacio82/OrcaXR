@@ -89,4 +89,9 @@
     <string name="wave_choice_monotonic">Monotonic</string>
     <string name="wave_choice_aligned">Hizalı</string>
     <string name="wave_choice_random">Rastgele</string>
+    <string name="project_view_menu">Görünüm</string>
+    <string name="view_show_navigator">3D Gezgini Göster</string>
+    <string name="project_help_menu">Yardım</string>
+    <string name="help_shortcuts">Klavye kısayolları</string>
+    <string name="help_language">Dil…</string>
 </resources>

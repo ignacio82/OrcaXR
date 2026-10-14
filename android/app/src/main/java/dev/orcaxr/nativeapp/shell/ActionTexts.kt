@@ -123,6 +123,21 @@ object ActionTexts {
         "file_export_logs" to R.string.export_logs,
         "save_gcode_to_downloads" to R.string.export_download,
         "save_all_plate_gcode" to R.string.export_download_all,
+        "view_show_wireframe" to R.string.view_show_wireframe,
+        "view_show_printable_box" to R.string.view_show_printable_box,
+        "view_show_labels" to R.string.view_show_labels,
+        "view_show_overhang" to R.string.view_show_overhang,
+        "view_show_navigator" to R.string.view_show_navigator,
+        "view_show_outline" to R.string.view_show_outline,
+        "view_perspective_toggle" to R.string.view_perspective_toggle,
+        "help_shortcuts" to R.string.help_shortcuts,
+        "help_docs" to R.string.help_docs,
+        "help_report_bug" to R.string.help_report_bug,
+        "help_about" to R.string.help_about,
+        "help_language" to R.string.help_language,
+        "add_calibration_cube" to R.string.add_calibration_cube,
+        "add_calibration_tower" to R.string.add_calibration_tower,
+        "add_handy_model" to R.string.add_handy_model,
     )
 
     /** Each action the app performs, by catalogue id, with its hint. */
@@ -217,6 +232,21 @@ object ActionTexts {
         "file_export_logs" to R.string.action_hint_file_export_logs,
         "save_gcode_to_downloads" to R.string.action_hint_save_gcode_to_downloads,
         "save_all_plate_gcode" to R.string.action_hint_save_all_plate_gcode,
+        "view_show_wireframe" to R.string.action_hint_view_show_wireframe,
+        "view_show_printable_box" to R.string.action_hint_view_show_printable_box,
+        "view_show_labels" to R.string.action_hint_view_show_labels,
+        "view_show_overhang" to R.string.action_hint_view_show_overhang,
+        "view_show_navigator" to R.string.action_hint_view_show_navigator,
+        "view_show_outline" to R.string.action_hint_view_show_outline,
+        "view_perspective_toggle" to R.string.action_hint_view_perspective_toggle,
+        "help_shortcuts" to R.string.action_hint_help_shortcuts,
+        "help_docs" to R.string.action_hint_help_docs,
+        "help_report_bug" to R.string.action_hint_help_report_bug,
+        "help_about" to R.string.action_hint_help_about,
+        "help_language" to R.string.action_hint_help_language,
+        "add_calibration_cube" to R.string.action_hint_add_calibration_cube,
+        "add_calibration_tower" to R.string.action_hint_add_calibration_tower,
+        "add_handy_model" to R.string.action_hint_add_handy_model,
     )
 
     /** [action]'s label in the app's language; the core's English one for an action the app has no words for. */

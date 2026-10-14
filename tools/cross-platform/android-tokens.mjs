@@ -81,6 +81,10 @@ const APP_ACTIONS = [
   "slice_active_plate", "slice_all_plates", "slice_cancel", "send_to_printer", "add_magnet",
   "file_export_gcode", "file_export_all_plates", "file_export_stl", "file_export_all_stls", "file_export_3mf",
   "file_export_config", "file_export_obj", "file_export_logs", "save_gcode_to_downloads", "save_all_plate_gcode",
+  "view_show_wireframe", "view_show_printable_box", "view_show_labels", "view_show_overhang",
+  "view_show_navigator", "view_show_outline", "view_perspective_toggle",
+  "help_shortcuts", "help_docs", "help_report_bug", "help_about", "help_language",
+  "add_calibration_cube", "add_calibration_tower", "add_handy_model",
 ];
 
 const problems = [];

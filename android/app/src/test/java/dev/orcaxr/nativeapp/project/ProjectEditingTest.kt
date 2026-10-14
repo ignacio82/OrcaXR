@@ -189,11 +189,12 @@ class ProjectEditingTest {
         // The clipboard opens the Edit menu, as in the browser's; instance creations close it.
         assertEquals(listOf("edit_cut", "edit_copy", "edit_paste"), ProjectEditing.editMenu(view).take(3).map { it.id })
         assertEquals(listOf("add_instance", "fill_bed_with_instances"), ProjectEditing.editMenu(view).takeLast(2).map { it.id })
-        // The Add menu: the six primitives in the browser's order, then the helper volumes, Set as Negative Part, and Add Magnet Hole.
+        // The Add menu: the six primitives in the browser's order, calibration models, then the helper volumes, Set as Negative Part, and Add Magnet Hole.
         assertEquals(
             listOf(
                 "add_primitive_cube", "add_primitive_cylinder", "add_primitive_sphere", "add_primitive_cone", "add_primitive_disc",
-                "add_primitive_torus", "add_modifier", "add_support_enforcer", "add_support_blocker", "set_negative_part", "add_magnet",
+                "add_primitive_torus", "add_calibration_cube", "add_calibration_tower", "add_handy_model",
+                "add_modifier", "add_support_enforcer", "add_support_blocker", "set_negative_part", "add_magnet",
             ),
             ProjectEditing.ADD_MENU,
         )
@@ -214,5 +215,13 @@ class ProjectEditingTest {
             .filterIsInstance<ProjectEditing.Choice.Action>().map { it.state.id }
         assertEquals(listOf("add_instance", "fill_bed_with_instances"), ids(instanceRow))
         assertEquals(listOf("add_primitive_torus", "arrange_all"), ids(plateRow))
+    }
+
+    @Test
+    fun viewAndHelpMenusOfferTheBrowsersActions() {
+        assertEquals(ProjectEditing.VIEW_MENU, ProjectEditing.viewMenu(view).map { it.id })
+        assertEquals(ProjectEditing.HELP_MENU, ProjectEditing.helpMenu(view).map { it.id })
+        assertTrue(ProjectEditing.viewMenu(view.copy(ready = true)).all { it.enabled })
+        assertTrue(ProjectEditing.helpMenu(view.copy(ready = true)).all { it.enabled })
     }
 }

@@ -61,8 +61,17 @@ object AppActions {
     /** The File menu's exports and the Download actions: the system's picker takes the file, from any area ([ExportCommands]). */
     val EXPORT = ExportCommands.IDS
 
+    /** The View menu's display toggles and projection controls. */
+    val VIEW = listOf(
+        "view_show_wireframe", "view_show_printable_box", "view_show_labels", "view_show_overhang",
+        "view_show_navigator", "view_show_outline", "view_perspective_toggle",
+    )
+
+    /** The Help menu's documentation, shortcuts, bug reports and about actions. */
+    val HELP = listOf("help_shortcuts", "help_docs", "help_report_bug", "help_about", "help_language")
+
     /** Every catalogue action the app performs. */
-    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PANELS + PREPARE + EXPORT).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
+    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PANELS + PREPARE + EXPORT + VIEW + HELP).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
 
     /**
      * Whether running [id] needs the Workspace's 3D view on screen: a camera

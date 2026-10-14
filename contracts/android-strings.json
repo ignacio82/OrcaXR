@@ -559,7 +559,40 @@
     "wave_problem_bool": { "key": "settings.wave.problem.bool" },
     "wave_problem_choice": { "key": "settings.wave.problem.choice" },
     "wave_problem_integer": { "key": "settings.wave.problem.integer" },
-    "wave_problem_number": { "key": "settings.wave.problem.number" }
+    "wave_problem_number": { "key": "settings.wave.problem.number" },
+    "project_view_menu": { "key": "menuSection.view.label" },
+    "project_help_menu": { "key": "menuSection.help.label" },
+    "view_show_wireframe": { "key": "action.view_show_wireframe.label" },
+    "action_hint_view_show_wireframe": { "key": "action.view_show_wireframe.hint" },
+    "view_show_printable_box": { "key": "action.view_show_printable_box.label" },
+    "action_hint_view_show_printable_box": { "key": "action.view_show_printable_box.hint" },
+    "view_show_labels": { "key": "action.view_show_labels.label" },
+    "action_hint_view_show_labels": { "key": "action.view_show_labels.hint" },
+    "view_show_overhang": { "key": "action.view_show_overhang.label" },
+    "action_hint_view_show_overhang": { "key": "action.view_show_overhang.hint" },
+    "view_show_navigator": { "key": "action.view_show_navigator.label" },
+    "action_hint_view_show_navigator": { "key": "action.view_show_navigator.hint" },
+    "view_show_outline": { "key": "action.view_show_outline.label" },
+    "action_hint_view_show_outline": { "key": "action.view_show_outline.hint" },
+    "view_perspective_toggle": { "key": "action.view_perspective_toggle.label" },
+    "action_hint_view_perspective_toggle": { "key": "action.view_perspective_toggle.hint" },
+    "help_shortcuts": { "key": "action.help_shortcuts.label" },
+    "action_hint_help_shortcuts": { "key": "action.help_shortcuts.hint" },
+    "help_docs": { "key": "action.help_docs.label" },
+    "action_hint_help_docs": { "key": "action.help_docs.hint" },
+    "help_report_bug": { "key": "action.help_report_bug.label" },
+    "action_hint_help_report_bug": { "key": "action.help_report_bug.hint" },
+    "help_about": { "key": "action.help_about.label" },
+    "about_title": { "key": "action.help_about.label" },
+    "action_hint_help_about": { "key": "action.help_about.hint" },
+    "help_language": { "key": "action.help_language.label" },
+    "action_hint_help_language": { "key": "action.help_language.hint" },
+    "add_calibration_cube": { "key": "action.add_calibration_cube.label" },
+    "action_hint_add_calibration_cube": { "key": "action.add_calibration_cube.hint" },
+    "add_calibration_tower": { "key": "action.add_calibration_tower.label" },
+    "action_hint_add_calibration_tower": { "key": "action.add_calibration_tower.hint" },
+    "add_handy_model": { "key": "action.add_handy_model.label" },
+    "action_hint_add_handy_model": { "key": "action.add_handy_model.hint" }
   },
   "english": [
     "app_name",
@@ -888,7 +921,14 @@
     "wave_reset_applied",
     "preview_add_pause",
     "preview_add_custom_gcode",
-    "preview_remove_event"
+    "preview_remove_event",
+    "shortcuts_title",
+    "shortcuts_close",
+    "about_version",
+    "about_engine",
+    "about_close",
+    "motion_reduce",
+    "motion_reduce_hint"
   ],
   "kotlin": [
     {
@@ -898,6 +938,11 @@
     },
     {
       "file": "android/app/src/main/java/dev/orcaxr/nativeapp/device/DeviceModel.kt",
+      "key": "action.delete_models.label",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/shell/HelpDialogs.kt",
       "key": "action.delete_models.label",
       "kept": "model"
     },

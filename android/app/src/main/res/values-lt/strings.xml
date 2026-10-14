@@ -89,4 +89,9 @@
     <string name="wave_choice_monotonic">Monotoniškas</string>
     <string name="wave_choice_aligned">Sulygiuota</string>
     <string name="wave_choice_random">Atsitiktinė</string>
+    <string name="project_view_menu">Vaizdas</string>
+    <string name="view_show_navigator">Rodyti 3D navigatorių</string>
+    <string name="project_help_menu">Pagalba</string>
+    <string name="help_shortcuts">Klaviatūros nuorodos</string>
+    <string name="help_language">Kalba…</string>
 </resources>

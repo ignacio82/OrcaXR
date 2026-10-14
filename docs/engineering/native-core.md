@@ -6605,6 +6605,43 @@ Reinforcement, Motion, Cooling, Floor Layers, and Debug). Options are driven by
 - Resolution and mutation use a lightweight, portable parser (`MiniJson`), ensuring
   deterministic JVM and Android runtime execution free of framework mocking limitations.
 
+### Android view menu, help menu, calibration models and reduce motion
+
+The Project area, Workspace and Shell provide the View menu, the Help menu,
+built-in calibration / library models, and in-app reduce-motion control,
+raising `AppActions.PERFORMED` to 105 actions.
+
+View menu (`ViewMenu` in `ProjectScreen.kt`). Added beside the Edit and Add menus
+in the Project area's menu bar:
+- Wireframe toggle (`view_show_wireframe`), printable volume boundary box (`view_show_printable_box`),
+  labels overlay (`view_show_labels`), overhang display (`view_show_overhang`),
+  orientation navigator (`view_show_navigator`), outline toggle (`view_show_outline`),
+  and perspective toggle (`view_perspective_toggle`).
+- Each toggle is exposed through reactive state on `ProjectModel` (`wireframeOn`, `printableBoxOn`, etc.)
+  with checkmarks in the menu reflecting active state.
+- Printable boundary box: `FilamentScene.setPrintableBox(widthMm, depthMm, heightMm, visible)` renders
+  the 12 bounding edges of the printable volume in cyan (`#4fc3f7`) with GPU lines geometry and
+  invalidates the scene; `WorkspaceRenderer` synchronizes visibility with the model's state.
+
+Add menu calibration and library models (`ADD_MENU` in `ProjectEditing.kt`):
+- "Calibration cube" (`add_calibration_cube`): generates a 20 mm calibration cube via `PrimitiveShape.CUBE`.
+- "Calibration tower" (`add_calibration_tower`): generates a calibration test cylinder via `PrimitiveShape.CYLINDER`.
+- "Add from library" (`add_handy_model`): opens the model intake picker via `documentRequest = "file_import_model"`.
+
+Help menu and dialogs (`HelpMenu`, `HelpDialogs.kt`):
+- "Keyboard Shortcuts" (`help_shortcuts`): opens `ShortcutsDialog` displaying common shortcuts
+  (Undo, Redo, Cut, Copy, Paste, Delete, Select All, Deselect All, Move/Rotate/Scale gizmos, and Command Palette).
+- "Documentation" (`help_docs`): dispatches `urlRequest` to the upstream wiki in the external browser.
+- "Report a Bug" (`help_report_bug`): dispatches `urlRequest` to the issue tracker in the external browser.
+- "About OrcaXR" (`help_about`): opens `AboutDialog` with version ("0.1.0-dev"), engine provenance ("Snapmaker OrcaSlicer v2.3.4"),
+  and pinned commit (`9fd12ffb2b1b80c9fb4c14564754d2ec1573a626`).
+- "Language…" (`help_language`): opens `LanguageDialog` listing all 19 supported locales (and system default),
+  applying selection dynamically via Android 13+ `LocaleManager`.
+
+Reduce motion (`MotionPreference.kt`):
+- `MotionPreference` persists in-app animation preference in `orcaxr.motion`.
+- `OrcaMotionScope` exposes `LocalReduceMotion`, allowing animation suppression across the UI.
+
 ### Android filaments
 
 The app lists and assigns the project's filaments as the browser's

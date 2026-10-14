@@ -49,11 +49,20 @@ object ProjectEditing {
         "auto_place_wipe",
     )
 
+    val VIEW_MENU = listOf(
+        "view_show_wireframe", "view_show_printable_box", "view_show_labels", "view_show_overhang",
+        "view_show_navigator", "view_show_outline", "view_perspective_toggle",
+    )
+
+    val HELP_MENU = listOf(
+        "help_shortcuts", "help_docs", "help_report_bug", "help_about", "help_language",
+    )
+
     /** The catalogue actions the app performs, by ID. */
     val PERFORMED = setOf(
         "edit_select_all", "edit_deselect_all", "edit_duplicate", "add_instance", "edit_delete_selected", "edit_delete_all",
         "toggle_printable", "instance_to_object", "add_plate", "duplicate_plate", "delete_plate",
-    ) + PLACEMENT_MENU + TOOLS_MENU
+    ) + PLACEMENT_MENU + TOOLS_MENU + VIEW_MENU + HELP_MENU
 
     /** The Edit menu, in the browser's menu order (web/src/actions/groups/edit.ts, then the scene's object edits). */
     val EDIT_MENU = listOf(
@@ -65,11 +74,14 @@ object ProjectEditing {
     val EDIT_CLIPBOARD = listOf("edit_cut", "edit_copy", "edit_paste")
     val EDIT_INSTANCES = listOf("add_instance", "fill_bed_with_instances")
 
+    val CALIBRATION_MODELS = listOf("add_calibration_cube", "add_calibration_tower", "add_handy_model")
+
     /**
-     * The Add menu: the browser's `add` section primitives (scene.ts), then the helper volumes for the selected
+     * The Add menu: the browser's `add` section primitives and calibration models (scene.ts), then the helper volumes for the selected
      * object, Set as Negative Part, and Add Magnet Hole, in the catalogue's order.
      */
     val ADD_MENU = PrimitiveShape.PRIMITIVES.mapNotNull { it.actionId } +
+        CALIBRATION_MODELS +
         HelperVolumeRole.entries.mapNotNull { it.actionId } + listOf("set_negative_part", "add_magnet")
 
     /** Creation's catalogue actions the app performs: the clipboard, the bed fill and the Add menu. */
@@ -117,7 +129,15 @@ object ProjectEditing {
 
     /** The Add menu's actions with the core's enablement, as [editMenu]. */
     fun addMenu(view: ProjectView): List<ProjectActionState> =
-        ADD_MENU.map { id -> view.actions[id] ?: ProjectActionState(id, id, enabled = false) }
+        ADD_MENU.map { id -> view.actions[id] ?: ProjectActionState(id, id, enabled = if (id in CALIBRATION_MODELS) view.ready else false) }
+
+    /** The View menu's actions with the core's enablement. */
+    fun viewMenu(view: ProjectView): List<ProjectActionState> =
+        VIEW_MENU.map { id -> view.actions[id] ?: ProjectActionState(id, id, enabled = view.ready) }
+
+    /** The Help menu's actions with the core's enablement. */
+    fun helpMenu(view: ProjectView): List<ProjectActionState> =
+        HELP_MENU.map { id -> view.actions[id] ?: ProjectActionState(id, id, enabled = view.ready) }
 
     /** The Edit menu's placement actions with the core's enablement; one the core has not answered for yet is disabled. */
     fun placementMenu(view: ProjectView): List<ProjectActionState> =

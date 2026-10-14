@@ -111,6 +111,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private val placed = LinkedHashMap<String, Placed>()
     private var bed: Lines? = null
     private var bedSize: Pair<Double, Double>? = null
+    private var printableBox: Lines? = null
     /** The bed's outline and grid colours (RGB, 0..1): the plate skin's major and minor lines once themed. */
     private var bedOutline = BED_TINT.copyOf()
     private var bedGrid = FloatArray(3) { BED_TINT[it] * BED_GRID_SHADE }
@@ -220,8 +221,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         requireUi()
         return Metrics(state, meshes.size, geometries.values.sumOf { it.mesh.source.facetCount },
             geometries.values.sumOf { it.uploadedFacets }, placed.size,
-            placed.values.sumOf { it.entities.size + (if (it.leafEntity == null) 0 else 1) } + (if (bed == null) 0 else 1) + (if (toolpath == null) 0 else 1),
-            geometries.values.sumOf { geometry -> geometry.chunks.sumOf { it.bytes } + (geometry.leaves?.bytes ?: 0) } + (bed?.bytes ?: 0) + (toolpath?.bytes ?: 0),
+            placed.values.sumOf { it.entities.size + (if (it.leafEntity == null) 0 else 1) } + (if (bed == null) 0 else 1) + (if (toolpath == null) 0 else 1) + (if (printableBox == null) 0 else 1),
+            geometries.values.sumOf { geometry -> geometry.chunks.sumOf { it.bytes } + (geometry.leaves?.bytes ?: 0) } + (bed?.bytes ?: 0) + (toolpath?.bytes ?: 0) + (printableBox?.bytes ?: 0),
             pending, peakPending, uploaded, uploads, frames, maxFrameCpuMs, closed, toolpathSegments,
             geometries.size, geometries.values.count { it.colors != null }, paintUploaded)
     }
@@ -844,6 +845,54 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     }
 
     /**
+     * The printable volume boundary box: 12 edges on (0, 0, 0) to (widthMm, depthMm, heightMm).
+     * When [visible] is false, any existing box is cleared.
+     */
+    fun setPrintableBox(widthMm: Double, depthMm: Double, heightMm: Double = 250.0, visible: Boolean = true) {
+        checkOpen()
+        printableBox?.let(::destroyLines); printableBox = null
+        if (!visible) {
+            invalidate()
+            return
+        }
+        require(widthMm.isFinite() && depthMm.isFinite() && heightMm.isFinite())
+        require(widthMm in 1.0..5000.0 && depthMm in 1.0..5000.0 && heightMm in 1.0..5000.0)
+        val c000 = Point3(0.0, 0.0, 0.0)
+        val c100 = Point3(widthMm, 0.0, 0.0)
+        val c110 = Point3(widthMm, depthMm, 0.0)
+        val c010 = Point3(0.0, depthMm, 0.0)
+        val c001 = Point3(0.0, 0.0, heightMm)
+        val c101 = Point3(widthMm, 0.0, heightMm)
+        val c111 = Point3(widthMm, depthMm, heightMm)
+        val c011 = Point3(0.0, depthMm, heightMm)
+        val segments = listOf(
+            c000 to c100, c100 to c110, c110 to c010, c010 to c000,
+            c001 to c101, c101 to c111, c111 to c011, c011 to c001,
+            c000 to c001, c100 to c101, c110 to c111, c010 to c011,
+        )
+        val positions = MeshPacking.direct(segments.size * 24)
+        val colors = MeshPacking.direct(segments.size * 32)
+        val indices = MeshPacking.direct(segments.size * 8)
+        val low = FloatArray(3) { Float.POSITIVE_INFINITY }; val high = FloatArray(3) { Float.NEGATIVE_INFINITY }
+        val boxColor = floatArrayOf(0.31f, 0.76f, 0.97f) // #4fc3f7 cyan tint
+        for ((a, b) in segments) {
+            for (point in arrayOf(RenderSpace.point(a), RenderSpace.point(b))) {
+                val coordinates = floatArrayOf(point.x.toFloat(), point.y.toFloat(), point.z.toFloat())
+                for (axis in 0..2) {
+                    positions.putFloat(coordinates[axis])
+                    low[axis] = min(low[axis], coordinates[axis]); high[axis] = max(high[axis], coordinates[axis])
+                }
+                colors.putFloat(boxColor[0]).putFloat(boxColor[1]).putFloat(boxColor[2]).putFloat(1f)
+                indices.putInt(indices.position() / 4)
+            }
+        }
+        positions.flip(); colors.flip(); indices.flip()
+        printableBox = createLines(positions, colors, indices,
+            FloatArray(3) { (low[it] + high[it]) * .5f }, FloatArray(3) { max((high[it] - low[it]) * .5f, 1e-5f) }, bedMaterial)
+        invalidate()
+    }
+
+    /**
      * Shows a G-code toolpath (replacing the one shown before), drawn as lines
      * in the colours Rust chose for each record; none clears it. Its buffers are
      * copied to the GPU in the background; the geometry stays the caller's.
@@ -1011,6 +1060,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         meshes.values.forEach(::discard); meshes.clear()
         for (volumeId in geometries.keys.toList()) dropGeometry(volumeId)
         bed?.let(::destroyLines); bed = null
+        printableBox?.let(::destroyLines); printableBox = null
         toolpath?.let(::destroyLines); toolpath = null; toolpathSegments = 0
         marked.forEach { destroyEntity(it.entity); engine.destroyMaterialInstance(it.material) }; marked.clear()
         shapes.values.forEach { engine.destroyVertexBuffer(it.vertices); engine.destroyIndexBuffer(it.indices) }; shapes.clear()

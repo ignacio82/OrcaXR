@@ -183,6 +183,8 @@ fun ProjectScreen(model: ProjectModel, prepare: PrepareModel, modifier: Modifier
                 }
                 EditMenu(view, model)
                 AddMenu(view, model)
+                ViewMenu(view, model)
+                HelpMenu(view, model)
             }
         }
         item { Text(stringResource(R.string.project_plates), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium) }
@@ -461,6 +463,41 @@ private fun AddMenu(view: ProjectView, model: ProjectModel) {
         OutlinedButton(onClick = { open = true }, enabled = view.ready && !model.busy) { Text(stringResource(R.string.project_add_menu)) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             for (action in ProjectEditing.addMenu(view)) {
+                ActionMenuItem(action) {
+                    open = false
+                    model.perform(action.id)
+                }
+            }
+        }
+    }
+}
+
+/** The browser's View menu: its display and projection toggles. */
+@Composable
+private fun ViewMenu(view: ProjectView, model: ProjectModel) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { open = true }, enabled = view.ready && !model.busy) { Text(stringResource(R.string.project_view_menu)) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            for (action in ProjectEditing.viewMenu(view)) {
+                val on = model.viewToggleActive(action.id)
+                ActionMenuItem(action, trailing = if (on) "✓" else null) {
+                    open = false
+                    model.perform(action.id)
+                }
+            }
+        }
+    }
+}
+
+/** The browser's Help menu: shortcuts, docs, bug reports, about, and language. */
+@Composable
+private fun HelpMenu(view: ProjectView, model: ProjectModel) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { open = true }, enabled = view.ready && !model.busy) { Text(stringResource(R.string.project_help_menu)) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            for (action in ProjectEditing.helpMenu(view)) {
                 ActionMenuItem(action) {
                     open = false
                     model.perform(action.id)

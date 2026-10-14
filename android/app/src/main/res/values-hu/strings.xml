@@ -85,4 +85,8 @@
     <string name="wave_choice_monotonic">Monotonikus</string>
     <string name="wave_choice_aligned">Igazított</string>
     <string name="wave_choice_random">Véletlenszerû</string>
+    <string name="project_view_menu">Nézet</string>
+    <string name="project_help_menu">Segítség</string>
+    <string name="help_shortcuts">Gyorsbillentyűk</string>
+    <string name="help_language">Nyelv…</string>
 </resources>

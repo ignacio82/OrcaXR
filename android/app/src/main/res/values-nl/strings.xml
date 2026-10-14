@@ -86,4 +86,8 @@
     <string name="wave_choice_monotonic">Monotoon</string>
     <string name="wave_choice_aligned">Uitgelijnd</string>
     <string name="wave_choice_random">Willekeurig</string>
+    <string name="project_view_menu">Weergave</string>
+    <string name="project_help_menu">Hulp</string>
+    <string name="help_shortcuts">Sneltoesten</string>
+    <string name="help_language">Taal…</string>
 </resources>

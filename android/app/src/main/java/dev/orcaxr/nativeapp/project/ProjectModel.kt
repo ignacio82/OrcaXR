@@ -971,6 +971,18 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "auto_place_wipe" -> autoPlaceWipeTower()
             "variable_layer_height" -> variableLayerHeight(!variableLayerHeighting)
             "add_magnet" -> addMagnetHole()
+            "view_show_wireframe" -> wireframeOn = !wireframeOn
+            "view_show_printable_box" -> printableBoxOn = !printableBoxOn
+            "view_show_labels" -> labelsOn = !labelsOn
+            "view_show_overhang" -> overhangOn = !overhangOn
+            "view_show_navigator" -> navigatorOn = !navigatorOn
+            "view_show_outline" -> outlineOn = !outlineOn
+            "view_perspective_toggle" -> perspectiveOn = !perspectiveOn
+            "help_shortcuts" -> showShortcutsDialog = true
+            "help_about" -> showAboutDialog = true
+            "help_language" -> showLanguageDialog = true
+            "help_docs" -> urlRequest = "https://github.com/SoftFever/OrcaSlicer/wiki"
+            "help_report_bug" -> urlRequest = "https://github.com/SoftFever/OrcaSlicer/issues"
             // The toolbar's, the command palette's and the menus' other actions: one call for all of them.
             "delete_models" -> work { workspace.deleteSelected().await() }
             "edit_undo" -> if (view.undo != null) undo()
@@ -1056,6 +1068,48 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun cameraShown(request: CameraRequest) {
         if (cameraRequest == request) cameraRequest = null
     }
+
+    // ---- View toggles and Help dialogs ----
+
+    var wireframeOn by mutableStateOf(false)
+        private set
+    var printableBoxOn by mutableStateOf(false)
+        private set
+    var labelsOn by mutableStateOf(true)
+        private set
+    var overhangOn by mutableStateOf(false)
+        private set
+    var navigatorOn by mutableStateOf(true)
+        private set
+    var outlineOn by mutableStateOf(true)
+        private set
+    var perspectiveOn by mutableStateOf(true)
+        private set
+
+    fun viewToggleActive(id: String): Boolean = when (id) {
+        "view_show_wireframe" -> wireframeOn
+        "view_show_printable_box" -> printableBoxOn
+        "view_show_labels" -> labelsOn
+        "view_show_overhang" -> overhangOn
+        "view_show_navigator" -> navigatorOn
+        "view_show_outline" -> outlineOn
+        "view_perspective_toggle" -> perspectiveOn
+        else -> false
+    }
+
+    var showShortcutsDialog by mutableStateOf(false)
+        private set
+    var showAboutDialog by mutableStateOf(false)
+        private set
+    var showLanguageDialog by mutableStateOf(false)
+        private set
+    var urlRequest by mutableStateOf<String?>(null)
+        private set
+
+    fun dismissShortcutsDialog() { showShortcutsDialog = false }
+    fun dismissAboutDialog() { showAboutDialog = false }
+    fun dismissLanguageDialog() { showLanguageDialog = false }
+    fun urlHandled() { urlRequest = null }
 
     /** The actions [surface] offers now, in catalogue order, as the core enables them (the command palette's and the toolbar's lists). */
     fun surfaceActions(surface: ProjectIntents.ActionSurface): CompletableFuture<List<ProjectActionState>> =
@@ -1961,6 +2015,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             id == "edit_copy" -> work { workspace.copySelected().await() }
             id == "edit_paste" -> work { workspace.paste().await() }
             id == "fill_bed_with_instances" -> work { workspace.fillBed().await() }
+            id == "add_calibration_cube" -> work { workspace.addPrimitive(PrimitiveShape.CUBE).await() }
+            id == "add_calibration_tower" -> work { workspace.addPrimitive(PrimitiveShape.CYLINDER).await() }
+            id == "add_handy_model" -> documentRequest = "file_import_model"
             else -> return false
         }
         return true

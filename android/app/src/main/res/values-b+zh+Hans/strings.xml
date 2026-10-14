@@ -89,4 +89,9 @@
     <string name="wave_choice_monotonic">单调</string>
     <string name="wave_choice_aligned">对齐</string>
     <string name="wave_choice_random">随机</string>
+    <string name="project_view_menu">视图</string>
+    <string name="view_show_navigator">显示3D导航器</string>
+    <string name="project_help_menu">帮助</string>
+    <string name="help_shortcuts">快捷键</string>
+    <string name="help_language">语言…</string>
 </resources>

@@ -81,12 +81,17 @@ import dev.orcaxr.nativeapp.project.DropIntake
 import dev.orcaxr.nativeapp.project.ProjectModel
 import dev.orcaxr.nativeapp.project.ProjectScreen
 import dev.orcaxr.nativeapp.send.SendDialog
+import dev.orcaxr.nativeapp.shell.AboutDialog
 import dev.orcaxr.nativeapp.shell.AppActions
 import dev.orcaxr.nativeapp.shell.CommandPalette
+import dev.orcaxr.nativeapp.shell.LanguageDialog
 import dev.orcaxr.nativeapp.shell.LocalActionRunner
 import dev.orcaxr.nativeapp.shell.LocalActionStates
 import dev.orcaxr.nativeapp.shell.LocalCommandPalette
+import dev.orcaxr.nativeapp.shell.ShortcutsDialog
 import dev.orcaxr.nativeapp.shell.FocusVisibleTheme
+import dev.orcaxr.nativeapp.theme.MotionPreference
+import dev.orcaxr.nativeapp.theme.OrcaMotionScope
 import dev.orcaxr.nativeapp.shell.Navigation
 import dev.orcaxr.nativeapp.shell.ShellArea
 import dev.orcaxr.nativeapp.shell.ShellBar
@@ -143,8 +148,11 @@ class MainActivity : ComponentActivity() {
     /** The area shown; an opened or shared document switches to the Project area, a finished slice to Preview. */
     private var area by mutableIntStateOf(R.string.nav_workspace)
     private val themePreference by lazy { ThemePreference(this) }
+    private val motionPreference by lazy { MotionPreference(this) }
     /** The theme chosen with the switch on this device, if any (otherwise the system's decides). */
     private var themeChoice by mutableStateOf<String?>(null)
+    /** In-app preference to suppress animations across the app. */
+    private var reduceMotion by mutableStateOf(false)
     /** Whether the command palette is open (Ctrl/⌘ K, or a search button). */
     private var palette by mutableStateOf(false)
     /** Whether the keyboard opened it: someone typing on keys needs no on-screen keyboard over it. */
@@ -351,6 +359,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         themeChoice = themePreference.stored
+        reduceMotion = motionPreference.reduceMotion
         enableEdgeToEdge()
         project.taskId = taskId
         prepare.bind(project)
@@ -411,7 +420,7 @@ class MainActivity : ComponentActivity() {
                 },
                 LocalActionRunner provides ::runAction,
                 LocalActionStates provides remember { { action: ProjectActionState -> actionState(action) } },
-            ) { FocusVisibleTheme {
+            ) { OrcaMotionScope(reduceMotion) { FocusVisibleTheme {
                 val ready = state == R.string.workspace_development
                 val layout = ShellLayout.of(LocalWindowInfo.current.containerDpSize.width.value.toInt(), shellArea(area))
                 workspaceShown = area == R.string.nav_workspace || layout.viewport == Viewport.Workspace
@@ -489,7 +498,19 @@ class MainActivity : ComponentActivity() {
                     FollowSlicing(prepare, project)
                     CommandPalette(project, paletteFromKeys, onDismiss = { palette = false }, run = ::runAction)
                 }
-            } } }
+                val urlToOpen = project.urlRequest
+                LaunchedEffect(urlToOpen) {
+                    urlToOpen?.let { url ->
+                        project.urlHandled()
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        } catch (_: Exception) {}
+                    }
+                }
+                if (project.showShortcutsDialog) ShortcutsDialog(project::dismissShortcutsDialog)
+                if (project.showAboutDialog) AboutDialog(project::dismissAboutDialog)
+                if (project.showLanguageDialog) LanguageDialog(project::dismissLanguageDialog)
+            } } } }
         }
     }
 

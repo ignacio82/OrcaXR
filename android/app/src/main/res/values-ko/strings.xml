@@ -89,4 +89,9 @@
     <string name="wave_choice_monotonic">단조</string>
     <string name="wave_choice_aligned">정렬</string>
     <string name="wave_choice_random">무작위</string>
+    <string name="project_view_menu">시점</string>
+    <string name="view_show_navigator">3D 내비게이터 표시</string>
+    <string name="project_help_menu">도움말</string>
+    <string name="help_shortcuts">키보드 단축키</string>
+    <string name="help_language">언어…</string>
 </resources>

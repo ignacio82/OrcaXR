@@ -89,4 +89,9 @@
     <string name="wave_choice_monotonic">Монотонный</string>
     <string name="wave_choice_aligned">Выровненная</string>
     <string name="wave_choice_random">Случайно</string>
+    <string name="project_view_menu">Вид</string>
+    <string name="view_show_navigator">Показать навигационный куб</string>
+    <string name="project_help_menu">Помощь</string>
+    <string name="help_shortcuts">Горячие клавиши</string>
+    <string name="help_language">Язык…</string>
 </resources>
