@@ -6955,6 +6955,48 @@ to the colour the assigned cube was drawn in; finds "Undo Paint colour
 facets", undoes it and finds the cube drawn as before. It passes on both
 emulators.
 
+### Android Smart Paint
+
+The shared Rust core (`orcaxr_project::smart_paint`) implements Smart Paint proposal
+validation, 3D geometric projection, and transactional batch commit planning:
+
+- Proposal validation (`proposal.rs`): Strictly enforces schema and domain bounds
+  matching the TypeScript reference (`aiPaintProposal.ts`). A proposal is admitted
+  only if it contains 1 to 32 regions with valid hex colours (`#RRGGBB`), normalised
+  surface normal direction vectors, cone angle tolerances within (0, 180] degrees, and
+  confidence values within [0.0, 1.0].
+- Geometric projection (`projection.rs`): Projects candidate regions onto mesh facets
+  using the volume's vertex coordinates and triangle indices. Facet bounding boxes are
+  evaluated against the proposal's normalized extents, and triangle face normals are
+  filtered against region normal cones. Layering proceeds in declared order so later
+  regions cleanly overwrite earlier ones on shared triangles. Calculates exact facet
+  coverage counts, percentage coverage, and weighted proposal confidence.
+- Atomic commit planning (`plan.rs`): Assembles projected region assignments into a
+  single transactional `wire::Batch` intent composed of `FacetStroke` commands with
+  contiguous triangle ranges, guaranteeing atomic application or complete rollback.
+- Geometry description: Exposes bounded bounding box dimensions (mm) and facet counts
+  without leaking internal vertex data off-device.
+
+The JNI layer (`orcaxr-android::project::smart_paint`) exports four methods:
+`smart_paint_validate_proposal`, `smart_paint_describe_geometry`,
+`smart_paint_project`, and `smart_paint_build_batch`. These are surfaced through
+`ProjectSmartPaint.kt`, `ProjectSession.kt`, and `ProjectWorkspace.kt` (`smartPaintDescribe`,
+`smartPaintProject`, `smartPaintBuildBatch`, `applySmartPaintBatch`).
+
+The Compose UI (`SmartPaintDialog.kt`, `ProjectModel.kt`) provides:
+- Explicit consent gates: Two independent checkboxes require user confirmation before
+  sharing geometry bounding dimensions or attaching optional camera reference images.
+- Proposal trigger & prompt configuration: Text input and trigger button driving the
+  async AI generation session.
+- Region review: Lists detected regions with confidence percentage, surface coverage,
+  and triangle counts, with an interactive filament destination dropdown per region.
+- Headless testability: Includes a portable pure-Kotlin `SimpleJson` parser, eliminating
+  Android SDK `org.json` mocks in JVM unit tests.
+- Action integration: 6 actions (`tool_smart_paint`, `tool_smart_paint_image`,
+  `paint_smart_configure`, `paint_smart_request`, `paint_smart_apply`, `paint_smart_cancel`)
+  wired into `AppActions.kt`, localized across 19 language sets, and verified in
+  `SmartPaintActionsTest.kt`, `AppActionsTest.kt`, and `tests/smart_paint.rs`.
+
 ### Android settings panels
 
 The Project area's tree rows lead to the inspector's other panels, as the
@@ -8499,6 +8541,41 @@ dark tokens'; the switch's explicit light outranks it), sets font scale 2.0
 the bar's five whole names), checks fields above the keyboard in landscape and
 portrait and opens areas, a menu and a dialog with every animation scale at 0,
 restoring each setting as it ends. It passes on both emulators.
+
+### Automation and platform-specific integrations
+
+OrcaXR maintains strict separation between portable canonical domain operations, target-specific
+automation adapters, and browser-only platform integrations:
+
+1. Canonical Action ID Preservation:
+   - Action IDs in Android `AppActions.kt` (`PERFORMED`) match the canonical catalog
+     (`contracts/action-catalog.json`) and web `ActionRegistry` byte-for-byte. No private
+     or divergent action names are introduced for native platforms.
+   - 153 native performed actions are validated across the catalog, action presentation vectors
+     (`testdata/cross-platform/action-presentation-vectors.json`), and parity reports
+     (`docs/parity/release-report.json`).
+
+2. Native Test Automation:
+   - Automated testing on Android runs via external Python harnesses (`tools/cross-platform/android-*.py`)
+     interfacing with the Android OS through UI Automator, Accessibility Node hierarchies, and ADB shell commands.
+   - Replays exercise realistic user journeys (drawing parts, assembly alignment, Brim Ears, Smart Paint,
+     settings overrides, Filament swaps, slicing preflight) on both standard 4 KB page architectures (API 34)
+     and 16 KB page architectures (API 37).
+
+3. Browser-Only Integrations (Documented Non-Portable Boundaries):
+   - **WebMCP (`WorkspaceTools.ts`, `webmcp-client.ts`)**: In-browser Model Context Protocol server/client
+     adapter for external web AI agents over WebSocket/SSE. Not ported to Android; native automation uses
+     Android Accessibility, test intents, and Compose test rules.
+   - **Browser MediaPipe & Web Speech API**: Web-based speech recognition and vision models for multimodal
+     command experiments. Android leaves voice and camera features to lazy native Android APIs (SpeechRecognizer,
+     CameraX), ensuring optional external services never gate core startup or session readiness.
+   - **WebXR & XRBlocks**: Web-based spatial rendering uses Three.js and WebXR device sessions. Native
+     Android XR development targets Jetpack SceneCore and native Filament pipelines, not WebXR shims.
+   - **Web File System Access API**: Web uses OPFS and `showOpenFilePicker`. Android uses the Storage Access
+     Framework (`ProjectDocuments.kt`, `DocumentOwners`, `ActivityResultContracts.OpenDocument`) with
+     persisted URI permissions.
+   - **Moonraker Printer Communication**: Both platforms share the offline-first Moonraker HTTP/WebSocket
+     boundary (`orcaxr_printer`), prohibiting vendor cloud proxies or telemetry dependencies.
 
 ### Action capabilities
 

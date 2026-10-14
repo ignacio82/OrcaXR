@@ -3056,9 +3056,16 @@ and 3.
   integrates 6 actions (`AppActions.kt`, `ActionTexts.kt`), 19 localized XML string sets,
   verified in `SmartPaintActionsTest.kt`, `AppActionsTest.kt`, `tests/smart_paint.rs`,
   and `./scripts/quality.sh`.
-- [ ] Inventory existing automation and platform-specific integrations. Preserve
+- [x] Inventory existing automation and platform-specific integrations. Preserve
   action IDs and implement deliberate native adapters where applicable; document
   browser-only integrations explicitly rather than claiming automatic portability.
+  Status (2026-10-14): documented in `docs/engineering/native-core.md#automation-and-platform-specific-integrations`.
+  Preserves canonical action IDs byte-for-byte across all 153 native performed actions in
+  `AppActions.kt` without divergent platform aliases. Documents explicit browser-only boundaries
+  (WebMCP server/client, browser MediaPipe/Web Speech, WebXR/XRBlocks, Web File System Access OPFS)
+  and native counterparts (Android UI Automator/Accessibility test harnesses on 4 KB / 16 KB
+  architectures, lazy Android SpeechRecognizer/CameraX, Storage Access Framework). Shared
+  offline Moonraker printer client contracts remain unified without proprietary cloud services.
 - [ ] Qualify Googlebook file, window, keyboard, trackpad, DPI, and lifecycle
   behavior on actual hardware. Reassess package ABI coverage from that hardware.
 - [ ] Design the display/audio-glasses companion as a separate feature package
