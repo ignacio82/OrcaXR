@@ -19,6 +19,7 @@ pub mod action_presentation;
 pub mod assembly;
 pub mod assets;
 pub mod brim_ears;
+pub mod calibration;
 pub mod capabilities;
 pub mod clipboard;
 pub mod commands;

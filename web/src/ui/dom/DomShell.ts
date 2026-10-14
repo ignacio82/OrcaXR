@@ -107,11 +107,7 @@ export class DomShell {
   private readonly ctx: ActionContext;
   private readonly ui: UiState;
 
-  constructor(
-    registry: ActionRegistry,
-    ctx: ActionContext,
-    ui: UiState,
-  ) {
+  constructor(registry: ActionRegistry, ctx: ActionContext, ui: UiState) {
     this.registry = registry;
     this.ctx = ctx;
     this.ui = ui;

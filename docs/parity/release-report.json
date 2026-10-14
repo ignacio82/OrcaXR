@@ -151,8 +151,8 @@
     "catalog": {
       "targets": {
         "androidFlat": {
-          "implemented": 120,
-          "unavailable": 106
+          "implemented": 147,
+          "unavailable": 79
         },
         "androidXr": {
           "implemented": 0,
@@ -213,68 +213,8 @@
             "reason": "Action not supported on this target"
           },
           {
-            "action": "calib_input_shaping_damping",
-            "item": "MainFrame::init_menubar_as_editor::Input Shaping Damping/zeta factor",
-            "reason": "Action not supported on this target"
-          },
-          {
-            "action": "calib_input_shaping_frequency",
-            "item": "MainFrame::init_menubar_as_editor::Input Shaping Frequency",
-            "reason": "Action not supported on this target"
-          },
-          {
-            "action": "calib_junction_deviation",
-            "item": "MainFrame::init_menubar_as_editor::Junction Deviation",
-            "reason": "Action not supported on this target"
-          },
-          {
-            "action": "calib_max_flow",
-            "item": "MainFrame::init_menubar_as_editor::Max flowrate",
-            "reason": "Action not supported on this target"
-          },
-          {
-            "action": "calib_flow_pass1",
-            "item": "MainFrame::init_menubar_as_editor::Pass 1",
-            "reason": "Action not supported on this target"
-          },
-          {
-            "action": "calib_flow_pass2",
-            "item": "MainFrame::init_menubar_as_editor::Pass 2",
-            "reason": "Action not supported on this target"
-          },
-          {
-            "action": "calib_pressure_advance",
-            "item": "MainFrame::init_menubar_as_editor::Pressure advance",
-            "reason": "Action not supported on this target"
-          },
-          {
-            "action": "calib_retraction",
-            "item": "MainFrame::init_menubar_as_editor::Retraction test",
-            "reason": "Action not supported on this target"
-          },
-          {
             "action": "view_show_gcode_window",
             "item": "MainFrame::init_menubar_as_editor::Show &G-code Window",
-            "reason": "Action not supported on this target"
-          },
-          {
-            "action": "calib_temperature",
-            "item": "MainFrame::init_menubar_as_editor::Temperature",
-            "reason": "Action not supported on this target"
-          },
-          {
-            "action": "calib_vfa",
-            "item": "MainFrame::init_menubar_as_editor::VFA",
-            "reason": "Action not supported on this target"
-          },
-          {
-            "action": "calib_flow_yolo_perfectionist",
-            "item": "MainFrame::init_menubar_as_editor::YOLO (perfectionist version)",
-            "reason": "Action not supported on this target"
-          },
-          {
-            "action": "calib_flow_yolo",
-            "item": "MainFrame::init_menubar_as_editor::YOLO (Recommended)",
             "reason": "Action not supported on this target"
           },
           {
@@ -1128,9 +1068,9 @@
       "actionCount": 115,
       "targets": {
         "androidFlat": {
-          "absentCount": 38,
-          "supported": 85,
-          "unavailable": 30
+          "absentCount": 26,
+          "supported": 97,
+          "unavailable": 18
         },
         "androidXr": {
           "absentCount": 123,

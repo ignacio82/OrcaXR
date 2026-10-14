@@ -594,5 +594,21 @@ final class NativeProject {
     static native long historyLabelLength(long handle, boolean undo);
     static native char[] historyLabel(long handle, boolean undo, long start, long count);
     static native String historyDirtyCategories(long handle);
+    // Calibration workflows, forms, instructions, automation, application and history.
+    static native String calibrationDefinitions();
+    static native String calibrationCompile(String request, String jobId);
+    static native String calibrationVerify(String plan);
+    static native String calibrationForm(String request);
+    static native String calibrationInstructions(String plan);
+    static native String calibrationAutomation(String workflowId, String objects);
+    static native String calibrationApplication(String record, String conditions);
+    static native String calibrationLineProgram(String plan, String options);
+    static native String calibrationFlowMatching(String patches, String effects);
+    static native String calibrationHistoryRecord(String method, String conditions, String entry);
+    static native String calibrationHistoryAssess(String record, String conditions);
+    static native String calibrationHistoryCompare(String left, String right);
+    static native String calibrationHistoryExport(String records, String exportedAt);
+    static native String calibrationHistoryImport(String text);
+    static native String calibrationHistoryRerun(String record, String prerequisites);
     static native void close(long handle);
 }

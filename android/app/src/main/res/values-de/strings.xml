@@ -99,4 +99,8 @@
     <string name="help_check_updates">Nach Updates suchen</string>
     <string name="help_setup_wizard">Einrichtungsassistent</string>
     <string name="presets_export_bundle">Preset-Bundle exportieren</string>
+    <string name="calib_junction_deviation">Junction-Deviation</string>
+    <string name="calib_input_shaping_frequency">Input Shaping Frequenz</string>
+    <string name="calib_send_printer_btn">Zum Drucker senden</string>
+    <string name="calib_history_delete_btn">Löschen</string>
 </resources>

@@ -11,129 +11,333 @@
     "tested": "Platform-free words the JVM tests check through the class that composes them (PrepareFlowTest, SendFlowTest)."
   },
   "resources": {
-    "nav_workspace": { "key": "startup.feature.workspace" },
-    "drop_prompt": { "key": "app.main.dropA3MFSTLOBJ" },
-    "nav_prepare": { "key": "ui.workspaceViews.prepare" },
-    "nav_device": { "key": "ui.workspaceViews.device" },
-    "nav_project": { "key": "ui.workspaceViews.project" },
-    "nav_preview": { "key": "ui.workspaceViews.preview" },
+    "nav_workspace": {
+      "key": "startup.feature.workspace"
+    },
+    "drop_prompt": {
+      "key": "app.main.dropA3MFSTLOBJ"
+    },
+    "nav_prepare": {
+      "key": "ui.workspaceViews.prepare"
+    },
+    "nav_device": {
+      "key": "ui.workspaceViews.device"
+    },
+    "nav_project": {
+      "key": "ui.workspaceViews.project"
+    },
+    "nav_preview": {
+      "key": "ui.workspaceViews.preview"
+    },
     "prepare_head_filament": {
       "key": "app.main.headFilament",
-      "arguments": ["index"]
+      "arguments": [
+        "index"
+      ]
     },
     "project_transform_failed": {
       "key": "app.main.transformFailed",
-      "arguments": ["reason"]
+      "arguments": [
+        "reason"
+      ]
     },
     "workspace_transform_stopped": {
       "key": "workspace.orcaWorkspace.transformStopped",
-      "arguments": ["reason"]
+      "arguments": [
+        "reason"
+      ]
     },
-    "prepare_no_presets": { "key": "app.main.noCompatiblePresets" },
-    "prepare_own_settings": { "key": "app.main.usingTheProjectSOwn" },
-    "prepare_remove": { "key": "action.delete_models.label" },
-    "action_group_file": { "key": "actionGroup.file.label" },
-    "action_group_edit": { "key": "actionGroup.edit.label" },
-    "action_group_view": { "key": "actionGroup.view.label" },
-    "action_group_scene": { "key": "actionGroup.scene.label" },
-    "action_group_paint": { "key": "actionGroup.paint.label" },
-    "action_group_slice": { "key": "actionGroup.slice.label" },
-    "action_group_filament": { "key": "actionGroup.filament.label" },
-    "action_group_output": { "key": "actionGroup.output.label" },
-    "action_group_calibration": { "key": "actionGroup.calibration.label" },
-    "action_group_advanced": { "key": "actionGroup.advanced.label" },
-    "action_group_help": { "key": "actionGroup.help.label" },
-    "action_group_system": { "key": "actionGroup.system.label" },
-    "project_edit_menu": { "key": "menuSection.edit.label" },
-    "project_add_menu": { "key": "menuSection.add.label" },
+    "prepare_no_presets": {
+      "key": "app.main.noCompatiblePresets"
+    },
+    "prepare_own_settings": {
+      "key": "app.main.usingTheProjectSOwn"
+    },
+    "prepare_remove": {
+      "key": "action.delete_models.label"
+    },
+    "action_group_file": {
+      "key": "actionGroup.file.label"
+    },
+    "action_group_edit": {
+      "key": "actionGroup.edit.label"
+    },
+    "action_group_view": {
+      "key": "actionGroup.view.label"
+    },
+    "action_group_scene": {
+      "key": "actionGroup.scene.label"
+    },
+    "action_group_paint": {
+      "key": "actionGroup.paint.label"
+    },
+    "action_group_slice": {
+      "key": "actionGroup.slice.label"
+    },
+    "action_group_filament": {
+      "key": "actionGroup.filament.label"
+    },
+    "action_group_output": {
+      "key": "actionGroup.output.label"
+    },
+    "action_group_calibration": {
+      "key": "actionGroup.calibration.label"
+    },
+    "action_group_advanced": {
+      "key": "actionGroup.advanced.label"
+    },
+    "action_group_help": {
+      "key": "actionGroup.help.label"
+    },
+    "action_group_system": {
+      "key": "actionGroup.system.label"
+    },
+    "project_edit_menu": {
+      "key": "menuSection.edit.label"
+    },
+    "project_add_menu": {
+      "key": "menuSection.add.label"
+    },
     "prepare_preflight": {
       "key": "ui.slicePreflightPanel.slicePreflightIssues"
     },
-    "prepare_show": { "key": "ui.slicePreflightPanel.show" },
+    "prepare_show": {
+      "key": "ui.slicePreflightPanel.show"
+    },
     "prepare_hidden_issues": {
       "key": "ui.slicePreflightPanel.hiddenIssues",
-      "arguments": ["count"]
+      "arguments": [
+        "count"
+      ]
     },
-    "prepare_slice": { "key": "action.slice_active_plate.label" },
-    "prepare_cancel": { "key": "action.slice_cancel.label" },
-    "prepare_slice_all": { "key": "action.slice_all_plates.label" },
-    "send_action": { "key": "action.send_to_printer.label" },
-    "preview_heading": { "key": "ui.gcodePreviewPanel.gCodePreview" },
-    "preview_open": { "key": "ui.gcodePreviewPanel.openGCodeFile" },
-    "preview_loading": { "key": "ui.preview.loading" },
-    "preview_single_layer": { "key": "ui.gcodePreviewPanel.singleLayer" },
-    "preview_previous_moves": { "key": "ui.preview.previousMoves" },
-    "preview_next_moves": { "key": "ui.preview.nextMoves" },
-    "project_unsaved": { "key": "ui.projectSummaryPanel.unsavedChanges" },
-    "project_new": { "key": "action.file_new_project.label" },
-    "project_open": { "key": "action.file_open_project.label" },
-    "project_save": { "key": "action.file_save_project.label" },
-    "project_save_as": { "key": "action.file_save_project_as.label" },
-    "project_import": { "key": "action.file_import_model.label" },
-    "project_undo": { "key": "action.edit_undo.label" },
-    "project_redo": { "key": "action.edit_redo.label" },
-    "project_edit_select_all": { "key": "action.edit_select_all.label" },
-    "project_edit_deselect_all": { "key": "action.edit_deselect_all.label" },
-    "project_edit_duplicate": { "key": "action.edit_duplicate.label" },
-    "project_add_instance": { "key": "action.add_instance.label" },
-    "project_edit_delete_selected": { "key": "action.edit_delete_selected.label" },
-    "project_edit_delete_all": { "key": "action.edit_delete_all.label" },
-    "project_toggle_printable": { "key": "action.toggle_printable.label" },
-    "project_instance_to_object": { "key": "action.instance_to_object.label" },
-    "project_plates": { "key": "ui.xrDesk.plates" },
-    "project_add_plate": { "key": "action.add_plate.label" },
-    "project_duplicate_plate": { "key": "action.duplicate_plate.label" },
-    "project_delete_plate": { "key": "action.delete_plate.label" },
-    "project_rename_plate": { "key": "action.rename_plate.label" },
-    "project_activate_plate": { "key": "action.activate_plate.label" },
-    "project_set_plate_printable": { "key": "action.set_plate_printable.label" },
-    "workspace_tool_move": { "key": "action.tool_move.label" },
-    "workspace_tool_rotate": { "key": "action.tool_rotate.label" },
-    "workspace_tool_scale": { "key": "action.tool_scale.label" },
-    "project_lay_flat": { "key": "action.tool_lay_on_face.label" },
-    "project_mirror_x": { "key": "action.mirror_x.label" },
-    "project_mirror_y": { "key": "action.mirror_y.label" },
-    "project_mirror_z": { "key": "action.mirror_z.label" },
-    "project_reset_rotation": { "key": "action.reset_rotation.label" },
-    "project_reset_scale": { "key": "action.reset_scale.label" },
-    "project_center_on_plate": { "key": "action.center_on_plate.label" },
-    "project_scale_to_fit_volume": { "key": "action.scale_to_fit_volume.label" },
-    "project_drop_to_bed": { "key": "action.drop_to_bed.label" },
-    "project_arrange_all": { "key": "action.arrange_all.label" },
+    "prepare_slice": {
+      "key": "action.slice_active_plate.label"
+    },
+    "prepare_cancel": {
+      "key": "action.slice_cancel.label"
+    },
+    "prepare_slice_all": {
+      "key": "action.slice_all_plates.label"
+    },
+    "send_action": {
+      "key": "action.send_to_printer.label"
+    },
+    "preview_heading": {
+      "key": "ui.gcodePreviewPanel.gCodePreview"
+    },
+    "preview_open": {
+      "key": "ui.gcodePreviewPanel.openGCodeFile"
+    },
+    "preview_loading": {
+      "key": "ui.preview.loading"
+    },
+    "preview_single_layer": {
+      "key": "ui.gcodePreviewPanel.singleLayer"
+    },
+    "preview_previous_moves": {
+      "key": "ui.preview.previousMoves"
+    },
+    "preview_next_moves": {
+      "key": "ui.preview.nextMoves"
+    },
+    "project_unsaved": {
+      "key": "ui.projectSummaryPanel.unsavedChanges"
+    },
+    "project_new": {
+      "key": "action.file_new_project.label"
+    },
+    "project_open": {
+      "key": "action.file_open_project.label"
+    },
+    "project_save": {
+      "key": "action.file_save_project.label"
+    },
+    "project_save_as": {
+      "key": "action.file_save_project_as.label"
+    },
+    "project_import": {
+      "key": "action.file_import_model.label"
+    },
+    "project_undo": {
+      "key": "action.edit_undo.label"
+    },
+    "project_redo": {
+      "key": "action.edit_redo.label"
+    },
+    "project_edit_select_all": {
+      "key": "action.edit_select_all.label"
+    },
+    "project_edit_deselect_all": {
+      "key": "action.edit_deselect_all.label"
+    },
+    "project_edit_duplicate": {
+      "key": "action.edit_duplicate.label"
+    },
+    "project_add_instance": {
+      "key": "action.add_instance.label"
+    },
+    "project_edit_delete_selected": {
+      "key": "action.edit_delete_selected.label"
+    },
+    "project_edit_delete_all": {
+      "key": "action.edit_delete_all.label"
+    },
+    "project_toggle_printable": {
+      "key": "action.toggle_printable.label"
+    },
+    "project_instance_to_object": {
+      "key": "action.instance_to_object.label"
+    },
+    "project_plates": {
+      "key": "ui.xrDesk.plates"
+    },
+    "project_add_plate": {
+      "key": "action.add_plate.label"
+    },
+    "project_duplicate_plate": {
+      "key": "action.duplicate_plate.label"
+    },
+    "project_delete_plate": {
+      "key": "action.delete_plate.label"
+    },
+    "project_rename_plate": {
+      "key": "action.rename_plate.label"
+    },
+    "project_activate_plate": {
+      "key": "action.activate_plate.label"
+    },
+    "project_set_plate_printable": {
+      "key": "action.set_plate_printable.label"
+    },
+    "workspace_tool_move": {
+      "key": "action.tool_move.label"
+    },
+    "workspace_tool_rotate": {
+      "key": "action.tool_rotate.label"
+    },
+    "workspace_tool_scale": {
+      "key": "action.tool_scale.label"
+    },
+    "project_lay_flat": {
+      "key": "action.tool_lay_on_face.label"
+    },
+    "project_mirror_x": {
+      "key": "action.mirror_x.label"
+    },
+    "project_mirror_y": {
+      "key": "action.mirror_y.label"
+    },
+    "project_mirror_z": {
+      "key": "action.mirror_z.label"
+    },
+    "project_reset_rotation": {
+      "key": "action.reset_rotation.label"
+    },
+    "project_reset_scale": {
+      "key": "action.reset_scale.label"
+    },
+    "project_center_on_plate": {
+      "key": "action.center_on_plate.label"
+    },
+    "project_scale_to_fit_volume": {
+      "key": "action.scale_to_fit_volume.label"
+    },
+    "project_drop_to_bed": {
+      "key": "action.drop_to_bed.label"
+    },
+    "project_arrange_all": {
+      "key": "action.arrange_all.label"
+    },
     "workspace_lay_flat_hint": {
       "key": "workspace.orcaWorkspace.layFlatClickTheFacet"
     },
     "workspace_lay_flat_missed": {
       "key": "workspace.orcaWorkspace.clickAModelFacetTo"
     },
-    "workspace_paint": { "key": "action.tool_paint.label" },
-    "paint_title": { "key": "ui.paintPanel.colourPainting" },
-    "paint_channels": { "key": "ui.paintPanel.paintChannel" },
-    "paint_filaments": { "key": "ui.paintPanel.paintFilament" },
-    "paint_states": { "key": "ui.paintPanel.paintState" },
-    "paint_tools": { "key": "ui.paintPanel.paintTool" },
-    "paint_erase_all": { "key": "ui.paintPanel.eraseAllPaintingOnSelection" },
-    "paint_status_erase_default": { "key": "workspace.orcaWorkspace.paintColourEraseToDefault" },
-    "paint_status_not_in_project": { "key": "workspace.orcaWorkspace.thatFilamentIsNotIn" },
-    "paint_channel_color": { "key": "ui.xrToolRail.group.colour" },
-    "paint_tool_sphere": { "key": "action.add_primitive_sphere.label" },
-    "project_edit_cut": { "key": "action.edit_cut.label" },
-    "project_edit_copy": { "key": "action.edit_copy.label" },
-    "project_edit_paste": { "key": "action.edit_paste.label" },
-    "project_fill_bed": { "key": "action.fill_bed_with_instances.label" },
-    "project_add_cube": { "key": "action.add_primitive_cube.label" },
-    "project_add_cylinder": { "key": "action.add_primitive_cylinder.label" },
-    "project_add_sphere": { "key": "action.add_primitive_sphere.label" },
-    "project_add_cone": { "key": "action.add_primitive_cone.label" },
-    "project_add_disc": { "key": "action.add_primitive_disc.label" },
-    "project_add_torus": { "key": "action.add_primitive_torus.label" },
-    "project_add_modifier": { "key": "action.add_modifier.label" },
-    "project_add_support_enforcer": { "key": "action.add_support_enforcer.label" },
-    "project_add_support_blocker": { "key": "action.add_support_blocker.label" },
-    "project_set_negative_part": { "key": "action.set_negative_part.label" },
-    "project_set_negative_part_failed": { "key": "workspace.orcaWorkspace.setNegativePartFailed" },
-    "device_cancel": { "key": "persistence.cancel" },
-    "device_tab_camera": { "key": "startup.feature.camera" },
+    "workspace_paint": {
+      "key": "action.tool_paint.label"
+    },
+    "paint_title": {
+      "key": "ui.paintPanel.colourPainting"
+    },
+    "paint_channels": {
+      "key": "ui.paintPanel.paintChannel"
+    },
+    "paint_filaments": {
+      "key": "ui.paintPanel.paintFilament"
+    },
+    "paint_states": {
+      "key": "ui.paintPanel.paintState"
+    },
+    "paint_tools": {
+      "key": "ui.paintPanel.paintTool"
+    },
+    "paint_erase_all": {
+      "key": "ui.paintPanel.eraseAllPaintingOnSelection"
+    },
+    "paint_status_erase_default": {
+      "key": "workspace.orcaWorkspace.paintColourEraseToDefault"
+    },
+    "paint_status_not_in_project": {
+      "key": "workspace.orcaWorkspace.thatFilamentIsNotIn"
+    },
+    "paint_channel_color": {
+      "key": "ui.xrToolRail.group.colour"
+    },
+    "paint_tool_sphere": {
+      "key": "action.add_primitive_sphere.label"
+    },
+    "project_edit_cut": {
+      "key": "action.edit_cut.label"
+    },
+    "project_edit_copy": {
+      "key": "action.edit_copy.label"
+    },
+    "project_edit_paste": {
+      "key": "action.edit_paste.label"
+    },
+    "project_fill_bed": {
+      "key": "action.fill_bed_with_instances.label"
+    },
+    "project_add_cube": {
+      "key": "action.add_primitive_cube.label"
+    },
+    "project_add_cylinder": {
+      "key": "action.add_primitive_cylinder.label"
+    },
+    "project_add_sphere": {
+      "key": "action.add_primitive_sphere.label"
+    },
+    "project_add_cone": {
+      "key": "action.add_primitive_cone.label"
+    },
+    "project_add_disc": {
+      "key": "action.add_primitive_disc.label"
+    },
+    "project_add_torus": {
+      "key": "action.add_primitive_torus.label"
+    },
+    "project_add_modifier": {
+      "key": "action.add_modifier.label"
+    },
+    "project_add_support_enforcer": {
+      "key": "action.add_support_enforcer.label"
+    },
+    "project_add_support_blocker": {
+      "key": "action.add_support_blocker.label"
+    },
+    "project_set_negative_part": {
+      "key": "action.set_negative_part.label"
+    },
+    "project_set_negative_part_failed": {
+      "key": "workspace.orcaWorkspace.setNegativePartFailed"
+    },
+    "device_cancel": {
+      "key": "persistence.cancel"
+    },
+    "device_tab_camera": {
+      "key": "startup.feature.camera"
+    },
     "device_folder_empty": {
       "key": "ui.printerStoragePanel.thisFolderIsEmpty"
     },
@@ -145,78 +349,148 @@
     },
     "prepare_palette_filament": {
       "key": "app.main.paletteFilament",
-      "arguments": ["index"]
+      "arguments": [
+        "index"
+      ]
     },
-    "filament_add": { "key": "app.main.addAnAuxiliaryPaletteColor" },
+    "filament_add": {
+      "key": "app.main.addAnAuxiliaryPaletteColor"
+    },
     "filament_head_colour": {
       "key": "app.main.headColour",
-      "arguments": ["index"]
+      "arguments": [
+        "index"
+      ]
     },
     "filament_palette_colour": {
       "key": "app.main.paletteColour",
-      "arguments": ["index"]
+      "arguments": [
+        "index"
+      ]
     },
     "filament_head_nozzle": {
       "key": "app.main.headNozzle",
-      "arguments": ["index"]
+      "arguments": [
+        "index"
+      ]
     },
-    "filament_remove": { "key": "app.main.del" },
+    "filament_remove": {
+      "key": "app.main.del"
+    },
     "filament_remove_slot": {
       "key": "app.main.removePaletteSlot",
-      "arguments": ["index"]
+      "arguments": [
+        "index"
+      ]
     },
-    "filament_colour_apply": { "key": "ui.xrKeypad.apply" },
+    "filament_colour_apply": {
+      "key": "ui.xrKeypad.apply"
+    },
     "filament_bar_title": {
       "key": "ui.selectionFilamentBar.filamentForSelection"
     },
-    "filament_bar_selected": { "key": "ui.selectionFilamentBar.selectedScopes" },
-    "filament_bar_head": { "key": "ui.selectionFilamentBar.head" },
-    "filament_bar_mixed": { "key": "ui.selectionFilamentBar.mixed" },
-    "filament_bar_default": { "key": "ui.selectionFilamentBar.default" },
+    "filament_bar_selected": {
+      "key": "ui.selectionFilamentBar.selectedScopes"
+    },
+    "filament_bar_head": {
+      "key": "ui.selectionFilamentBar.head"
+    },
+    "filament_bar_mixed": {
+      "key": "ui.selectionFilamentBar.mixed"
+    },
+    "filament_bar_default": {
+      "key": "ui.selectionFilamentBar.default"
+    },
     "filament_bar_default_hint": {
       "key": "ui.selectionFilamentBar.removeLocalAssignment"
     },
-    "filament_bar_assigning": { "key": "ui.selectionFilamentBar.assigning" },
-    "filament_bar_assigned": { "key": "ui.selectionFilamentBar.assigned" },
+    "filament_bar_assigning": {
+      "key": "ui.selectionFilamentBar.assigning"
+    },
+    "filament_bar_assigned": {
+      "key": "ui.selectionFilamentBar.assigned"
+    },
     "filament_bar_cleared": {
       "key": "ui.selectionFilamentBar.assignmentCleared"
     },
-    "workspace_selection": { "key": "ui.xrObjectsPanel.selection" },
-    "workspace_nothing_selected": { "key": "ui.xrObjectsPanel.noSelection" },
-    "workspace_plate_empty": { "key": "ui.xrObjectsPanel.empty" },
-    "view_camera_default": { "key": "action.view_camera_default.label" },
-    "view_camera_top": { "key": "action.view_camera_top.label" },
-    "view_camera_front": { "key": "action.view_camera_front.label" },
-    "view_camera_left": { "key": "action.view_camera_left.label" },
-    "view_camera_right": { "key": "action.view_camera_right.label" },
-    "view_camera_rear": { "key": "action.view_camera_rear.label" },
-    "view_camera_bottom": { "key": "action.view_camera_bottom.label" },
-    "theme_switch_dark": { "key": "app.main.switchToDarkMode" },
-    "theme_switch_light": { "key": "app.main.switchToLightMode" },
-    "vf_open_library": { "key": "app.main.openVirtualFilamentLibrary" },
-    "vf_add": { "key": "ui.virtualFilamentLibrary.addVirtualFilament" },
+    "workspace_selection": {
+      "key": "ui.xrObjectsPanel.selection"
+    },
+    "workspace_nothing_selected": {
+      "key": "ui.xrObjectsPanel.noSelection"
+    },
+    "workspace_plate_empty": {
+      "key": "ui.xrObjectsPanel.empty"
+    },
+    "view_camera_default": {
+      "key": "action.view_camera_default.label"
+    },
+    "view_camera_top": {
+      "key": "action.view_camera_top.label"
+    },
+    "view_camera_front": {
+      "key": "action.view_camera_front.label"
+    },
+    "view_camera_left": {
+      "key": "action.view_camera_left.label"
+    },
+    "view_camera_right": {
+      "key": "action.view_camera_right.label"
+    },
+    "view_camera_rear": {
+      "key": "action.view_camera_rear.label"
+    },
+    "view_camera_bottom": {
+      "key": "action.view_camera_bottom.label"
+    },
+    "theme_switch_dark": {
+      "key": "app.main.switchToDarkMode"
+    },
+    "theme_switch_light": {
+      "key": "app.main.switchToLightMode"
+    },
+    "vf_open_library": {
+      "key": "app.main.openVirtualFilamentLibrary"
+    },
+    "vf_add": {
+      "key": "ui.virtualFilamentLibrary.addVirtualFilament"
+    },
     "vf_physical_title": {
       "key": "ui.virtualFilamentLibrary.physicalComponents"
     },
     "vf_physical_help": {
       "key": "ui.virtualFilamentLibrary.recipesReferenceTheseStablePhysical"
     },
-    "vf_library_title": { "key": "ui.virtualFilamentLibrary.virtualLibrary" },
-    "vf_delete": { "key": "action.delete_models.label" },
+    "vf_library_title": {
+      "key": "ui.virtualFilamentLibrary.virtualLibrary"
+    },
+    "vf_delete": {
+      "key": "action.delete_models.label"
+    },
     "vf_dialog_description": {
       "key": "ui.virtualFilamentLibrary.choosePhysicalHeadsAndAuthor"
     },
-    "vf_badge_color": { "key": "ui.virtualFilamentLibrary.displayBadgeColor" },
+    "vf_badge_color": {
+      "key": "ui.virtualFilamentLibrary.displayBadgeColor"
+    },
     "vf_choose_badge": {
       "key": "ui.virtualFilamentLibrary.chooseDisplayBadgeColor"
     },
-    "vf_hex_placeholder": { "key": "ui.virtualFilamentLibrary.rRGGBB" },
-    "vf_authoring_mode": { "key": "ui.virtualFilamentLibrary.authoringMode" },
-    "vf_choose_head": { "key": "ui.virtualFilamentLibrary.chooseAPhysicalHead" },
+    "vf_hex_placeholder": {
+      "key": "ui.virtualFilamentLibrary.rRGGBB"
+    },
+    "vf_authoring_mode": {
+      "key": "ui.virtualFilamentLibrary.authoringMode"
+    },
+    "vf_choose_head": {
+      "key": "ui.virtualFilamentLibrary.chooseAPhysicalHead"
+    },
     "vf_component_b_percent": {
       "key": "ui.virtualFilamentLibrary.componentBPercent"
     },
-    "vf_exact_percent": { "key": "ui.virtualFilamentLibrary.exactPercent" },
+    "vf_exact_percent": {
+      "key": "ui.virtualFilamentLibrary.exactPercent"
+    },
     "vf_triangle_proportions": {
       "key": "ui.virtualFilamentLibrary.triangleProportions"
     },
@@ -232,14 +506,24 @@
     "vf_cycle_pattern": {
       "key": "ui.virtualFilamentLibrary.manualCyclePattern"
     },
-    "vf_cycle_help": { "key": "ui.virtualFilamentLibrary.useCompact19IDs" },
+    "vf_cycle_help": {
+      "key": "ui.virtualFilamentLibrary.useCompact19IDs"
+    },
     "vf_insert_token_group": {
       "key": "ui.virtualFilamentLibrary.insertPhysicalFilamentToken"
     },
-    "vf_new_group": { "key": "ui.virtualFilamentLibrary.newPerimeterGroup" },
-    "vf_target": { "key": "ui.virtualFilamentLibrary.targetHexColor" },
-    "vf_minimum": { "key": "ui.virtualFilamentLibrary.minimumComponent" },
-    "vf_ranked": { "key": "ui.virtualFilamentLibrary.rankedSuppliedCandidates" },
+    "vf_new_group": {
+      "key": "ui.virtualFilamentLibrary.newPerimeterGroup"
+    },
+    "vf_target": {
+      "key": "ui.virtualFilamentLibrary.targetHexColor"
+    },
+    "vf_minimum": {
+      "key": "ui.virtualFilamentLibrary.minimumComponent"
+    },
+    "vf_ranked": {
+      "key": "ui.virtualFilamentLibrary.rankedSuppliedCandidates"
+    },
     "vf_searching": {
       "key": "ui.virtualFilamentLibrary.searchingTheCompatiblePhysicalPalette"
     },
@@ -252,32 +536,72 @@
     "vf_delete_description": {
       "key": "ui.virtualFilamentLibrary.deletionIsSentAsOne"
     },
-    "project_split_to_objects": { "key": "action.split_to_objects.label" },
-    "project_split_to_parts": { "key": "action.split_to_parts.label" },
-    "project_simplify_model": { "key": "action.simplify_model.label" },
-    "action_repair_model": { "key": "action.repair_model.label" },
-    "action_hint_repair_model": { "key": "action.repair_model.hint" },
-    "action_mesh_boolean_union": { "key": "action.mesh_boolean_union.label" },
-    "action_hint_mesh_boolean_union": { "key": "action.mesh_boolean_union.hint" },
-    "action_mesh_boolean_subtract": { "key": "action.mesh_boolean_subtract.label" },
-    "action_hint_mesh_boolean_subtract": { "key": "action.mesh_boolean_subtract.hint" },
-    "action_mesh_boolean_intersection": { "key": "action.mesh_boolean_intersection.label" },
-    "action_hint_mesh_boolean_intersection": { "key": "action.mesh_boolean_intersection.hint" },
-    "repair_select_model": { "key": "workspace.orcaWorkspace.selectAModelToRepair" },
-    "repair_completed": { "key": "workspace.orcaWorkspace.modelRepairedSuccess" },
-    "repair_failed": { "key": "workspace.orcaWorkspace.repairFailed" },
-    "boolean_select_models": { "key": "workspace.orcaWorkspace.selectTwoModelsForBoolean" },
-    "boolean_completed": { "key": "workspace.orcaWorkspace.booleanCompleted" },
-    "boolean_failed": { "key": "workspace.orcaWorkspace.booleanFailed" },
-    "project_measure": { "key": "action.tool_measure.label" },
+    "project_split_to_objects": {
+      "key": "action.split_to_objects.label"
+    },
+    "project_split_to_parts": {
+      "key": "action.split_to_parts.label"
+    },
+    "project_simplify_model": {
+      "key": "action.simplify_model.label"
+    },
+    "action_repair_model": {
+      "key": "action.repair_model.label"
+    },
+    "action_hint_repair_model": {
+      "key": "action.repair_model.hint"
+    },
+    "action_mesh_boolean_union": {
+      "key": "action.mesh_boolean_union.label"
+    },
+    "action_hint_mesh_boolean_union": {
+      "key": "action.mesh_boolean_union.hint"
+    },
+    "action_mesh_boolean_subtract": {
+      "key": "action.mesh_boolean_subtract.label"
+    },
+    "action_hint_mesh_boolean_subtract": {
+      "key": "action.mesh_boolean_subtract.hint"
+    },
+    "action_mesh_boolean_intersection": {
+      "key": "action.mesh_boolean_intersection.label"
+    },
+    "action_hint_mesh_boolean_intersection": {
+      "key": "action.mesh_boolean_intersection.hint"
+    },
+    "repair_select_model": {
+      "key": "workspace.orcaWorkspace.selectAModelToRepair"
+    },
+    "repair_completed": {
+      "key": "workspace.orcaWorkspace.modelRepairedSuccess"
+    },
+    "repair_failed": {
+      "key": "workspace.orcaWorkspace.repairFailed"
+    },
+    "boolean_select_models": {
+      "key": "workspace.orcaWorkspace.selectTwoModelsForBoolean"
+    },
+    "boolean_completed": {
+      "key": "workspace.orcaWorkspace.booleanCompleted"
+    },
+    "boolean_failed": {
+      "key": "workspace.orcaWorkspace.booleanFailed"
+    },
+    "project_measure": {
+      "key": "action.tool_measure.label"
+    },
     "project_split_parts_done": {
       "key": "workspace.orcaWorkspace.splitToPartsSuccess"
     },
     "project_split_parts_failed": {
       "key": "workspace.orcaWorkspace.splitToPartsFailed"
     },
-    "simplify_decimate_by": { "key": "ui.simplifyPanel.decimateBy" },
-    "simplify_apply": { "key": "ui.xrKeypad.apply" },
+    "simplify_decimate_by": {
+      "key": "ui.simplifyPanel.decimateBy"
+    },
+    "simplify_apply": {
+      "key": "ui.xrKeypad.apply"
+    },
     "simplify_select_model": {
       "key": "ui.simplifyPanel.selectAModelToSimplify"
     },
@@ -296,343 +620,1188 @@
     "measure_start": {
       "key": "workspace.orcaWorkspace.measureClickTwoFeaturesA"
     },
-    "measure_cleared": { "key": "workspace.orcaWorkspace.measurementCleared" },
+    "measure_cleared": {
+      "key": "workspace.orcaWorkspace.measurementCleared"
+    },
     "measure_missed": {
       "key": "workspace.orcaWorkspace.clickAModelSurfaceTo"
     },
-    "measure_picked_features": { "key": "ui.measurePanel.pickedFeatures" },
-    "action_delete_models": { "key": "action.delete_models.label" },
-    "action_tool_support_paint": { "key": "action.tool_support_paint.label" },
-    "action_tool_seam_paint": { "key": "action.tool_seam_paint.label" },
-    "action_tool_fuzzy_skin": { "key": "action.tool_fuzzy_skin.label" },
-    "action_hint_file_new_project": { "key": "action.file_new_project.hint" },
-    "action_hint_file_open_project": { "key": "action.file_open_project.hint" },
-    "action_hint_file_import_model": { "key": "action.file_import_model.hint" },
-    "action_hint_file_save_project": { "key": "action.file_save_project.hint" },
-    "action_hint_file_save_project_as": { "key": "action.file_save_project_as.hint" },
-    "action_hint_edit_undo": { "key": "action.edit_undo.hint" },
-    "action_hint_edit_redo": { "key": "action.edit_redo.hint" },
-    "action_hint_edit_cut": { "key": "action.edit_cut.hint" },
-    "action_hint_edit_copy": { "key": "action.edit_copy.hint" },
-    "action_hint_edit_paste": { "key": "action.edit_paste.hint" },
-    "action_hint_edit_duplicate": { "key": "action.edit_duplicate.hint" },
-    "action_hint_edit_delete_selected": { "key": "action.edit_delete_selected.hint" },
-    "action_hint_edit_delete_all": { "key": "action.edit_delete_all.hint" },
-    "action_hint_edit_select_all": { "key": "action.edit_select_all.hint" },
-    "action_hint_edit_deselect_all": { "key": "action.edit_deselect_all.hint" },
-    "action_hint_view_camera_default": { "key": "action.view_camera_default.hint" },
-    "action_hint_view_camera_top": { "key": "action.view_camera_top.hint" },
-    "action_hint_view_camera_front": { "key": "action.view_camera_front.hint" },
-    "action_hint_view_camera_left": { "key": "action.view_camera_left.hint" },
-    "action_hint_view_camera_right": { "key": "action.view_camera_right.hint" },
-    "action_hint_view_camera_rear": { "key": "action.view_camera_rear.hint" },
-    "action_hint_view_camera_bottom": { "key": "action.view_camera_bottom.hint" },
-    "action_hint_tool_move": { "key": "action.tool_move.hint" },
-    "action_hint_tool_rotate": { "key": "action.tool_rotate.hint" },
-    "action_hint_tool_scale": { "key": "action.tool_scale.hint" },
-    "action_hint_tool_lay_on_face": { "key": "action.tool_lay_on_face.hint" },
-    "action_hint_tool_paint": { "key": "action.tool_paint.hint" },
-    "action_hint_add_instance": { "key": "action.add_instance.hint" },
-    "action_hint_instance_to_object": { "key": "action.instance_to_object.hint" },
-    "action_hint_fill_bed_with_instances": { "key": "action.fill_bed_with_instances.hint" },
-    "action_hint_mirror_x": { "key": "action.mirror_x.hint" },
-    "action_hint_mirror_y": { "key": "action.mirror_y.hint" },
-    "action_hint_mirror_z": { "key": "action.mirror_z.hint" },
-    "action_hint_reset_rotation": { "key": "action.reset_rotation.hint" },
-    "action_hint_reset_scale": { "key": "action.reset_scale.hint" },
-    "action_hint_center_on_plate": { "key": "action.center_on_plate.hint" },
-    "action_hint_toggle_printable": { "key": "action.toggle_printable.hint" },
-    "action_hint_scale_to_fit_volume": { "key": "action.scale_to_fit_volume.hint" },
-    "action_hint_drop_to_bed": { "key": "action.drop_to_bed.hint" },
-    "action_hint_delete_models": { "key": "action.delete_models.hint" },
-    "action_hint_add_primitive_cube": { "key": "action.add_primitive_cube.hint" },
-    "action_hint_add_primitive_cylinder": { "key": "action.add_primitive_cylinder.hint" },
-    "action_hint_add_primitive_sphere": { "key": "action.add_primitive_sphere.hint" },
-    "action_hint_add_primitive_cone": { "key": "action.add_primitive_cone.hint" },
-    "action_hint_add_primitive_disc": { "key": "action.add_primitive_disc.hint" },
-    "action_hint_add_primitive_torus": { "key": "action.add_primitive_torus.hint" },
-    "action_hint_simplify_model": { "key": "action.simplify_model.hint" },
-    "action_hint_add_plate": { "key": "action.add_plate.hint" },
-    "action_hint_delete_plate": { "key": "action.delete_plate.hint" },
-    "action_hint_arrange_all": { "key": "action.arrange_all.hint" },
-    "action_hint_duplicate_plate": { "key": "action.duplicate_plate.hint" },
-    "action_hint_split_to_objects": { "key": "action.split_to_objects.hint" },
-    "action_hint_split_to_parts": { "key": "action.split_to_parts.hint" },
-    "action_hint_tool_support_paint": { "key": "action.tool_support_paint.hint" },
-    "action_hint_tool_seam_paint": { "key": "action.tool_seam_paint.hint" },
-    "action_hint_tool_fuzzy_skin": { "key": "action.tool_fuzzy_skin.hint" },
-    "action_hint_tool_measure": { "key": "action.tool_measure.hint" },
-    "workspace_brim_ears": { "key": "action.tool_brim_ears.label" },
-    "brim_ears_auto": { "key": "action.brim_ears_auto.label" },
-    "brim_ears_clear": { "key": "action.brim_ears_clear.label" },
-    "brim_ears_title": { "key": "ui.brimEarsPanel.brimEars" },
-    "brim_ears_radius": { "key": "ui.brimEarsPanel.earRadiusMm" },
-    "brim_ears_corners_hint": { "key": "ui.brimEarsPanel.findTheFirstLayerCorners" },
-    "brim_ears_placed_list": { "key": "ui.brimEarsPanel.placedBrimEars" },
-    "brim_ears_start": { "key": "workspace.orcaWorkspace.brimEarsClickTheModel" },
+    "measure_picked_features": {
+      "key": "ui.measurePanel.pickedFeatures"
+    },
+    "action_delete_models": {
+      "key": "action.delete_models.label"
+    },
+    "action_tool_support_paint": {
+      "key": "action.tool_support_paint.label"
+    },
+    "action_tool_seam_paint": {
+      "key": "action.tool_seam_paint.label"
+    },
+    "action_tool_fuzzy_skin": {
+      "key": "action.tool_fuzzy_skin.label"
+    },
+    "action_hint_file_new_project": {
+      "key": "action.file_new_project.hint"
+    },
+    "action_hint_file_open_project": {
+      "key": "action.file_open_project.hint"
+    },
+    "action_hint_file_import_model": {
+      "key": "action.file_import_model.hint"
+    },
+    "action_hint_file_save_project": {
+      "key": "action.file_save_project.hint"
+    },
+    "action_hint_file_save_project_as": {
+      "key": "action.file_save_project_as.hint"
+    },
+    "action_hint_edit_undo": {
+      "key": "action.edit_undo.hint"
+    },
+    "action_hint_edit_redo": {
+      "key": "action.edit_redo.hint"
+    },
+    "action_hint_edit_cut": {
+      "key": "action.edit_cut.hint"
+    },
+    "action_hint_edit_copy": {
+      "key": "action.edit_copy.hint"
+    },
+    "action_hint_edit_paste": {
+      "key": "action.edit_paste.hint"
+    },
+    "action_hint_edit_duplicate": {
+      "key": "action.edit_duplicate.hint"
+    },
+    "action_hint_edit_delete_selected": {
+      "key": "action.edit_delete_selected.hint"
+    },
+    "action_hint_edit_delete_all": {
+      "key": "action.edit_delete_all.hint"
+    },
+    "action_hint_edit_select_all": {
+      "key": "action.edit_select_all.hint"
+    },
+    "action_hint_edit_deselect_all": {
+      "key": "action.edit_deselect_all.hint"
+    },
+    "action_hint_view_camera_default": {
+      "key": "action.view_camera_default.hint"
+    },
+    "action_hint_view_camera_top": {
+      "key": "action.view_camera_top.hint"
+    },
+    "action_hint_view_camera_front": {
+      "key": "action.view_camera_front.hint"
+    },
+    "action_hint_view_camera_left": {
+      "key": "action.view_camera_left.hint"
+    },
+    "action_hint_view_camera_right": {
+      "key": "action.view_camera_right.hint"
+    },
+    "action_hint_view_camera_rear": {
+      "key": "action.view_camera_rear.hint"
+    },
+    "action_hint_view_camera_bottom": {
+      "key": "action.view_camera_bottom.hint"
+    },
+    "action_hint_tool_move": {
+      "key": "action.tool_move.hint"
+    },
+    "action_hint_tool_rotate": {
+      "key": "action.tool_rotate.hint"
+    },
+    "action_hint_tool_scale": {
+      "key": "action.tool_scale.hint"
+    },
+    "action_hint_tool_lay_on_face": {
+      "key": "action.tool_lay_on_face.hint"
+    },
+    "action_hint_tool_paint": {
+      "key": "action.tool_paint.hint"
+    },
+    "action_hint_add_instance": {
+      "key": "action.add_instance.hint"
+    },
+    "action_hint_instance_to_object": {
+      "key": "action.instance_to_object.hint"
+    },
+    "action_hint_fill_bed_with_instances": {
+      "key": "action.fill_bed_with_instances.hint"
+    },
+    "action_hint_mirror_x": {
+      "key": "action.mirror_x.hint"
+    },
+    "action_hint_mirror_y": {
+      "key": "action.mirror_y.hint"
+    },
+    "action_hint_mirror_z": {
+      "key": "action.mirror_z.hint"
+    },
+    "action_hint_reset_rotation": {
+      "key": "action.reset_rotation.hint"
+    },
+    "action_hint_reset_scale": {
+      "key": "action.reset_scale.hint"
+    },
+    "action_hint_center_on_plate": {
+      "key": "action.center_on_plate.hint"
+    },
+    "action_hint_toggle_printable": {
+      "key": "action.toggle_printable.hint"
+    },
+    "action_hint_scale_to_fit_volume": {
+      "key": "action.scale_to_fit_volume.hint"
+    },
+    "action_hint_drop_to_bed": {
+      "key": "action.drop_to_bed.hint"
+    },
+    "action_hint_delete_models": {
+      "key": "action.delete_models.hint"
+    },
+    "action_hint_add_primitive_cube": {
+      "key": "action.add_primitive_cube.hint"
+    },
+    "action_hint_add_primitive_cylinder": {
+      "key": "action.add_primitive_cylinder.hint"
+    },
+    "action_hint_add_primitive_sphere": {
+      "key": "action.add_primitive_sphere.hint"
+    },
+    "action_hint_add_primitive_cone": {
+      "key": "action.add_primitive_cone.hint"
+    },
+    "action_hint_add_primitive_disc": {
+      "key": "action.add_primitive_disc.hint"
+    },
+    "action_hint_add_primitive_torus": {
+      "key": "action.add_primitive_torus.hint"
+    },
+    "action_hint_simplify_model": {
+      "key": "action.simplify_model.hint"
+    },
+    "action_hint_add_plate": {
+      "key": "action.add_plate.hint"
+    },
+    "action_hint_delete_plate": {
+      "key": "action.delete_plate.hint"
+    },
+    "action_hint_arrange_all": {
+      "key": "action.arrange_all.hint"
+    },
+    "action_hint_duplicate_plate": {
+      "key": "action.duplicate_plate.hint"
+    },
+    "action_hint_split_to_objects": {
+      "key": "action.split_to_objects.hint"
+    },
+    "action_hint_split_to_parts": {
+      "key": "action.split_to_parts.hint"
+    },
+    "action_hint_tool_support_paint": {
+      "key": "action.tool_support_paint.hint"
+    },
+    "action_hint_tool_seam_paint": {
+      "key": "action.tool_seam_paint.hint"
+    },
+    "action_hint_tool_fuzzy_skin": {
+      "key": "action.tool_fuzzy_skin.hint"
+    },
+    "action_hint_tool_measure": {
+      "key": "action.tool_measure.hint"
+    },
+    "workspace_brim_ears": {
+      "key": "action.tool_brim_ears.label"
+    },
+    "brim_ears_auto": {
+      "key": "action.brim_ears_auto.label"
+    },
+    "brim_ears_clear": {
+      "key": "action.brim_ears_clear.label"
+    },
+    "brim_ears_title": {
+      "key": "ui.brimEarsPanel.brimEars"
+    },
+    "brim_ears_radius": {
+      "key": "ui.brimEarsPanel.earRadiusMm"
+    },
+    "brim_ears_corners_hint": {
+      "key": "ui.brimEarsPanel.findTheFirstLayerCorners"
+    },
+    "brim_ears_placed_list": {
+      "key": "ui.brimEarsPanel.placedBrimEars"
+    },
+    "brim_ears_start": {
+      "key": "workspace.orcaWorkspace.brimEarsClickTheModel"
+    },
     "brim_ears_failed": {
       "key": "workspace.orcaWorkspace.brimEarsFailed",
-      "arguments": ["reason"]
+      "arguments": [
+        "reason"
+      ]
     },
-    "brim_ears_select_auto": { "key": "workspace.orcaWorkspace.selectOneModelPartBefore" },
-    "brim_ears_select_clear": { "key": "workspace.orcaWorkspace.selectOneModelPartBefore2" },
-    "brim_ears_select_tap": { "key": "workspace.orcaWorkspace.selectOneModelPartBefore3" },
-    "brim_ears_no_geometry": { "key": "workspace.orcaWorkspace.thatPartHasNoGeometry" },
-    "brim_ears_none": { "key": "workspace.orcaWorkspace.thatPartHasNoBrim" },
-    "brim_ears_cleared": { "key": "workspace.orcaWorkspace.clearedTheBrimEarsUndo" },
-    "brim_ears_removed": { "key": "workspace.orcaWorkspace.removedABrimEar" },
-    "brim_ears_missed": { "key": "workspace.orcaWorkspace.clickTheSelectedModelTo" },
-    "action_hint_tool_brim_ears": { "key": "action.tool_brim_ears.hint" },
-    "action_hint_brim_ears_auto": { "key": "action.brim_ears_auto.hint" },
-    "action_hint_brim_ears_clear": { "key": "action.brim_ears_clear.hint" },
-    "workspace_assembly": { "key": "action.tool_assembly.label" },
-    "assembly_align_action": { "key": "action.assembly_align.label" },
-    "assembly_explode": { "key": "action.assembly_explode.label" },
-    "action_hint_tool_assembly": { "key": "action.tool_assembly.hint" },
-    "action_hint_assembly_align": { "key": "action.assembly_align.hint" },
-    "action_hint_assembly_explode": { "key": "action.assembly_explode.hint" },
-    "assembly_start": { "key": "actions.actionContext.assemblyPickAFaceOn" },
-    "assembly_gap": { "key": "ui.measurePanel.gapMm" },
-    "assembly_pick_two": { "key": "workspace.orcaWorkspace.pickTwoFacesBeforeAligning" },
-    "assembly_different_models": { "key": "workspace.orcaWorkspace.assemblyAlignmentNeedsTwoFaces" },
-    "assembly_model_gone": { "key": "workspace.orcaWorkspace.theModelToAlignIs" },
-    "assembly_already_aligned": { "key": "workspace.orcaWorkspace.thoseFacesAreAlreadyAligned" },
-    "assembly_explosion_refused": { "key": "workspace.orcaWorkspace.anExplosionFactorMustBe" },
-    "workspace_emboss": { "key": "action.add_emboss.label" },
-    "emboss_load_font": { "key": "action.emboss_load_font.label" },
-    "emboss_apply": { "key": "action.emboss_apply.label" },
-    "workspace_svg_part": { "key": "action.tool_svg.label" },
-    "svg_load_drawing": { "key": "action.svg_load_drawing.label" },
-    "svg_apply": { "key": "action.svg_apply.label" },
-    "emboss_title": { "key": "ui.embossPanel.embossText" },
-    "svg_title": { "key": "ui.svgPanel.sVGPart" },
-    "svg_unsupported": { "key": "ui.svgPanel.partsOfThisDrawingThat" },
-    "emboss_choose_font": { "key": "workspace.orcaWorkspace.chooseATtfFontFile" },
-    "emboss_select_part": { "key": "workspace.orcaWorkspace.selectOneModelPartTo" },
-    "svg_choose_drawing": { "key": "workspace.orcaWorkspace.chooseAnSvgFileBefore" },
-    "svg_select_part": { "key": "workspace.orcaWorkspace.selectOneModelPartTo2" },
-    "action_hint_add_emboss": { "key": "action.add_emboss.hint" },
-    "action_hint_emboss_apply": { "key": "action.emboss_apply.hint" },
-    "action_hint_tool_svg": { "key": "action.tool_svg.hint" },
-    "action_hint_svg_load_drawing": { "key": "action.svg_load_drawing.hint" },
-    "action_hint_svg_apply": { "key": "action.svg_apply.hint" },
-    "project_auto_place_wipe": { "key": "action.auto_place_wipe.label" },
-    "action_hint_auto_place_wipe": { "key": "action.auto_place_wipe.hint" },
-    "wipe_tower_placed": { "key": "workspace.orcaWorkspace.autoPlacedWipeTower" },
-    "wipe_tower_failed": { "key": "workspace.orcaWorkspace.autoPlaceWipeTowerFailed" },
-    "wipe_tower_auto_on": { "key": "workspace.orcaWorkspace.wipeTowerAutoEnabled" },
-    "wipe_tower_auto_off": { "key": "workspace.orcaWorkspace.wipeTowerAutoDisabled" },
-    "action_hint_add_modifier": { "key": "action.add_modifier.hint" },
-    "action_hint_add_support_enforcer": { "key": "action.add_support_enforcer.hint" },
-    "action_hint_add_support_blocker": { "key": "action.add_support_blocker.hint" },
-    "action_hint_set_negative_part": { "key": "action.set_negative_part.hint" },
-    "workspace_variable_layer_height": { "key": "action.variable_layer_height.label" },
-    "action_hint_variable_layer_height": { "key": "action.variable_layer_height.hint" },
-    "workspace_applied_adaptive_layer_height": { "key": "workspace.orcaWorkspace.appliedAdaptiveLayerHeight" },
-    "workspace_variable_layer_height_failed": { "key": "workspace.orcaWorkspace.variableLayerHeightFailed" },
-    "project_add_magnet": { "key": "action.add_magnet.label" },
-    "action_hint_add_magnet": { "key": "action.add_magnet.hint" },
-    "workspace_added_magnet_hole": { "key": "workspace.orcaWorkspace.addedMagnetHole" },
-    "workspace_add_magnet_hole_failed": { "key": "workspace.orcaWorkspace.addMagnetHoleFailed" },
-    "preview_layer_events": { "key": "ui.layerEventPanel.layerEvents" },
-    "action_hint_slice_active_plate": { "key": "action.slice_active_plate.hint" },
-    "action_hint_slice_all_plates": { "key": "action.slice_all_plates.hint" },
-    "action_hint_slice_cancel": { "key": "action.slice_cancel.hint" },
-    "action_hint_send_to_printer": { "key": "action.send_to_printer.hint" },
-    "export_gcode": { "key": "action.file_export_gcode.label" },
-    "export_all_plates": { "key": "action.file_export_all_plates.label" },
-    "export_stl": { "key": "action.file_export_stl.label" },
-    "export_all_stls": { "key": "action.file_export_all_stls.label" },
-    "export_download": { "key": "action.save_gcode_to_downloads.label" },
-    "export_download_all": { "key": "action.save_all_plate_gcode.label" },
-    "action_hint_file_export_gcode": { "key": "action.file_export_gcode.hint" },
-    "action_hint_file_export_all_plates": { "key": "action.file_export_all_plates.hint" },
-    "action_hint_file_export_stl": { "key": "action.file_export_stl.hint" },
-    "action_hint_file_export_all_stls": { "key": "action.file_export_all_stls.hint" },
-    "action_hint_save_gcode_to_downloads": { "key": "action.save_gcode_to_downloads.hint" },
-    "action_hint_save_all_plate_gcode": { "key": "action.save_all_plate_gcode.hint" },
-    "export_slice_all_first": { "key": "workspace.orcaWorkspace.sliceAllPlatesBeforeDownloading" },
-    "export_stale": { "key": "workspace.orcaWorkspace.theProjectChangedSinceThe" },
-    "export_nothing_to_slice": { "key": "workspace.orcaWorkspace.noPrintablePlateHasModels" },
-    "export_all_stls_done": { "key": "workspace.orcaWorkspace.exportedAllStls" },
-    "export_stl_failed": { "key": "workspace.orcaWorkspace.stlExportFailed" },
-    "export_3mf": { "key": "action.file_export_3mf.label" },
-    "action_hint_file_export_3mf": { "key": "action.file_export_3mf.hint" },
-    "export_3mf_done": { "key": "workspace.orcaWorkspace.exported3mf" },
-    "export_3mf_failed": { "key": "workspace.orcaWorkspace.export3mfFailed" },
-    "export_config": { "key": "action.file_export_config.label" },
-    "action_hint_file_export_config": { "key": "action.file_export_config.hint" },
-    "export_config_done": { "key": "workspace.orcaWorkspace.exportedConfig" },
-    "export_config_no_profile": { "key": "workspace.orcaWorkspace.noActiveProfileToExport" },
-    "export_obj": { "key": "action.file_export_obj.label" },
-    "action_hint_file_export_obj": { "key": "action.file_export_obj.hint" },
-    "export_obj_done": { "key": "workspace.orcaWorkspace.toolpathsExportedAsObj" },
-    "export_obj_failed": { "key": "workspace.orcaWorkspace.exportObjFailed" },
-    "export_obj_slice_first": { "key": "workspace.orcaWorkspace.slicePlateBeforeExportingObj" },
-    "export_logs": { "key": "action.file_export_logs.label" },
-    "action_hint_file_export_logs": { "key": "action.file_export_logs.hint" },
-    "export_logs_cancelled": { "key": "app.main.diagnosticsExportCancelledNothingWas" },
-    "palette_search": { "key": "ui.xrCommandPalette.search" },
-    "palette_empty": { "key": "ui.commandPalette.noMatchingActions" },
-    "settings_for": { "key": "ui.scopedSettingsPanel.settingsFor" },
-    "settings_detail_level": { "key": "ui.generatedSettingsPanel.detailLevel" },
-    "settings_search": { "key": "ui.generatedSettingsPanel.searchSettings" },
-    "settings_search_hint": { "key": "ui.generatedSettingsPanel.nameKeyCategoryTooltipAlias" },
-    "settings_no_match": { "key": "ui.generatedSettingsPanel.noSettingsMatchThisSearch" },
-    "settings_use_inherited": { "key": "ui.generatedSettingsPanel.useInherited" },
-    "settings_use_default": { "key": "ui.generatedSettingsPanel.useDefault" },
-    "settings_draft_changed": { "key": "ui.generatedSettingsPanel.draftChanged" },
-    "settings_structured_editor": { "key": "ui.generatedSettingsPanel.structuredEditor" },
-    "settings_not_applicable": { "key": "ui.generatedSettingsPanel.notApplicable" },
-    "settings_not_set": { "key": "ui.generatedSettingsPanel.notSet" },
-    "settings_structured_note": { "key": "ui.generatedSettingsPanel.managedByTheStructuredFullSpectrum" },
-    "settings_dependency_note": { "key": "ui.generatedSettingsPanel.notApplicableWhileSubdivideMix" },
-    "settings_conflict": { "key": "ui.generatedSettingsPanel.projectSettingsChangedAfterThis" },
-    "settings_discard_reload": { "key": "ui.generatedSettingsPanel.discardDraftAndReloadCurrent" },
-    "roles_heading": { "key": "ui.semanticObjectEditor.volumeRole" },
-    "roles_select_hint": { "key": "ui.semanticObjectEditor.selectAPartOrSemantic" },
-    "roles_convert_to": { "key": "ui.semanticObjectEditor.convertTo" },
-    "ranges_heading": { "key": "ui.semanticObjectEditor.heightRanges" },
-    "ranges_none": { "key": "ui.semanticObjectEditor.noHeightRangesAreDefined" },
-    "ranges_select_hint": { "key": "ui.semanticObjectEditor.selectAHeightRangeTo" },
-    "ranges_split": { "key": "ui.semanticObjectEditor.splitRange" },
-    "ranges_split_button": { "key": "ui.semanticObjectEditor.splitRange2" },
-    "ranges_merge": { "key": "ui.semanticObjectEditor.mergeRange" },
-    "ranges_delete": { "key": "ui.semanticObjectEditor.deleteSelectedRange" },
-    "ranges_settings": { "key": "ui.xrPanels.settings" },
-    "wave_title": { "key": "ui.waveOverhangs.title" },
-    "wave_experimental": { "key": "ui.waveOverhangs.experimental" },
-    "wave_reset": { "key": "ui.waveOverhangs.reset" },
-    "wave_reset_hint": { "key": "ui.waveOverhangs.resetHint" },
-    "wave_clear": { "key": "ui.waveOverhangs.clear" },
-    "wave_master_label": { "key": "settings.wave.wave_overhangs.label" },
-    "wave_group_general": { "key": "settings.wave.group.general" },
-    "wave_group_detection": { "key": "settings.wave.group.detection" },
-    "wave_group_pattern": { "key": "settings.wave.group.pattern" },
-    "wave_group_corner": { "key": "settings.wave.group.corner" },
-    "wave_group_motion": { "key": "settings.wave.group.motion" },
-    "wave_group_cooling": { "key": "settings.wave.group.cooling" },
-    "wave_group_floor": { "key": "settings.wave.group.floor" },
-    "wave_group_debug": { "key": "settings.wave.group.debug" },
-    "wave_source_override": { "key": "settings.wave.source.override" },
-    "wave_source_inherited": { "key": "settings.wave.source.inherited" },
-    "wave_source_default": { "key": "settings.wave.source.default" },
-    "wave_notice_turn_on": { "key": "settings.wave.notice.turnOn" },
-    "wave_notice_remove_unknown": { "key": "settings.wave.notice.removeUnknown" },
-    "wave_notice_detect_overhang": { "key": "settings.wave.notice.detectOverhangWall" },
-    "wave_notice_no_walls": { "key": "settings.wave.notice.noWalls" },
-    "wave_notice_spiral_vase": { "key": "settings.wave.notice.spiralVase" },
-    "wave_about": { "key": "ui.waveOverhangs.about" },
-    "wave_apply_unavailable": { "key": "ui.waveOverhangs.applyUnavailable" },
-    "wave_opt_instead_of_bridges": { "key": "settings.wave.instead_of_bridges.label" },
-    "wave_opt_support_remaining": { "key": "settings.wave.support_remaining.label" },
-    "wave_opt_min_angle": { "key": "settings.wave.min_angle.label" },
-    "wave_opt_min_length": { "key": "settings.wave.min_length.label" },
-    "wave_opt_max_iterations": { "key": "settings.wave.max_iterations.label" },
-    "wave_opt_pattern": { "key": "settings.wave.pattern.label" },
-    "wave_opt_seam_mode": { "key": "settings.wave.seam_mode.label" },
-    "wave_opt_outer_perimeters": { "key": "settings.wave.outer_perimeters.label" },
-    "wave_opt_line_spacing": { "key": "settings.wave.line_spacing.label" },
-    "wave_opt_spacing_mode": { "key": "settings.wave.spacing_mode.label" },
-    "wave_opt_perimeter_overlap": { "key": "settings.wave.perimeter_overlap.label" },
-    "wave_opt_minimum_width": { "key": "settings.wave.minimum_width.label" },
-    "wave_opt_min_new_area": { "key": "settings.wave.min_new_area.label" },
-    "wave_opt_flow": { "key": "settings.wave.flow.label" },
-    "wave_opt_corner_enable": { "key": "settings.wave.corner_enable.label" },
-    "wave_opt_corner_spacing": { "key": "settings.wave.corner_spacing.label" },
-    "wave_opt_corner_distance": { "key": "settings.wave.corner_distance.label" },
-    "wave_opt_corner_angle": { "key": "settings.wave.corner_angle.label" },
-    "wave_opt_print_speed": { "key": "settings.wave.print_speed.label" },
-    "wave_opt_perimeter_speed": { "key": "settings.wave.perimeter_speed.label" },
-    "wave_opt_travel_speed": { "key": "settings.wave.travel_speed.label" },
-    "wave_opt_end_retract": { "key": "settings.wave.end_retract.label" },
-    "wave_opt_fan_speed": { "key": "settings.wave.fan_speed.label" },
-    "wave_opt_aux_fan_speed": { "key": "settings.wave.aux_fan_speed.label" },
-    "wave_opt_nozzle_temp": { "key": "settings.wave.nozzle_temp.label" },
-    "wave_opt_min_wave_time": { "key": "settings.wave.min_wave_time.label" },
-    "wave_opt_min_layer_time": { "key": "settings.wave.min_layer_time.label" },
-    "wave_opt_floor_layers": { "key": "settings.wave.floor_layers.label" },
-    "wave_opt_floor_hilbert": { "key": "settings.wave.floor_hilbert.label" },
-    "wave_opt_floor_hilbert_layers": { "key": "settings.wave.floor_hilbert_layers.label" },
-    "wave_opt_floor_hilbert_density": { "key": "settings.wave.floor_hilbert_density.label" },
-    "wave_opt_floor_print_speed": { "key": "settings.wave.floor_print_speed.label" },
-    "wave_opt_floor_perimeter_speed": { "key": "settings.wave.floor_perimeter_speed.label" },
-    "wave_opt_floor_speed_ramp": { "key": "settings.wave.floor_speed_ramp.label" },
-    "wave_opt_floor_fan_speed": { "key": "settings.wave.floor_fan_speed.label" },
-    "wave_opt_floor_aux_fan_speed": { "key": "settings.wave.floor_aux_fan_speed.label" },
-    "wave_opt_debug_gcode": { "key": "settings.wave.debug_gcode.label" },
-    "wave_choice_smart": { "key": "settings.wave.choice.smart" },
-    "wave_choice_monotonic": { "key": "settings.wave.choice.monotonic" },
-    "wave_choice_zigzag": { "key": "settings.wave.choice.zigzag" },
-    "wave_choice_alternating": { "key": "settings.wave.choice.alternating" },
-    "wave_choice_aligned": { "key": "settings.wave.choice.aligned" },
-    "wave_choice_random": { "key": "settings.wave.choice.random" },
-    "wave_choice_uniform": { "key": "settings.wave.choice.uniform" },
-    "wave_choice_progressive": { "key": "settings.wave.choice.progressive" },
-    "wave_about_how": { "key": "ui.waveOverhangs.about.how" },
-    "wave_about_material": { "key": "ui.waveOverhangs.about.material" },
-    "wave_about_span": { "key": "ui.waveOverhangs.about.span" },
-    "wave_about_floor": { "key": "ui.waveOverhangs.about.floor" },
-    "wave_problem_bool": { "key": "settings.wave.problem.bool" },
-    "wave_problem_choice": { "key": "settings.wave.problem.choice" },
-    "wave_problem_integer": { "key": "settings.wave.problem.integer" },
-    "wave_problem_number": { "key": "settings.wave.problem.number" },
-    "project_view_menu": { "key": "menuSection.view.label" },
-    "project_help_menu": { "key": "menuSection.help.label" },
-    "view_show_wireframe": { "key": "action.view_show_wireframe.label" },
-    "action_hint_view_show_wireframe": { "key": "action.view_show_wireframe.hint" },
-    "view_show_printable_box": { "key": "action.view_show_printable_box.label" },
-    "action_hint_view_show_printable_box": { "key": "action.view_show_printable_box.hint" },
-    "view_show_labels": { "key": "action.view_show_labels.label" },
-    "action_hint_view_show_labels": { "key": "action.view_show_labels.hint" },
-    "view_show_overhang": { "key": "action.view_show_overhang.label" },
-    "action_hint_view_show_overhang": { "key": "action.view_show_overhang.hint" },
-    "view_show_navigator": { "key": "action.view_show_navigator.label" },
-    "action_hint_view_show_navigator": { "key": "action.view_show_navigator.hint" },
-    "view_show_outline": { "key": "action.view_show_outline.label" },
-    "action_hint_view_show_outline": { "key": "action.view_show_outline.hint" },
-    "view_perspective_toggle": { "key": "action.view_perspective_toggle.label" },
-    "action_hint_view_perspective_toggle": { "key": "action.view_perspective_toggle.hint" },
-    "help_shortcuts": { "key": "action.help_shortcuts.label" },
-    "action_hint_help_shortcuts": { "key": "action.help_shortcuts.hint" },
-    "help_docs": { "key": "action.help_docs.label" },
-    "action_hint_help_docs": { "key": "action.help_docs.hint" },
-    "help_report_bug": { "key": "action.help_report_bug.label" },
-    "action_hint_help_report_bug": { "key": "action.help_report_bug.hint" },
-    "help_about": { "key": "action.help_about.label" },
-    "about_title": { "key": "action.help_about.label" },
-    "action_hint_help_about": { "key": "action.help_about.hint" },
-    "help_language": { "key": "action.help_language.label" },
-    "action_hint_help_language": { "key": "action.help_language.hint" },
-    "add_calibration_cube": { "key": "action.add_calibration_cube.label" },
-    "action_hint_add_calibration_cube": { "key": "action.add_calibration_cube.hint" },
-    "add_calibration_tower": { "key": "action.add_calibration_tower.label" },
-    "action_hint_add_calibration_tower": { "key": "action.add_calibration_tower.hint" },
-    "add_handy_model": { "key": "action.add_handy_model.label" },
-    "action_hint_add_handy_model": { "key": "action.add_handy_model.hint" },
-    "help_tutorial": { "key": "action.help_tutorial.label" },
-    "action_hint_help_tutorial": { "key": "action.help_tutorial.hint" },
-    "help_tip_of_day": { "key": "action.help_tip_of_day.label" },
-    "action_hint_help_tip_of_day": { "key": "action.help_tip_of_day.hint" },
-    "help_check_updates": { "key": "action.help_check_updates.label" },
-    "action_hint_help_check_updates": { "key": "action.help_check_updates.hint" },
-    "help_setup_wizard": { "key": "action.help_setup_wizard.label" },
-    "action_hint_help_setup_wizard": { "key": "action.help_setup_wizard.hint" },
-    "help_search": { "key": "action.help_search.label" },
-    "action_hint_help_search": { "key": "action.help_search.hint" },
-    "presets_install_printer": { "key": "action.presets_install_printer.label" },
-    "action_hint_presets_install_printer": { "key": "action.presets_install_printer.hint" },
-    "presets_create_custom": { "key": "action.presets_create_custom.label" },
-    "action_hint_presets_create_custom": { "key": "action.presets_create_custom.hint" },
-    "presets_update_custom": { "key": "action.presets_update_custom.label" },
-    "action_hint_presets_update_custom": { "key": "action.presets_update_custom.hint" },
-    "presets_delete_custom": { "key": "action.presets_delete_custom.label" },
-    "action_hint_presets_delete_custom": { "key": "action.presets_delete_custom.hint" },
-    "presets_export_bundle": { "key": "action.presets_export_bundle.label" },
-    "action_hint_presets_export_bundle": { "key": "action.presets_export_bundle.hint" },
-    "presets_import_bundle": { "key": "action.presets_import_bundle.label" },
-    "action_hint_presets_import_bundle": { "key": "action.presets_import_bundle.hint" },
-    "check_updates_status": { "key": "persistence.upToDate" }
+    "brim_ears_select_auto": {
+      "key": "workspace.orcaWorkspace.selectOneModelPartBefore"
+    },
+    "brim_ears_select_clear": {
+      "key": "workspace.orcaWorkspace.selectOneModelPartBefore2"
+    },
+    "brim_ears_select_tap": {
+      "key": "workspace.orcaWorkspace.selectOneModelPartBefore3"
+    },
+    "brim_ears_no_geometry": {
+      "key": "workspace.orcaWorkspace.thatPartHasNoGeometry"
+    },
+    "brim_ears_none": {
+      "key": "workspace.orcaWorkspace.thatPartHasNoBrim"
+    },
+    "brim_ears_cleared": {
+      "key": "workspace.orcaWorkspace.clearedTheBrimEarsUndo"
+    },
+    "brim_ears_removed": {
+      "key": "workspace.orcaWorkspace.removedABrimEar"
+    },
+    "brim_ears_missed": {
+      "key": "workspace.orcaWorkspace.clickTheSelectedModelTo"
+    },
+    "action_hint_tool_brim_ears": {
+      "key": "action.tool_brim_ears.hint"
+    },
+    "action_hint_brim_ears_auto": {
+      "key": "action.brim_ears_auto.hint"
+    },
+    "action_hint_brim_ears_clear": {
+      "key": "action.brim_ears_clear.hint"
+    },
+    "workspace_assembly": {
+      "key": "action.tool_assembly.label"
+    },
+    "assembly_align_action": {
+      "key": "action.assembly_align.label"
+    },
+    "assembly_explode": {
+      "key": "action.assembly_explode.label"
+    },
+    "action_hint_tool_assembly": {
+      "key": "action.tool_assembly.hint"
+    },
+    "action_hint_assembly_align": {
+      "key": "action.assembly_align.hint"
+    },
+    "action_hint_assembly_explode": {
+      "key": "action.assembly_explode.hint"
+    },
+    "assembly_start": {
+      "key": "actions.actionContext.assemblyPickAFaceOn"
+    },
+    "assembly_gap": {
+      "key": "ui.measurePanel.gapMm"
+    },
+    "assembly_pick_two": {
+      "key": "workspace.orcaWorkspace.pickTwoFacesBeforeAligning"
+    },
+    "assembly_different_models": {
+      "key": "workspace.orcaWorkspace.assemblyAlignmentNeedsTwoFaces"
+    },
+    "assembly_model_gone": {
+      "key": "workspace.orcaWorkspace.theModelToAlignIs"
+    },
+    "assembly_already_aligned": {
+      "key": "workspace.orcaWorkspace.thoseFacesAreAlreadyAligned"
+    },
+    "assembly_explosion_refused": {
+      "key": "workspace.orcaWorkspace.anExplosionFactorMustBe"
+    },
+    "workspace_emboss": {
+      "key": "action.add_emboss.label"
+    },
+    "emboss_load_font": {
+      "key": "action.emboss_load_font.label"
+    },
+    "emboss_apply": {
+      "key": "action.emboss_apply.label"
+    },
+    "workspace_svg_part": {
+      "key": "action.tool_svg.label"
+    },
+    "svg_load_drawing": {
+      "key": "action.svg_load_drawing.label"
+    },
+    "svg_apply": {
+      "key": "action.svg_apply.label"
+    },
+    "emboss_title": {
+      "key": "ui.embossPanel.embossText"
+    },
+    "svg_title": {
+      "key": "ui.svgPanel.sVGPart"
+    },
+    "svg_unsupported": {
+      "key": "ui.svgPanel.partsOfThisDrawingThat"
+    },
+    "emboss_choose_font": {
+      "key": "workspace.orcaWorkspace.chooseATtfFontFile"
+    },
+    "emboss_select_part": {
+      "key": "workspace.orcaWorkspace.selectOneModelPartTo"
+    },
+    "svg_choose_drawing": {
+      "key": "workspace.orcaWorkspace.chooseAnSvgFileBefore"
+    },
+    "svg_select_part": {
+      "key": "workspace.orcaWorkspace.selectOneModelPartTo2"
+    },
+    "action_hint_add_emboss": {
+      "key": "action.add_emboss.hint"
+    },
+    "action_hint_emboss_apply": {
+      "key": "action.emboss_apply.hint"
+    },
+    "action_hint_tool_svg": {
+      "key": "action.tool_svg.hint"
+    },
+    "action_hint_svg_load_drawing": {
+      "key": "action.svg_load_drawing.hint"
+    },
+    "action_hint_svg_apply": {
+      "key": "action.svg_apply.hint"
+    },
+    "project_auto_place_wipe": {
+      "key": "action.auto_place_wipe.label"
+    },
+    "action_hint_auto_place_wipe": {
+      "key": "action.auto_place_wipe.hint"
+    },
+    "wipe_tower_placed": {
+      "key": "workspace.orcaWorkspace.autoPlacedWipeTower"
+    },
+    "wipe_tower_failed": {
+      "key": "workspace.orcaWorkspace.autoPlaceWipeTowerFailed"
+    },
+    "wipe_tower_auto_on": {
+      "key": "workspace.orcaWorkspace.wipeTowerAutoEnabled"
+    },
+    "wipe_tower_auto_off": {
+      "key": "workspace.orcaWorkspace.wipeTowerAutoDisabled"
+    },
+    "action_hint_add_modifier": {
+      "key": "action.add_modifier.hint"
+    },
+    "action_hint_add_support_enforcer": {
+      "key": "action.add_support_enforcer.hint"
+    },
+    "action_hint_add_support_blocker": {
+      "key": "action.add_support_blocker.hint"
+    },
+    "action_hint_set_negative_part": {
+      "key": "action.set_negative_part.hint"
+    },
+    "workspace_variable_layer_height": {
+      "key": "action.variable_layer_height.label"
+    },
+    "action_hint_variable_layer_height": {
+      "key": "action.variable_layer_height.hint"
+    },
+    "workspace_applied_adaptive_layer_height": {
+      "key": "workspace.orcaWorkspace.appliedAdaptiveLayerHeight"
+    },
+    "workspace_variable_layer_height_failed": {
+      "key": "workspace.orcaWorkspace.variableLayerHeightFailed"
+    },
+    "project_add_magnet": {
+      "key": "action.add_magnet.label"
+    },
+    "action_hint_add_magnet": {
+      "key": "action.add_magnet.hint"
+    },
+    "workspace_added_magnet_hole": {
+      "key": "workspace.orcaWorkspace.addedMagnetHole"
+    },
+    "workspace_add_magnet_hole_failed": {
+      "key": "workspace.orcaWorkspace.addMagnetHoleFailed"
+    },
+    "preview_layer_events": {
+      "key": "ui.layerEventPanel.layerEvents"
+    },
+    "action_hint_slice_active_plate": {
+      "key": "action.slice_active_plate.hint"
+    },
+    "action_hint_slice_all_plates": {
+      "key": "action.slice_all_plates.hint"
+    },
+    "action_hint_slice_cancel": {
+      "key": "action.slice_cancel.hint"
+    },
+    "action_hint_send_to_printer": {
+      "key": "action.send_to_printer.hint"
+    },
+    "export_gcode": {
+      "key": "action.file_export_gcode.label"
+    },
+    "export_all_plates": {
+      "key": "action.file_export_all_plates.label"
+    },
+    "export_stl": {
+      "key": "action.file_export_stl.label"
+    },
+    "export_all_stls": {
+      "key": "action.file_export_all_stls.label"
+    },
+    "export_download": {
+      "key": "action.save_gcode_to_downloads.label"
+    },
+    "export_download_all": {
+      "key": "action.save_all_plate_gcode.label"
+    },
+    "action_hint_file_export_gcode": {
+      "key": "action.file_export_gcode.hint"
+    },
+    "action_hint_file_export_all_plates": {
+      "key": "action.file_export_all_plates.hint"
+    },
+    "action_hint_file_export_stl": {
+      "key": "action.file_export_stl.hint"
+    },
+    "action_hint_file_export_all_stls": {
+      "key": "action.file_export_all_stls.hint"
+    },
+    "action_hint_save_gcode_to_downloads": {
+      "key": "action.save_gcode_to_downloads.hint"
+    },
+    "action_hint_save_all_plate_gcode": {
+      "key": "action.save_all_plate_gcode.hint"
+    },
+    "export_slice_all_first": {
+      "key": "workspace.orcaWorkspace.sliceAllPlatesBeforeDownloading"
+    },
+    "export_stale": {
+      "key": "workspace.orcaWorkspace.theProjectChangedSinceThe"
+    },
+    "export_nothing_to_slice": {
+      "key": "workspace.orcaWorkspace.noPrintablePlateHasModels"
+    },
+    "export_all_stls_done": {
+      "key": "workspace.orcaWorkspace.exportedAllStls"
+    },
+    "export_stl_failed": {
+      "key": "workspace.orcaWorkspace.stlExportFailed"
+    },
+    "export_3mf": {
+      "key": "action.file_export_3mf.label"
+    },
+    "action_hint_file_export_3mf": {
+      "key": "action.file_export_3mf.hint"
+    },
+    "export_3mf_done": {
+      "key": "workspace.orcaWorkspace.exported3mf"
+    },
+    "export_3mf_failed": {
+      "key": "workspace.orcaWorkspace.export3mfFailed"
+    },
+    "export_config": {
+      "key": "action.file_export_config.label"
+    },
+    "action_hint_file_export_config": {
+      "key": "action.file_export_config.hint"
+    },
+    "export_config_done": {
+      "key": "workspace.orcaWorkspace.exportedConfig"
+    },
+    "export_config_no_profile": {
+      "key": "workspace.orcaWorkspace.noActiveProfileToExport"
+    },
+    "export_obj": {
+      "key": "action.file_export_obj.label"
+    },
+    "action_hint_file_export_obj": {
+      "key": "action.file_export_obj.hint"
+    },
+    "export_obj_done": {
+      "key": "workspace.orcaWorkspace.toolpathsExportedAsObj"
+    },
+    "export_obj_failed": {
+      "key": "workspace.orcaWorkspace.exportObjFailed"
+    },
+    "export_obj_slice_first": {
+      "key": "workspace.orcaWorkspace.slicePlateBeforeExportingObj"
+    },
+    "export_logs": {
+      "key": "action.file_export_logs.label"
+    },
+    "action_hint_file_export_logs": {
+      "key": "action.file_export_logs.hint"
+    },
+    "export_logs_cancelled": {
+      "key": "app.main.diagnosticsExportCancelledNothingWas"
+    },
+    "palette_search": {
+      "key": "ui.xrCommandPalette.search"
+    },
+    "palette_empty": {
+      "key": "ui.commandPalette.noMatchingActions"
+    },
+    "settings_for": {
+      "key": "ui.scopedSettingsPanel.settingsFor"
+    },
+    "settings_detail_level": {
+      "key": "ui.generatedSettingsPanel.detailLevel"
+    },
+    "settings_search": {
+      "key": "ui.generatedSettingsPanel.searchSettings"
+    },
+    "settings_search_hint": {
+      "key": "ui.generatedSettingsPanel.nameKeyCategoryTooltipAlias"
+    },
+    "settings_no_match": {
+      "key": "ui.generatedSettingsPanel.noSettingsMatchThisSearch"
+    },
+    "settings_use_inherited": {
+      "key": "ui.generatedSettingsPanel.useInherited"
+    },
+    "settings_use_default": {
+      "key": "ui.generatedSettingsPanel.useDefault"
+    },
+    "settings_draft_changed": {
+      "key": "ui.generatedSettingsPanel.draftChanged"
+    },
+    "settings_structured_editor": {
+      "key": "ui.generatedSettingsPanel.structuredEditor"
+    },
+    "settings_not_applicable": {
+      "key": "ui.generatedSettingsPanel.notApplicable"
+    },
+    "settings_not_set": {
+      "key": "ui.generatedSettingsPanel.notSet"
+    },
+    "settings_structured_note": {
+      "key": "ui.generatedSettingsPanel.managedByTheStructuredFullSpectrum"
+    },
+    "settings_dependency_note": {
+      "key": "ui.generatedSettingsPanel.notApplicableWhileSubdivideMix"
+    },
+    "settings_conflict": {
+      "key": "ui.generatedSettingsPanel.projectSettingsChangedAfterThis"
+    },
+    "settings_discard_reload": {
+      "key": "ui.generatedSettingsPanel.discardDraftAndReloadCurrent"
+    },
+    "roles_heading": {
+      "key": "ui.semanticObjectEditor.volumeRole"
+    },
+    "roles_select_hint": {
+      "key": "ui.semanticObjectEditor.selectAPartOrSemantic"
+    },
+    "roles_convert_to": {
+      "key": "ui.semanticObjectEditor.convertTo"
+    },
+    "ranges_heading": {
+      "key": "ui.semanticObjectEditor.heightRanges"
+    },
+    "ranges_none": {
+      "key": "ui.semanticObjectEditor.noHeightRangesAreDefined"
+    },
+    "ranges_select_hint": {
+      "key": "ui.semanticObjectEditor.selectAHeightRangeTo"
+    },
+    "ranges_split": {
+      "key": "ui.semanticObjectEditor.splitRange"
+    },
+    "ranges_split_button": {
+      "key": "ui.semanticObjectEditor.splitRange2"
+    },
+    "ranges_merge": {
+      "key": "ui.semanticObjectEditor.mergeRange"
+    },
+    "ranges_delete": {
+      "key": "ui.semanticObjectEditor.deleteSelectedRange"
+    },
+    "ranges_settings": {
+      "key": "ui.xrPanels.settings"
+    },
+    "wave_title": {
+      "key": "ui.waveOverhangs.title"
+    },
+    "wave_experimental": {
+      "key": "ui.waveOverhangs.experimental"
+    },
+    "wave_reset": {
+      "key": "ui.waveOverhangs.reset"
+    },
+    "wave_reset_hint": {
+      "key": "ui.waveOverhangs.resetHint"
+    },
+    "wave_clear": {
+      "key": "ui.waveOverhangs.clear"
+    },
+    "wave_master_label": {
+      "key": "settings.wave.wave_overhangs.label"
+    },
+    "wave_group_general": {
+      "key": "settings.wave.group.general"
+    },
+    "wave_group_detection": {
+      "key": "settings.wave.group.detection"
+    },
+    "wave_group_pattern": {
+      "key": "settings.wave.group.pattern"
+    },
+    "wave_group_corner": {
+      "key": "settings.wave.group.corner"
+    },
+    "wave_group_motion": {
+      "key": "settings.wave.group.motion"
+    },
+    "wave_group_cooling": {
+      "key": "settings.wave.group.cooling"
+    },
+    "wave_group_floor": {
+      "key": "settings.wave.group.floor"
+    },
+    "wave_group_debug": {
+      "key": "settings.wave.group.debug"
+    },
+    "wave_source_override": {
+      "key": "settings.wave.source.override"
+    },
+    "wave_source_inherited": {
+      "key": "settings.wave.source.inherited"
+    },
+    "wave_source_default": {
+      "key": "settings.wave.source.default"
+    },
+    "wave_notice_turn_on": {
+      "key": "settings.wave.notice.turnOn"
+    },
+    "wave_notice_remove_unknown": {
+      "key": "settings.wave.notice.removeUnknown"
+    },
+    "wave_notice_detect_overhang": {
+      "key": "settings.wave.notice.detectOverhangWall"
+    },
+    "wave_notice_no_walls": {
+      "key": "settings.wave.notice.noWalls"
+    },
+    "wave_notice_spiral_vase": {
+      "key": "settings.wave.notice.spiralVase"
+    },
+    "wave_about": {
+      "key": "ui.waveOverhangs.about"
+    },
+    "wave_apply_unavailable": {
+      "key": "ui.waveOverhangs.applyUnavailable"
+    },
+    "wave_opt_instead_of_bridges": {
+      "key": "settings.wave.instead_of_bridges.label"
+    },
+    "wave_opt_support_remaining": {
+      "key": "settings.wave.support_remaining.label"
+    },
+    "wave_opt_min_angle": {
+      "key": "settings.wave.min_angle.label"
+    },
+    "wave_opt_min_length": {
+      "key": "settings.wave.min_length.label"
+    },
+    "wave_opt_max_iterations": {
+      "key": "settings.wave.max_iterations.label"
+    },
+    "wave_opt_pattern": {
+      "key": "settings.wave.pattern.label"
+    },
+    "wave_opt_seam_mode": {
+      "key": "settings.wave.seam_mode.label"
+    },
+    "wave_opt_outer_perimeters": {
+      "key": "settings.wave.outer_perimeters.label"
+    },
+    "wave_opt_line_spacing": {
+      "key": "settings.wave.line_spacing.label"
+    },
+    "wave_opt_spacing_mode": {
+      "key": "settings.wave.spacing_mode.label"
+    },
+    "wave_opt_perimeter_overlap": {
+      "key": "settings.wave.perimeter_overlap.label"
+    },
+    "wave_opt_minimum_width": {
+      "key": "settings.wave.minimum_width.label"
+    },
+    "wave_opt_min_new_area": {
+      "key": "settings.wave.min_new_area.label"
+    },
+    "wave_opt_flow": {
+      "key": "settings.wave.flow.label"
+    },
+    "wave_opt_corner_enable": {
+      "key": "settings.wave.corner_enable.label"
+    },
+    "wave_opt_corner_spacing": {
+      "key": "settings.wave.corner_spacing.label"
+    },
+    "wave_opt_corner_distance": {
+      "key": "settings.wave.corner_distance.label"
+    },
+    "wave_opt_corner_angle": {
+      "key": "settings.wave.corner_angle.label"
+    },
+    "wave_opt_print_speed": {
+      "key": "settings.wave.print_speed.label"
+    },
+    "wave_opt_perimeter_speed": {
+      "key": "settings.wave.perimeter_speed.label"
+    },
+    "wave_opt_travel_speed": {
+      "key": "settings.wave.travel_speed.label"
+    },
+    "wave_opt_end_retract": {
+      "key": "settings.wave.end_retract.label"
+    },
+    "wave_opt_fan_speed": {
+      "key": "settings.wave.fan_speed.label"
+    },
+    "wave_opt_aux_fan_speed": {
+      "key": "settings.wave.aux_fan_speed.label"
+    },
+    "wave_opt_nozzle_temp": {
+      "key": "settings.wave.nozzle_temp.label"
+    },
+    "wave_opt_min_wave_time": {
+      "key": "settings.wave.min_wave_time.label"
+    },
+    "wave_opt_min_layer_time": {
+      "key": "settings.wave.min_layer_time.label"
+    },
+    "wave_opt_floor_layers": {
+      "key": "settings.wave.floor_layers.label"
+    },
+    "wave_opt_floor_hilbert": {
+      "key": "settings.wave.floor_hilbert.label"
+    },
+    "wave_opt_floor_hilbert_layers": {
+      "key": "settings.wave.floor_hilbert_layers.label"
+    },
+    "wave_opt_floor_hilbert_density": {
+      "key": "settings.wave.floor_hilbert_density.label"
+    },
+    "wave_opt_floor_print_speed": {
+      "key": "settings.wave.floor_print_speed.label"
+    },
+    "wave_opt_floor_perimeter_speed": {
+      "key": "settings.wave.floor_perimeter_speed.label"
+    },
+    "wave_opt_floor_speed_ramp": {
+      "key": "settings.wave.floor_speed_ramp.label"
+    },
+    "wave_opt_floor_fan_speed": {
+      "key": "settings.wave.floor_fan_speed.label"
+    },
+    "wave_opt_floor_aux_fan_speed": {
+      "key": "settings.wave.floor_aux_fan_speed.label"
+    },
+    "wave_opt_debug_gcode": {
+      "key": "settings.wave.debug_gcode.label"
+    },
+    "wave_choice_smart": {
+      "key": "settings.wave.choice.smart"
+    },
+    "wave_choice_monotonic": {
+      "key": "settings.wave.choice.monotonic"
+    },
+    "wave_choice_zigzag": {
+      "key": "settings.wave.choice.zigzag"
+    },
+    "wave_choice_alternating": {
+      "key": "settings.wave.choice.alternating"
+    },
+    "wave_choice_aligned": {
+      "key": "settings.wave.choice.aligned"
+    },
+    "wave_choice_random": {
+      "key": "settings.wave.choice.random"
+    },
+    "wave_choice_uniform": {
+      "key": "settings.wave.choice.uniform"
+    },
+    "wave_choice_progressive": {
+      "key": "settings.wave.choice.progressive"
+    },
+    "wave_about_how": {
+      "key": "ui.waveOverhangs.about.how"
+    },
+    "wave_about_material": {
+      "key": "ui.waveOverhangs.about.material"
+    },
+    "wave_about_span": {
+      "key": "ui.waveOverhangs.about.span"
+    },
+    "wave_about_floor": {
+      "key": "ui.waveOverhangs.about.floor"
+    },
+    "wave_problem_bool": {
+      "key": "settings.wave.problem.bool"
+    },
+    "wave_problem_choice": {
+      "key": "settings.wave.problem.choice"
+    },
+    "wave_problem_integer": {
+      "key": "settings.wave.problem.integer"
+    },
+    "wave_problem_number": {
+      "key": "settings.wave.problem.number"
+    },
+    "project_view_menu": {
+      "key": "menuSection.view.label"
+    },
+    "project_help_menu": {
+      "key": "menuSection.help.label"
+    },
+    "view_show_wireframe": {
+      "key": "action.view_show_wireframe.label"
+    },
+    "action_hint_view_show_wireframe": {
+      "key": "action.view_show_wireframe.hint"
+    },
+    "view_show_printable_box": {
+      "key": "action.view_show_printable_box.label"
+    },
+    "action_hint_view_show_printable_box": {
+      "key": "action.view_show_printable_box.hint"
+    },
+    "view_show_labels": {
+      "key": "action.view_show_labels.label"
+    },
+    "action_hint_view_show_labels": {
+      "key": "action.view_show_labels.hint"
+    },
+    "view_show_overhang": {
+      "key": "action.view_show_overhang.label"
+    },
+    "action_hint_view_show_overhang": {
+      "key": "action.view_show_overhang.hint"
+    },
+    "view_show_navigator": {
+      "key": "action.view_show_navigator.label"
+    },
+    "action_hint_view_show_navigator": {
+      "key": "action.view_show_navigator.hint"
+    },
+    "view_show_outline": {
+      "key": "action.view_show_outline.label"
+    },
+    "action_hint_view_show_outline": {
+      "key": "action.view_show_outline.hint"
+    },
+    "view_perspective_toggle": {
+      "key": "action.view_perspective_toggle.label"
+    },
+    "action_hint_view_perspective_toggle": {
+      "key": "action.view_perspective_toggle.hint"
+    },
+    "help_shortcuts": {
+      "key": "action.help_shortcuts.label"
+    },
+    "action_hint_help_shortcuts": {
+      "key": "action.help_shortcuts.hint"
+    },
+    "help_docs": {
+      "key": "action.help_docs.label"
+    },
+    "action_hint_help_docs": {
+      "key": "action.help_docs.hint"
+    },
+    "help_report_bug": {
+      "key": "action.help_report_bug.label"
+    },
+    "action_hint_help_report_bug": {
+      "key": "action.help_report_bug.hint"
+    },
+    "help_about": {
+      "key": "action.help_about.label"
+    },
+    "about_title": {
+      "key": "action.help_about.label"
+    },
+    "action_hint_help_about": {
+      "key": "action.help_about.hint"
+    },
+    "help_language": {
+      "key": "action.help_language.label"
+    },
+    "action_hint_help_language": {
+      "key": "action.help_language.hint"
+    },
+    "add_calibration_cube": {
+      "key": "action.add_calibration_cube.label"
+    },
+    "action_hint_add_calibration_cube": {
+      "key": "action.add_calibration_cube.hint"
+    },
+    "add_calibration_tower": {
+      "key": "action.add_calibration_tower.label"
+    },
+    "action_hint_add_calibration_tower": {
+      "key": "action.add_calibration_tower.hint"
+    },
+    "add_handy_model": {
+      "key": "action.add_handy_model.label"
+    },
+    "action_hint_add_handy_model": {
+      "key": "action.add_handy_model.hint"
+    },
+    "help_tutorial": {
+      "key": "action.help_tutorial.label"
+    },
+    "action_hint_help_tutorial": {
+      "key": "action.help_tutorial.hint"
+    },
+    "help_tip_of_day": {
+      "key": "action.help_tip_of_day.label"
+    },
+    "action_hint_help_tip_of_day": {
+      "key": "action.help_tip_of_day.hint"
+    },
+    "help_check_updates": {
+      "key": "action.help_check_updates.label"
+    },
+    "action_hint_help_check_updates": {
+      "key": "action.help_check_updates.hint"
+    },
+    "help_setup_wizard": {
+      "key": "action.help_setup_wizard.label"
+    },
+    "action_hint_help_setup_wizard": {
+      "key": "action.help_setup_wizard.hint"
+    },
+    "help_search": {
+      "key": "action.help_search.label"
+    },
+    "action_hint_help_search": {
+      "key": "action.help_search.hint"
+    },
+    "presets_install_printer": {
+      "key": "action.presets_install_printer.label"
+    },
+    "action_hint_presets_install_printer": {
+      "key": "action.presets_install_printer.hint"
+    },
+    "presets_create_custom": {
+      "key": "action.presets_create_custom.label"
+    },
+    "action_hint_presets_create_custom": {
+      "key": "action.presets_create_custom.hint"
+    },
+    "presets_update_custom": {
+      "key": "action.presets_update_custom.label"
+    },
+    "action_hint_presets_update_custom": {
+      "key": "action.presets_update_custom.hint"
+    },
+    "presets_delete_custom": {
+      "key": "action.presets_delete_custom.label"
+    },
+    "action_hint_presets_delete_custom": {
+      "key": "action.presets_delete_custom.hint"
+    },
+    "presets_export_bundle": {
+      "key": "action.presets_export_bundle.label"
+    },
+    "action_hint_presets_export_bundle": {
+      "key": "action.presets_export_bundle.hint"
+    },
+    "presets_import_bundle": {
+      "key": "action.presets_import_bundle.label"
+    },
+    "action_hint_presets_import_bundle": {
+      "key": "action.presets_import_bundle.hint"
+    },
+    "check_updates_status": {
+      "key": "persistence.upToDate"
+    },
+    "calib_temperature": {
+      "key": "action.calib_temperature.label"
+    },
+    "action_hint_calib_temperature": {
+      "key": "action.calib_temperature.hint"
+    },
+    "calib_flow_pass1": {
+      "key": "action.calib_flow_pass1.label"
+    },
+    "action_hint_calib_flow_pass1": {
+      "key": "action.calib_flow_pass1.hint"
+    },
+    "calib_flow_pass2": {
+      "key": "action.calib_flow_pass2.label"
+    },
+    "action_hint_calib_flow_pass2": {
+      "key": "action.calib_flow_pass2.hint"
+    },
+    "calib_flow_yolo": {
+      "key": "action.calib_flow_yolo.label"
+    },
+    "action_hint_calib_flow_yolo": {
+      "key": "action.calib_flow_yolo.hint"
+    },
+    "calib_flow_yolo_perfectionist": {
+      "key": "action.calib_flow_yolo_perfectionist.label"
+    },
+    "action_hint_calib_flow_yolo_perfectionist": {
+      "key": "action.calib_flow_yolo_perfectionist.hint"
+    },
+    "calib_pressure_advance": {
+      "key": "action.calib_pressure_advance.label"
+    },
+    "action_hint_calib_pressure_advance": {
+      "key": "action.calib_pressure_advance.hint"
+    },
+    "calib_retraction": {
+      "key": "action.calib_retraction.label"
+    },
+    "action_hint_calib_retraction": {
+      "key": "action.calib_retraction.hint"
+    },
+    "calib_max_flow": {
+      "key": "action.calib_max_flow.label"
+    },
+    "action_hint_calib_max_flow": {
+      "key": "action.calib_max_flow.hint"
+    },
+    "calib_vfa": {
+      "key": "action.calib_vfa.label"
+    },
+    "action_hint_calib_vfa": {
+      "key": "action.calib_vfa.hint"
+    },
+    "calib_tolerance": {
+      "key": "action.calib_tolerance.label"
+    },
+    "action_hint_calib_tolerance": {
+      "key": "action.calib_tolerance.hint"
+    },
+    "calib_junction_deviation": {
+      "key": "action.calib_junction_deviation.label"
+    },
+    "action_hint_calib_junction_deviation": {
+      "key": "action.calib_junction_deviation.hint"
+    },
+    "calib_input_shaping_frequency": {
+      "key": "action.calib_input_shaping_frequency.label"
+    },
+    "action_hint_calib_input_shaping_frequency": {
+      "key": "action.calib_input_shaping_frequency.hint"
+    },
+    "calib_input_shaping_damping": {
+      "key": "action.calib_input_shaping_damping.label"
+    },
+    "action_hint_calib_input_shaping_damping": {
+      "key": "action.calib_input_shaping_damping.hint"
+    },
+    "calib_view_history": {
+      "key": "action.calib_view_history.label"
+    },
+    "action_hint_calib_view_history": {
+      "key": "action.calib_view_history.hint"
+    },
+    "calib_record_result": {
+      "key": "action.calib_record_result.label"
+    },
+    "action_hint_calib_record_result": {
+      "key": "action.calib_record_result.hint"
+    },
+    "calib_compare_results": {
+      "key": "action.calib_compare_results.label"
+    },
+    "action_hint_calib_compare_results": {
+      "key": "action.calib_compare_results.hint"
+    },
+    "calib_rerun_result": {
+      "key": "action.calib_rerun_result.label"
+    },
+    "action_hint_calib_rerun_result": {
+      "key": "action.calib_rerun_result.hint"
+    },
+    "calib_apply_result": {
+      "key": "action.calib_apply_result.label"
+    },
+    "action_hint_calib_apply_result": {
+      "key": "action.calib_apply_result.hint"
+    },
+    "calib_delete_result": {
+      "key": "action.calib_delete_result.label"
+    },
+    "action_hint_calib_delete_result": {
+      "key": "action.calib_delete_result.hint"
+    },
+    "calib_choose": {
+      "key": "action.calib_choose.label"
+    },
+    "action_hint_calib_choose": {
+      "key": "action.calib_choose.hint"
+    },
+    "calib_configure": {
+      "key": "action.calib_configure.label"
+    },
+    "action_hint_calib_configure": {
+      "key": "action.calib_configure.hint"
+    },
+    "calib_reset_parameters": {
+      "key": "action.calib_reset_parameters.label"
+    },
+    "action_hint_calib_reset_parameters": {
+      "key": "action.calib_reset_parameters.hint"
+    },
+    "calib_place_geometry": {
+      "key": "action.calib_place_geometry.label"
+    },
+    "action_hint_calib_place_geometry": {
+      "key": "action.calib_place_geometry.hint"
+    },
+    "calib_sweep_export": {
+      "key": "action.calib_sweep_export.label"
+    },
+    "action_hint_calib_sweep_export": {
+      "key": "action.calib_sweep_export.hint"
+    },
+    "calib_session_discard": {
+      "key": "action.calib_session_discard.label"
+    },
+    "action_hint_calib_session_discard": {
+      "key": "action.calib_session_discard.hint"
+    },
+    "calib_session_keep": {
+      "key": "action.calib_session_keep.label"
+    },
+    "action_hint_calib_session_keep": {
+      "key": "action.calib_session_keep.hint"
+    },
+    "calib_export_history": {
+      "key": "action.calib_export_history.label"
+    },
+    "action_hint_calib_export_history": {
+      "key": "action.calib_export_history.hint"
+    },
+    "calib_send_printer_btn": {
+      "key": "ui.printSubmissionDialog.sendToPrinter"
+    },
+    "calib_history_record_btn": {
+      "key": "ui.calibrationHistoryPanel.recordResult"
+    },
+    "calib_history_apply_btn": {
+      "key": "ui.calibrationHistoryPanel.saveToPreset"
+    },
+    "calib_history_delete_btn": {
+      "key": "action.delete_models.label"
+    },
+    "calib_history_no_results": {
+      "key": "ui.calibrationHistoryPanel.noCalibrationResultsRecordedOn"
+    },
+    "calib_history_both_same": {
+      "key": "ui.calibrationHistoryPanel.bothRunsMeasuredTheSame"
+    },
+    "calib_history_how_it_works": {
+      "key": "ui.calibrationParametersPanel.howThisCalibrationWorks"
+    }
   },
   "english": [
     "app_name",
@@ -1026,7 +2195,34 @@
     "presets_tab_bundles",
     "presets_bundle_desc",
     "presets_printer_snapmaker_u1_desc",
-    "presets_printer_centauri_desc"
+    "presets_printer_centauri_desc",
+    "calib_session_banner_text",
+    "calib_session_held_named",
+    "calib_session_held_unnamed",
+    "calib_slice_btn",
+    "calib_export_gcode_btn",
+    "calib_discard_btn",
+    "calib_keep_btn",
+    "calib_dialog_title",
+    "calib_instructions_title",
+    "calib_generate_btn",
+    "calib_reset_btn",
+    "calib_export_line_btn",
+    "calib_history_refresh",
+    "calib_history_export",
+    "calib_history_compare_btn",
+    "calib_history_rerun_btn",
+    "calib_history_applicable",
+    "calib_history_not_applicable",
+    "calib_history_operator",
+    "calib_history_measured",
+    "calib_history_printer",
+    "calib_history_nozzle",
+    "calib_history_material",
+    "calib_history_record_success",
+    "calib_history_apply_success",
+    "calib_history_delete_confirm",
+    "calib_history_delete_title"
   ],
   "kotlin": [
     {
@@ -1097,7 +2293,9 @@
     {
       "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
       "key": "app.main.sendFailure",
-      "arguments": { "reason": "reason" },
+      "arguments": {
+        "reason": "reason"
+      },
       "kept": "model"
     },
     {
@@ -1113,7 +2311,9 @@
     {
       "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
       "key": "app.main.uploadingFile",
-      "arguments": { "filename": "filename" },
+      "arguments": {
+        "filename": "filename"
+      },
       "kept": "model"
     },
     {
@@ -1172,7 +2372,9 @@
     {
       "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
       "key": "ui.printSubmission.exactNewName",
-      "arguments": { "filename": "name" },
+      "arguments": {
+        "filename": "name"
+      },
       "kept": "tested"
     },
     {

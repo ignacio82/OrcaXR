@@ -99,4 +99,8 @@
     <string name="help_check_updates">Verificar Atualizações</string>
     <string name="help_setup_wizard">Assistente de Configuração</string>
     <string name="presets_export_bundle">Exportar Pacote de Predefinições</string>
+    <string name="calib_junction_deviation">Desvio de Junção</string>
+    <string name="calib_input_shaping_frequency">Frequência da Modelagem de Entrada</string>
+    <string name="calib_send_printer_btn">Enviar para a impressora</string>
+    <string name="calib_history_delete_btn">Excluir</string>
 </resources>

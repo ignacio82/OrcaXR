@@ -99,4 +99,8 @@
     <string name="help_check_updates">檢查新版本</string>
     <string name="help_setup_wizard">設定精靈</string>
     <string name="presets_export_bundle">匯出設定檔組</string>
+    <string name="calib_junction_deviation">轉折偏移值</string>
+    <string name="calib_input_shaping_frequency">輸入震動抑制頻率</string>
+    <string name="calib_send_printer_btn">傳送到列印設備</string>
+    <string name="calib_history_delete_btn">刪除</string>
 </resources>

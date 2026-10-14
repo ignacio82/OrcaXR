@@ -79,8 +79,29 @@ object AppActions {
         "presets_delete_custom", "presets_export_bundle", "presets_import_bundle",
     )
 
+    /** The Calibration menu's workflows. */
+    val CALIBRATION_WORKFLOWS = listOf(
+        "calib_temperature", "calib_flow_pass1", "calib_flow_pass2", "calib_flow_yolo", "calib_flow_yolo_perfectionist",
+        "calib_pressure_advance", "calib_retraction", "calib_max_flow", "calib_vfa", "calib_tolerance",
+        "calib_junction_deviation", "calib_input_shaping_frequency", "calib_input_shaping_damping",
+    )
+
+    /** Calibration history ledger operations. */
+    val CALIBRATION_HISTORY = listOf(
+        "calib_view_history", "calib_record_result", "calib_compare_results", "calib_rerun_result",
+        "calib_apply_result", "calib_delete_result", "calib_export_history",
+    )
+
+    /** Calibration session lifecycle, parameter configuration and materialisation. */
+    val CALIBRATION_SESSION = listOf(
+        "calib_choose", "calib_configure", "calib_reset_parameters",
+        "calib_place_geometry", "calib_sweep_export", "calib_session_discard", "calib_session_keep",
+    )
+
+    val CALIBRATION = CALIBRATION_WORKFLOWS + CALIBRATION_HISTORY + CALIBRATION_SESSION
+
     /** Every catalogue action the app performs. */
-    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PANELS + PREPARE + EXPORT + VIEW + HELP + PRESETS).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
+    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PANELS + PREPARE + EXPORT + VIEW + HELP + PRESETS + CALIBRATION).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
 
     /**
      * Whether running [id] needs the Workspace's 3D view on screen: a camera

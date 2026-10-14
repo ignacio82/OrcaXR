@@ -99,4 +99,8 @@
     <string name="help_check_updates">检查新版本</string>
     <string name="help_setup_wizard">配置向导</string>
     <string name="presets_export_bundle">导出预设包</string>
+    <string name="calib_junction_deviation">结点偏差</string>
+    <string name="calib_input_shaping_frequency">输入整形频率</string>
+    <string name="calib_send_printer_btn">发送到打印机</string>
+    <string name="calib_history_delete_btn">删除</string>
 </resources>

@@ -11561,6 +11561,111 @@ object ProjectIntents {
             is ExternalSlicerDownloadStep.Failed -> w.field("failed") { writeExternalSlicerFailure(w, v.value) }
         } }
     }
+    data object CalibrationDefinitionsRequest
+    private fun readCalibrationDefinitionsRequest(v: Any): CalibrationDefinitionsRequest {
+        val obj = ProjectIntentJson.fields(v, setOf(), false)
+        return CalibrationDefinitionsRequest
+    }
+    private fun writeCalibrationDefinitionsRequest(w: ProjectIntentWriter, v: CalibrationDefinitionsRequest) {
+        w.obj {
+
+        }
+    }
+    data class CalibrationDefinitionsReply(val definitionsJson: List<Int>)
+    private fun readCalibrationDefinitionsReply(v: Any): CalibrationDefinitionsReply {
+        val obj = ProjectIntentJson.fields(v, setOf("definitionsJson"), false)
+        return CalibrationDefinitionsReply(readPrinterReplyText(obj.get("definitionsJson")))
+    }
+    private fun writeCalibrationDefinitionsReply(w: ProjectIntentWriter, v: CalibrationDefinitionsReply) {
+        w.obj {
+            w.field("definitionsJson") { writePrinterReplyText(w, v.definitionsJson) }
+        }
+    }
+    data class CalibrationFormRequest(val workflowId: List<Int>, val prerequisitesJson: List<Int>, val editsJson: List<Int>, val jobId: List<Int>)
+    private fun readCalibrationFormRequest(v: Any): CalibrationFormRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("workflowId", "prerequisitesJson", "editsJson", "jobId"), false)
+        return CalibrationFormRequest(readEditText(obj.get("workflowId")), readPrinterReplyText(obj.get("prerequisitesJson")), readPrinterReplyText(obj.get("editsJson")), readEditText(obj.get("jobId")))
+    }
+    private fun writeCalibrationFormRequest(w: ProjectIntentWriter, v: CalibrationFormRequest) {
+        w.obj {
+            w.field("workflowId") { writeEditText(w, v.workflowId) }
+            w.field("prerequisitesJson") { writePrinterReplyText(w, v.prerequisitesJson) }
+            w.field("editsJson") { writePrinterReplyText(w, v.editsJson) }
+            w.field("jobId") { writeEditText(w, v.jobId) }
+        }
+    }
+    data class CalibrationFormReply(val formJson: List<Int>)
+    private fun readCalibrationFormReply(v: Any): CalibrationFormReply {
+        val obj = ProjectIntentJson.fields(v, setOf("formJson"), false)
+        return CalibrationFormReply(readPrinterReplyText(obj.get("formJson")))
+    }
+    private fun writeCalibrationFormReply(w: ProjectIntentWriter, v: CalibrationFormReply) {
+        w.obj {
+            w.field("formJson") { writePrinterReplyText(w, v.formJson) }
+        }
+    }
+    data class CalibrationInstructionsRequest(val planJson: List<Int>)
+    private fun readCalibrationInstructionsRequest(v: Any): CalibrationInstructionsRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("planJson"), false)
+        return CalibrationInstructionsRequest(readPrinterReplyText(obj.get("planJson")))
+    }
+    private fun writeCalibrationInstructionsRequest(w: ProjectIntentWriter, v: CalibrationInstructionsRequest) {
+        w.obj {
+            w.field("planJson") { writePrinterReplyText(w, v.planJson) }
+        }
+    }
+    data class CalibrationInstructionsReply(val instructionsJson: List<Int>)
+    private fun readCalibrationInstructionsReply(v: Any): CalibrationInstructionsReply {
+        val obj = ProjectIntentJson.fields(v, setOf("instructionsJson"), false)
+        return CalibrationInstructionsReply(readPrinterReplyText(obj.get("instructionsJson")))
+    }
+    private fun writeCalibrationInstructionsReply(w: ProjectIntentWriter, v: CalibrationInstructionsReply) {
+        w.obj {
+            w.field("instructionsJson") { writePrinterReplyText(w, v.instructionsJson) }
+        }
+    }
+    data class CalibrationHistoryRequest(val operation: List<Int>, val payloadJson: List<Int>)
+    private fun readCalibrationHistoryRequest(v: Any): CalibrationHistoryRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("operation", "payloadJson"), false)
+        return CalibrationHistoryRequest(readEditText(obj.get("operation")), readPrinterReplyText(obj.get("payloadJson")))
+    }
+    private fun writeCalibrationHistoryRequest(w: ProjectIntentWriter, v: CalibrationHistoryRequest) {
+        w.obj {
+            w.field("operation") { writeEditText(w, v.operation) }
+            w.field("payloadJson") { writePrinterReplyText(w, v.payloadJson) }
+        }
+    }
+    data class CalibrationHistoryReply(val resultJson: List<Int>)
+    private fun readCalibrationHistoryReply(v: Any): CalibrationHistoryReply {
+        val obj = ProjectIntentJson.fields(v, setOf("resultJson"), false)
+        return CalibrationHistoryReply(readPrinterReplyText(obj.get("resultJson")))
+    }
+    private fun writeCalibrationHistoryReply(w: ProjectIntentWriter, v: CalibrationHistoryReply) {
+        w.obj {
+            w.field("resultJson") { writePrinterReplyText(w, v.resultJson) }
+        }
+    }
+    data class CalibrationApplyRequest(val recordJson: List<Int>, val conditionsJson: List<Int>)
+    private fun readCalibrationApplyRequest(v: Any): CalibrationApplyRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("recordJson", "conditionsJson"), false)
+        return CalibrationApplyRequest(readPrinterReplyText(obj.get("recordJson")), readPrinterReplyText(obj.get("conditionsJson")))
+    }
+    private fun writeCalibrationApplyRequest(w: ProjectIntentWriter, v: CalibrationApplyRequest) {
+        w.obj {
+            w.field("recordJson") { writePrinterReplyText(w, v.recordJson) }
+            w.field("conditionsJson") { writePrinterReplyText(w, v.conditionsJson) }
+        }
+    }
+    data class CalibrationApplyReply(val planJson: List<Int>)
+    private fun readCalibrationApplyReply(v: Any): CalibrationApplyReply {
+        val obj = ProjectIntentJson.fields(v, setOf("planJson"), false)
+        return CalibrationApplyReply(readPrinterReplyText(obj.get("planJson")))
+    }
+    private fun writeCalibrationApplyReply(w: ProjectIntentWriter, v: CalibrationApplyReply) {
+        w.obj {
+            w.field("planJson") { writePrinterReplyText(w, v.planJson) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -12085,4 +12190,24 @@ object ProjectIntents {
     fun encodeExternalSlicerDownloadRead(value: ExternalSlicerDownloadRead): String = ProjectIntentWriter(BULK).also { writeExternalSlicerDownloadRead(it, value) }.finish()
     fun decodeExternalSlicerDownloadStep(text: String): ExternalSlicerDownloadStep = readExternalSlicerDownloadStep(ProjectIntentJson.parse(text, BULK))
     fun encodeExternalSlicerDownloadStep(value: ExternalSlicerDownloadStep): String = ProjectIntentWriter(BULK).also { writeExternalSlicerDownloadStep(it, value) }.finish()
+    fun decodeCalibrationDefinitionsRequest(text: String): CalibrationDefinitionsRequest = readCalibrationDefinitionsRequest(ProjectIntentJson.parse(text, BULK))
+    fun encodeCalibrationDefinitionsRequest(value: CalibrationDefinitionsRequest): String = ProjectIntentWriter(BULK).also { writeCalibrationDefinitionsRequest(it, value) }.finish()
+    fun decodeCalibrationDefinitionsReply(text: String): CalibrationDefinitionsReply = readCalibrationDefinitionsReply(ProjectIntentJson.parse(text, BULK))
+    fun encodeCalibrationDefinitionsReply(value: CalibrationDefinitionsReply): String = ProjectIntentWriter(BULK).also { writeCalibrationDefinitionsReply(it, value) }.finish()
+    fun decodeCalibrationFormRequest(text: String): CalibrationFormRequest = readCalibrationFormRequest(ProjectIntentJson.parse(text, BULK))
+    fun encodeCalibrationFormRequest(value: CalibrationFormRequest): String = ProjectIntentWriter(BULK).also { writeCalibrationFormRequest(it, value) }.finish()
+    fun decodeCalibrationFormReply(text: String): CalibrationFormReply = readCalibrationFormReply(ProjectIntentJson.parse(text, BULK))
+    fun encodeCalibrationFormReply(value: CalibrationFormReply): String = ProjectIntentWriter(BULK).also { writeCalibrationFormReply(it, value) }.finish()
+    fun decodeCalibrationInstructionsRequest(text: String): CalibrationInstructionsRequest = readCalibrationInstructionsRequest(ProjectIntentJson.parse(text, BULK))
+    fun encodeCalibrationInstructionsRequest(value: CalibrationInstructionsRequest): String = ProjectIntentWriter(BULK).also { writeCalibrationInstructionsRequest(it, value) }.finish()
+    fun decodeCalibrationInstructionsReply(text: String): CalibrationInstructionsReply = readCalibrationInstructionsReply(ProjectIntentJson.parse(text, BULK))
+    fun encodeCalibrationInstructionsReply(value: CalibrationInstructionsReply): String = ProjectIntentWriter(BULK).also { writeCalibrationInstructionsReply(it, value) }.finish()
+    fun decodeCalibrationHistoryRequest(text: String): CalibrationHistoryRequest = readCalibrationHistoryRequest(ProjectIntentJson.parse(text, BULK))
+    fun encodeCalibrationHistoryRequest(value: CalibrationHistoryRequest): String = ProjectIntentWriter(BULK).also { writeCalibrationHistoryRequest(it, value) }.finish()
+    fun decodeCalibrationHistoryReply(text: String): CalibrationHistoryReply = readCalibrationHistoryReply(ProjectIntentJson.parse(text, BULK))
+    fun encodeCalibrationHistoryReply(value: CalibrationHistoryReply): String = ProjectIntentWriter(BULK).also { writeCalibrationHistoryReply(it, value) }.finish()
+    fun decodeCalibrationApplyRequest(text: String): CalibrationApplyRequest = readCalibrationApplyRequest(ProjectIntentJson.parse(text, BULK))
+    fun encodeCalibrationApplyRequest(value: CalibrationApplyRequest): String = ProjectIntentWriter(BULK).also { writeCalibrationApplyRequest(it, value) }.finish()
+    fun decodeCalibrationApplyReply(text: String): CalibrationApplyReply = readCalibrationApplyReply(ProjectIntentJson.parse(text, BULK))
+    fun encodeCalibrationApplyReply(value: CalibrationApplyReply): String = ProjectIntentWriter(BULK).also { writeCalibrationApplyReply(it, value) }.finish()
 }

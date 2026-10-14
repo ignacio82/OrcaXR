@@ -2634,3 +2634,89 @@ export! {
     Java_dev_orcaxr_core_NativeProject_close, close, (),
     handle: jlong,
 }
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationDefinitions, calibration_definitions, jstring,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationCompile, calibration_compile, jstring,
+    request: JString<'local>,
+    job_id: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationVerify, calibration_verify, jstring,
+    plan: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationForm, calibration_form, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationInstructions, calibration_instructions, jstring,
+    plan: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationAutomation, calibration_automation, jstring,
+    workflow_id: JString<'local>,
+    objects: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationApplication, calibration_application, jstring,
+    record: JString<'local>,
+    conditions: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationLineProgram, calibration_line_program, jstring,
+    plan: JString<'local>,
+    options: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationFlowMatching, calibration_flow_matching, jstring,
+    patches: JString<'local>,
+    effects: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationHistoryRecord, calibration_history_record, jstring,
+    method: JString<'local>,
+    conditions: JString<'local>,
+    entry: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationHistoryAssess, calibration_history_assess, jstring,
+    record: JString<'local>,
+    conditions: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationHistoryCompare, calibration_history_compare, jstring,
+    left: JString<'local>,
+    right: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationHistoryExport, calibration_history_export, jstring,
+    records: JString<'local>,
+    exported_at: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationHistoryImport, calibration_history_import, jstring,
+    text: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_calibrationHistoryRerun, calibration_history_rerun, jstring,
+    record: JString<'local>,
+    prerequisites: JString<'local>,
+}
+

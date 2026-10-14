@@ -94,4 +94,6 @@
     <string name="help_tip_of_day">Toon Tip van de dag</string>
     <string name="help_check_updates">Zoeken naar updates</string>
     <string name="help_setup_wizard">Installatiewizard</string>
+    <string name="calib_send_printer_btn">Stuur naar printer</string>
+    <string name="calib_history_delete_btn">Verwijderen</string>
 </resources>

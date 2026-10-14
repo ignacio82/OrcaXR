@@ -99,4 +99,8 @@
     <string name="help_check_updates">Güncellemeleri kontrol et</string>
     <string name="help_setup_wizard">Kurulum sihirbazı</string>
     <string name="presets_export_bundle">Ön Ayar Paketini Dışa Aktar</string>
+    <string name="calib_junction_deviation">Köşe sapması</string>
+    <string name="calib_input_shaping_frequency">Input shaping Frekansı</string>
+    <string name="calib_send_printer_btn">Yazıcıya gönder</string>
+    <string name="calib_history_delete_btn">Sil</string>
 </resources>

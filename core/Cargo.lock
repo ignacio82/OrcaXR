@@ -339,6 +339,8 @@ dependencies = [
  "orcaxr-gcode",
  "orcaxr-printer",
  "orcaxr-project",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -393,6 +395,7 @@ version = "0.1.0"
 dependencies = [
  "libm",
  "orcaxr-contracts",
+ "serde",
  "serde_json",
  "sha2",
 ]

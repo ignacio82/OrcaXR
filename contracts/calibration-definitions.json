@@ -1,0 +1,2307 @@
+[
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "temperature-tower",
+    "label": "Temperature",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-height",
+      "per-object"
+    ],
+    "effectKind": "band",
+    "parameters": [
+      {
+        "key": "filamentType",
+        "label": "Filament type",
+        "kind": "choice",
+        "unit": null,
+        "editable": true,
+        "default": "PLA",
+        "choices": [
+          "PLA",
+          "ABS/ASA",
+          "PETG",
+          "PCTG",
+          "TPU",
+          "PA-CF",
+          "PET-CF",
+          "Custom"
+        ],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "start",
+        "label": "Start temp",
+        "kind": "number",
+        "unit": "°C",
+        "editable": true,
+        "default": 230,
+        "choices": [],
+        "range": {
+          "min": 170,
+          "max": 350,
+          "step": 5,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "end",
+        "label": "End temp",
+        "kind": "number",
+        "unit": "°C",
+        "editable": true,
+        "default": 190,
+        "choices": [],
+        "range": {
+          "min": 170,
+          "max": 350,
+          "step": 5,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "step",
+        "label": "Temp step",
+        "kind": "number",
+        "unit": "°C",
+        "editable": false,
+        "default": 5,
+        "choices": [],
+        "range": {
+          "min": 5,
+          "max": 5,
+          "step": 1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 44.488,
+        "minBedDepthMm": 10.001,
+        "minBuildHeightMm": 10,
+        "minMaxPrintSpeedMmPerS": 1,
+        "minMaxAccelerationMmPerS2": 1
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": true
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": true,
+        "requiresFlowRatio": false,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": false,
+        "requiresOuterWallSpeed": false,
+        "requiresAcceleration": false,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": [
+          "nozzle-temperature"
+        ]
+      }
+    },
+    "geometry": {
+      "kind": "resource",
+      "resources": [
+        {
+          "path": "resources/calib/temperature_tower/temperature_tower.stl",
+          "blob": "7430437e881e23d4fb1bf56f5d1b61be862b034b",
+          "role": "model"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        44.488,
+        10.001,
+        370
+      ],
+      "zTrimmable": true
+    },
+    "resultFields": [
+      {
+        "key": "bestNozzleTemperatureC",
+        "label": "Selected nozzle temperature",
+        "unit": "°C",
+        "required": true
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "filament",
+        "key": "nozzle_temperature",
+        "application": "manual"
+      },
+      {
+        "scope": "filament",
+        "key": "nozzle_temperature_initial_layer",
+        "application": "manual"
+      }
+    ],
+    "fingerprint": "fnv1a64:c5778c21a78202a0"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "flow-pass-1",
+    "label": "Flow rate — Pass 1",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-object"
+    ],
+    "effectKind": "object",
+    "parameters": [
+      {
+        "key": "linearMode",
+        "label": "Linear mode",
+        "kind": "boolean",
+        "unit": null,
+        "editable": false,
+        "default": false,
+        "choices": [],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "pass",
+        "label": "Pass",
+        "kind": "number",
+        "unit": null,
+        "editable": false,
+        "default": 1,
+        "choices": [],
+        "range": {
+          "min": 1,
+          "max": 1,
+          "step": 1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 124,
+        "minBedDepthMm": 94,
+        "minBuildHeightMm": 2,
+        "minMaxPrintSpeedMmPerS": 1,
+        "minMaxAccelerationMmPerS2": 1
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": true,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": false,
+        "requiresOuterWallSpeed": false,
+        "requiresAcceleration": false,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": []
+      }
+    },
+    "geometry": {
+      "kind": "resource",
+      "resources": [
+        {
+          "path": "resources/calib/filament_flow/flowrate-test-pass1.3mf",
+          "blob": "20c997da020fc8b4d0b3481c04efa44454049c6e",
+          "role": "template"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        124,
+        94,
+        2
+      ],
+      "zTrimmable": false
+    },
+    "resultFields": [
+      {
+        "key": "flowRatio",
+        "label": "Flow ratio",
+        "unit": null,
+        "required": true
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "filament",
+        "key": "filament_flow_ratio",
+        "application": "manual"
+      }
+    ],
+    "fingerprint": "fnv1a64:b769cb8dc85d8a1f"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "flow-pass-2",
+    "label": "Flow rate — Pass 2",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-object"
+    ],
+    "effectKind": "object",
+    "parameters": [
+      {
+        "key": "linearMode",
+        "label": "Linear mode",
+        "kind": "boolean",
+        "unit": null,
+        "editable": false,
+        "default": false,
+        "choices": [],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "pass",
+        "label": "Pass",
+        "kind": "number",
+        "unit": null,
+        "editable": false,
+        "default": 2,
+        "choices": [],
+        "range": {
+          "min": 2,
+          "max": 2,
+          "step": 1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 124,
+        "minBedDepthMm": 126,
+        "minBuildHeightMm": 2,
+        "minMaxPrintSpeedMmPerS": 1,
+        "minMaxAccelerationMmPerS2": 1
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": true,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": false,
+        "requiresOuterWallSpeed": false,
+        "requiresAcceleration": false,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": []
+      }
+    },
+    "geometry": {
+      "kind": "resource",
+      "resources": [
+        {
+          "path": "resources/calib/filament_flow/flowrate-test-pass2.3mf",
+          "blob": "97978494050f01e29cd2ffe7c7f4e0a74d70c295",
+          "role": "template"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        124,
+        126,
+        2
+      ],
+      "zTrimmable": false
+    },
+    "resultFields": [
+      {
+        "key": "flowRatio",
+        "label": "Flow ratio",
+        "unit": null,
+        "required": true
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "filament",
+        "key": "filament_flow_ratio",
+        "application": "manual"
+      }
+    ],
+    "fingerprint": "fnv1a64:0c2009a3a55daf13"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "flow-yolo",
+    "label": "Flow rate — YOLO (Recommended)",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-object"
+    ],
+    "effectKind": "object",
+    "parameters": [
+      {
+        "key": "linearMode",
+        "label": "Linear mode",
+        "kind": "boolean",
+        "unit": null,
+        "editable": false,
+        "default": true,
+        "choices": [],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "pass",
+        "label": "Pass",
+        "kind": "number",
+        "unit": null,
+        "editable": false,
+        "default": 1,
+        "choices": [],
+        "range": {
+          "min": 1,
+          "max": 1,
+          "step": 1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "modifierStep",
+        "label": "Flow-ratio step",
+        "kind": "number",
+        "unit": null,
+        "editable": false,
+        "default": 0.01,
+        "choices": [],
+        "range": {
+          "min": 0.01,
+          "max": 0.01,
+          "step": 0.001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 123,
+        "minBedDepthMm": 94,
+        "minBuildHeightMm": 2,
+        "minMaxPrintSpeedMmPerS": 1,
+        "minMaxAccelerationMmPerS2": 1
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": true,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": false,
+        "requiresOuterWallSpeed": false,
+        "requiresAcceleration": false,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": []
+      }
+    },
+    "geometry": {
+      "kind": "resource",
+      "resources": [
+        {
+          "path": "resources/calib/filament_flow/Orca-LinearFlow.3mf",
+          "blob": "8be217beb575eb277abefb6b63c1cfc06d1891be",
+          "role": "template"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        123,
+        94,
+        2
+      ],
+      "zTrimmable": false
+    },
+    "resultFields": [
+      {
+        "key": "flowRatio",
+        "label": "Flow ratio",
+        "unit": null,
+        "required": true
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "filament",
+        "key": "filament_flow_ratio",
+        "application": "manual"
+      }
+    ],
+    "fingerprint": "fnv1a64:f6fa6136930ee758"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "flow-yolo-perfectionist",
+    "label": "Flow rate — YOLO (perfectionist version)",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-object"
+    ],
+    "effectKind": "object",
+    "parameters": [
+      {
+        "key": "linearMode",
+        "label": "Linear mode",
+        "kind": "boolean",
+        "unit": null,
+        "editable": false,
+        "default": true,
+        "choices": [],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "pass",
+        "label": "Pass",
+        "kind": "number",
+        "unit": null,
+        "editable": false,
+        "default": 2,
+        "choices": [],
+        "range": {
+          "min": 2,
+          "max": 2,
+          "step": 1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "modifierStep",
+        "label": "Flow-ratio step",
+        "kind": "number",
+        "unit": null,
+        "editable": false,
+        "default": 0.005,
+        "choices": [],
+        "range": {
+          "min": 0.005,
+          "max": 0.005,
+          "step": 0.001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 123,
+        "minBedDepthMm": 125,
+        "minBuildHeightMm": 2,
+        "minMaxPrintSpeedMmPerS": 1,
+        "minMaxAccelerationMmPerS2": 1
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": true,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": false,
+        "requiresOuterWallSpeed": false,
+        "requiresAcceleration": false,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": []
+      }
+    },
+    "geometry": {
+      "kind": "resource",
+      "resources": [
+        {
+          "path": "resources/calib/filament_flow/Orca-LinearFlow_fine.3mf",
+          "blob": "94f8e62fbf4d0a11f891562b1e8ddab8c616c1aa",
+          "role": "template"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        123,
+        125,
+        2
+      ],
+      "zTrimmable": false
+    },
+    "resultFields": [
+      {
+        "key": "flowRatio",
+        "label": "Flow ratio",
+        "unit": null,
+        "required": true
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "filament",
+        "key": "filament_flow_ratio",
+        "application": "manual"
+      }
+    ],
+    "fingerprint": "fnv1a64:3041034eb5424f26"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "pressure-advance-tower",
+    "label": "Pressure advance — PA Tower",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-height",
+      "per-object"
+    ],
+    "effectKind": "band",
+    "parameters": [
+      {
+        "key": "extruderType",
+        "label": "Extruder type",
+        "kind": "choice",
+        "unit": null,
+        "editable": true,
+        "default": "DDE",
+        "choices": [
+          "DDE",
+          "Bowden"
+        ],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "method",
+        "label": "Method",
+        "kind": "choice",
+        "unit": null,
+        "editable": false,
+        "default": "PA Tower",
+        "choices": [
+          "PA Tower"
+        ],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "start",
+        "label": "Start PA",
+        "kind": "number",
+        "unit": null,
+        "editable": true,
+        "default": 0,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 2,
+          "step": 0.000001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "end",
+        "label": "End PA",
+        "kind": "number",
+        "unit": null,
+        "editable": true,
+        "default": 0.1,
+        "choices": [],
+        "range": {
+          "min": 0.000001,
+          "max": 2,
+          "step": 0.000001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "step",
+        "label": "PA step",
+        "kind": "number",
+        "unit": null,
+        "editable": true,
+        "default": 0.002,
+        "choices": [],
+        "range": {
+          "min": 0.000001,
+          "max": 1,
+          "step": 0.000001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "printNumbers",
+        "label": "Print numbers",
+        "kind": "boolean",
+        "unit": null,
+        "editable": false,
+        "default": false,
+        "choices": [],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "accelerations",
+        "label": "Accelerations",
+        "kind": "number-list",
+        "unit": "mm/s²",
+        "editable": false,
+        "default": [],
+        "choices": [],
+        "range": {
+          "min": 1,
+          "max": 1000000,
+          "step": 1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": 32
+      },
+      {
+        "key": "speeds",
+        "label": "Speeds",
+        "kind": "number-list",
+        "unit": "mm/s",
+        "editable": false,
+        "default": [],
+        "choices": [],
+        "range": {
+          "min": 1,
+          "max": 1000000,
+          "step": 1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": 32
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 70,
+        "minBedDepthMm": 70,
+        "minBuildHeightMm": 2,
+        "minMaxPrintSpeedMmPerS": 1,
+        "minMaxAccelerationMmPerS2": 1
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": true,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": false,
+        "requiresOuterWallSpeed": false,
+        "requiresAcceleration": false,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": [
+          "pressure-advance"
+        ]
+      }
+    },
+    "geometry": {
+      "kind": "resource",
+      "resources": [
+        {
+          "path": "resources/calib/pressure_advance/tower_with_seam.stl",
+          "blob": "7e14536c7d6cc6c7e5edbbb4d8a123aa1a1248b8",
+          "role": "model"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        70,
+        70,
+        60
+      ],
+      "zTrimmable": true
+    },
+    "resultFields": [
+      {
+        "key": "pressureAdvanceK",
+        "label": "Factor K",
+        "unit": null,
+        "required": true
+      },
+      {
+        "key": "adaptivePressureAdvanceN",
+        "label": "Factor N",
+        "unit": null,
+        "required": false
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "filament",
+        "key": "enable_pressure_advance",
+        "application": "manual"
+      },
+      {
+        "scope": "filament",
+        "key": "pressure_advance",
+        "application": "manual"
+      }
+    ],
+    "fingerprint": "fnv1a64:68df31d754b9742e"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "pressure-advance-line",
+    "label": "Pressure advance — PA Line",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "generated-gcode"
+    ],
+    "effectKind": "line",
+    "parameters": [
+      {
+        "key": "extruderType",
+        "label": "Extruder type",
+        "kind": "choice",
+        "unit": null,
+        "editable": true,
+        "default": "DDE",
+        "choices": [
+          "DDE",
+          "Bowden"
+        ],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "method",
+        "label": "Method",
+        "kind": "choice",
+        "unit": null,
+        "editable": false,
+        "default": "PA Line",
+        "choices": [
+          "PA Line"
+        ],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "start",
+        "label": "Start PA",
+        "kind": "number",
+        "unit": null,
+        "editable": true,
+        "default": 0,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 2,
+          "step": 0.000001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "end",
+        "label": "End PA",
+        "kind": "number",
+        "unit": null,
+        "editable": true,
+        "default": 0.1,
+        "choices": [],
+        "range": {
+          "min": 0.000001,
+          "max": 2,
+          "step": 0.000001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "step",
+        "label": "PA step",
+        "kind": "number",
+        "unit": null,
+        "editable": true,
+        "default": 0.002,
+        "choices": [],
+        "range": {
+          "min": 0.000001,
+          "max": 1,
+          "step": 0.000001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "printNumbers",
+        "label": "Print numbers",
+        "kind": "boolean",
+        "unit": null,
+        "editable": true,
+        "default": true,
+        "choices": [],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "accelerations",
+        "label": "Accelerations",
+        "kind": "number-list",
+        "unit": "mm/s²",
+        "editable": false,
+        "default": [],
+        "choices": [],
+        "range": {
+          "min": 1,
+          "max": 1000000,
+          "step": 1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": 32
+      },
+      {
+        "key": "speeds",
+        "label": "Speeds",
+        "kind": "number-list",
+        "unit": "mm/s",
+        "editable": false,
+        "default": [],
+        "choices": [],
+        "range": {
+          "min": 1,
+          "max": 1000000,
+          "step": 1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": 32
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 67.973,
+        "minBedDepthMm": 14.266,
+        "minBuildHeightMm": 1,
+        "minMaxPrintSpeedMmPerS": 1,
+        "minMaxAccelerationMmPerS2": 1
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": true,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": true,
+        "requiresOuterWallSpeed": false,
+        "requiresAcceleration": false,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": [
+          "pressure-advance"
+        ]
+      }
+    },
+    "geometry": {
+      "kind": "hybrid",
+      "resources": [
+        {
+          "path": "resources/calib/pressure_advance/pressure_advance_test.stl",
+          "blob": "0df26de76a59b0bd97fa4103495cd67c5329d14b",
+          "role": "model"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        67.973,
+        14.266,
+        0.201
+      ],
+      "zTrimmable": false
+    },
+    "resultFields": [
+      {
+        "key": "pressureAdvanceK",
+        "label": "Factor K",
+        "unit": null,
+        "required": true
+      },
+      {
+        "key": "adaptivePressureAdvanceN",
+        "label": "Factor N",
+        "unit": null,
+        "required": false
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "filament",
+        "key": "enable_pressure_advance",
+        "application": "manual"
+      },
+      {
+        "scope": "filament",
+        "key": "pressure_advance",
+        "application": "manual"
+      }
+    ],
+    "fingerprint": "fnv1a64:6cef53b2ca7840da"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "pressure-advance-pattern",
+    "label": "Pressure advance — PA Pattern",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-object",
+      "generated-gcode"
+    ],
+    "effectKind": "line",
+    "parameters": [
+      {
+        "key": "extruderType",
+        "label": "Extruder type",
+        "kind": "choice",
+        "unit": null,
+        "editable": true,
+        "default": "DDE",
+        "choices": [
+          "DDE",
+          "Bowden"
+        ],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "method",
+        "label": "Method",
+        "kind": "choice",
+        "unit": null,
+        "editable": false,
+        "default": "PA Pattern",
+        "choices": [
+          "PA Pattern"
+        ],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "start",
+        "label": "Start PA",
+        "kind": "number",
+        "unit": null,
+        "editable": true,
+        "default": 0,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 2,
+          "step": 0.000001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "end",
+        "label": "End PA",
+        "kind": "number",
+        "unit": null,
+        "editable": true,
+        "default": 0.08,
+        "choices": [],
+        "range": {
+          "min": 0.000001,
+          "max": 2,
+          "step": 0.000001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "step",
+        "label": "PA step",
+        "kind": "number",
+        "unit": null,
+        "editable": true,
+        "default": 0.005,
+        "choices": [],
+        "range": {
+          "min": 0.000001,
+          "max": 1,
+          "step": 0.000001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "printNumbers",
+        "label": "Print numbers",
+        "kind": "boolean",
+        "unit": null,
+        "editable": false,
+        "default": true,
+        "choices": [],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "accelerations",
+        "label": "Accelerations",
+        "kind": "number-list",
+        "unit": "mm/s²",
+        "editable": true,
+        "default": [],
+        "choices": [],
+        "range": {
+          "min": 1,
+          "max": 1000000,
+          "step": 1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": 32
+      },
+      {
+        "key": "speeds",
+        "label": "Speeds",
+        "kind": "number-list",
+        "unit": "mm/s",
+        "editable": true,
+        "default": [],
+        "choices": [],
+        "range": {
+          "min": 1,
+          "max": 1000000,
+          "step": 1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": 32
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 5,
+        "minBedDepthMm": 5,
+        "minBuildHeightMm": 1,
+        "minMaxPrintSpeedMmPerS": 1,
+        "minMaxAccelerationMmPerS2": 1
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": true,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": true,
+        "requiresOuterWallSpeed": false,
+        "requiresAcceleration": true,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": [
+          "pressure-advance"
+        ]
+      }
+    },
+    "geometry": {
+      "kind": "hybrid",
+      "resources": [
+        {
+          "path": "resources/calib/pressure_advance/pa_pattern.3mf",
+          "blob": "01e3d443960010dac2e56af32545f1b0a32df769",
+          "role": "device-template"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        5,
+        5,
+        0.85
+      ],
+      "zTrimmable": false
+    },
+    "resultFields": [
+      {
+        "key": "pressureAdvanceK",
+        "label": "Factor K",
+        "unit": null,
+        "required": true
+      },
+      {
+        "key": "adaptivePressureAdvanceN",
+        "label": "Factor N",
+        "unit": null,
+        "required": false
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "filament",
+        "key": "enable_pressure_advance",
+        "application": "manual"
+      },
+      {
+        "scope": "filament",
+        "key": "pressure_advance",
+        "application": "manual"
+      }
+    ],
+    "fingerprint": "fnv1a64:4c0dd0b66f3392f9"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "retraction-tower",
+    "label": "Retraction test",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-height",
+      "per-object"
+    ],
+    "effectKind": "band",
+    "parameters": [
+      {
+        "key": "start",
+        "label": "Start retraction length",
+        "kind": "number",
+        "unit": "mm",
+        "editable": true,
+        "default": 0,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 50,
+          "step": 0.001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "end",
+        "label": "End retraction length",
+        "kind": "number",
+        "unit": "mm",
+        "editable": true,
+        "default": 2,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 50,
+          "step": 0.001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "step",
+        "label": "Step",
+        "kind": "number",
+        "unit": "mm",
+        "editable": true,
+        "default": 0.1,
+        "choices": [],
+        "range": {
+          "min": 0.001,
+          "max": 10,
+          "step": 0.001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 40,
+        "minBedDepthMm": 15,
+        "minBuildHeightMm": 2,
+        "minMaxPrintSpeedMmPerS": 1,
+        "minMaxAccelerationMmPerS2": 1
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": false,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": true
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": false,
+        "requiresOuterWallSpeed": false,
+        "requiresAcceleration": false,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": []
+      }
+    },
+    "geometry": {
+      "kind": "resource",
+      "resources": [
+        {
+          "path": "resources/calib/retraction/retraction_tower.stl",
+          "blob": "bae70d5924f3be85978f7580419d8354f1d8fc6d",
+          "role": "model"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        40,
+        15,
+        80.401
+      ],
+      "zTrimmable": true
+    },
+    "resultFields": [
+      {
+        "key": "retractionLengthMm",
+        "label": "Selected retraction length",
+        "unit": "mm",
+        "required": true
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "printer",
+        "key": "retraction_length",
+        "application": "manual"
+      }
+    ],
+    "fingerprint": "fnv1a64:70232b004be86ce9"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "max-volumetric-speed",
+    "label": "Max flowrate",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-height",
+      "per-object"
+    ],
+    "effectKind": "band",
+    "parameters": [
+      {
+        "key": "start",
+        "label": "Start volumetric speed",
+        "kind": "number",
+        "unit": "mm³/s",
+        "editable": true,
+        "default": 5,
+        "choices": [],
+        "range": {
+          "min": 0.1,
+          "max": 200,
+          "step": 0.1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "end",
+        "label": "End volumetric speed",
+        "kind": "number",
+        "unit": "mm³/s",
+        "editable": true,
+        "default": 20,
+        "choices": [],
+        "range": {
+          "min": 0.1,
+          "max": 200,
+          "step": 0.1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "step",
+        "label": "Step",
+        "kind": "number",
+        "unit": "mm³/s",
+        "editable": true,
+        "default": 0.5,
+        "choices": [],
+        "range": {
+          "min": 0.1,
+          "max": 50,
+          "step": 0.1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 190.006,
+        "minBedDepthMm": 171,
+        "minBuildHeightMm": 2,
+        "minMaxPrintSpeedMmPerS": 1,
+        "minMaxAccelerationMmPerS2": 1
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": true,
+        "requiresMaxVolumetricSpeed": true,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": true,
+        "requiresOuterWallSpeed": true,
+        "requiresAcceleration": false,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": []
+      }
+    },
+    "geometry": {
+      "kind": "resource",
+      "resources": [
+        {
+          "path": "resources/calib/volumetric_speed/SpeedTestStructure.step",
+          "blob": "87aa053957155918f9ad9468483cac1bf4bcc323",
+          "role": "model"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        190.006,
+        171,
+        280.001
+      ],
+      "zTrimmable": true
+    },
+    "resultFields": [
+      {
+        "key": "maxVolumetricSpeedMm3PerS",
+        "label": "Maximum acceptable volumetric speed",
+        "unit": "mm³/s",
+        "required": true
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "filament",
+        "key": "filament_max_volumetric_speed",
+        "application": "manual"
+      }
+    ],
+    "fingerprint": "fnv1a64:1c71b0d6b295cf12"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "junction-deviation",
+    "label": "Junction Deviation",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-height",
+      "per-object"
+    ],
+    "effectKind": "band",
+    "parameters": [
+      {
+        "key": "testModel",
+        "label": "Test model",
+        "kind": "choice",
+        "unit": null,
+        "editable": true,
+        "default": "Ringing Tower",
+        "choices": [
+          "Ringing Tower",
+          "Fast Tower"
+        ],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "start",
+        "label": "Start junction deviation",
+        "kind": "number",
+        "unit": "mm",
+        "editable": true,
+        "default": 0,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 1,
+          "step": 0.001,
+          "minInclusive": true,
+          "maxInclusive": false
+        },
+        "maxItems": null
+      },
+      {
+        "key": "end",
+        "label": "End junction deviation",
+        "kind": "number",
+        "unit": "mm",
+        "editable": true,
+        "default": 0.25,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 1,
+          "step": 0.001,
+          "minInclusive": false,
+          "maxInclusive": false
+        },
+        "maxItems": null
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 120.001,
+        "minBedDepthMm": 120,
+        "minBuildHeightMm": 2,
+        "minMaxPrintSpeedMmPerS": 200,
+        "minMaxAccelerationMmPerS2": 2000
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": false,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": false,
+        "requiresOuterWallSpeed": true,
+        "requiresAcceleration": true,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "marlin"
+        ],
+        "capabilities": [
+          "junction-deviation"
+        ]
+      }
+    },
+    "geometry": {
+      "kind": "resource",
+      "resources": [
+        {
+          "path": "resources/calib/input_shaping/ringing_tower.stl",
+          "blob": "70cae09ea63db2411493f22ab8c4677f64f7467f",
+          "role": "model"
+        },
+        {
+          "path": "resources/calib/input_shaping/fast_tower_test.stl",
+          "blob": "e2fd5cd370c4404744b0faecef41f07902cafed9",
+          "role": "model"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        120.001,
+        120,
+        60
+      ],
+      "zTrimmable": true
+    },
+    "resultFields": [
+      {
+        "key": "junctionDeviationMm",
+        "label": "Selected junction deviation",
+        "unit": "mm",
+        "required": true
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "process",
+        "key": "default_junction_deviation",
+        "application": "manual"
+      }
+    ],
+    "fingerprint": "fnv1a64:9fd188a83315f495"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "input-shaping-frequency",
+    "label": "Input Shaping Frequency",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-height",
+      "per-object"
+    ],
+    "effectKind": "band",
+    "parameters": [
+      {
+        "key": "testModel",
+        "label": "Test model",
+        "kind": "choice",
+        "unit": null,
+        "editable": true,
+        "default": "Ringing Tower",
+        "choices": [
+          "Ringing Tower",
+          "Fast Tower"
+        ],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "freqStartX",
+        "label": "X start",
+        "kind": "number",
+        "unit": "Hz",
+        "editable": true,
+        "default": 15,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 500,
+          "step": 0.01,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "freqEndX",
+        "label": "X end",
+        "kind": "number",
+        "unit": "Hz",
+        "editable": true,
+        "default": 110,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 500,
+          "step": 0.01,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "freqStartY",
+        "label": "Y start",
+        "kind": "number",
+        "unit": "Hz",
+        "editable": true,
+        "default": 15,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 500,
+          "step": 0.01,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "freqEndY",
+        "label": "Y end",
+        "kind": "number",
+        "unit": "Hz",
+        "editable": true,
+        "default": 110,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 500,
+          "step": 0.01,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "damping",
+        "label": "Damp",
+        "kind": "number",
+        "unit": null,
+        "editable": true,
+        "default": 0.15,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 1,
+          "step": 0.001,
+          "minInclusive": true,
+          "maxInclusive": false
+        },
+        "maxItems": null
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 120.001,
+        "minBedDepthMm": 120,
+        "minBuildHeightMm": 2,
+        "minMaxPrintSpeedMmPerS": 200,
+        "minMaxAccelerationMmPerS2": 2000
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": false,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": false,
+        "requiresOuterWallSpeed": true,
+        "requiresAcceleration": true,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": [
+          "input-shaping"
+        ]
+      }
+    },
+    "geometry": {
+      "kind": "resource",
+      "resources": [
+        {
+          "path": "resources/calib/input_shaping/ringing_tower.stl",
+          "blob": "70cae09ea63db2411493f22ab8c4677f64f7467f",
+          "role": "model"
+        },
+        {
+          "path": "resources/calib/input_shaping/fast_tower_test.stl",
+          "blob": "e2fd5cd370c4404744b0faecef41f07902cafed9",
+          "role": "model"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        120.001,
+        120,
+        60
+      ],
+      "zTrimmable": true
+    },
+    "resultFields": [
+      {
+        "key": "frequencyXHz",
+        "label": "Selected X input-shaper frequency",
+        "unit": "Hz",
+        "required": true
+      },
+      {
+        "key": "frequencyYHz",
+        "label": "Selected Y input-shaper frequency",
+        "unit": "Hz",
+        "required": true
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "firmware",
+        "key": "input_shaper.frequency_x",
+        "application": "manual-transfer"
+      },
+      {
+        "scope": "firmware",
+        "key": "input_shaper.frequency_y",
+        "application": "manual-transfer"
+      }
+    ],
+    "fingerprint": "fnv1a64:73cccad7e1d5d5db"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "input-shaping-damping",
+    "label": "Input Shaping Damping/zeta factor",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-height",
+      "per-object"
+    ],
+    "effectKind": "band",
+    "parameters": [
+      {
+        "key": "testModel",
+        "label": "Test model",
+        "kind": "choice",
+        "unit": null,
+        "editable": true,
+        "default": "Ringing Tower",
+        "choices": [
+          "Ringing Tower",
+          "Fast Tower"
+        ],
+        "range": null,
+        "maxItems": null
+      },
+      {
+        "key": "frequencyX",
+        "label": "Frequency X",
+        "kind": "number",
+        "unit": "Hz",
+        "editable": true,
+        "default": 30,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 500,
+          "step": 0.01,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "frequencyY",
+        "label": "Frequency Y",
+        "kind": "number",
+        "unit": "Hz",
+        "editable": true,
+        "default": 30,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 500,
+          "step": 0.01,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "start",
+        "label": "Damp start",
+        "kind": "number",
+        "unit": null,
+        "editable": true,
+        "default": 0,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 1,
+          "step": 0.001,
+          "minInclusive": true,
+          "maxInclusive": false
+        },
+        "maxItems": null
+      },
+      {
+        "key": "end",
+        "label": "Damp end",
+        "kind": "number",
+        "unit": null,
+        "editable": true,
+        "default": 0.4,
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 1,
+          "step": 0.001,
+          "minInclusive": false,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 120.001,
+        "minBedDepthMm": 120,
+        "minBuildHeightMm": 2,
+        "minMaxPrintSpeedMmPerS": 200,
+        "minMaxAccelerationMmPerS2": 2000
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": false,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": false,
+        "requiresOuterWallSpeed": true,
+        "requiresAcceleration": true,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": [
+          "input-shaping"
+        ]
+      }
+    },
+    "geometry": {
+      "kind": "resource",
+      "resources": [
+        {
+          "path": "resources/calib/input_shaping/ringing_tower.stl",
+          "blob": "70cae09ea63db2411493f22ab8c4677f64f7467f",
+          "role": "model"
+        },
+        {
+          "path": "resources/calib/input_shaping/fast_tower_test.stl",
+          "blob": "e2fd5cd370c4404744b0faecef41f07902cafed9",
+          "role": "model"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        120.001,
+        120,
+        60
+      ],
+      "zTrimmable": true
+    },
+    "resultFields": [
+      {
+        "key": "dampingRatio",
+        "label": "Selected damping/zeta factor",
+        "unit": null,
+        "required": true
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "firmware",
+        "key": "input_shaper.damping_ratio",
+        "application": "manual-transfer"
+      }
+    ],
+    "fingerprint": "fnv1a64:482d29d90bfd6fec"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "vfa",
+    "label": "VFA",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-height",
+      "per-object"
+    ],
+    "effectKind": "band",
+    "parameters": [
+      {
+        "key": "start",
+        "label": "Start speed",
+        "kind": "number",
+        "unit": "mm/s",
+        "editable": true,
+        "default": 40,
+        "choices": [],
+        "range": {
+          "min": 10,
+          "max": 1000,
+          "step": 1,
+          "minInclusive": false,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "end",
+        "label": "End speed",
+        "kind": "number",
+        "unit": "mm/s",
+        "editable": true,
+        "default": 200,
+        "choices": [],
+        "range": {
+          "min": 10,
+          "max": 1000,
+          "step": 1,
+          "minInclusive": false,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      },
+      {
+        "key": "step",
+        "label": "Step",
+        "kind": "number",
+        "unit": "mm/s",
+        "editable": true,
+        "default": 10,
+        "choices": [],
+        "range": {
+          "min": 0.1,
+          "max": 500,
+          "step": 0.1,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": null
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 112.881,
+        "minBedDepthMm": 113.248,
+        "minBuildHeightMm": 5,
+        "minMaxPrintSpeedMmPerS": 200,
+        "minMaxAccelerationMmPerS2": 1
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": false,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": false,
+        "requiresOuterWallSpeed": true,
+        "requiresAcceleration": false,
+        "requiresXyCompensation": false
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": []
+      }
+    },
+    "geometry": {
+      "kind": "resource",
+      "resources": [
+        {
+          "path": "resources/calib/vfa/VFA.stl",
+          "blob": "460a1191e93084691e6292d75d021adb065862ea",
+          "role": "model"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        112.881,
+        113.248,
+        300
+      ],
+      "zTrimmable": true
+    },
+    "resultFields": [
+      {
+        "key": "artifactFreeSpeedMinMmPerS",
+        "label": "Artifact-free speed range minimum",
+        "unit": "mm/s",
+        "required": true
+      },
+      {
+        "key": "artifactFreeSpeedMaxMmPerS",
+        "label": "Artifact-free speed range maximum",
+        "unit": "mm/s",
+        "required": true
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "process",
+        "key": "outer_wall_speed",
+        "application": "manual"
+      },
+      {
+        "scope": "process",
+        "key": "inner_wall_speed",
+        "application": "manual"
+      }
+    ],
+    "fingerprint": "fnv1a64:96bed7aeddf33f25"
+  },
+  {
+    "schemaVersion": 1,
+    "definitionVersion": 1,
+    "id": "tolerance-extension",
+    "label": "Orca Tolerance Test",
+    "sourceCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "inventoryEffectCategories": [
+      "per-object"
+    ],
+    "effectKind": "object",
+    "parameters": [
+      {
+        "key": "testClearances",
+        "label": "Model clearances",
+        "kind": "number-list",
+        "unit": "mm",
+        "editable": false,
+        "default": [
+          0,
+          0.05,
+          0.1,
+          0.2,
+          0.3,
+          0.4
+        ],
+        "choices": [],
+        "range": {
+          "min": 0,
+          "max": 1,
+          "step": 0.001,
+          "minInclusive": true,
+          "maxInclusive": true
+        },
+        "maxItems": 6
+      }
+    ],
+    "prerequisites": {
+      "printer": {
+        "minBedWidthMm": 57.937,
+        "minBedDepthMm": 14.401,
+        "minBuildHeightMm": 6.401,
+        "minMaxPrintSpeedMmPerS": 1,
+        "minMaxAccelerationMmPerS2": 1
+      },
+      "nozzle": {
+        "minDiameterMm": 0.1,
+        "maxDiameterMm": 1.2,
+        "requiresTemperatureEnvelope": false
+      },
+      "filament": {
+        "requiresTemperatureEnvelope": false,
+        "requiresFlowRatio": false,
+        "requiresMaxVolumetricSpeed": false,
+        "requiresRetractionLength": false
+      },
+      "process": {
+        "requiresLayerHeight": true,
+        "requiresLineWidth": false,
+        "requiresOuterWallSpeed": false,
+        "requiresAcceleration": false,
+        "requiresXyCompensation": true
+      },
+      "firmware": {
+        "allowedFlavors": [
+          "klipper",
+          "marlin",
+          "reprap"
+        ],
+        "capabilities": []
+      }
+    },
+    "geometry": {
+      "kind": "resource",
+      "resources": [
+        {
+          "path": "resources/handy_models/OrcaToleranceTest.stl",
+          "blob": "3f4e87eb9436d000b15b6f853675c262f821f45f",
+          "role": "model"
+        }
+      ],
+      "sourceEnvelopeMm": [
+        57.937,
+        14.401,
+        6.401
+      ],
+      "zTrimmable": false
+    },
+    "resultFields": [
+      {
+        "key": "passingClearanceMm",
+        "label": "Smallest freely fitting clearance",
+        "unit": "mm",
+        "required": true
+      },
+      {
+        "key": "xyHoleCompensationMm",
+        "label": "Derived X-Y hole compensation",
+        "unit": "mm",
+        "required": false
+      },
+      {
+        "key": "xyContourCompensationMm",
+        "label": "Derived X-Y contour compensation",
+        "unit": "mm",
+        "required": false
+      }
+    ],
+    "presetTargets": [
+      {
+        "scope": "process",
+        "key": "xy_hole_compensation",
+        "application": "manual"
+      },
+      {
+        "scope": "process",
+        "key": "xy_contour_compensation",
+        "application": "manual"
+      }
+    ],
+    "fingerprint": "fnv1a64:202033555ccb0536"
+  }
+]

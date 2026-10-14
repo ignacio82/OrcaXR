@@ -15745,6 +15745,134 @@ fn read_external_slicer_download_step(
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalibrationDefinitionsRequest {}
+fn read_calibration_definitions_request(
+    v: &Value,
+) -> Result<CalibrationDefinitionsRequest, InvalidIntent> {
+    let _object = fields(v, &[], false)?;
+    Ok(CalibrationDefinitionsRequest {})
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalibrationDefinitionsReply {
+    pub definitions_json: PrinterReplyText,
+}
+fn read_calibration_definitions_reply(
+    v: &Value,
+) -> Result<CalibrationDefinitionsReply, InvalidIntent> {
+    let object = fields(v, &["definitionsJson"], false)?;
+    Ok(CalibrationDefinitionsReply {
+        definitions_json: read_printer_reply_text(&object["definitionsJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalibrationFormRequest {
+    pub workflow_id: EditText,
+    pub prerequisites_json: PrinterReplyText,
+    pub edits_json: PrinterReplyText,
+    pub job_id: EditText,
+}
+fn read_calibration_form_request(v: &Value) -> Result<CalibrationFormRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &["workflowId", "prerequisitesJson", "editsJson", "jobId"],
+        false,
+    )?;
+    Ok(CalibrationFormRequest {
+        workflow_id: read_edit_text(&object["workflowId"])?,
+        prerequisites_json: read_printer_reply_text(&object["prerequisitesJson"])?,
+        edits_json: read_printer_reply_text(&object["editsJson"])?,
+        job_id: read_edit_text(&object["jobId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalibrationFormReply {
+    pub form_json: PrinterReplyText,
+}
+fn read_calibration_form_reply(v: &Value) -> Result<CalibrationFormReply, InvalidIntent> {
+    let object = fields(v, &["formJson"], false)?;
+    Ok(CalibrationFormReply {
+        form_json: read_printer_reply_text(&object["formJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalibrationInstructionsRequest {
+    pub plan_json: PrinterReplyText,
+}
+fn read_calibration_instructions_request(
+    v: &Value,
+) -> Result<CalibrationInstructionsRequest, InvalidIntent> {
+    let object = fields(v, &["planJson"], false)?;
+    Ok(CalibrationInstructionsRequest {
+        plan_json: read_printer_reply_text(&object["planJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalibrationInstructionsReply {
+    pub instructions_json: PrinterReplyText,
+}
+fn read_calibration_instructions_reply(
+    v: &Value,
+) -> Result<CalibrationInstructionsReply, InvalidIntent> {
+    let object = fields(v, &["instructionsJson"], false)?;
+    Ok(CalibrationInstructionsReply {
+        instructions_json: read_printer_reply_text(&object["instructionsJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalibrationHistoryRequest {
+    pub operation: EditText,
+    pub payload_json: PrinterReplyText,
+}
+fn read_calibration_history_request(v: &Value) -> Result<CalibrationHistoryRequest, InvalidIntent> {
+    let object = fields(v, &["operation", "payloadJson"], false)?;
+    Ok(CalibrationHistoryRequest {
+        operation: read_edit_text(&object["operation"])?,
+        payload_json: read_printer_reply_text(&object["payloadJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalibrationHistoryReply {
+    pub result_json: PrinterReplyText,
+}
+fn read_calibration_history_reply(v: &Value) -> Result<CalibrationHistoryReply, InvalidIntent> {
+    let object = fields(v, &["resultJson"], false)?;
+    Ok(CalibrationHistoryReply {
+        result_json: read_printer_reply_text(&object["resultJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalibrationApplyRequest {
+    pub record_json: PrinterReplyText,
+    pub conditions_json: PrinterReplyText,
+}
+fn read_calibration_apply_request(v: &Value) -> Result<CalibrationApplyRequest, InvalidIntent> {
+    let object = fields(v, &["recordJson", "conditionsJson"], false)?;
+    Ok(CalibrationApplyRequest {
+        record_json: read_printer_reply_text(&object["recordJson"])?,
+        conditions_json: read_printer_reply_text(&object["conditionsJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalibrationApplyReply {
+    pub plan_json: PrinterReplyText,
+}
+fn read_calibration_apply_reply(v: &Value) -> Result<CalibrationApplyReply, InvalidIntent> {
+    let object = fields(v, &["planJson"], false)?;
+    Ok(CalibrationApplyReply {
+        plan_json: read_printer_reply_text(&object["planJson"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -18187,5 +18315,121 @@ pub fn encode_external_slicer_download_step(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode_bounded(value, &BULK)?;
     decode_external_slicer_download_step(&text)?;
+    Ok(text)
+}
+pub fn decode_calibration_definitions_request(
+    text: &str,
+) -> Result<CalibrationDefinitionsRequest, InvalidIntent> {
+    read_calibration_definitions_request(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_calibration_definitions_request(
+    value: &CalibrationDefinitionsRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_calibration_definitions_request(&text)?;
+    Ok(text)
+}
+pub fn decode_calibration_definitions_reply(
+    text: &str,
+) -> Result<CalibrationDefinitionsReply, InvalidIntent> {
+    read_calibration_definitions_reply(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_calibration_definitions_reply(
+    value: &CalibrationDefinitionsReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_calibration_definitions_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_calibration_form_request(
+    text: &str,
+) -> Result<CalibrationFormRequest, InvalidIntent> {
+    read_calibration_form_request(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_calibration_form_request(
+    value: &CalibrationFormRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_calibration_form_request(&text)?;
+    Ok(text)
+}
+pub fn decode_calibration_form_reply(text: &str) -> Result<CalibrationFormReply, InvalidIntent> {
+    read_calibration_form_reply(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_calibration_form_reply(
+    value: &CalibrationFormReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_calibration_form_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_calibration_instructions_request(
+    text: &str,
+) -> Result<CalibrationInstructionsRequest, InvalidIntent> {
+    read_calibration_instructions_request(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_calibration_instructions_request(
+    value: &CalibrationInstructionsRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_calibration_instructions_request(&text)?;
+    Ok(text)
+}
+pub fn decode_calibration_instructions_reply(
+    text: &str,
+) -> Result<CalibrationInstructionsReply, InvalidIntent> {
+    read_calibration_instructions_reply(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_calibration_instructions_reply(
+    value: &CalibrationInstructionsReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_calibration_instructions_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_calibration_history_request(
+    text: &str,
+) -> Result<CalibrationHistoryRequest, InvalidIntent> {
+    read_calibration_history_request(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_calibration_history_request(
+    value: &CalibrationHistoryRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_calibration_history_request(&text)?;
+    Ok(text)
+}
+pub fn decode_calibration_history_reply(
+    text: &str,
+) -> Result<CalibrationHistoryReply, InvalidIntent> {
+    read_calibration_history_reply(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_calibration_history_reply(
+    value: &CalibrationHistoryReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_calibration_history_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_calibration_apply_request(
+    text: &str,
+) -> Result<CalibrationApplyRequest, InvalidIntent> {
+    read_calibration_apply_request(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_calibration_apply_request(
+    value: &CalibrationApplyRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_calibration_apply_request(&text)?;
+    Ok(text)
+}
+pub fn decode_calibration_apply_reply(text: &str) -> Result<CalibrationApplyReply, InvalidIntent> {
+    read_calibration_apply_reply(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_calibration_apply_reply(
+    value: &CalibrationApplyReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_calibration_apply_reply(&text)?;
     Ok(text)
 }

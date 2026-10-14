@@ -94,4 +94,6 @@
     <string name="help_tip_of_day">Ukázat Tip Dne</string>
     <string name="help_check_updates">Zkontrolovat aktualizace</string>
     <string name="help_setup_wizard">Průvodce nastavením</string>
+    <string name="calib_send_printer_btn">Odeslat do tiskárny</string>
+    <string name="calib_history_delete_btn">Smazat</string>
 </resources>

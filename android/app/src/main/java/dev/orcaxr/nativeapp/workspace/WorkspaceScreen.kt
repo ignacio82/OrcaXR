@@ -261,6 +261,17 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
             ModelToolbar(model, if (compact) Modifier.fillMaxWidth() else Modifier.align(Alignment.CenterHorizontally))
             // A simplify preview's Apply and Cancel, beneath the strip: clear of the tools' panels at the foot.
             model.simplifyPreview?.let { SimplifyCard(model, it, Modifier.align(Alignment.CenterHorizontally)) }
+            model.calibrationSession?.let { session ->
+                dev.orcaxr.nativeapp.project.CalibrationSessionBanner(
+                    state = session,
+                    onSlice = model::sliceCalibration,
+                    onExport = model::exportCalibrationGcode,
+                    onSend = model::sendCalibration,
+                    onDiscard = model::discardCalibrationSession,
+                    onKeep = model::keepCalibrationSession,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp).align(Alignment.CenterHorizontally),
+                )
+            }
         }
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             // The active tool's panel takes the view's foot: one tool at a time, as the browser's `setTool`.

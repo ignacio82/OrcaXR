@@ -231,7 +231,7 @@ export class MeasurePanel {
     turn.style.cssText = distance.style.cssText;
     const turnLabel = document.createElement('label');
     turnLabel.htmlFor = turn.id;
-    turnLabel.textContent = 'Turn (°)';
+    turnLabel.textContent = t('ui.measurePanel.turnDeg', 'Turn (°)');
     turnLabel.style.cssText = distanceLabel.style.cssText;
     turnLabel.appendChild(turn);
     align('align-around-face-center', 'Turn about centre', assembly.canRotateAroundFaceCenter, () =>

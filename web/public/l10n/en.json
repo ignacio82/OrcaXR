@@ -1077,6 +1077,7 @@
   "ui.layerEventPanel.noLayerEventsOnThis": "No layer events on this plate.",
   "ui.measurePanel.gapMm": "Gap (mm)",
   "ui.measurePanel.pickedFeatures": "Picked features",
+  "ui.measurePanel.turnDeg": "Turn (°)",
   "ui.objectsPanel.nameTypeSettingOrFilament": "Name, type, setting, or filament",
   "ui.objectsPanel.searchObjects": "Search objects",
   "ui.paintPanel.colourPainting": "Colour painting",

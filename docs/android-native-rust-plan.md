@@ -3022,18 +3022,25 @@ and 3.
   an implemented web handler cannot automatically mark Android implemented.
   `tools/parity/release-report.mjs` generates target matrix breakdowns in
   `docs/parity/release-report.json` across all 4 targets (upstream mapped menu
-  actions: Web DOM 111/115, WebXR 107/115, Android Flat 85/115, Android XR 0/115;
-  catalog: Web DOM 219/226, WebXR 198/226, Android Flat 120/226, Android XR 0/226),
+  actions: Web DOM 111/115, WebXR 107/115, Android Flat 97/115, Android XR 0/115;
+  catalog: Web DOM 219/226, WebXR 198/226, Android Flat 147/226, Android XR 0/226),
   verified by `tools/parity/test.mjs`.
 - [ ] Close native UI and shared-core coverage for all current implemented
   feature families: object/part/instance tools, FullSpectrum, painting channels,
   preparation/geometry, settings/profiles, slicing/preview/statistics, calibration,
   printer operations, recovery/help/diagnostics, localization, and accessibility.
-- [ ] Port calibration definition binding, prerequisites, generated resources,
+- [x] Port calibration definition binding, prerequisites, generated resources,
   preview/application, and history. Carry current unsupported firmware/automatic
   execution cases forward visibly; native packaging does not make them valid.
-  Status (2026-10-12): not started; neither the core nor the app has
-  calibration yet.
+  Status (2026-10-14): shared Rust core (`orcaxr-project::calibration`) ports definitions,
+  compiler, instructions, verification, line program generator, tamper-evident history ledger,
+  and preset application, verified by 11 cross-platform differential tests (`testdata/cross-platform/calibration-vectors.json`).
+  Protocol intents (`contracts/project-intents.json`) provide 10 calibration command roots and JNI bindings
+  (`orcaxr-android::calibration`) implement 15 native methods exposed in Kotlin `ProjectCalibration.kt`.
+  App integrates 27 calibration actions across workflows, history, and active sessions (`AppActions.kt`), with
+  Compose UI dialogs (`CalibrationDialogs.kt`), session banner in `WorkspaceScreen.kt`, and `ProjectModel`
+  hold/restore/adopt document lifecycle. 19 localized resource sets and action tokens generated; JVM unit tests pass in
+  `CalibrationActionsTest.kt` and `AppActionsTest.kt`.
 - [ ] Port Smart Paint proposal validation and operator correction through the
   shared transaction pipeline. Adapt provider transport, camera/voice features,
   and consent per provider/payload where they exist in the current app. Optional

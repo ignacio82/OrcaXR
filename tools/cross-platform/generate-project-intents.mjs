@@ -314,6 +314,16 @@ assert.deepEqual(schema.roots, [
   "ExternalSlicerArtifact",
   "ExternalSlicerDownloadRead",
   "ExternalSlicerDownloadStep",
+  "CalibrationDefinitionsRequest",
+  "CalibrationDefinitionsReply",
+  "CalibrationFormRequest",
+  "CalibrationFormReply",
+  "CalibrationInstructionsRequest",
+  "CalibrationInstructionsReply",
+  "CalibrationHistoryRequest",
+  "CalibrationHistoryReply",
+  "CalibrationApplyRequest",
+  "CalibrationApplyReply",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

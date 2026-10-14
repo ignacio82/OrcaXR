@@ -9,7 +9,7 @@
     "maxNodes": 4194304,
     "maxDepth": 12
   },
-  "bulkRoots": ["PrinterStorageResult", "PrintHistoryResult", "PrintHistoryJob", "PrintHistoryJobView", "GcodeAssessment", "ConsolePlan", "ConsoleResult", "MacroInvocation", "CameraListResult", "PrinterCamera", "CameraSnapshotRequest", "CameraSnapshotPlan", "CameraSnapshotFinish", "CameraFailure", "CameraMechanismsRequest", "CameraDescribeRequest", "CameraFrameRequest", "OptionalPrinterReplyText", "RememberedCredentials", "ExternalSlicerAttestationPlan", "ExternalSlicerReply", "ExternalSlicerAttestation", "ExternalSlicerPlan", "ExternalSlicerSubmitRead", "ExternalSlicerSubmission", "ExternalSlicerPollRead", "ExternalSlicerPollStep", "ExternalSlicerCancelRead", "ExternalSlicerCancelStep", "ExternalSlicerArtifactRead", "ExternalSlicerArtifact", "ExternalSlicerDownloadRead", "ExternalSlicerDownloadStep"],
+  "bulkRoots": ["PrinterStorageResult", "PrintHistoryResult", "PrintHistoryJob", "PrintHistoryJobView", "GcodeAssessment", "ConsolePlan", "ConsoleResult", "MacroInvocation", "CameraListResult", "PrinterCamera", "CameraSnapshotRequest", "CameraSnapshotPlan", "CameraSnapshotFinish", "CameraFailure", "CameraMechanismsRequest", "CameraDescribeRequest", "CameraFrameRequest", "OptionalPrinterReplyText", "RememberedCredentials", "ExternalSlicerAttestationPlan", "ExternalSlicerReply", "ExternalSlicerAttestation", "ExternalSlicerPlan", "ExternalSlicerSubmitRead", "ExternalSlicerSubmission", "ExternalSlicerPollRead", "ExternalSlicerPollStep", "ExternalSlicerCancelRead", "ExternalSlicerCancelStep", "ExternalSlicerArtifactRead", "ExternalSlicerArtifact", "ExternalSlicerDownloadRead", "ExternalSlicerDownloadStep", "CalibrationDefinitionsRequest", "CalibrationDefinitionsReply", "CalibrationFormRequest", "CalibrationFormReply", "CalibrationInstructionsRequest", "CalibrationInstructionsReply", "CalibrationHistoryRequest", "CalibrationHistoryReply", "CalibrationApplyRequest", "CalibrationApplyReply"],
   "description": "Prepared project commands, session messages and slice preflight exchanges. Text is lossless UTF-16 units. Project transport, command format and persisted schema versions are distinct.",
   "definitions": {
     "Unit": {
@@ -7386,6 +7386,69 @@
         "refetch": "Empty",
         "failed": "ExternalSlicerFailure"
       }
+    },
+    "CalibrationDefinitionsRequest": {
+      "kind": "object",
+      "fields": {}
+    },
+    "CalibrationDefinitionsReply": {
+      "kind": "object",
+      "fields": {
+        "definitionsJson": "PrinterReplyText"
+      }
+    },
+    "CalibrationFormRequest": {
+      "kind": "object",
+      "fields": {
+        "workflowId": "EditText",
+        "prerequisitesJson": "PrinterReplyText",
+        "editsJson": "PrinterReplyText",
+        "jobId": "EditText"
+      }
+    },
+    "CalibrationFormReply": {
+      "kind": "object",
+      "fields": {
+        "formJson": "PrinterReplyText"
+      }
+    },
+    "CalibrationInstructionsRequest": {
+      "kind": "object",
+      "fields": {
+        "planJson": "PrinterReplyText"
+      }
+    },
+    "CalibrationInstructionsReply": {
+      "kind": "object",
+      "fields": {
+        "instructionsJson": "PrinterReplyText"
+      }
+    },
+    "CalibrationHistoryRequest": {
+      "kind": "object",
+      "fields": {
+        "operation": "EditText",
+        "payloadJson": "PrinterReplyText"
+      }
+    },
+    "CalibrationHistoryReply": {
+      "kind": "object",
+      "fields": {
+        "resultJson": "PrinterReplyText"
+      }
+    },
+    "CalibrationApplyRequest": {
+      "kind": "object",
+      "fields": {
+        "recordJson": "PrinterReplyText",
+        "conditionsJson": "PrinterReplyText"
+      }
+    },
+    "CalibrationApplyReply": {
+      "kind": "object",
+      "fields": {
+        "planJson": "PrinterReplyText"
+      }
     }
   },
   "roots": [
@@ -7650,7 +7713,17 @@
     "ExternalSlicerArtifactRead",
     "ExternalSlicerArtifact",
     "ExternalSlicerDownloadRead",
-    "ExternalSlicerDownloadStep"
+    "ExternalSlicerDownloadStep",
+    "CalibrationDefinitionsRequest",
+    "CalibrationDefinitionsReply",
+    "CalibrationFormRequest",
+    "CalibrationFormReply",
+    "CalibrationInstructionsRequest",
+    "CalibrationInstructionsReply",
+    "CalibrationHistoryRequest",
+    "CalibrationHistoryReply",
+    "CalibrationApplyRequest",
+    "CalibrationApplyReply"
   ],
   "sessionVersion": 1
 }

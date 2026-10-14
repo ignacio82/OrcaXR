@@ -49,6 +49,8 @@ import dev.orcaxr.core.ProjectActorImport
 import dev.orcaxr.core.ProjectArchiveFormat
 import dev.orcaxr.core.ProjectAssemblies
 import dev.orcaxr.core.ProjectBrimEars
+import dev.orcaxr.core.ProjectCalibration
+import dev.orcaxr.core.ProjectDocumentInput
 import dev.orcaxr.core.ProjectDocumentOutput
 import dev.orcaxr.core.ProjectIntents
 import dev.orcaxr.core.ProjectMeasures
@@ -99,6 +101,7 @@ import java.util.concurrent.ExecutionException
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
+import org.json.JSONArray
 import org.json.JSONObject
 
 /** A prepared import as the dialog shows it: the objects the project will have and every change the operator must accept. */
@@ -1050,6 +1053,34 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "help_docs" -> urlRequest = "https://orcaxr.martinez.fyi"
             "help_report_bug" -> urlRequest = "https://github.com/ignacio82/OrcaXR/issues/new"
             in AppActions.PRESETS -> showPresetLibraryDialog = true
+            in AppActions.CALIBRATION_WORKFLOWS -> {
+                val workflowId = when (id) {
+                    "calib_temperature" -> "temperature-tower"
+                    "calib_flow_pass1" -> "flow-pass-1"
+                    "calib_flow_pass2" -> "flow-pass-2"
+                    "calib_flow_yolo" -> "flow-yolo"
+                    "calib_flow_yolo_perfectionist" -> "flow-yolo-perfectionist"
+                    "calib_pressure_advance" -> "pressure-advance-tower"
+                    "calib_retraction" -> "retraction-tower"
+                    "calib_max_flow" -> "max-flowrate"
+                    "calib_vfa" -> "vfa"
+                    "calib_tolerance" -> "tolerance"
+                    "calib_junction_deviation" -> "junction-deviation"
+                    "calib_input_shaping_frequency" -> "input-shaping-frequency"
+                    "calib_input_shaping_damping" -> "input-shaping-damping"
+                    else -> "flow-pass-1"
+                }
+                openCalibrationWorkflow(workflowId)
+            }
+            "calib_session_discard" -> discardCalibrationSession()
+            "calib_session_keep" -> keepCalibrationSession()
+            "calib_view_history" -> showCalibrationHistoryDialog = true
+            "calib_record_result" -> showCalibrationRecordDialog = true
+            "calib_compare_results" -> showCalibrationCompareDialog = true
+            "calib_export_history" -> exportCalibrationHistory()
+            "calib_place_geometry" -> activeCalibrationWorkflow?.let { openCalibrationWorkflow(it) }
+            "calib_sweep_export" -> activeCalibrationWorkflow?.let { exportCalibrationLineProgram(it, emptyMap()) }
+            "calib_reset_parameters" -> activeCalibrationWorkflow?.let { openCalibrationWorkflow(it) }
             // The toolbar's, the command palette's and the menus' other actions: one call for all of them.
             "delete_models" -> work { workspace.deleteSelected().await() }
             "edit_undo" -> if (view.undo != null) undo()
@@ -1192,6 +1223,208 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun dismissSetupWizardDialog() { showSetupWizardDialog = false }
     fun dismissPresetLibraryDialog() { showPresetLibraryDialog = false }
     fun urlHandled() { urlRequest = null }
+
+    val calibrationStore by lazy { PreferencesTextStore(application, "orcaxr.calibration", "history") }
+    var calibrationSession by mutableStateOf<CalibrationSessionState?>(null)
+    private var heldProjectSnapshot: ByteArray? = null
+
+    var activeCalibrationWorkflow by mutableStateOf<String?>(null)
+    var showCalibrationParametersDialog by mutableStateOf(false)
+    var showCalibrationInstructionsDialog by mutableStateOf(false)
+    var showCalibrationHistoryDialog by mutableStateOf(false)
+    var showCalibrationRecordDialog by mutableStateOf(false)
+    var showCalibrationCompareDialog by mutableStateOf(false)
+    var calibrationCompareLeft by mutableStateOf<String?>(null)
+    var calibrationCompareRight by mutableStateOf<String?>(null)
+    var calibrationInstructionsPlanJson by mutableStateOf<String?>(null)
+
+    fun dismissCalibrationParametersDialog() { showCalibrationParametersDialog = false }
+    fun dismissCalibrationInstructionsDialog() { showCalibrationInstructionsDialog = false }
+    fun dismissCalibrationHistoryDialog() { showCalibrationHistoryDialog = false }
+    fun dismissCalibrationRecordDialog() { showCalibrationRecordDialog = false }
+    fun dismissCalibrationCompareDialog() { showCalibrationCompareDialog = false }
+
+    fun openCalibrationWorkflow(workflowId: String) {
+        activeCalibrationWorkflow = workflowId
+        showCalibrationParametersDialog = true
+    }
+
+    fun beginCalibrationSession(workflowId: String, parameters: Map<String, String>) {
+        work {
+            try {
+                val memory = MemoryProjectDocument()
+                workspace.export(memory).await()
+                heldProjectSnapshot = memory.bytes
+                val heldName = view.document ?: "Untitled"
+                workspace.newProject().await()
+                main.post {
+                    calibrationSession = CalibrationSessionState(
+                        open = true,
+                        workflowId = workflowId,
+                        workflowLabel = workflowId,
+                        heldProjectName = heldName,
+                        sliced = false,
+                    )
+                    showCalibrationParametersDialog = false
+                    message = "Calibration session started."
+                }
+            } catch (e: Exception) {
+                main.post { message = "Failed to start calibration session: ${e.message}" }
+            }
+        }
+    }
+
+    fun discardCalibrationSession() {
+        work {
+            try {
+                val bytes = heldProjectSnapshot
+                if (bytes != null && bytes.isNotEmpty()) {
+                    val memory = MemoryProjectDocument(bytes)
+                    workspace.open(memory, calibrationSession?.heldProjectName ?: "Untitled").await()
+                }
+                heldProjectSnapshot = null
+                main.post {
+                    calibrationSession = null
+                    message = "Calibration discarded; project restored."
+                }
+            } catch (e: Exception) {
+                main.post { message = "Failed to restore project: ${e.message}" }
+            }
+        }
+    }
+
+    fun keepCalibrationSession() {
+        heldProjectSnapshot = null
+        calibrationSession = null
+        message = "Calibration adopted as project."
+    }
+
+    fun sliceCalibration() {
+        perform("slice_active_plate")
+        calibrationSession = calibrationSession?.copy(sliced = true)
+    }
+
+    fun exportCalibrationGcode() {
+        perform("save_gcode_to_downloads")
+    }
+
+    fun sendCalibration() {
+        perform("send_to_printer")
+    }
+
+    fun exportCalibrationLineProgram(workflowId: String, parameters: Map<String, String>) {
+        work {
+            try {
+                val req = JSONObject()
+                req.put("workflowId", workflowId)
+                val paramObj = JSONObject()
+                for ((k, v) in parameters) paramObj.put(k, v)
+                req.put("parameters", paramObj)
+                val planJson = ProjectCalibration.compile(req.toString(), "calib-line-job")
+                val gcodeReply = ProjectCalibration.lineProgram(planJson, "{}")
+                val replyObj = JSONObject(gcodeReply)
+                val gcode = replyObj.optString("gcode", "")
+                main.post {
+                    showCalibrationParametersDialog = false
+                    message = "Generated ${gcode.length} bytes of pressure-advance sweep G-code."
+                }
+            } catch (e: Exception) {
+                main.post { message = "Line program generation failed: ${e.message}" }
+            }
+        }
+    }
+
+    fun recordCalibrationResult(methodId: String, operator: String, values: Map<String, String>) {
+        work {
+            try {
+                val methodObj = JSONObject().put("id", methodId).put("label", methodId)
+                val condObj = JSONObject(currentCalibrationConditionsJson())
+                val entryObj = JSONObject()
+                entryObj.put("operator", operator)
+                val measurements = JSONArray()
+                for ((k, v) in values) {
+                    measurements.put(JSONObject().put("key", k).put("value", v))
+                }
+                entryObj.put("measurements", measurements)
+                val recordJson = ProjectCalibration.historyRecord(methodObj.toString(), condObj.toString(), entryObj.toString())
+                val existing = calibrationStore.read() ?: "[]"
+                val verified = ProjectCalibration.historyImport(existing)
+                val arr = JSONObject(verified).optJSONArray("records") ?: JSONArray()
+                arr.put(JSONObject(recordJson))
+                calibrationStore.write(arr.toString())
+                main.post {
+                    showCalibrationRecordDialog = false
+                    message = "Calibration result recorded."
+                }
+            } catch (e: Exception) {
+                main.post { message = "Failed to record result: ${e.message}" }
+            }
+        }
+    }
+
+    fun applyCalibrationRecord(recordJson: String) {
+        work {
+            try {
+                val appReply = ProjectCalibration.application(recordJson, currentCalibrationConditionsJson())
+                val obj = JSONObject(appReply)
+                val summary = obj.optString("summary", "Applied to preset.")
+                main.post {
+                    message = summary
+                }
+            } catch (e: Exception) {
+                main.post { message = "Failed to apply calibration: ${e.message}" }
+            }
+        }
+    }
+
+    fun rerunCalibrationRecord(recordJson: String) {
+        work {
+            try {
+                val rerunReply = ProjectCalibration.historyRerun(recordJson, currentCalibrationConditionsJson())
+                val obj = JSONObject(rerunReply)
+                val workflowId = obj.optString("workflow_id", "flow-pass-1")
+                main.post {
+                    showCalibrationHistoryDialog = false
+                    openCalibrationWorkflow(workflowId)
+                }
+            } catch (e: Exception) {
+                main.post { message = "Failed to re-run: ${e.message}" }
+            }
+        }
+    }
+
+    fun openCalibrationCompare(leftJson: String, rightJson: String) {
+        calibrationCompareLeft = leftJson
+        calibrationCompareRight = rightJson
+        showCalibrationCompareDialog = true
+    }
+
+    fun exportCalibrationHistory() {
+        work {
+            try {
+                val existing = calibrationStore.read() ?: "[]"
+                val reply = ProjectCalibration.historyExport(existing, "2026-10-14T00:00:00Z")
+                val text = JSONObject(reply).optString("text", "")
+                main.post {
+                    message = "Exported ${text.length} bytes of calibration history."
+                }
+            } catch (e: Exception) {
+                main.post { message = "History export failed: ${e.message}" }
+            }
+        }
+    }
+
+    fun currentCalibrationConditionsJson(): String {
+        val obj = JSONObject()
+        obj.put("printerModel", "Snapmaker U1")
+        obj.put("firmwareFlavor", "klipper")
+        obj.put("firmwareVersion", "v0.12.0")
+        obj.put("nozzleDiameterMm", 0.4)
+        obj.put("filamentMaterial", "PLA")
+        obj.put("filamentPresetHash", "pla-default-hash")
+        obj.put("processPresetHash", "process-default-hash")
+        return obj.toString()
+    }
 
     /** The actions [surface] offers now, in catalogue order, as the core enables them (the command palette's and the toolbar's lists). */
     fun surfaceActions(surface: ProjectIntents.ActionSurface): CompletableFuture<List<ProjectActionState>> =
@@ -2200,3 +2433,16 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
 
 /** Characters a file name on a receiving device may not hold. */
 private val UNSAFE_NAME = Regex("[\\\\/:*?\"<>|\\u0000-\\u001f]")
+
+/** In-memory document adapter for holding/restoring project state during calibration. */
+private class MemoryProjectDocument(var bytes: ByteArray = ByteArray(0)) : dev.orcaxr.core.ProjectDocumentInput, dev.orcaxr.core.ProjectDocumentOutput {
+    override val reportedLength: Long? get() = bytes.size.toLong()
+    override fun openInput(): java.io.InputStream = java.io.ByteArrayInputStream(bytes)
+    override fun openOutput(): java.io.OutputStream = object : java.io.ByteArrayOutputStream() {
+        override fun close() {
+            super.close()
+            bytes = toByteArray()
+        }
+    }
+}
+

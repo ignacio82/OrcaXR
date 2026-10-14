@@ -99,4 +99,6 @@
     <string name="help_check_updates">Verifica aggiornamenti</string>
     <string name="help_setup_wizard">Configurazione Guidata</string>
     <string name="presets_export_bundle">Esporta pacchetto profili</string>
+    <string name="calib_send_printer_btn">Invia alla stampante</string>
+    <string name="calib_history_delete_btn">Elimina</string>
 </resources>

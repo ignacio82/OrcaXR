@@ -14,6 +14,7 @@ macro_rules! export {
 }
 mod archive;
 mod bindings;
+mod calibration;
 mod catalog;
 mod editor;
 mod exports;
@@ -32,6 +33,7 @@ mod registry;
 mod slicing;
 mod timestamps;
 use archive::*;
+use calibration::*;
 use catalog::*;
 use editor::*;
 use exports::*;

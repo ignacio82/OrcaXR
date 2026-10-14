@@ -88,6 +88,12 @@ const APP_ACTIONS = [
   "help_tutorial", "help_tip_of_day", "help_check_updates", "help_setup_wizard", "help_search",
   "presets_install_printer", "presets_create_custom", "presets_update_custom", "presets_delete_custom", "presets_export_bundle", "presets_import_bundle",
   "add_calibration_cube", "add_calibration_tower", "add_handy_model",
+  "calib_temperature", "calib_flow_pass1", "calib_flow_pass2", "calib_flow_yolo", "calib_flow_yolo_perfectionist",
+  "calib_pressure_advance", "calib_retraction", "calib_max_flow", "calib_vfa", "calib_tolerance",
+  "calib_junction_deviation", "calib_input_shaping_frequency", "calib_input_shaping_damping",
+  "calib_view_history", "calib_record_result", "calib_compare_results", "calib_rerun_result",
+  "calib_apply_result", "calib_delete_result", "calib_choose", "calib_configure", "calib_reset_parameters",
+  "calib_place_geometry", "calib_sweep_export", "calib_session_discard", "calib_session_keep", "calib_export_history",
 ];
 
 const problems = [];

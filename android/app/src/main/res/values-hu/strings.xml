@@ -93,4 +93,6 @@
     <string name="help_tip_of_day">A nap tippjének megjelenítése</string>
     <string name="help_check_updates">Frissítés keresése</string>
     <string name="help_setup_wizard">Beállítás varázsló</string>
+    <string name="calib_send_printer_btn">Nyomtatóra küldés</string>
+    <string name="calib_history_delete_btn">Törlés</string>
 </resources>

@@ -531,6 +531,56 @@ class MainActivity : ComponentActivity() {
                     area = R.string.nav_prepare
                     project.dismissPresetLibraryDialog()
                 })
+                if (project.showCalibrationParametersDialog) {
+                    project.activeCalibrationWorkflow?.let { workflowId ->
+                        dev.orcaxr.nativeapp.project.CalibrationParametersDialog(
+                            workflowId = workflowId,
+                            conditionsJson = project.currentCalibrationConditionsJson(),
+                            onDismiss = project::dismissCalibrationParametersDialog,
+                            onGenerate = project::beginCalibrationSession,
+                            onExportLineProgram = project::exportCalibrationLineProgram,
+                        )
+                    }
+                }
+                if (project.showCalibrationInstructionsDialog) {
+                    project.calibrationInstructionsPlanJson?.let { planJson ->
+                        dev.orcaxr.nativeapp.project.CalibrationInstructionsDialog(
+                            planJson = planJson,
+                            onDismiss = project::dismissCalibrationInstructionsDialog,
+                        )
+                    }
+                }
+                if (project.showCalibrationHistoryDialog) {
+                    dev.orcaxr.nativeapp.project.CalibrationHistoryDialog(
+                        historyStore = project.calibrationStore,
+                        conditionsJson = project.currentCalibrationConditionsJson(),
+                        onDismiss = project::dismissCalibrationHistoryDialog,
+                        onRecordResult = {
+                            project.dismissCalibrationHistoryDialog()
+                            project.showCalibrationRecordDialog = true
+                        },
+                        onCompare = project::openCalibrationCompare,
+                        onRerun = project::rerunCalibrationRecord,
+                        onApply = project::applyCalibrationRecord,
+                    )
+                }
+                if (project.showCalibrationRecordDialog) {
+                    dev.orcaxr.nativeapp.project.CalibrationRecordResultDialog(
+                        onDismiss = project::dismissCalibrationRecordDialog,
+                        onSave = project::recordCalibrationResult,
+                    )
+                }
+                if (project.showCalibrationCompareDialog) {
+                    val left = project.calibrationCompareLeft
+                    val right = project.calibrationCompareRight
+                    if (left != null && right != null) {
+                        dev.orcaxr.nativeapp.project.CalibrationCompareDialog(
+                            leftJson = left,
+                            rightJson = right,
+                            onDismiss = project::dismissCalibrationCompareDialog,
+                        )
+                    }
+                }
             } } } }
         }
     }

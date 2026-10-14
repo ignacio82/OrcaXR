@@ -99,4 +99,6 @@
     <string name="help_check_updates">업데이트 확인</string>
     <string name="help_setup_wizard">설정 마법사</string>
     <string name="presets_export_bundle">프리셋 번들 내보내기</string>
+    <string name="calib_send_printer_btn">프린터로 전송</string>
+    <string name="calib_history_delete_btn">삭제</string>
 </resources>

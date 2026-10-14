@@ -7436,6 +7436,69 @@ const shapes = {
       "refetch": "Empty",
       "failed": "ExternalSlicerFailure"
     }
+  },
+  "CalibrationDefinitionsRequest": {
+    "kind": "object",
+    "fields": {}
+  },
+  "CalibrationDefinitionsReply": {
+    "kind": "object",
+    "fields": {
+      "definitionsJson": "PrinterReplyText"
+    }
+  },
+  "CalibrationFormRequest": {
+    "kind": "object",
+    "fields": {
+      "workflowId": "EditText",
+      "prerequisitesJson": "PrinterReplyText",
+      "editsJson": "PrinterReplyText",
+      "jobId": "EditText"
+    }
+  },
+  "CalibrationFormReply": {
+    "kind": "object",
+    "fields": {
+      "formJson": "PrinterReplyText"
+    }
+  },
+  "CalibrationInstructionsRequest": {
+    "kind": "object",
+    "fields": {
+      "planJson": "PrinterReplyText"
+    }
+  },
+  "CalibrationInstructionsReply": {
+    "kind": "object",
+    "fields": {
+      "instructionsJson": "PrinterReplyText"
+    }
+  },
+  "CalibrationHistoryRequest": {
+    "kind": "object",
+    "fields": {
+      "operation": "EditText",
+      "payloadJson": "PrinterReplyText"
+    }
+  },
+  "CalibrationHistoryReply": {
+    "kind": "object",
+    "fields": {
+      "resultJson": "PrinterReplyText"
+    }
+  },
+  "CalibrationApplyRequest": {
+    "kind": "object",
+    "fields": {
+      "recordJson": "PrinterReplyText",
+      "conditionsJson": "PrinterReplyText"
+    }
+  },
+  "CalibrationApplyReply": {
+    "kind": "object",
+    "fields": {
+      "planJson": "PrinterReplyText"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -8340,6 +8403,16 @@ export type ProjectExternalSlicerArtifactWire = {readonly accepted:ProjectExtern
 export type ProjectExternalSlicerDownloadOutcomeWire = {readonly transferFailed:ProjectEditTextWire} | {readonly artifact:ProjectExternalSlicerArtifactWire};
 export interface ProjectExternalSlicerDownloadReadWire {readonly attempt: ProjectCounterWire;readonly outcome: ProjectExternalSlicerDownloadOutcomeWire;}
 export type ProjectExternalSlicerDownloadStepWire = {readonly accept:ProjectEmptyWire} | {readonly refetch:ProjectEmptyWire} | {readonly failed:ProjectExternalSlicerFailureWire};
+export interface ProjectCalibrationDefinitionsRequestWire {}
+export interface ProjectCalibrationDefinitionsReplyWire {readonly definitionsJson: ProjectPrinterReplyTextWire;}
+export interface ProjectCalibrationFormRequestWire {readonly workflowId: ProjectEditTextWire;readonly prerequisitesJson: ProjectPrinterReplyTextWire;readonly editsJson: ProjectPrinterReplyTextWire;readonly jobId: ProjectEditTextWire;}
+export interface ProjectCalibrationFormReplyWire {readonly formJson: ProjectPrinterReplyTextWire;}
+export interface ProjectCalibrationInstructionsRequestWire {readonly planJson: ProjectPrinterReplyTextWire;}
+export interface ProjectCalibrationInstructionsReplyWire {readonly instructionsJson: ProjectPrinterReplyTextWire;}
+export interface ProjectCalibrationHistoryRequestWire {readonly operation: ProjectEditTextWire;readonly payloadJson: ProjectPrinterReplyTextWire;}
+export interface ProjectCalibrationHistoryReplyWire {readonly resultJson: ProjectPrinterReplyTextWire;}
+export interface ProjectCalibrationApplyRequestWire {readonly recordJson: ProjectPrinterReplyTextWire;readonly conditionsJson: ProjectPrinterReplyTextWire;}
+export interface ProjectCalibrationApplyReplyWire {readonly planJson: ProjectPrinterReplyTextWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -9126,3 +9199,33 @@ export function encodeProjectExternalSlicerDownloadRead(value:ProjectExternalSli
 export function captureProjectExternalSlicerDownloadStep(value:unknown):ProjectExternalSlicerDownloadStepWire { return captureIntent("ExternalSlicerDownloadStep",value,shapes,bulkLimits) as ProjectExternalSlicerDownloadStepWire; }
 export function decodeProjectExternalSlicerDownloadStep(text:string):ProjectExternalSlicerDownloadStepWire { return captureProjectExternalSlicerDownloadStep(parseIntentJson(text,bulkLimits)); }
 export function encodeProjectExternalSlicerDownloadStep(value:ProjectExternalSlicerDownloadStepWire):string { return JSON.stringify(captureProjectExternalSlicerDownloadStep(value)); }
+export function captureProjectCalibrationDefinitionsRequest(value:unknown):ProjectCalibrationDefinitionsRequestWire { return captureIntent("CalibrationDefinitionsRequest",value,shapes,bulkLimits) as ProjectCalibrationDefinitionsRequestWire; }
+export function decodeProjectCalibrationDefinitionsRequest(text:string):ProjectCalibrationDefinitionsRequestWire { return captureProjectCalibrationDefinitionsRequest(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCalibrationDefinitionsRequest(value:ProjectCalibrationDefinitionsRequestWire):string { return JSON.stringify(captureProjectCalibrationDefinitionsRequest(value)); }
+export function captureProjectCalibrationDefinitionsReply(value:unknown):ProjectCalibrationDefinitionsReplyWire { return captureIntent("CalibrationDefinitionsReply",value,shapes,bulkLimits) as ProjectCalibrationDefinitionsReplyWire; }
+export function decodeProjectCalibrationDefinitionsReply(text:string):ProjectCalibrationDefinitionsReplyWire { return captureProjectCalibrationDefinitionsReply(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCalibrationDefinitionsReply(value:ProjectCalibrationDefinitionsReplyWire):string { return JSON.stringify(captureProjectCalibrationDefinitionsReply(value)); }
+export function captureProjectCalibrationFormRequest(value:unknown):ProjectCalibrationFormRequestWire { return captureIntent("CalibrationFormRequest",value,shapes,bulkLimits) as ProjectCalibrationFormRequestWire; }
+export function decodeProjectCalibrationFormRequest(text:string):ProjectCalibrationFormRequestWire { return captureProjectCalibrationFormRequest(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCalibrationFormRequest(value:ProjectCalibrationFormRequestWire):string { return JSON.stringify(captureProjectCalibrationFormRequest(value)); }
+export function captureProjectCalibrationFormReply(value:unknown):ProjectCalibrationFormReplyWire { return captureIntent("CalibrationFormReply",value,shapes,bulkLimits) as ProjectCalibrationFormReplyWire; }
+export function decodeProjectCalibrationFormReply(text:string):ProjectCalibrationFormReplyWire { return captureProjectCalibrationFormReply(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCalibrationFormReply(value:ProjectCalibrationFormReplyWire):string { return JSON.stringify(captureProjectCalibrationFormReply(value)); }
+export function captureProjectCalibrationInstructionsRequest(value:unknown):ProjectCalibrationInstructionsRequestWire { return captureIntent("CalibrationInstructionsRequest",value,shapes,bulkLimits) as ProjectCalibrationInstructionsRequestWire; }
+export function decodeProjectCalibrationInstructionsRequest(text:string):ProjectCalibrationInstructionsRequestWire { return captureProjectCalibrationInstructionsRequest(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCalibrationInstructionsRequest(value:ProjectCalibrationInstructionsRequestWire):string { return JSON.stringify(captureProjectCalibrationInstructionsRequest(value)); }
+export function captureProjectCalibrationInstructionsReply(value:unknown):ProjectCalibrationInstructionsReplyWire { return captureIntent("CalibrationInstructionsReply",value,shapes,bulkLimits) as ProjectCalibrationInstructionsReplyWire; }
+export function decodeProjectCalibrationInstructionsReply(text:string):ProjectCalibrationInstructionsReplyWire { return captureProjectCalibrationInstructionsReply(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCalibrationInstructionsReply(value:ProjectCalibrationInstructionsReplyWire):string { return JSON.stringify(captureProjectCalibrationInstructionsReply(value)); }
+export function captureProjectCalibrationHistoryRequest(value:unknown):ProjectCalibrationHistoryRequestWire { return captureIntent("CalibrationHistoryRequest",value,shapes,bulkLimits) as ProjectCalibrationHistoryRequestWire; }
+export function decodeProjectCalibrationHistoryRequest(text:string):ProjectCalibrationHistoryRequestWire { return captureProjectCalibrationHistoryRequest(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCalibrationHistoryRequest(value:ProjectCalibrationHistoryRequestWire):string { return JSON.stringify(captureProjectCalibrationHistoryRequest(value)); }
+export function captureProjectCalibrationHistoryReply(value:unknown):ProjectCalibrationHistoryReplyWire { return captureIntent("CalibrationHistoryReply",value,shapes,bulkLimits) as ProjectCalibrationHistoryReplyWire; }
+export function decodeProjectCalibrationHistoryReply(text:string):ProjectCalibrationHistoryReplyWire { return captureProjectCalibrationHistoryReply(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCalibrationHistoryReply(value:ProjectCalibrationHistoryReplyWire):string { return JSON.stringify(captureProjectCalibrationHistoryReply(value)); }
+export function captureProjectCalibrationApplyRequest(value:unknown):ProjectCalibrationApplyRequestWire { return captureIntent("CalibrationApplyRequest",value,shapes,bulkLimits) as ProjectCalibrationApplyRequestWire; }
+export function decodeProjectCalibrationApplyRequest(text:string):ProjectCalibrationApplyRequestWire { return captureProjectCalibrationApplyRequest(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCalibrationApplyRequest(value:ProjectCalibrationApplyRequestWire):string { return JSON.stringify(captureProjectCalibrationApplyRequest(value)); }
+export function captureProjectCalibrationApplyReply(value:unknown):ProjectCalibrationApplyReplyWire { return captureIntent("CalibrationApplyReply",value,shapes,bulkLimits) as ProjectCalibrationApplyReplyWire; }
+export function decodeProjectCalibrationApplyReply(text:string):ProjectCalibrationApplyReplyWire { return captureProjectCalibrationApplyReply(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCalibrationApplyReply(value:ProjectCalibrationApplyReplyWire):string { return JSON.stringify(captureProjectCalibrationApplyReply(value)); }
