@@ -115,6 +115,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     /** The bed's outline and grid colours (RGB, 0..1): the plate skin's major and minor lines once themed. */
     private var bedOutline = BED_TINT.copyOf()
     private var bedGrid = FloatArray(3) { BED_TINT[it] * BED_GRID_SHADE }
+    /** The bed origin marker colour (RGB, 0..1), matching the theme's plate origin token. */
+    private var bedOrigin = floatArrayOf(0.0f, 0.59f, 0.53f)
     /** The viewport's wash, top and bottom (RGB, 0..1). */
     private var washTop = CLEAR.copyOf()
     private var washBottom = CLEAR.copyOf()
@@ -648,12 +650,13 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         invalidate()
     }
 
-    /** The bed's colours: its outline in [outlineArgb], its grid in [gridArgb] (the plate skin's major and minor lines). */
-    fun setBedColors(outlineArgb: Int, gridArgb: Int) {
+    /** The bed's colours: its outline in [outlineArgb], its grid in [gridArgb], and its origin in [originArgb]. */
+    fun setBedColors(outlineArgb: Int, gridArgb: Int, originArgb: Int? = null) {
         checkOpen()
         val outline = rgb(outlineArgb); val grid = rgb(gridArgb)
-        if (outline.contentEquals(bedOutline) && grid.contentEquals(bedGrid)) return
-        bedOutline = outline; bedGrid = grid
+        val origin = originArgb?.let(::rgb) ?: bedOrigin
+        if (outline.contentEquals(bedOutline) && grid.contentEquals(bedGrid) && origin.contentEquals(bedOrigin)) return
+        bedOutline = outline; bedGrid = grid; bedOrigin = origin
         bedSize?.let { (width, depth) -> setBed(width, depth) }
     }
 
@@ -814,20 +817,36 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         var spacing = 10.0
         while ((widthMm + depthMm) / spacing > MAX_BED_LINES) spacing *= 5
         val segments = ArrayList<Pair<Point3, Point3>>()
-        val outline = ArrayList<Boolean>()
-        fun line(a: Point3, b: Point3, edge: Boolean) { segments.add(a to b); outline.add(edge) }
+        val lineKinds = ArrayList<Int>()
+        fun line(a: Point3, b: Point3, kind: Int) { segments.add(a to b); lineKinds.add(kind) }
         var x = spacing
-        while (x < widthMm - 1e-6) { line(Point3(x, 0.0, 0.0), Point3(x, depthMm, 0.0), false); x += spacing }
+        while (x < widthMm - 1e-6) { line(Point3(x, 0.0, 0.0), Point3(x, depthMm, 0.0), 0); x += spacing }
         var y = spacing
-        while (y < depthMm - 1e-6) { line(Point3(0.0, y, 0.0), Point3(widthMm, y, 0.0), false); y += spacing }
+        while (y < depthMm - 1e-6) { line(Point3(0.0, y, 0.0), Point3(widthMm, y, 0.0), 0); y += spacing }
         val corners = listOf(Point3(0.0, 0.0, 0.0), Point3(widthMm, 0.0, 0.0), Point3(widthMm, depthMm, 0.0), Point3(0.0, depthMm, 0.0))
-        for (n in 0..3) line(corners[n], corners[(n + 1) % 4], true)
+        for (n in 0..3) line(corners[n], corners[(n + 1) % 4], 1)
+        // Origin indicator at (0, 0): quarter-ring inside plate and tick axes
+        val originSegments = 16
+        val originRadius = 6.0
+        val originPoints = List(originSegments + 1) { i ->
+            val theta = 0.5 * Math.PI * i / originSegments
+            Point3(Math.cos(theta) * originRadius, Math.sin(theta) * originRadius, 0.0)
+        }
+        for (i in 0 until originSegments) {
+            line(originPoints[i], originPoints[i + 1], 2)
+        }
+        line(Point3(0.0, 0.0, 0.0), Point3(originRadius * 1.5, 0.0, 0.0), 2)
+        line(Point3(0.0, 0.0, 0.0), Point3(0.0, originRadius * 1.5, 0.0), 2)
         val positions = MeshPacking.direct(segments.size * 24)
         val colors = MeshPacking.direct(segments.size * 32)
         val indices = MeshPacking.direct(segments.size * 8)
         val low = FloatArray(3) { Float.POSITIVE_INFINITY }; val high = FloatArray(3) { Float.NEGATIVE_INFINITY }
         segments.forEachIndexed { n, (a, b) ->
-            val colour = if (outline[n]) bedOutline else bedGrid
+            val colour = when (lineKinds[n]) {
+                1 -> bedOutline
+                2 -> bedOrigin
+                else -> bedGrid
+            }
             for (point in arrayOf(RenderSpace.point(a), RenderSpace.point(b))) {
                 val coordinates = floatArrayOf(point.x.toFloat(), point.y.toFloat(), point.z.toFloat())
                 for (axis in 0..2) {

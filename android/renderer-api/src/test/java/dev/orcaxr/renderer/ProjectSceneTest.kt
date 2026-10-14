@@ -175,7 +175,7 @@ class ProjectSceneTest {
             near(Point3(10.0, 0.0, 0.0), mesh.vertex(0, 1))
             // The second chunk's local indices land on its own vertices.
             near(Point3(5.0, 15.0, 5.0), mesh.vertex(2, 1))
-            val light = Point3(-.4, -.55, .75).normalized()
+            val light = Point3(.4, -.55, .75).normalized()
             assertEquals(PacketMeshes.shade(Point3(0.0, 0.0, 1.0)), mesh.colors[0])
             assertEquals(0xff000000.toInt() or (Math.round((.35 + .65 * light.z) * 255).toInt() * 0x010101), mesh.colors[0])
             // Facing down, away from the light: the ambient shade only.

@@ -227,10 +227,11 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    the reproducible clean-source engine build.
 6. Phase 2: the flat renderer's open items, recorded with its selection
    ([§](engineering/native-core.md#flat-renderer-selection)): the baked
-   shading's light side and curve, the plate's fill, grid and origin, and
-   anti-aliasing, against the browser's; `FilamentScene`'s own frame time,
-   draw calls, memory and paint/pick latency on the large fixture; the
-   transparent sort; context loss. The SceneCore comparison needs XR hardware.
+   shading's light side now matches the browser's DirectionalLight (front-right,
+   `Point3(0.4, -0.55, 0.75)` in `PacketMesh.kt`), and the bed includes an origin
+   indicator in the theme's origin token colour; remaining: plate fill, anti-aliasing,
+   `FilamentScene`'s own frame time, draw calls, memory and paint/pick latency on
+   the large fixture; transparent sort; context loss. The SceneCore comparison needs XR hardware.
 7. Phases 10 and 11 work that needs no hardware: per-target parity tooling
    (web DOM, WebXR, Android flat, Android XR), calibration and Smart Paint
    ports, and the release checklist items that are not device-bound.

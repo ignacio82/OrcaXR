@@ -340,14 +340,13 @@ What it does, and how that compares with the browser's three.js workspace:
   unlit (`materials/opaque.mat`, `transparent.mat`, compiled by
   `tools/renderer/build-materials.py` with Filament's own `matc`). Shading is
   baked on the CPU per facet (`PacketMesh.kt`): grey = 0.35 + 0.65·max(0,
-  n·L) with L = normalize(−0.4, −0.55, 0.75) in printer millimetres (from the
-  front left), multiplied with the tint and paint in sRGB bytes. The browser
+  n·L) with L = normalize(0.4, −0.55, 0.75) in printer millimetres (from the
+  front right, matching the browser's DirectionalLight), multiplied with the tint and paint in sRGB bytes. The browser
   lights its surfaces per pixel (`MeshStandardMaterial`, roughness .72,
   metalness .04) with a hemisphere light (`0xbbbbbb`/`0x888888`, 3) and a
   directional light (white, 2) from the front right. Chosen for the flat app:
   baked shading — it costs nothing per frame, keeps paint uploads to colours,
-  and needs no lighting material; the light's side and the shading curve are
-  not the browser's yet.
+  and needs no lighting material.
 - **Colour management.** Colours are drawn as authored: post-processing is off
   (no tone mapper, colour grading, dithering or FXAA), the swap chain is not
   sRGB, and every colour — tints, the theme's viewport wash and plate tokens,
@@ -366,7 +365,8 @@ What it does, and how that compares with the browser's three.js workspace:
   selection outline transparent.
 - **Drawing.** Selection mixes the tint 45 % toward the accent (1, .62, .18).
   The bed is lines only (a 10 mm grid, coarsened to keep under 1,000 lines,
-  the outline in the plate's major colour); the browser also fills the plate,
+  the outline in the plate's major colour, with an origin indicator at (0, 0) in
+  the plate's origin token colour); the browser also fills the plate,
   draws its grid as ten divisions of the larger side at .85 or .7 opacity and
   marks the origin. Toolpaths are one-pixel lines (Filament has no line
   width), at most 240,000 segments, as the browser's. Culling is off and
@@ -378,12 +378,11 @@ What it does, and how that compares with the browser's three.js workspace:
 - **Devices.** Only x86_64 emulators (API 34; API 37 with 16 KB pages) have run
   it: no ARM64 device, no physical GPU.
 
-Open before the flat exit gate, none of them blocking: the shading's light
-side and curve, the plate's fill, grid and origin, and anti-aliasing, against
-the browser's; frame time, draw calls, memory and paint and pick latency of
-`FilamentScene` itself on the large fixture (the workbench's numbers are not
-the production renderer's); the transparent sort with overlapping
-non-printable instances; context loss; a device run.
+Open before the flat exit gate, none of them blocking: the plate's fill and
+anti-aliasing, against the browser's; frame time, draw calls, memory and paint
+and pick latency of `FilamentScene` itself on the large fixture (the workbench's
+numbers are not the production renderer's); the transparent sort with
+overlapping non-printable instances; context loss; a device run.
 
 The spatial selection (Android XR's Full Space) waits on hardware: the
 SceneCore candidate ([below](#scenecore-candidate)) has rendered nothing

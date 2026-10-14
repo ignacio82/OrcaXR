@@ -465,7 +465,7 @@ private class PreviewRenderer {
 
     private fun dress(renderer: FilamentScene, tokens: OrcaThemeTokens) {
         renderer.setBackdrop(tokens.viewportTop.toInt(), tokens.viewportBottom.toInt())
-        renderer.setBedColors(tokens.plate.gridMajor.toInt(), tokens.plate.gridMinor.toInt())
+        renderer.setBedColors(tokens.plate.gridMajor.toInt(), tokens.plate.gridMinor.toInt(), tokens.plate.origin.toInt())
     }
 
     /** Puts the camera on the browser's [view] of the bed drawn under the toolpaths. */

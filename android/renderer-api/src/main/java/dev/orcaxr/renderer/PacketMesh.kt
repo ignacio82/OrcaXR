@@ -35,8 +35,8 @@ fun ProjectMeshPacket.asSource(): MeshPacketSource? {
  * a fixed direction above the front of the plate: `0.35 + 0.65 * max(0, n·L)`.
  */
 object PacketMeshes {
-    /** The light, in the project's Z-up millimetre space. */
-    private val LIGHT = Point3(-.4, -.55, .75).normalized()
+    /** The light, in the project's Z-up millimetre space, from the front right (matching browser's DirectionalLight). */
+    private val LIGHT = Point3(.4, -.55, .75).normalized()
     private const val AMBIENT = .35
     private const val DIFFUSE = .65
 
