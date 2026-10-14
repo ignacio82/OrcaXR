@@ -1168,15 +1168,15 @@ Snapmaker NDK build proof, and an explicit renderer decision.
 - [ ] Record the flat/spatial renderer selection and any required alternative
   prototype. Resolve blockers before building the full XR interface.
   The Workspace now uses the Filament candidate in release builds too.
-  Status (2026-10-12): the flat selection is recorded
+  Status (2026-10-14): the flat selection is recorded
   ([§](engineering/native-core.md#flat-renderer-selection)): Filament on
   OpenGL ES, unlit with shading baked per facet, colours drawn as authored
   sRGB without tone mapping, one blended material for non-printable
-  instances, x86_64 emulators only; its open items against the browser and
-  its unmeasured costs are listed there. Recording it found the browser's 3D
-  preview drawing toolpaths lighter than authored (fixed). The spatial
-  selection waits on XR hardware: SceneCore if it meets the stated test on a
-  Galaxy XR, else the OpenXR fallback.
+  instances, x86_64 emulators only; the 3D solid plate fill is implemented
+  and verified on emulators, anti-aliasing is blocked by Filament 1.77.1's
+  GLES `blitLow` compiler error, and remaining unmeasured costs are listed
+  there. The spatial selection waits on XR hardware: SceneCore if it meets
+  the stated test on a Galaxy XR, else the OpenXR fallback.
 
 **Exit gate:** real-device proof of usable mesh/toolpath updates and a valid slice
 from the current engine. A cube render or successful linker invocation alone is

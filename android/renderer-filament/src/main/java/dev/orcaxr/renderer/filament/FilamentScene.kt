@@ -83,6 +83,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         var leafEntity: Int? = null
     }
     private class Lines(val vertices: VertexBuffer, val indices: IndexBuffer, val entity: Int, val bytes: Long)
+    private class Plate(val vertices: VertexBuffer, val indices: IndexBuffer, val entity: Int, val bytes: Long)
     /** A marker shape on the GPU, shared by the markers drawing it: facets, or line segments. */
     private class Shape(val vertices: VertexBuffer, val indices: IndexBuffer, val count: Int, val center: FloatArray, val extent: FloatArray, val lines: Boolean)
     /** One marker drawn: its entity and its own material. */
@@ -100,6 +101,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private val opaque: Material
     private val transparent: Material
     private val bedMaterial: MaterialInstance
+    private val plateMaterial: MaterialInstance
     private val toolpathMaterial: MaterialInstance
     private val helper = UiHelper(UiHelper.ContextErrorPolicy.DONT_CHECK)
     private val display = DisplayHelper(surface.context)
@@ -110,6 +112,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private val geometries = LinkedHashMap<String, Geometry>()
     private val placed = LinkedHashMap<String, Placed>()
     private var bed: Lines? = null
+    private var bedPlate: Plate? = null
     private var bedSize: Pair<Double, Double>? = null
     private var printableBox: Lines? = null
     /** The bed's outline and grid colours (RGB, 0..1): the plate skin's major and minor lines once themed. */
@@ -117,6 +120,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private var bedGrid = FloatArray(3) { BED_TINT[it] * BED_GRID_SHADE }
     /** The bed origin marker colour (RGB, 0..1), matching the theme's plate origin token. */
     private var bedOrigin = floatArrayOf(0.0f, 0.59f, 0.53f)
+    /** The plate fill colour (RGB, 0..1), matching the theme's plate fill token. */
+    private var bedFill = floatArrayOf(0.208f, 0.231f, 0.243f)
     /** The viewport's wash, top and bottom (RGB, 0..1). */
     private var washTop = CLEAR.copyOf()
     private var washBottom = CLEAR.copyOf()
@@ -165,6 +170,12 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             // The bed's lines carry their own colours.
             bedMaterial.setParameter("tint", 1f, 1f, 1f, 1f)
             bedMaterial.setParameter("highlight", 0f, 0f, 0f, 0f)
+            plateMaterial = opaque.createInstance()
+            plateMaterial.setParameter("clipHeight", clipHeight)
+            plateMaterial.setParameter("opacity", 1f)
+            plateMaterial.setParameter("tint", 1f, 1f, 1f, 1f)
+            plateMaterial.setParameter("highlight", 0f, 0f, 0f, 0f)
+            plateMaterial.setPolygonOffset(1f, 1f)
             toolpathMaterial = opaque.createInstance()
             toolpathMaterial.setParameter("clipHeight", clipHeight)
             toolpathMaterial.setParameter("opacity", 1f)
@@ -223,8 +234,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         requireUi()
         return Metrics(state, meshes.size, geometries.values.sumOf { it.mesh.source.facetCount },
             geometries.values.sumOf { it.uploadedFacets }, placed.size,
-            placed.values.sumOf { it.entities.size + (if (it.leafEntity == null) 0 else 1) } + (if (bed == null) 0 else 1) + (if (toolpath == null) 0 else 1) + (if (printableBox == null) 0 else 1),
-            geometries.values.sumOf { geometry -> geometry.chunks.sumOf { it.bytes } + (geometry.leaves?.bytes ?: 0) } + (bed?.bytes ?: 0) + (toolpath?.bytes ?: 0) + (printableBox?.bytes ?: 0),
+            placed.values.sumOf { it.entities.size + (if (it.leafEntity == null) 0 else 1) } + (if (bed == null) 0 else 1) + (if (bedPlate == null) 0 else 1) + (if (toolpath == null) 0 else 1) + (if (printableBox == null) 0 else 1),
+            geometries.values.sumOf { geometry -> geometry.chunks.sumOf { it.bytes } + (geometry.leaves?.bytes ?: 0) } + (bed?.bytes ?: 0) + (bedPlate?.bytes ?: 0) + (toolpath?.bytes ?: 0) + (printableBox?.bytes ?: 0),
             pending, peakPending, uploaded, uploads, frames, maxFrameCpuMs, closed, toolpathSegments,
             geometries.size, geometries.values.count { it.colors != null }, paintUploaded)
     }
@@ -650,13 +661,14 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         invalidate()
     }
 
-    /** The bed's colours: its outline in [outlineArgb], its grid in [gridArgb], and its origin in [originArgb]. */
-    fun setBedColors(outlineArgb: Int, gridArgb: Int, originArgb: Int? = null) {
+    /** The bed's colours: its outline in [outlineArgb], its grid in [gridArgb], its origin in [originArgb], and its plate fill in [fillArgb]. */
+    fun setBedColors(outlineArgb: Int, gridArgb: Int, originArgb: Int? = null, fillArgb: Int? = null) {
         checkOpen()
         val outline = rgb(outlineArgb); val grid = rgb(gridArgb)
         val origin = originArgb?.let(::rgb) ?: bedOrigin
-        if (outline.contentEquals(bedOutline) && grid.contentEquals(bedGrid) && origin.contentEquals(bedOrigin)) return
-        bedOutline = outline; bedGrid = grid; bedOrigin = origin
+        val fill = fillArgb?.let(::rgb) ?: bedFill
+        if (outline.contentEquals(bedOutline) && grid.contentEquals(bedGrid) && origin.contentEquals(bedOrigin) && fill.contentEquals(bedFill)) return
+        bedOutline = outline; bedGrid = grid; bedOrigin = origin; bedFill = fill
         bedSize?.let { (width, depth) -> setBed(width, depth) }
     }
 
@@ -809,10 +821,11 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         return Shape(vertices, index, count, FloatArray(3) { (low[it] + high[it]) * .5f }, FloatArray(3) { max((high[it] - low[it]) * .5f, 1e-5f) }, shape.lines)
     }
 
-    /** The print bed: its outline and a grid every 10 mm (coarser on a large bed), on z = 0 from the origin. */
+    /** The print bed: its solid plate, outline and a grid every 10 mm (coarser on a large bed), on z = 0 from the origin. */
     fun setBed(widthMm: Double, depthMm: Double) {
         checkOpen(); require(widthMm.isFinite() && depthMm.isFinite() && widthMm in 1.0..5000.0 && depthMm in 1.0..5000.0)
         bed?.let(::destroyLines); bed = null
+        bedPlate?.let(::destroyPlate); bedPlate = null
         bedSize = widthMm to depthMm
         var spacing = 10.0
         while ((widthMm + depthMm) / spacing > MAX_BED_LINES) spacing *= 5
@@ -860,7 +873,102 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         positions.flip(); colors.flip(); indices.flip()
         bed = createLines(positions, colors, indices,
             FloatArray(3) { (low[it] + high[it]) * .5f }, FloatArray(3) { max((high[it] - low[it]) * .5f, 1e-5f) }, bedMaterial)
+        bedPlate = createPlate(widthMm, depthMm)
         invalidate()
+    }
+
+    /** The print bed solid plate: a 3D box of thickness [BED_PLATE_THICKNESS_MM] below z = 0, filled in [bedFill]. */
+    private fun createPlate(widthMm: Double, depthMm: Double): Plate {
+        val pt0 = RenderSpace.point(Point3(0.0, 0.0, 0.0))
+        val pt1 = RenderSpace.point(Point3(widthMm, 0.0, 0.0))
+        val pt2 = RenderSpace.point(Point3(widthMm, depthMm, 0.0))
+        val pt3 = RenderSpace.point(Point3(0.0, depthMm, 0.0))
+
+        val pb0 = RenderSpace.point(Point3(0.0, 0.0, -BED_PLATE_THICKNESS_MM))
+        val pb1 = RenderSpace.point(Point3(widthMm, 0.0, -BED_PLATE_THICKNESS_MM))
+        val pb2 = RenderSpace.point(Point3(widthMm, depthMm, -BED_PLATE_THICKNESS_MM))
+        val pb3 = RenderSpace.point(Point3(0.0, depthMm, -BED_PLATE_THICKNESS_MM))
+
+        val topColor = bedFill
+        val sideColor = floatArrayOf(bedFill[0] * BED_PLATE_SIDE_SHADE, bedFill[1] * BED_PLATE_SIDE_SHADE, bedFill[2] * BED_PLATE_SIDE_SHADE)
+        val bottomColor = floatArrayOf(bedFill[0] * BED_PLATE_BOTTOM_SHADE, bedFill[1] * BED_PLATE_BOTTOM_SHADE, bedFill[2] * BED_PLATE_BOTTOM_SHADE)
+
+        val faces = listOf(
+            listOf(pt0, pt1, pt2, pt3) to topColor,
+            listOf(pb0, pb3, pb2, pb1) to bottomColor,
+            listOf(pb0, pb1, pt1, pt0) to sideColor,
+            listOf(pb1, pb2, pt2, pt1) to sideColor,
+            listOf(pb2, pb3, pt3, pt2) to sideColor,
+            listOf(pb3, pb0, pt0, pt3) to sideColor,
+        )
+
+        val vertexCount = faces.size * 4
+        val indexCount = faces.size * 6
+        val positions = MeshPacking.direct(vertexCount * 12)
+        val colors = MeshPacking.direct(vertexCount * 16)
+        val indices = MeshPacking.direct(indexCount * 4)
+        val low = FloatArray(3) { Float.POSITIVE_INFINITY }
+        val high = FloatArray(3) { Float.NEGATIVE_INFINITY }
+
+        faces.forEachIndexed { f, (faceCorners, color) ->
+            val base = f * 4
+            for (p in faceCorners) {
+                val coords = floatArrayOf(p.x.toFloat(), p.y.toFloat(), p.z.toFloat())
+                for (axis in 0..2) {
+                    positions.putFloat(coords[axis])
+                    low[axis] = min(low[axis], coords[axis])
+                    high[axis] = max(high[axis], coords[axis])
+                }
+                colors.putFloat(color[0]).putFloat(color[1]).putFloat(color[2]).putFloat(1f)
+            }
+            indices.putInt(base)
+            indices.putInt(base + 1)
+            indices.putInt(base + 2)
+            indices.putInt(base)
+            indices.putInt(base + 2)
+            indices.putInt(base + 3)
+        }
+        positions.flip(); colors.flip(); indices.flip()
+
+        val vertices = VertexBuffer.Builder().bufferCount(2).vertexCount(vertexCount)
+            .attribute(VertexBuffer.VertexAttribute.POSITION, 0, VertexBuffer.AttributeType.FLOAT3, 0, 12)
+            .attribute(VertexBuffer.VertexAttribute.COLOR, 1, VertexBuffer.AttributeType.FLOAT4, 0, 16)
+            .build(engine)
+        val index = try {
+            IndexBuffer.Builder().indexCount(indexCount).bufferType(IndexBuffer.Builder.IndexType.UINT).build(engine)
+        } catch (failure: Throwable) {
+            engine.destroyVertexBuffer(vertices)
+            throw failure
+        }
+        val entity = engine.entityManager.create()
+        val center = FloatArray(3) { (low[it] + high[it]) * .5f }
+        val halfExtent = FloatArray(3) { max((high[it] - low[it]) * .5f, 1e-5f) }
+        try {
+            RenderableManager.Builder(1)
+                .boundingBox(Box(center[0], center[1], center[2], halfExtent[0], halfExtent[1], halfExtent[2]))
+                .geometry(0, RenderableManager.PrimitiveType.TRIANGLES, vertices, index, 0, indexCount)
+                .material(0, plateMaterial)
+                .priority(3)
+                .culling(false).castShadows(false).receiveShadows(false)
+                .build(engine, entity)
+            scene.addEntity(entity)
+            submit(positions) { callback -> vertices.setBufferAt(engine, 0, positions, 0, positions.remaining(), handler, callback) }
+            submit(colors) { callback -> vertices.setBufferAt(engine, 1, colors, 0, colors.remaining(), handler, callback) }
+            submit(indices) { callback -> index.setBuffer(engine, indices, 0, indices.remaining(), handler, callback) }
+            engine.flush()
+        } catch (failure: Throwable) {
+            destroyEntity(entity)
+            engine.destroyVertexBuffer(vertices)
+            engine.destroyIndexBuffer(index)
+            throw failure
+        }
+        return Plate(vertices, index, entity, positions.remaining().toLong() + colors.remaining() + indices.remaining())
+    }
+
+    private fun destroyPlate(value: Plate) {
+        destroyEntity(value.entity)
+        engine.destroyVertexBuffer(value.vertices)
+        engine.destroyIndexBuffer(value.indices)
     }
 
     /**
@@ -985,6 +1093,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         checkOpen(); require(height == null || height.isFinite() && height in -1_000_000f..1_000_000f)
         clipHeight = height?.times(.001f) ?: 10000f
         bedMaterial.setParameter("clipHeight", clipHeight)
+        plateMaterial.setParameter("clipHeight", clipHeight)
         toolpathMaterial.setParameter("clipHeight", clipHeight)
         for (each in placed.values) {
             each.material.setParameter("clipHeight", clipHeight)
@@ -1079,6 +1188,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         meshes.values.forEach(::discard); meshes.clear()
         for (volumeId in geometries.keys.toList()) dropGeometry(volumeId)
         bed?.let(::destroyLines); bed = null
+        bedPlate?.let(::destroyPlate); bedPlate = null
         printableBox?.let(::destroyLines); printableBox = null
         toolpath?.let(::destroyLines); toolpath = null; toolpathSegments = 0
         marked.forEach { destroyEntity(it.entity); engine.destroyMaterialInstance(it.material) }; marked.clear()
@@ -1090,6 +1200,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         }
         backdrop = null
         engine.destroyMaterialInstance(bedMaterial)
+        engine.destroyMaterialInstance(plateMaterial)
         engine.destroyMaterialInstance(toolpathMaterial)
         engine.destroyMaterial(opaque); engine.destroyMaterial(transparent)
         engine.destroyView(view); engine.destroyScene(scene); engine.destroyRenderer(renderer)
@@ -1115,6 +1226,9 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         val BED_TINT = floatArrayOf(.42f, .47f, .55f)
         const val BED_GRID_SHADE = .55f
         const val MAX_BED_LINES = 1000.0
+        const val BED_PLATE_THICKNESS_MM = 6.0
+        const val BED_PLATE_SIDE_SHADE = 0.85f
+        const val BED_PLATE_BOTTOM_SHADE = 0.7f
         /** The viewport experiment's toolpath bound and `ToolpathGeometry`'s default budget. */
         const val MAX_TOOLPATH_SEGMENTS = 240_000
         /** Leaves are pulled toward the eye, as the browser offsets its paint overlay (`polygonOffsetFactor/Units -2`). */

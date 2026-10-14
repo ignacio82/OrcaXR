@@ -68,8 +68,8 @@ find(SHOWING, timeout=30)
 # The file's own totals, from the shared core's summary.
 find("≈42s · 0.02 g")
 lines = drawn()
-# Toolpaths are drawn in the core's saturated colours; the bed and background are not.
-assert saturated_pixels(empty, *view) < 20, "The empty view already shows coloured lines"
+# Toolpaths are drawn in the core's saturated colours; the bed origin indicator is ~20 pixels, toolpaths >150.
+assert saturated_pixels(empty, *view) < 50, "The empty view already shows coloured lines"
 toolpaths = saturated_pixels(lines, *view)
 assert toolpaths > 150, f"The toolpaths were not drawn ({toolpaths} coloured pixels)"
 # Coloured by tool rather than by line type.

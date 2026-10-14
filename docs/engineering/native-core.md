@@ -364,25 +364,32 @@ What it does, and how that compares with the browser's three.js workspace:
   draws the wipe-tower ghost (.35), its paint preview (.55) and an optional
   selection outline transparent.
 - **Drawing.** Selection mixes the tint 45 % toward the accent (1, .62, .18).
-  The bed is lines only (a 10 mm grid, coarsened to keep under 1,000 lines,
-  the outline in the plate's major colour, with an origin indicator at (0, 0) in
-  the plate's origin token colour); the browser also fills the plate,
-  draws its grid as ten divisions of the larger side at .85 or .7 opacity and
-  marks the origin. Toolpaths are one-pixel lines (Filament has no line
+  The bed draws a 3D solid plate (a 6 mm box below z = 0 filled in the theme's
+  `plate.fill` token, side faces shaded at 0.85× and bottom at 0.7×, offset by
+  `setPolygonOffset(1f, 1f)` to avoid z-fighting with the grid lines and models
+  at z = 0), a 10 mm grid (coarsened to keep under 1,000 lines), the outline in
+  the plate's major colour, and an origin indicator at (0, 0) in the plate's
+  origin token colour. Toolpaths are one-pixel lines (Filament has no line
   width), at most 240,000 segments, as the browser's. Culling is off and
   materials are double-sided; each draw chunk is its own renderable (no GPU
-  instancing). There is no anti-aliasing (the browser asks for it).
+  instancing). Anti-aliasing remains disabled on OpenGL ES: Filament 1.77.1's
+  built-in blit shader (`blitLow`) for resolving multisample framebuffers on
+  GLES 3.0 fails GLSL compilation in `FEngine::loop` with `PostconditionPanic:
+  OpenGL program blitLow failed to link or compile` (GLSL syntax error in
+  structure constructor arguments and float to mediump vec4 assignment), aborting
+  with SIGABRT if MSAA is enabled.
 - **Lifecycle.** A scene exists only while its area is resumed and renders
   only while dirty; surface loss destroys the swap chain. Context loss is not
   handled (`DONT_CHECK`), and the Vulkan materials are packaged but never used.
 - **Devices.** Only x86_64 emulators (API 34; API 37 with 16 KB pages) have run
   it: no ARM64 device, no physical GPU.
 
-Open before the flat exit gate, none of them blocking: the plate's fill and
-anti-aliasing, against the browser's; frame time, draw calls, memory and paint
-and pick latency of `FilamentScene` itself on the large fixture (the workbench's
-numbers are not the production renderer's); the transparent sort with
-overlapping non-printable instances; context loss; a device run.
+Open before the flat exit gate, none of them blocking: frame time, draw calls,
+memory and paint and pick latency of `FilamentScene` itself on the large fixture
+(the workbench's numbers are not the production renderer's); the transparent
+sort with overlapping non-printable instances; context loss; a device run.
+(The plate fill is done; anti-aliasing is blocked by Filament's GLES `blitLow`
+shader bug until an upgraded Filament or Vulkan backend is adopted).
 
 The spatial selection (Android XR's Full Space) waits on hardware: the
 SceneCore candidate ([below](#scenecore-candidate)) has rendered nothing

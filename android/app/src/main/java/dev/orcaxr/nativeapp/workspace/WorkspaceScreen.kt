@@ -682,7 +682,12 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
 
     private fun dress(renderer: FilamentScene, tokens: OrcaThemeTokens) {
         renderer.setBackdrop(tokens.viewportTop.toInt(), tokens.viewportBottom.toInt())
-        renderer.setBedColors(tokens.plate.gridMajor.toInt(), tokens.plate.gridMinor.toInt(), tokens.plate.origin.toInt())
+        renderer.setBedColors(
+            tokens.plate.gridMajor.toInt(),
+            tokens.plate.gridMinor.toInt(),
+            tokens.plate.origin.toInt(),
+            tokens.plate.fill.toInt(),
+        )
     }
 
     /** A camera view asked for before the scene existed, taken once it does. */
