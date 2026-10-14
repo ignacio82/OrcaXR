@@ -9,6 +9,7 @@
 //! cooperatively cancellable: run it on an owned import task.
 mod amf;
 mod detect;
+pub mod geometry_merge;
 pub mod host;
 pub mod layout;
 mod mesh;

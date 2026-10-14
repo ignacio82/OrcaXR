@@ -103,7 +103,11 @@ data class ProjectView(
     val filamentSlots: SlicingSlots = SlicingSlots(emptyList(), emptyList(), emptyList()),
     /** The virtual filament library the project shows (the browser's library), or why it shows none. */
     val virtualFilaments: VirtualFilamentLibraryResult = VirtualFilamentLibraryResult.Shown(VirtualFilamentLibrary.EMPTY),
-)
+) {
+    /** Whether any build plate in the project holds models. */
+    val hasObjects: Boolean get() = plateList.sumOf { it.objects } > 0
+    val objectCount: Int get() = plateList.sumOf { it.objects }
+}
 
 /** An operation the session refused or could not confirm, in an operator's words. */
 class ProjectFailure(message: String) : Exception(message)
@@ -917,6 +921,18 @@ class ProjectWorkspace(
             capturing(record) {
                 val upload = ProjectDocuments.stageModel(scope, input, ProjectModelImportOptions(), resolver, ProjectIntegerProfile.CHROMIUM)
                 base.prepareModel(upload, filename, NewProjects.timestamp(clock()), placement)
+            }
+        }
+    }) { result -> (result as? ProjectOutcome.ImportPrepared)?.candidate }
+
+    /** Prepares a 3MF geometry-only import against the current project; nothing changes until it is committed. */
+    fun prepareGeometryImport(input: ProjectDocumentInput, filename: String): CompletableFuture<ProjectActorImport> = run({ guard, record ->
+        // Centred on the project's own printable area and dropped onto the bed, as the browser places an import.
+        val placement = ProjectModelPlacement(view.bed.areaMm, dropToBed = true)
+        actor.prepareImport(guard) { scope, base ->
+            capturing(record) {
+                val upload = ProjectDocuments.stageModel(scope, input, ProjectModelImportOptions(), resolver, ProjectIntegerProfile.CHROMIUM)
+                base.prepareGeometry(upload, filename, NewProjects.timestamp(clock()), placement)
             }
         }
     }) { result -> (result as? ProjectOutcome.ImportPrepared)?.candidate }

@@ -53,3 +53,24 @@ pub fn decode_options(version: f64, input: &[f64]) -> Option<ArchiveOptions> {
     }
     Some(result)
 }
+
+impl Default for ArchiveOptions {
+    fn default() -> Self {
+        Self {
+            archive_bytes: 1 << 30,
+            entries: 4096,
+            entry_bytes: 512 << 20,
+            total_bytes: 2 << 30,
+            vertices: 16_000_000,
+            triangles: 16_000_000,
+            records: 65536,
+            text_units: 10_000_000,
+            paint_nodes: 100_000,
+            assets: 4096,
+            asset_bytes: 512 << 20,
+            total_asset_bytes: 2 << 30,
+            warnings: 1000,
+        }
+    }
+}
+

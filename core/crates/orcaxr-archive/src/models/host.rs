@@ -30,10 +30,10 @@ pub enum Ids {
 #[derive(Clone)]
 pub struct Base {
     pub guard: LocalGuard,
-    revision: u64,
-    hash: String,
-    state: orcaxr_project::model::ProjectState,
-    assets: Vec<AssetPayload>,
+    pub revision: u64,
+    pub hash: String,
+    pub state: orcaxr_project::model::ProjectState,
+    pub assets: Vec<AssetPayload>,
 }
 impl Base {
     pub fn capture<P: TimestampPolicy>(session: &ProjectSession<P>) -> Result<Self, SessionError> {
@@ -82,9 +82,9 @@ impl Failure {
     }
 }
 
-struct Xoshiro([u64; 4]);
+pub(crate) struct Xoshiro(pub(crate) [u64; 4]);
 impl Xoshiro {
-    fn next(&mut self) -> u64 {
+    pub(crate) fn next(&mut self) -> u64 {
         let s = &mut self.0;
         let result = s[1].wrapping_mul(5).rotate_left(7).wrapping_mul(9);
         let t = s[1] << 17;
@@ -96,7 +96,7 @@ impl Xoshiro {
         s[3] = s[3].rotate_left(45);
         result
     }
-    fn uuid(&mut self) -> Vec<u16> {
+    pub(crate) fn uuid(&mut self) -> Vec<u16> {
         let mut bytes = [0u8; 16];
         bytes[..8].copy_from_slice(&self.next().to_le_bytes());
         bytes[8..].copy_from_slice(&self.next().to_le_bytes());
@@ -114,6 +114,18 @@ impl Xoshiro {
         .encode_utf16()
         .collect()
     }
+}
+
+/// Decode, stage and preview a 3MF's models as a geometry merge into `base`.
+pub fn prepare_geometry<P: TimestampPolicy>(
+    bytes: &[u8],
+    request: &Request,
+    limits: &Limits,
+    base: &Base,
+    timestamps: &mut P,
+    cancelled: impl FnMut() -> bool,
+) -> Result<Prepared, Failure> {
+    super::geometry_merge::prepare(bytes, request, limits, base, timestamps, cancelled)
 }
 
 /// Decode, stage and preview `bytes` against `base`. Synchronous and

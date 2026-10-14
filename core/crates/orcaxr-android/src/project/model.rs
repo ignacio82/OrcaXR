@@ -98,7 +98,7 @@ pub(super) fn chars(env: &mut JNIEnv<'_>, array: &JCharArray<'_>) -> Result<Vec<
 }
 /// Consumes the upload on every outcome; its slot then holds the preview.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn import_prepare_model(
+fn unpack_and_prepare<F>(
     env: &mut JNIEnv<'_>,
     handle: jlong,
     base: jlong,
@@ -108,7 +108,18 @@ pub(super) fn import_prepare_model(
     drop_to_bed: jboolean,
     id_seed: JLongArray<'_>,
     id_namespace: JString<'_>,
-) -> Result<()> {
+    prepare_fn: F,
+) -> Result<()>
+where
+    F: FnOnce(
+        &[u8],
+        &Request,
+        &orcaxr_archive::models::Limits,
+        &Base,
+        &mut Timestamps,
+        &mut dyn FnMut() -> bool,
+    ) -> std::result::Result<orcaxr_project::import::Prepared, host::Failure>,
+{
     let filename = chars(env, &filename)?;
     let imported_at = chars(env, &imported_at)?;
     // The printable area `[x_min, y_min, x_max, y_max]`, or none.
@@ -154,7 +165,7 @@ pub(super) fn import_prepare_model(
         _ => Err("invalid_handle_kind"),
     })?;
     let slot = registry().slot(handle)?;
-    let cancelled = || slot.is_closed();
+    let mut cancelled = || slot.is_closed();
     slot.with(|record| {
         if !matches!(record, Some(Record::ModelUpload(_))) {
             return Err("invalid_handle_kind");
@@ -177,7 +188,7 @@ pub(super) fn import_prepare_model(
             },
             ids,
         };
-        let prepared = host::prepare(&bytes, &request, &limits, &base, &mut timestamps, cancelled)
+        let prepared = prepare_fn(&bytes, &request, &limits, &base, &mut timestamps, &mut cancelled)
             .map_err(failure_code)?;
         let mut json = Vec::new();
         prepared
@@ -191,6 +202,62 @@ pub(super) fn import_prepare_model(
         })));
         Ok(())
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn import_prepare_model(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    base: jlong,
+    filename: JCharArray<'_>,
+    imported_at: JCharArray<'_>,
+    bed: JDoubleArray<'_>,
+    drop_to_bed: jboolean,
+    id_seed: JLongArray<'_>,
+    id_namespace: JString<'_>,
+) -> Result<()> {
+    unpack_and_prepare(
+        env,
+        handle,
+        base,
+        filename,
+        imported_at,
+        bed,
+        drop_to_bed,
+        id_seed,
+        id_namespace,
+        |bytes, req, limits, base, timestamps, cancelled| {
+            host::prepare(bytes, req, limits, base, timestamps, cancelled)
+        },
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn import_prepare_geometry(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    base: jlong,
+    filename: JCharArray<'_>,
+    imported_at: JCharArray<'_>,
+    bed: JDoubleArray<'_>,
+    drop_to_bed: jboolean,
+    id_seed: JLongArray<'_>,
+    id_namespace: JString<'_>,
+) -> Result<()> {
+    unpack_and_prepare(
+        env,
+        handle,
+        base,
+        filename,
+        imported_at,
+        bed,
+        drop_to_bed,
+        id_seed,
+        id_namespace,
+        |bytes, req, limits, base, timestamps, cancelled| {
+            host::prepare_geometry(bytes, req, limits, base, timestamps, cancelled)
+        },
+    )
 }
 /// Bounded static codes for the JNI exception message.
 fn failure_code(failure: host::Failure) -> &'static str {

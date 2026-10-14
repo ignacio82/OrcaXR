@@ -83,6 +83,9 @@ impl CompletedCanonicalArchive {
     pub fn project(&self) -> &ValidatedProject {
         &self.project
     }
+    pub fn assets(&self) -> &AssetRepository {
+        &self.assets
+    }
     pub fn asset(&self, id: &AssetId) -> Option<AssetLease> {
         self.assets.peek(id)
     }

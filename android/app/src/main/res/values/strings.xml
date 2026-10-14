@@ -111,6 +111,10 @@
     <string name="project_import_blocked">This file cannot be imported as it is.</string>
     <string name="project_import_confirm">Import</string>
     <string name="project_import_accept">Accept the changes and import</string>
+    <string name="project_intake_title">Load %1$s</string>
+    <string name="project_intake_detail">A 3MF can replace the open project with everything it contains — plates, settings, filaments, and paint — or contribute only its models to the project you already have.</string>
+    <string name="project_intake_open_project">Open as project</string>
+    <string name="project_intake_import_geometry">Import geometry only</string>
     <!-- Selection and object edits: the browser's catalogue actions (web/src/actions/groups), its Objects panel and plate manager. -->
     <string name="project_edit_menu">Edit</string>
     <string name="project_edit_select_all">Select All</string>

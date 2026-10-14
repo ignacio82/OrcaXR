@@ -185,8 +185,13 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    the device (`SystemFonts`, which the browser cannot read), and the
    recipe's `useSurface` projection onto the model and `boldnessMm` and
    `perGlyph`, which the browser's cut ignores too.
-3. Phase 7, other surfaces: geometry-only 3MF import, lighting and preview
-   controls, preset management, and the Android-only words still literal in
+3. Phase 7, other surfaces: geometry-only 3MF import is done
+   ([§](engineering/native-core.md#android-adaptive-shell-and-keyboard)):
+   shared Rust stager (`orcaxr-archive` `models::geometry_merge`), JNI bindings
+   (`importPrepareGeometry`), Kotlin workspace methods, Compose `ThreeMfIntakeDialog`,
+   and intake routing for drops and pickers, qualified by Rust fixture tests, 14 JVM
+   tests and adaptive emulator smoke. Next: lighting and preview controls,
+   preset management, and the Android-only words still literal in
    Kotlin. The View menu's display toggles (`view_show_wireframe`,
    `view_show_printable_box`, `view_show_labels`, `view_show_overhang`,
    `view_show_navigator`, `view_show_outline`, `view_perspective_toggle`), the

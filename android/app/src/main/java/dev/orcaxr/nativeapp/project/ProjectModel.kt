@@ -111,6 +111,12 @@ class PendingImport(
     internal val acknowledgements: List<String>,
 )
 
+/** A 3MF load decision: replace the open project or contribute geometry only to the current project. */
+class PendingThreeMf(val uri: Uri, val filename: String, internal val isIncoming: Boolean = false)
+
+/** How the operator answers [PendingThreeMf]: open as project, import geometry only, or cancel. */
+enum class ThreeMfChoice { Project, Geometry, Cancel }
+
 /** Something that would discard unsaved changes, held until the operator decides. */
 class PendingDiscard(val name: String, internal val action: () -> Unit)
 
@@ -175,6 +181,8 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     var recent by mutableStateOf(recentStore.entries)
         private set
     var pendingImport by mutableStateOf<PendingImport?>(null)
+        private set
+    var pendingThreeMf by mutableStateOf<PendingThreeMf?>(null)
         private set
     /** Unsaved work earlier sessions left, newest first, for the operator to restore or discard. */
     var recoveries by mutableStateOf<List<ProjectRecovery.Entry>>(emptyList())
@@ -314,14 +322,21 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
 
     /** Starts the next dropped file once nothing runs and nothing waits for the operator; one that starts nothing gives way to the next. */
     private fun advance() {
-        while (running == 0 && pendingImport == null && pendingDiscard == null && pendingConflict == null && !saveAsRequested) {
+        while (running == 0 && pendingImport == null && pendingThreeMf == null && pendingDiscard == null && pendingConflict == null && !saveAsRequested) {
             val next = dropped.removeFirstOrNull() ?: return
             val uri = Uri.parse(next.uri)
             when (next.kind) {
                 DropIntake.Kind.Model -> importModel(uri)
                 DropIntake.Kind.Project -> {
                     val holder = owners.holder(next.uri)
-                    if (holder != null && holder !== owner) holder.focus() else openIncoming(uri)
+                    if (holder != null && holder !== owner) {
+                        holder.focus()
+                    } else if (view.hasObjects) {
+                        pendingThreeMf = PendingThreeMf(uri, displayName(uri), isIncoming = true)
+                        return
+                    } else {
+                        openIncoming(uri)
+                    }
                 }
                 // Preview opens G-code; the shell never queues it here.
                 DropIntake.Kind.Gcode -> Unit
@@ -501,20 +516,49 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
      * untrusted input: only a content URI is accepted, read through the same
      * bounded Open as any document, and its one-time grant is not kept.
      */
-    fun openIncoming(uri: Uri) {
+    fun openIncoming(uri: Uri, forceOpen: Boolean = false) {
         if (uri.scheme != "content") {
             message = DropIntake.NOT_SHARED
             return
         }
+        val name = displayName(uri)
+        if (!forceOpen && DropIntake.extension(name) == "3mf" && view.hasObjects) {
+            pendingThreeMf = PendingThreeMf(uri, name, isIncoming = true)
+            return
+        }
         unlessDirty {
             work {
-                workspace.open(ContentProjectDocument(resolver, uri), displayName(uri)).await()
+                workspace.open(ContentProjectDocument(resolver, uri), name).await()
                 main.post { projectReplaced() }
                 profiles.opened(workspace)
                 // A one-time grant: this window does not write it back, so it holds nothing.
                 savedUri = null
                 hold(null)
             }
+        }
+    }
+
+    /** Answers [pendingThreeMf]: open as project, import geometry only, or cancel. */
+    fun answerThreeMf(choice: ThreeMfChoice) {
+        val pending = pendingThreeMf ?: return
+        pendingThreeMf = null
+        when (choice) {
+            ThreeMfChoice.Project -> if (pending.isIncoming) openIncoming(pending.uri, forceOpen = true) else open(pending.uri)
+            ThreeMfChoice.Geometry -> importGeometry(pending.uri)
+            ThreeMfChoice.Cancel -> advance()
+        }
+    }
+
+    /** Handles a document picked from an Open or Import file picker. */
+    fun intakePick(uri: Uri, preferImport: Boolean = false) {
+        val name = displayName(uri)
+        val is3mf = DropIntake.extension(name) == "3mf"
+        if (is3mf && view.hasObjects) {
+            pendingThreeMf = PendingThreeMf(uri, name, isIncoming = false)
+        } else if (is3mf || !preferImport) {
+            open(uri)
+        } else {
+            importModel(uri)
         }
     }
 
@@ -635,10 +679,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         shareRequest = null
     }
 
-    /** Prepares a model import and shows its preview; nothing changes until it is accepted. */
-    fun importModel(uri: Uri) = work {
-        val filename = displayName(uri)
-        val candidate = workspace.prepareImport(ContentProjectDocument(resolver, uri), filename).await()
+    private fun showImportPreview(filename: String, candidate: ProjectActorImport) {
         val preview = JSONObject(candidate.preview)
         val notices = buildList {
             for (field in listOf("repairs", "conflicts", "droppedFields", "diagnostics")) {
@@ -653,6 +694,20 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         val acknowledgements = List(required?.length() ?: 0) { required!!.getString(it) }
         val objects = preview.optJSONObject("counts")?.optInt("objects") ?: 0
         main.post { pendingImport = PendingImport(filename, objects, notices, candidate.blocked, candidate, acknowledgements) }
+    }
+
+    /** Prepares a model import and shows its preview; nothing changes until it is accepted. */
+    fun importModel(uri: Uri) = work {
+        val filename = displayName(uri)
+        val candidate = workspace.prepareImport(ContentProjectDocument(resolver, uri), filename).await()
+        showImportPreview(filename, candidate)
+    }
+
+    /** Prepares a 3MF geometry-only import and shows its preview; nothing changes until it is accepted. */
+    fun importGeometry(uri: Uri) = work {
+        val filename = displayName(uri)
+        val candidate = workspace.prepareGeometryImport(ContentProjectDocument(resolver, uri), filename).await()
+        showImportPreview(filename, candidate)
     }
 
     /** Accepts the previewed import with every change it listed, or drops it. */

@@ -112,8 +112,8 @@ private fun text(units: List<Int>) = String(CharArray(units.size) { units[it].to
 fun ProjectScreen(model: ProjectModel, prepare: PrepareModel, modifier: Modifier = Modifier) {
     val view = model.view
     // Any document: providers often report a 3MF or STL only as bytes; the content decides.
-    val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(model::open) }
-    val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(model::importModel) }
+    val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { model.intakePick(it, preferImport = false) } }
+    val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { model.intakePick(it, preferImport = true) } }
     val saveAs = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(MIME_3MF)) { uri -> uri?.let(model::saveTo) }
     val suggested = "${view.name.ifBlank { "Untitled project" }}.3mf"
     // "Save" in the unsaved-changes dialog with nowhere to save yet: ask where, then go on.
@@ -269,6 +269,20 @@ fun ProjectScreen(model: ProjectModel, prepare: PrepareModel, modifier: Modifier
                 }
             },
             dismissButton = { TextButton(onClick = { model.answerConflict(ConflictAnswer.Cancel) }) { Text(stringResource(R.string.device_cancel)) } },
+        )
+    }
+    model.pendingThreeMf?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { model.answerThreeMf(ThreeMfChoice.Cancel) },
+            title = { Text(stringResource(R.string.project_intake_title, pending.filename)) },
+            text = { Text(stringResource(R.string.project_intake_detail), Modifier.verticalScroll(rememberScrollState())) },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { model.answerThreeMf(ThreeMfChoice.Geometry) }) { Text(stringResource(R.string.project_intake_import_geometry)) }
+                    TextButton(onClick = { model.answerThreeMf(ThreeMfChoice.Project) }) { Text(stringResource(R.string.project_intake_open_project)) }
+                }
+            },
+            dismissButton = { TextButton(onClick = { model.answerThreeMf(ThreeMfChoice.Cancel) }) { Text(stringResource(R.string.device_cancel)) } },
         )
     }
     model.pendingImport?.let { pending ->

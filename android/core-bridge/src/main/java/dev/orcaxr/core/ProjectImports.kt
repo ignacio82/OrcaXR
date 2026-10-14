@@ -81,6 +81,27 @@ class ProjectImportBase internal constructor(handle: Long) : ProjectHandle(handl
             }
         }
     }
+
+    /** Prepares a 3MF geometry-only import, merging objects/meshes into the active plate. */
+    fun prepareGeometry(
+        upload: ProjectModelUpload,
+        filename: String,
+        importedAt: String,
+        placement: ProjectModelPlacement = ProjectModelPlacement(),
+        ids: ProjectImportIds = ProjectImportIds.Random,
+    ): ProjectImportPreview {
+        val bed = placement.encode()
+        val (seed, namespace) = when (ids) {
+            ProjectImportIds.Random -> SecureRandom().let { random -> LongArray(4) { random.nextLong() } } to null
+            is ProjectImportIds.Counter -> LongArray(0) to ids.namespace
+        }
+        return read { base ->
+            upload.move { input ->
+                NativeProject.importPrepareGeometry(input, base, filename.toCharArray(), importedAt.toCharArray(), bed, placement.dropToBed, seed, namespace)
+                own(input, ::ProjectImportPreview)
+            }
+        }
+    }
 }
 
 /** The browser's import preview (canonical JSON) and its private candidate. */

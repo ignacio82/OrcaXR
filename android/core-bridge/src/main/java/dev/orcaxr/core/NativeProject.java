@@ -506,6 +506,7 @@ final class NativeProject {
     static native void modelUploadAppend(long handle, long offset, byte[] bytes);
     static native long importBase(long handle);
     static native void importPrepareModel(long handle, long base, char[] filename, char[] importedAt, double[] bed, boolean dropToBed, long[] idSeed, String idNamespace);
+    static native void importPrepareGeometry(long handle, long base, char[] filename, char[] importedAt, double[] bed, boolean dropToBed, long[] idSeed, String idNamespace);
     static native long importPreviewLength(long handle);
     static native byte[] importPreviewRead(long handle, long start, long count);
     static native boolean importPreviewBlocked(long handle);

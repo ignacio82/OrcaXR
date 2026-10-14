@@ -52,6 +52,15 @@ impl Policy {
     pub fn new(options: ArchiveOptions) -> Self {
         Self(options)
     }
+}
+
+impl Default for Policy {
+    fn default() -> Self {
+        Self::new(ArchiveOptions::default())
+    }
+}
+
+impl Policy {
     pub fn options(&self) -> ArchiveOptions {
         self.0
     }

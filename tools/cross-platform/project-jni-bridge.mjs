@@ -675,6 +675,15 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
         return new ProjectImportPreview(id);
       });
     }
+    prepare_geometry(upload, filename, importedAt, bed, dropToBed, idSeed, namespace) {
+      const seed = [];
+      for (let i = 0; i < idSeed.length; i += 8)
+        seed.push(Buffer.from(idSeed.subarray(i, i + 8)).readBigInt64LE());
+      return consumed(upload, (id) => {
+        call("importPrepareGeometry", id, this.handle, Array.from(filename), Array.from(importedAt), Array.from(bed), dropToBed, seed, namespace ?? null);
+        return new ProjectImportPreview(id);
+      });
+    }
   }
   class ProjectImportPreview extends Handle {
     length() {

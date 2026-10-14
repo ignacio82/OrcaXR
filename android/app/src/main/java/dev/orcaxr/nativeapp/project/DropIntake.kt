@@ -6,9 +6,9 @@ import dev.orcaxr.nativeapp.shell.ShellArea
  * Files dropped on the window, as the browser's drop (web/src/main.ts
  * `intakeFiles`, `OrcaWorkspace.openFile`) takes them, one after another:
  * a model (STL, OBJ, AMF, ZIP) is imported through the Project area's
- * preview, a 3MF opens as the project through its Open — guarded like any
- * Open; geometry-only 3MF import is still browser-only — and G-code opens in
- * Preview. Anything else is refused in the browser's words.
+ * preview, a 3MF asks the operator whether to open as project or import
+ * geometry only when objects exist (or opens directly when empty) — guarded
+ * like any Open — and G-code opens in Preview. Anything else is refused in the browser's words.
  *
  * The browser reads the bytes before it decides (the content wins over an
  * extension it does not know); a drop here is decided by the file's name —

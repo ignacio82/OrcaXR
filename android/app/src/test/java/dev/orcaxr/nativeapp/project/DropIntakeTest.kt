@@ -106,4 +106,26 @@ class DropIntakeTest {
         assertEquals(listOf("c.stl"), plan.project.map { it.name })
         assertEquals(listOf("OrcaXR opens only documents shared through the system."), plan.refusals)
     }
+
+    @Test
+    fun projectViewObjectCountsDetectPresenceOfModels() {
+        val emptyView = dev.orcaxr.core.ProjectView(plateList = emptyList())
+        org.junit.Assert.assertFalse(emptyView.hasObjects)
+        assertEquals(0, emptyView.objectCount)
+
+        val plateEmpty = dev.orcaxr.core.ProjectPlateState(id = "p1", name = "Plate 1", printable = true, objects = 0)
+        val viewNoModels = dev.orcaxr.core.ProjectView(plateList = listOf(plateEmpty))
+        org.junit.Assert.assertFalse(viewNoModels.hasObjects)
+        assertEquals(0, viewNoModels.objectCount)
+
+        val plateWithModels = dev.orcaxr.core.ProjectPlateState(id = "p1", name = "Plate 1", printable = true, objects = 2)
+        val viewWithModels = dev.orcaxr.core.ProjectView(plateList = listOf(plateWithModels))
+        org.junit.Assert.assertTrue(viewWithModels.hasObjects)
+        assertEquals(2, viewWithModels.objectCount)
+    }
+
+    @Test
+    fun threeMfChoiceEnumeratesAllDecisions() {
+        assertEquals(listOf(ThreeMfChoice.Project, ThreeMfChoice.Geometry, ThreeMfChoice.Cancel), ThreeMfChoice.entries)
+    }
 }

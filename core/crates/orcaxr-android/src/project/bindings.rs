@@ -2110,6 +2110,18 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_importPrepareGeometry, import_prepare_geometry, (),
+    handle: jlong,
+    base: jlong,
+    filename: JCharArray<'local>,
+    imported_at: JCharArray<'local>,
+    bed: JDoubleArray<'local>,
+    drop_to_bed: jboolean,
+    id_seed: JLongArray<'local>,
+    id_namespace: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_importPreviewLength, import_preview_length, jlong,
     handle: jlong,
 }

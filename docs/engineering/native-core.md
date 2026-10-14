@@ -8053,13 +8053,18 @@ OBJ, AMF, ZIP) import through the Project area's preview and 3MF projects
 open through its Open, guarded for unsaved changes and refused as any
 handed-over document when not `content:`; `ProjectModel.intake` takes them
 one at a time, the next once nothing runs and no question waits (a project
-another window holds brings it forward). Geometry-only 3MF import is still
-browser-only. G-code opens in Preview (the last one dropped). The rest is
+another window holds brings it forward). A dropped or picked 3MF when
+models already exist presents the browser's decision dialog (`ThreeMfIntakeDialog`,
+`project_intake_*` resources): Open as project vs Import geometry only,
+the latter staging through `orcaxr-archive`'s `models::geometry_merge`
+(`prepare_geometry`), remapping stable IDs, deduplicating meshes, centering
+on the bed and previewing through `prepareGeometryImport` before an undoable commit.
+G-code opens in Preview (the last one dropped). The rest is
 refused in the browser's words ("Failed to load x: x is not a recognised
 model format", the STEP and SVG reasons) on a snackbar; the drop's prompt
 is the browser's. The activity requests the drag's permissions, which last
 as long as the window; a dropped document is untrusted input and joins no
-recent list. 12 JVM tests (`ShellLayoutTest`, `DropIntakeTest`) cover the
+recent list. 14 JVM tests (`ShellLayoutTest`, `DropIntakeTest`) cover the
 layouts and the drop's decisions and words; `android-adaptive-smoke.py`
 (last in `emulator-smoke.py`) checks the bar, Tab traversal and wrap,
 Shift+Tab, Space and Enter, the focused button's pixels, a dialog keeping

@@ -230,3 +230,38 @@ fn failures_are_bounded_codes() {
     );
     assert_eq!(cancelled.map(|_| ()).unwrap_err(), Failure::Cancelled);
 }
+
+#[test]
+fn geometry_merge_3mf_imports_objects() {
+    let mut owner = session();
+    let base = Base::capture(&owner).unwrap();
+    let three_mf = include_bytes!("../../../../web/public/models/multicolor_hexagon.3mf");
+    let req = Request {
+        filename: "hexagon.3mf".encode_utf16().collect(),
+        imported_at: "2026-10-14T10:00:00.000Z".encode_utf16().collect(),
+        placement: Placement::default(),
+        ids: Ids::Uuid([10, 20, 30, 40]),
+    };
+    let prepared = host::prepare_geometry(
+        three_mf,
+        &req,
+        &Limits::default(),
+        &base,
+        &mut complete::utc(),
+        || false,
+    )
+    .unwrap();
+
+    assert!(!prepared.is_blocked());
+    let acks = prepared.required_acknowledgements().to_vec();
+    let _ = owner.commit_import(&base.guard, prepared, &acks).unwrap();
+    let objects: Vec<String> = owner
+        .snapshot()
+        .state()
+        .plates
+        .iter()
+        .flat_map(|p| p.objects.iter().map(|o| String::from_utf16_lossy(o.name.units())))
+        .collect();
+    assert!(!objects.is_empty());
+}
+
