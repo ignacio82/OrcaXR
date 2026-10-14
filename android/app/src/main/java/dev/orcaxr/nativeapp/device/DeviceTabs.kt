@@ -58,9 +58,9 @@ fun FilesTab(model: DeviceModel) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (view.path.isNotEmpty()) {
-                OutlinedButton(onClick = { model.openFolder(view.path.substringBeforeLast('/', "")) }) { Text("Up") }
+                OutlinedButton(onClick = { model.openFolder(view.path.substringBeforeLast('/', "")) }) { Text(stringResource(R.string.device_files_up)) }
             }
-            OutlinedButton(onClick = { model.openFolder(view.path) }) { Text("Refresh files") }
+            OutlinedButton(onClick = { model.openFolder(view.path) }) { Text(stringResource(R.string.device_files_refresh)) }
         }
         Text(if (view.path.isEmpty()) "gcodes" else "gcodes/${view.path}", style = MaterialTheme.typography.labelLarge)
         val listing = view.listing
@@ -87,13 +87,13 @@ fun FilesTab(model: DeviceModel) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(path.substringAfterLast('/'), style = MaterialTheme.typography.titleMedium)
-                    (metadata.slicer as? ProjectIntents.OptionalPrinterReplyText.Value)?.let { Text("Sliced by ${text(it.value)}") }
+                    (metadata.slicer as? ProjectIntents.OptionalPrinterReplyText.Value)?.let { Text(stringResource(R.string.device_files_sliced_by, text(it.value))) }
                     (metadata.estimatedSeconds as? ProjectIntents.OptionalFinite.Value)?.let {
-                        Text("Estimated ${(it.value / 60).toLong()} min", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.device_files_estimated_min, (it.value / 60).toLong()), style = MaterialTheme.typography.bodySmall)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { model.printFile(path) }) { Text("Print this file") }
-                        OutlinedButton(onClick = { model.deleteFile(path) }) { Text("Delete file") }
+                        Button(onClick = { model.printFile(path) }) { Text(stringResource(R.string.device_files_print)) }
+                        OutlinedButton(onClick = { model.deleteFile(path) }) { Text(stringResource(R.string.device_files_delete)) }
                     }
                 }
             }
@@ -119,9 +119,9 @@ fun HistoryTab(model: DeviceModel) {
         }
         view.pager?.let { pager ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { model.loadHistory(pager.previousStart) }, enabled = pager.hasPrevious) { Text("Newer") }
+                OutlinedButton(onClick = { model.loadHistory(pager.previousStart) }, enabled = pager.hasPrevious) { Text(stringResource(R.string.device_history_newer)) }
                 Text(text(pager.label), Modifier.weight(1f).padding(top = 12.dp), style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick = { model.loadHistory(pager.nextStart) }, enabled = pager.hasNext) { Text("Older") }
+                OutlinedButton(onClick = { model.loadHistory(pager.nextStart) }, enabled = pager.hasNext) { Text(stringResource(R.string.device_history_older)) }
             }
         }
     }
@@ -133,7 +133,7 @@ fun ConsoleTab(model: DeviceModel) {
     var script by rememberSaveable { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(Modifier.fillMaxWidth().heightIn(min = 120.dp)) {
-            if (view.lines.isEmpty()) Text("Responses from the printer appear here.", style = MaterialTheme.typography.bodySmall)
+            if (view.lines.isEmpty()) Text(stringResource(R.string.device_console_responses_empty), style = MaterialTheme.typography.bodySmall)
             for (line in view.lines.takeLast(CONSOLE_SHOWN)) {
                 val prefix = when (line.kind) {
                     ProjectIntents.ConsoleLineKind.Sent -> "› "
@@ -144,10 +144,10 @@ fun ConsoleTab(model: DeviceModel) {
             }
         }
         // Several lines of G-code: Tab still moves on rather than typing into the script.
-        OutlinedTextField(script, { script = it }, label = { Text("G-code") }, modifier = Modifier.fillMaxWidth().tabMovesFocus())
+        OutlinedTextField(script, { script = it }, label = { Text(stringResource(R.string.device_console_gcode_label)) }, modifier = Modifier.fillMaxWidth().tabMovesFocus())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { model.sendScript(script); script = "" }, enabled = script.isNotBlank()) { Text("Send") }
-            OutlinedButton(onClick = model::loadMacros) { Text("Show macros") }
+            Button(onClick = { model.sendScript(script); script = "" }, enabled = script.isNotBlank()) { Text(stringResource(R.string.device_console_send)) }
+            OutlinedButton(onClick = model::loadMacros) { Text(stringResource(R.string.device_console_show_macros)) }
         }
         for (macro in view.macros) MacroRow(model, macro)
     }
@@ -169,7 +169,7 @@ private fun MacroRow(model: DeviceModel, macro: ProjectIntents.PrinterMacro) {
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            TextButton(onClick = { model.runMacro(macro, values.toMap()) }) { Text("Run ${text(macro.name)}") }
+            TextButton(onClick = { model.runMacro(macro, values.toMap()) }) { Text(stringResource(R.string.device_console_run_macro, text(macro.name))) }
         }
     }
 }
@@ -189,7 +189,7 @@ fun CameraTab(model: DeviceModel) {
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (view.cameras.isEmpty()) Text("This printer reports no camera.")
+        if (view.cameras.isEmpty()) Text(stringResource(R.string.device_camera_none))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             view.cameras.forEachIndexed { index, each ->
                 OutlinedButton(onClick = { model.selectCamera(index) }, enabled = index != view.selected) { Text(text(each.name)) }
@@ -202,7 +202,7 @@ fun CameraTab(model: DeviceModel) {
             if (bitmap != null) {
                 Image(
                     bitmap.asImageBitmap(),
-                    contentDescription = "Latest frame from ${text(selected.name)}",
+                    contentDescription = stringResource(R.string.device_camera_frame_description, text(selected.name)),
                     modifier = Modifier.fillMaxWidth().graphicsLayer {
                         // How the camera is mounted.
                         rotationZ = selected.rotationDegrees.toFloat()
@@ -211,7 +211,7 @@ fun CameraTab(model: DeviceModel) {
                     },
                 )
             } else if (view.failure == null) {
-                Text("Waiting for the first frame…", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.device_camera_waiting), style = MaterialTheme.typography.bodySmall)
             }
             view.failure?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }

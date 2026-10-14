@@ -26,6 +26,7 @@ import dev.orcaxr.core.PrintJobArtifacts
 import dev.orcaxr.core.PrintSendProgress
 import dev.orcaxr.core.PrinterExchanges
 import dev.orcaxr.core.ProjectIntents
+import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.send.SendDialogView
 import dev.orcaxr.nativeapp.send.SendState
 import dev.orcaxr.nativeapp.send.SendWords
@@ -128,6 +129,8 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
     private lateinit var workspace: DeviceWorkspace
     private lateinit var finder: AndroidPrinterDiscovery
     private var subscription: AutoCloseable? = null
+    private fun string(resId: Int): String = getApplication<Application>().getString(resId)
+    private fun string(resId: Int, vararg args: Any): String = getApplication<Application>().getString(resId, *args)
 
     var state by mutableStateOf(DeviceState())
         private set
@@ -313,7 +316,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         val proposal = workspace.discovery.proposals.firstOrNull { key(it) == key } ?: return@work
         workspace.addDiscovered(proposal)
         val needsKey = proposal.probe == DiscoveryProbe.NeedsKey
-        main.post { message = if (needsKey) "Saved ${proposal.name}. It asks for an API key: enter it to connect." else "Saved ${proposal.name}." }
+        main.post { message = if (needsKey) string(R.string.device_model_saved_needs_key, proposal.name) else string(R.string.device_model_saved, proposal.name) }
     }
 
     /** Shows a notice the screen itself decided on. */
@@ -337,9 +340,9 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         workspace.setRemember(remember)
         main.post {
             message = if (remember) {
-                "Printer keys and the slicer token will be remembered on this device."
+                string(R.string.device_model_remember_keys)
             } else {
-                "Stopped remembering printer keys and the slicer token; the saved copies were erased."
+                string(R.string.device_model_forget_keys)
             }
         }
     }
@@ -347,7 +350,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
     fun forgetCredentials() = work {
         workspace.forgetCredentials()
         // The browser's words: the slicer token is in the same record.
-        main.post { message = "Forgot the saved printer key and slicer token on this device." }
+        main.post { message = string(R.string.device_model_forgot_keys) }
     }
 
     /** Reports how [future] failed, without holding the worker while it runs. */
@@ -393,7 +396,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         main.post { ask = PendingAsk(title, detail, confirm, action) }
     }
 
-    private fun printerName(): String = workspace.active?.let { text(it.name) } ?: "the printer"
+    private fun printerName(): String = workspace.active?.let { text(it.name) } ?: string(R.string.device_model_the_printer)
 
     // --- Send --------------------------------------------------------------------------------
 
@@ -510,14 +513,18 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
             main.post {
                 message = when {
                     cause != null -> cause.message ?: cause.javaClass.simpleName
-                    file == null -> "Print cancelled."
-                    else -> "Printing $file."
+                    file == null -> string(R.string.device_model_print_cancelled)
+                    else -> string(R.string.device_model_printing, file)
                 }
             }
         }
     }
 
-    fun deleteFile(path: String) = askFirst("Delete ${path.substringAfterLast('/')}?", "It is removed from the printer's storage.", "Delete") {
+    fun deleteFile(path: String) = askFirst(
+        string(R.string.device_model_delete_title, path.substringAfterLast('/')),
+        string(R.string.device_model_delete_detail),
+        string(R.string.device_model_delete_confirm),
+    ) {
         val result = exchanges().storage(ProjectIntents.PrinterStorageOperation.Delete(ProjectIntents.PrinterText(units(path)))).get().result
         failure(result)?.let { failed -> main.post { message = failed } }
         main.post { files = files.copy(selected = null) }
@@ -587,9 +594,9 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         } else {
             val command = text(assessment.command)
             askFirst(
-                if (assessment.level == ProjectIntents.GcodeRiskLevel.Dangerous) "Run $command anyway?" else "Run $command?",
+                if (assessment.level == ProjectIntents.GcodeRiskLevel.Dangerous) string(R.string.device_model_run_anyway, command) else string(R.string.device_model_run_title, command),
                 assessment.reasons.joinToString("\n") { text(it) },
-                "Run $command",
+                string(R.string.device_model_run_confirm, command),
                 send,
             )
         }
@@ -672,8 +679,8 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
                     android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
                     if (bounds.outWidth <= 0) {
                         val where = if (mechanism == ProjectIntents.CameraMechanism.Transport) camera.snapshotPath else camera.snapshotUrl
-                        val named = (where as? ProjectIntents.OptionalPrinterReplyText.Value)?.let { text(it.value) } ?: "the camera"
-                        throw IllegalStateException("OrcaXR could not show a frame from $named.")
+                        val named = (where as? ProjectIntents.OptionalPrinterReplyText.Value)?.let { text(it.value) } ?: string(R.string.device_model_the_camera)
+                        throw IllegalStateException(string(R.string.device_model_camera_frame_error, named))
                     }
                     bytes
                 }

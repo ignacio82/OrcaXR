@@ -8363,8 +8363,10 @@ renderer found three `icu.ts` defects, fixed with regression tests: `#` was repl
 argument such as a file "Part #2" printed "Part 32"; `'#'` did not quote a
 literal `#` in a plural; and `selectordinal` used cardinal rules ("2th").
 The theme and accessibility follow ([below](#android-design-tokens-and-accessibility));
-the Android-only words still literal in Kotlin (the Device tabs' contents, model
-messages) remain.
+the Android-only words previously literal in Kotlin (the Device tabs' contents, model
+messages, and preset hardware descriptions) are extracted to string resources in
+`contracts/android-strings.json` and `strings.xml`, verified with `android-strings.mjs`,
+JVM tests, and `android-device-smoke` on an API 34 emulator.
 
 ### Android design tokens and accessibility
 

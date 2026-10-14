@@ -245,6 +245,38 @@
     <!-- The browser's printer files and history panels (web/src/ui/dom/PrinterStoragePanel.ts, PrintHistoryPanel.ts). -->
     <string name="device_folder_empty">This folder is empty.</string>
     <string name="device_no_longer_on_printer">No longer on the printer</string>
+    <string name="device_files_up">Up</string>
+    <string name="device_files_refresh">Refresh files</string>
+    <string name="device_files_print">Print this file</string>
+    <string name="device_files_delete">Delete file</string>
+    <string name="device_files_sliced_by">Sliced by %1$s</string>
+    <string name="device_files_estimated_min">Estimated %1$d min</string>
+    <string name="device_history_newer">Newer</string>
+    <string name="device_history_older">Older</string>
+    <string name="device_console_responses_empty">Responses from the printer appear here.</string>
+    <string name="device_console_gcode_label">G-code</string>
+    <string name="device_console_send">Send</string>
+    <string name="device_console_show_macros">Show macros</string>
+    <string name="device_console_run_macro">Run %1$s</string>
+    <string name="device_camera_none">This printer reports no camera.</string>
+    <string name="device_camera_waiting">Waiting for the first frame…</string>
+    <string name="device_camera_frame_description">Latest frame from %1$s</string>
+    <string name="device_model_saved">Saved %1$s.</string>
+    <string name="device_model_saved_needs_key">Saved %1$s. It asks for an API key: enter it to connect.</string>
+    <string name="device_model_remember_keys">Printer keys and the slicer token will be remembered on this device.</string>
+    <string name="device_model_forget_keys">Stopped remembering printer keys and the slicer token; the saved copies were erased.</string>
+    <string name="device_model_forgot_keys">Forgot the saved printer key and slicer token on this device.</string>
+    <string name="device_model_print_cancelled">Print cancelled.</string>
+    <string name="device_model_printing">Printing %1$s.</string>
+    <string name="device_model_delete_title">Delete %1$s?</string>
+    <string name="device_model_delete_detail">It is removed from the printer\'s storage.</string>
+    <string name="device_model_delete_confirm">Delete</string>
+    <string name="device_model_run_anyway">Run %1$s anyway?</string>
+    <string name="device_model_run_confirm">Run %1$s</string>
+    <string name="device_model_run_title">Run %1$s?</string>
+    <string name="device_model_camera_frame_error">OrcaXR could not show a frame from %1$s.</string>
+    <string name="device_model_the_camera">the camera</string>
+    <string name="device_model_the_printer">the printer</string>
     <!-- The project's filaments: the browser's Filament tab (its heads panel and extra palette colours, web/src/main.ts),
          its selection filament bar (web/src/ui/dom/SelectionFilamentBar.ts) and its Objects panel's indicators (ObjectsPanel.ts). -->
     <string name="prepare_palette_filament">Palette filament %1$s</string>
@@ -938,4 +970,6 @@
     <string name="presets_tab_custom">Custom</string>
     <string name="presets_tab_bundles">Bundles</string>
     <string name="presets_bundle_desc">Export or import complete preset bundles to share setups between devices.</string>
+    <string name="presets_printer_snapmaker_u1_desc">4-Head Toolchanger · Nozzles: 0.2, 0.4, 0.6, 0.8 mm</string>
+    <string name="presets_printer_centauri_desc">Single Head · Nozzles: 0.2, 0.4, 0.6, 0.8 mm</string>
 </resources>

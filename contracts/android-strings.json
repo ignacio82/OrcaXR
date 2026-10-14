@@ -140,6 +140,9 @@
     "device_no_longer_on_printer": {
       "key": "ui.printHistoryPanel.noLongerOnThePrinter"
     },
+    "device_model_forgot_keys": {
+      "key": "app.main.forgotTheSavedPrinterKey"
+    },
     "prepare_palette_filament": {
       "key": "app.main.paletteFilament",
       "arguments": ["index"]
@@ -787,6 +790,37 @@
     "device_tab_files",
     "device_tab_history",
     "device_tab_console",
+    "device_files_up",
+    "device_files_refresh",
+    "device_files_print",
+    "device_files_delete",
+    "device_files_sliced_by",
+    "device_files_estimated_min",
+    "device_history_newer",
+    "device_history_older",
+    "device_console_responses_empty",
+    "device_console_gcode_label",
+    "device_console_send",
+    "device_console_show_macros",
+    "device_console_run_macro",
+    "device_camera_none",
+    "device_camera_waiting",
+    "device_camera_frame_description",
+    "device_model_saved",
+    "device_model_saved_needs_key",
+    "device_model_remember_keys",
+    "device_model_forget_keys",
+    "device_model_print_cancelled",
+    "device_model_printing",
+    "device_model_delete_title",
+    "device_model_delete_detail",
+    "device_model_delete_confirm",
+    "device_model_run_anyway",
+    "device_model_run_confirm",
+    "device_model_run_title",
+    "device_model_camera_frame_error",
+    "device_model_the_camera",
+    "device_model_the_printer",
     "filament_title",
     "filament_colour_hex",
     "tree_not_printable",
@@ -990,19 +1024,11 @@
     "presets_tab_printers",
     "presets_tab_custom",
     "presets_tab_bundles",
-    "presets_bundle_desc"
+    "presets_bundle_desc",
+    "presets_printer_snapmaker_u1_desc",
+    "presets_printer_centauri_desc"
   ],
   "kotlin": [
-    {
-      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/device/DeviceModel.kt",
-      "key": "app.main.forgotTheSavedPrinterKey",
-      "kept": "model"
-    },
-    {
-      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/device/DeviceModel.kt",
-      "key": "action.delete_models.label",
-      "kept": "model"
-    },
     {
       "file": "android/app/src/main/java/dev/orcaxr/nativeapp/shell/HelpDialogs.kt",
       "key": "action.delete_models.label",
@@ -1258,6 +1284,11 @@
       "resource": "vlh_reset",
       "key": "ui.xrWaveOverhangs.reset",
       "reason": "The Variable Layer Height panel's Reset restores default layer heights, not the XR Wave Overhangs panel's Reset."
+    },
+    {
+      "resource": "device_model_delete_confirm",
+      "key": "action.delete_models.label",
+      "reason": "The storage delete confirmation's Delete button deletes a file from the printer's storage, not the canvas Delete Models action."
     }
   ]
 }

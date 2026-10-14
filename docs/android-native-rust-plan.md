@@ -188,9 +188,8 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    shared Rust stager (`orcaxr-archive` `models::geometry_merge`), JNI bindings
    (`importPrepareGeometry`), Kotlin workspace methods, Compose `ThreeMfIntakeDialog`,
    and intake routing for drops and pickers, qualified by Rust fixture tests, 14 JVM
-   tests and adaptive emulator smoke. Next: lighting and preview controls,
-   preset management, and the Android-only words still literal in
-   Kotlin. The View menu's display toggles (`view_show_wireframe`,
+   tests and adaptive emulator smoke. Next: lighting and preview controls.
+   The View menu's display toggles (`view_show_wireframe`,
    `view_show_printable_box`, `view_show_labels`, `view_show_overhang`,
    `view_show_navigator`, `view_show_outline`, `view_perspective_toggle`), the
    printable boundary box in `FilamentScene`, the Add menu's calibration and
@@ -200,10 +199,11 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    `help_tip_of_day`, `help_check_updates`, `help_setup_wizard`, `help_search`),
    preset management (`presets_install_printer`, `presets_create_custom`,
    `presets_update_custom`, `presets_delete_custom`, `presets_export_bundle`,
-   `presets_import_bundle`) with `PresetLibraryDialog`, and the in-app
-   reduce-motion override (`MotionPreference`, `OrcaMotionScope`) are done
+   `presets_import_bundle`) with `PresetLibraryDialog`, the in-app
+   reduce-motion override (`MotionPreference`, `OrcaMotionScope`), and extraction of
+   all Android-only words previously literal in Kotlin to managed string resources are done
    ([§](engineering/native-core.md#android-view-menu-help-menu-calibration-models-and-reduce-motion)),
-   raising `AppActions.PERFORMED` to 116 actions. For the full gap,
+   raising `AppActions.PERFORMED` to 120 actions (with Repair and mesh Booleans). For the full gap,
    compare `AppActions.PERFORMED` (`android/app/.../shell/AppActions.kt`, the
    actions the app performs) with the catalogue in
    `core/crates/orcaxr-contracts/src/capabilities/generated.rs`; some catalogue
@@ -2719,11 +2719,10 @@ storage journeys on phone, tablet, and desktop-sized windows.
   second row, the rail widens) and dialogs scroll; Compose's animator-scale
   handling is the reduced motion; content stays clear of the system bars,
   cutouts and the keyboard. `android-accessibility-smoke.py` passes on both
-  emulators. The browser's in-app reduce-motion override waits for an Android
-  preferences surface.
-  Status (2026-10-12): remains: the Android-only words still literal in Kotlin
-  (native-core *Android localization*), the in-app reduce-motion override, and
-  the user's decision on the design tokens that now differ from the Claude
+  emulators. The in-app reduce-motion override (`MotionPreference`, `OrcaMotionScope`)
+  and extraction of all Android-only words previously literal in Kotlin to managed string
+  resources (`contracts/android-strings.json`, `strings.xml`) are done.
+  Status (2026-10-14): remains: the user's decision on the design tokens that now differ from the Claude
   Design project (*Needs the user*).
 
 **Exit gate:** open a large painted project, edit it, undo/redo, save/reopen,
