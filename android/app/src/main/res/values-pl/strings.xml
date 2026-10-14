@@ -101,4 +101,5 @@
     <string name="presets_export_bundle">Eksportuj zestaw ustawień</string>
     <string name="calib_send_printer_btn">Wyślij do drukarki</string>
     <string name="calib_history_delete_btn">Usuń</string>
+    <string name="smart_paint_cancel">Anuluj</string>
 </resources>

@@ -101,4 +101,5 @@
     <string name="presets_export_bundle">Exporter l’ensemble des préréglages</string>
     <string name="calib_send_printer_btn">Envoyer à l\'imprimante</string>
     <string name="calib_history_delete_btn">Supprimer</string>
+    <string name="smart_paint_cancel">Annuler</string>
 </resources>

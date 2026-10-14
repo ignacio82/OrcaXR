@@ -101,4 +101,5 @@
     <string name="presets_export_bundle">Exportar Paquete de Perfiles</string>
     <string name="calib_send_printer_btn">Enviar a la impresora</string>
     <string name="calib_history_delete_btn">Borrar</string>
+    <string name="smart_paint_cancel">Cancelar</string>
 </resources>

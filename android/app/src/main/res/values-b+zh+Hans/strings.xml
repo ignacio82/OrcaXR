@@ -103,4 +103,5 @@
     <string name="calib_input_shaping_frequency">输入整形频率</string>
     <string name="calib_send_printer_btn">发送到打印机</string>
     <string name="calib_history_delete_btn">删除</string>
+    <string name="smart_paint_cancel">取消</string>
 </resources>

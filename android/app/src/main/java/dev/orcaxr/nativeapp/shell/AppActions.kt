@@ -28,6 +28,7 @@ object AppActions {
     val TOOLS = listOf(
         "tool_lay_on_face", "tool_paint", "tool_support_paint", "tool_seam_paint", "tool_fuzzy_skin", "tool_measure", "tool_assembly",
         "tool_brim_ears", "add_emboss", "tool_svg", "variable_layer_height",
+        "tool_smart_paint", "tool_smart_paint_image",
     )
 
     /**
@@ -41,10 +42,14 @@ object AppActions {
     val PANELS = listOf(
         "brim_ears_auto", "brim_ears_clear", "emboss_load_font", "emboss_apply", "svg_load_drawing", "svg_apply",
         "assembly_align", "assembly_explode",
+        "paint_smart_configure", "paint_smart_request", "paint_smart_apply", "paint_smart_cancel",
     )
 
     /** Panel actions that open their tool on the Workspace: automatic brim ears, choosing a font or a drawing, and the assembly's. */
-    private val OPENS_TOOL = setOf("brim_ears_auto", "emboss_load_font", "svg_load_drawing", "assembly_align", "assembly_explode")
+    private val OPENS_TOOL = setOf(
+        "brim_ears_auto", "emboss_load_font", "svg_load_drawing", "assembly_align", "assembly_explode",
+        "tool_smart_paint", "tool_smart_paint_image",
+    )
 
     /** The gizmo's Move, Rotate and Scale (G, R and S): each chooses what a drag of the gizmo's handles does. */
     val GIZMO = ProjectEditing.GIZMO_TOOLS

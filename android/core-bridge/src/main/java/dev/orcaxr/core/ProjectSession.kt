@@ -248,6 +248,18 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun strandedBrimEars(request: ProjectIntents.BrimEarStrandedRequest): ProjectIntents.BrimEarStrandedReply = read {
         ProjectIntents.decodeBrimEarStrandedReply(NativeProject.sessionBrimEarStranded(it, ProjectIntents.encodeBrimEarStrandedRequest(request)))
     }
+    /** Minimal geometry description for Smart Paint (triangle count and bounding extent mm only). */
+    fun smartPaintDescribeGeometry(volumeId: String): String = read {
+        NativeProject.smartPaintDescribeGeometry(it, volumeId)
+    }
+    /** Project an assistant proposal onto volume triangles. Returns SmartPaintProjection JSON. */
+    fun smartPaintProject(volumeId: String, proposalJson: String): String = read {
+        NativeProject.smartPaintProject(it, volumeId, proposalJson)
+    }
+    /** Build an atomic Batch intent applying Smart Paint region assignments. */
+    fun smartPaintBuildBatch(volumeId: String, channel: String, proposalJson: String, assignmentsJson: String): String = read {
+        NativeProject.smartPaintBuildBatch(it, volumeId, channel, proposalJson, assignmentsJson)
+    }
     /** One object's ears, the stranded ones and the base a placed ear sits
      * on: what the brim-ear tool shows and places with. */
     fun brimEarView(request: ProjectIntents.BrimEarViewRequest): ProjectIntents.BrimEarViewReply = read {

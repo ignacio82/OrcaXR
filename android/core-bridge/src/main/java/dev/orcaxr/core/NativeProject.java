@@ -610,5 +610,10 @@ final class NativeProject {
     static native String calibrationHistoryExport(String records, String exportedAt);
     static native String calibrationHistoryImport(String text);
     static native String calibrationHistoryRerun(String record, String prerequisites);
+    // Smart Paint proposal validation, geometric projection, and commit planning.
+    static native String smartPaintValidateProposal(String proposal);
+    static native String smartPaintDescribeGeometry(long handle, String volumeId);
+    static native String smartPaintProject(long handle, String volumeId, String proposal);
+    static native String smartPaintBuildBatch(long handle, String volumeId, String channel, String proposal, String assignments);
     static native void close(long handle);
 }

@@ -2631,11 +2631,6 @@ export! {
 }
 
 export! {
-    Java_dev_orcaxr_core_NativeProject_close, close, (),
-    handle: jlong,
-}
-
-export! {
     Java_dev_orcaxr_core_NativeProject_calibrationDefinitions, calibration_definitions, jstring,
 }
 
@@ -2720,3 +2715,34 @@ export! {
     prerequisites: JString<'local>,
 }
 
+export! {
+    Java_dev_orcaxr_core_NativeProject_smartPaintValidateProposal, smart_paint_validate_proposal, jstring,
+    proposal: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_smartPaintDescribeGeometry, smart_paint_describe_geometry, jstring,
+    handle: jlong,
+    volume_id: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_smartPaintProject, smart_paint_project, jstring,
+    handle: jlong,
+    volume_id: JString<'local>,
+    proposal: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_smartPaintBuildBatch, smart_paint_build_batch, jstring,
+    handle: jlong,
+    volume_id: JString<'local>,
+    channel: JString<'local>,
+    proposal: JString<'local>,
+    assignments: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_close, close, (),
+    handle: jlong,
+}

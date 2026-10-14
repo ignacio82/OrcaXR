@@ -95,4 +95,5 @@
     <string name="help_setup_wizard">Installationsguide</string>
     <string name="calib_send_printer_btn">Skicka till skrivare</string>
     <string name="calib_history_delete_btn">Radera</string>
+    <string name="smart_paint_cancel">Avbryt</string>
 </resources>

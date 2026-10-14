@@ -101,4 +101,5 @@
     <string name="presets_export_bundle">Esporta pacchetto profili</string>
     <string name="calib_send_printer_btn">Invia alla stampante</string>
     <string name="calib_history_delete_btn">Elimina</string>
+    <string name="smart_paint_cancel">Annulla</string>
 </resources>

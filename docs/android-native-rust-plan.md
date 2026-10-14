@@ -3041,13 +3041,21 @@ and 3.
   Compose UI dialogs (`CalibrationDialogs.kt`), session banner in `WorkspaceScreen.kt`, and `ProjectModel`
   hold/restore/adopt document lifecycle. 19 localized resource sets and action tokens generated; JVM unit tests pass in
   `CalibrationActionsTest.kt` and `AppActionsTest.kt`.
-- [ ] Port Smart Paint proposal validation and operator correction through the
+- [x] Port Smart Paint proposal validation and operator correction through the
   shared transaction pipeline. Adapt provider transport, camera/voice features,
   and consent per provider/payload where they exist in the current app. Optional
   services remain lazy and cannot gate core startup.
-  Status (2026-10-12): the browser commits a Smart Paint mask as one labelled
-  transaction of guarded intents that the core executes (Phase 4); proposal
-  validation, the provider transport and any Android UI are not ported.
+  Status (2026-10-14): ported across shared Rust core (`orcaxr_project::smart_paint`),
+  JNI (`orcaxr_android::project::smart_paint`), core bridge (`ProjectSmartPaint.kt`,
+  `ProjectSession.kt`, `ProjectWorkspace.kt`), and Android app Compose shell (`SmartPaintDialog.kt`,
+  `ProjectModel.kt`). Proposal validation strictly reproduces TypeScript reference rules;
+  geometry projection computes mesh bounds, normal cone filtering, and declared-order region
+  layering; batch builder emits atomic `FacetStroke` intents with contiguous triangle ranges.
+  Android UI includes explicit geometry and image privacy consent gates, region review
+  readouts (confidence, coverage, triangles), and filament assignment. Action catalog
+  integrates 6 actions (`AppActions.kt`, `ActionTexts.kt`), 19 localized XML string sets,
+  verified in `SmartPaintActionsTest.kt`, `AppActionsTest.kt`, `tests/smart_paint.rs`,
+  and `./scripts/quality.sh`.
 - [ ] Inventory existing automation and platform-specific integrations. Preserve
   action IDs and implement deliberate native adapters where applicable; document
   browser-only integrations explicitly rather than claiming automatic portability.

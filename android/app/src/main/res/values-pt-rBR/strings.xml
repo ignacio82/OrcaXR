@@ -103,4 +103,5 @@
     <string name="calib_input_shaping_frequency">Frequência da Modelagem de Entrada</string>
     <string name="calib_send_printer_btn">Enviar para a impressora</string>
     <string name="calib_history_delete_btn">Excluir</string>
+    <string name="smart_paint_cancel">Cancelar</string>
 </resources>

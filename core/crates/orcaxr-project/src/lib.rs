@@ -51,6 +51,7 @@ pub mod session;
 pub mod settings;
 pub mod simplify;
 pub mod slicing;
+pub mod smart_paint;
 pub mod split;
 pub mod staging_layout;
 pub mod store;

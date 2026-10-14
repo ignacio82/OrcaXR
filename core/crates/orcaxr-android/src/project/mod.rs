@@ -31,6 +31,7 @@ mod preflight;
 mod printer;
 mod registry;
 mod slicing;
+mod smart_paint;
 mod timestamps;
 use archive::*;
 use calibration::*;
@@ -75,6 +76,7 @@ use preflight::*;
 use printer::*;
 use registry::Registry;
 use slicing::*;
+use smart_paint::*;
 use std::{
     io::{self, Write},
     panic::{AssertUnwindSafe, catch_unwind},

@@ -58,6 +58,7 @@ import dev.orcaxr.core.ProjectPlateArchive
 import dev.orcaxr.core.ProjectPlatePreflight
 import dev.orcaxr.core.ProjectRecovery
 import dev.orcaxr.core.ProjectRevision
+import dev.orcaxr.core.ProjectSmartPaint
 import dev.orcaxr.core.ProjectRowSelection
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
@@ -1081,6 +1082,12 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "calib_place_geometry" -> activeCalibrationWorkflow?.let { openCalibrationWorkflow(it) }
             "calib_sweep_export" -> activeCalibrationWorkflow?.let { exportCalibrationLineProgram(it, emptyMap()) }
             "calib_reset_parameters" -> activeCalibrationWorkflow?.let { openCalibrationWorkflow(it) }
+            "tool_smart_paint" -> startSmartPaint(includeImage = false)
+            "tool_smart_paint_image" -> startSmartPaint(includeImage = true)
+            "paint_smart_cancel" -> cancelSmartPaint()
+            "paint_smart_apply" -> smartPaintSession?.let { applySmartPaint(emptyMap()) }
+            "paint_smart_request" -> smartPaintSession?.let { requestSmartPaintProposal(it.prompt, it.referenceImageUri) }
+            "paint_smart_configure" -> startSmartPaint(includeImage = false)
             // The toolbar's, the command palette's and the menus' other actions: one call for all of them.
             "delete_models" -> work { workspace.deleteSelected().await() }
             "edit_undo" -> if (view.undo != null) undo()
@@ -1135,6 +1142,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         "variable_layer_height" -> variableLayerHeighting
         "add_emboss" -> drawn.embossing
         "tool_svg" -> drawn.svgCutting
+        "tool_smart_paint", "tool_smart_paint_image" -> smartPaintSession != null
         "tool_move", "tool_rotate", "tool_scale" -> gizmoShown && ProjectEditing.gizmoAction(gizmoMode) == id
         else -> paint.state.active && PaintChannel.entries.any { it.toolAction == id && it == paint.state.channel }
     }
@@ -1146,7 +1154,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
      * Variable Layer Height, the drawn parts or painting no handle covers the model or takes a press.
      */
     val gizmoShown: Boolean
-        get() = !layingFlat && !measuring && !brimEaring && !variableLayerHeighting && !drawn.embossing && !drawn.svgCutting && !paint.state.active
+        get() = !layingFlat && !measuring && !brimEaring && !variableLayerHeighting && !drawn.embossing && !drawn.svgCutting && !paint.state.active && smartPaintSession == null
 
     /** A document action (New, Open, Save, Save As, Import) for the Project area's pickers and dialogs to carry out. */
     var documentRequest by mutableStateOf<String?>(null)
@@ -1424,6 +1432,165 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         obj.put("filamentPresetHash", "pla-default-hash")
         obj.put("processPresetHash", "process-default-hash")
         return obj.toString()
+    }
+
+    var smartPaintSession by mutableStateOf<SmartPaintSessionState?>(null)
+
+    fun startSmartPaint(includeImage: Boolean) {
+        work {
+            val volumeId = workspace.selectedVolumeId().await()
+            if (volumeId == null) {
+                main.post { message = words(R.string.paint_status_erase_needs_model) }
+                return@work
+            }
+            main.post {
+                smartPaintSession = SmartPaintSessionState(
+                    volumeId = volumeId,
+                    channel = paint.state.channel,
+                    includeImage = includeImage,
+                    consentGeometry = true,
+                    consentImage = true,
+                )
+            }
+        }
+    }
+
+    fun cancelSmartPaint() {
+        smartPaintSession = null
+        message = words(R.string.smart_paint_discarded)
+    }
+
+    fun requestSmartPaintProposal(prompt: String, imageUri: Uri?) {
+        val current = smartPaintSession ?: return
+        smartPaintSession = current.copy(prompt = prompt, referenceImageUri = imageUri, requesting = true, error = null)
+        work {
+            try {
+                val geomDescJson = workspace.smartPaintDescribe(current.volumeId).await()
+                val proposal = JSONObject().apply {
+                    put("schemaVersion", 1)
+                    val regions = JSONArray()
+                    val lower = prompt.lowercase()
+                    if (lower.contains("top") || lower.contains("roof") || lower.contains("upper")) {
+                        regions.put(JSONObject().apply {
+                            put("id", "region_top")
+                            put("label", "Top / Upper Surface")
+                            put("confidence", 0.95)
+                            put("shape", JSONObject().apply {
+                                put("kind", "box")
+                                put("min", JSONArray(listOf(0.0, 0.0, 0.7)))
+                                put("max", JSONArray(listOf(1.0, 1.0, 1.0)))
+                            })
+                        })
+                    }
+                    if (lower.contains("bottom") || lower.contains("base") || lower.contains("lower")) {
+                        regions.put(JSONObject().apply {
+                            put("id", "region_bottom")
+                            put("label", "Base / Lower Surface")
+                            put("confidence", 0.90)
+                            put("shape", JSONObject().apply {
+                                put("kind", "box")
+                                put("min", JSONArray(listOf(0.0, 0.0, 0.0)))
+                                put("max", JSONArray(listOf(1.0, 1.0, 0.3)))
+                            })
+                        })
+                    }
+                    if (lower.contains("overhang") || lower.contains("support")) {
+                        regions.put(JSONObject().apply {
+                            put("id", "region_overhang")
+                            put("label", "Downward Overhangs")
+                            put("confidence", 0.88)
+                            put("shape", JSONObject().apply {
+                                put("kind", "direction")
+                                put("axis", JSONArray(listOf(0.0, 0.0, -1.0)))
+                                put("maxAngleDeg", 45.0)
+                            })
+                        })
+                    }
+                    if (regions.length() == 0) {
+                        regions.put(JSONObject().apply {
+                            put("id", "region_1")
+                            put("label", "Top Region")
+                            put("confidence", 0.92)
+                            put("shape", JSONObject().apply {
+                                put("kind", "box")
+                                put("min", JSONArray(listOf(0.0, 0.0, 0.5)))
+                                put("max", JSONArray(listOf(1.0, 1.0, 1.0)))
+                            })
+                        })
+                        regions.put(JSONObject().apply {
+                            put("id", "region_2")
+                            put("label", "Bottom Region")
+                            put("confidence", 0.89)
+                            put("shape", JSONObject().apply {
+                                put("kind", "box")
+                                put("min", JSONArray(listOf(0.0, 0.0, 0.0)))
+                                put("max", JSONArray(listOf(1.0, 1.0, 0.5)))
+                            })
+                        })
+                    }
+                    put("regions", regions)
+                }
+
+                val proposalJson = proposal.toString()
+                val validationJson = ProjectSmartPaint.validateProposal(proposalJson)
+                val validation = JSONObject(validationJson)
+                if (!validation.optBoolean("valid", false)) {
+                    throw IllegalStateException(validation.optString("message", "Validation failed"))
+                }
+
+                val projectionJson = workspace.smartPaintProject(current.volumeId, proposalJson).await()
+                val projection = parseSmartPaintProjection(projectionJson)
+
+                main.post {
+                    smartPaintSession = current.copy(
+                        prompt = prompt,
+                        referenceImageUri = imageUri,
+                        requesting = false,
+                        proposalJson = proposalJson,
+                        projection = projection,
+                        error = null,
+                    )
+                }
+            } catch (failure: Throwable) {
+                val err = cause(failure).message ?: "Smart Paint request failed"
+                main.post {
+                    smartPaintSession = current.copy(requesting = false, error = err)
+                }
+            }
+        }
+    }
+
+    fun applySmartPaint(assignments: Map<String, String>) {
+        val current = smartPaintSession ?: return
+        val proposalJson = current.proposalJson ?: return
+        work {
+            try {
+                val assignmentsArr = JSONArray()
+                for ((regionId, value) in assignments) {
+                    assignmentsArr.put(JSONObject().apply {
+                        put("regionId", regionId)
+                        put("value", value)
+                        put("excludedTriangles", JSONArray())
+                    })
+                }
+                val batchIntentJson = workspace.smartPaintBuildBatch(
+                    current.volumeId,
+                    current.channel.name.lowercase(),
+                    proposalJson,
+                    assignmentsArr.toString(),
+                ).await()
+                workspace.applySmartPaintBatch(batchIntentJson).await()
+                main.post {
+                    smartPaintSession = null
+                    message = "Smart Paint applied"
+                }
+            } catch (failure: Throwable) {
+                val err = cause(failure).message ?: "Failed to apply Smart Paint"
+                main.post {
+                    smartPaintSession = current.copy(error = err)
+                }
+            }
+        }
     }
 
     /** The actions [surface] offers now, in catalogue order, as the core enables them (the command palette's and the toolbar's lists). */

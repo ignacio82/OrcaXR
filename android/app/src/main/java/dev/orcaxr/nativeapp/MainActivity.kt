@@ -581,6 +581,14 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+                project.smartPaintSession?.let { session ->
+                    dev.orcaxr.nativeapp.project.SmartPaintDialog(
+                        session = session,
+                        onDismiss = project::cancelSmartPaint,
+                        onPropose = project::requestSmartPaintProposal,
+                        onApply = project::applySmartPaint,
+                    )
+                }
             } } } }
         }
     }

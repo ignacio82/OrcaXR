@@ -1801,6 +1801,84 @@
     },
     "calib_history_how_it_works": {
       "key": "ui.calibrationParametersPanel.howThisCalibrationWorks"
+    },
+    "assembly_turn": {
+      "key": "ui.measurePanel.turnDeg"
+    },
+    "action_tool_smart_paint": {
+      "key": "action.tool_smart_paint.label"
+    },
+    "action_hint_tool_smart_paint": {
+      "key": "action.tool_smart_paint.hint"
+    },
+    "action_tool_smart_paint_image": {
+      "key": "action.tool_smart_paint_image.label"
+    },
+    "action_hint_tool_smart_paint_image": {
+      "key": "action.tool_smart_paint_image.hint"
+    },
+    "action_paint_smart_apply": {
+      "key": "action.paint_smart_apply.label"
+    },
+    "action_hint_paint_smart_apply": {
+      "key": "action.paint_smart_apply.hint"
+    },
+    "action_paint_smart_cancel": {
+      "key": "action.paint_smart_cancel.label"
+    },
+    "action_hint_paint_smart_cancel": {
+      "key": "action.paint_smart_cancel.hint"
+    },
+    "action_paint_smart_configure": {
+      "key": "action.paint_smart_configure.label"
+    },
+    "action_hint_paint_smart_configure": {
+      "key": "action.paint_smart_configure.hint"
+    },
+    "action_paint_smart_request": {
+      "key": "action.paint_smart_request.label"
+    },
+    "action_hint_paint_smart_request": {
+      "key": "action.paint_smart_request.hint"
+    },
+    "smart_paint_title": {
+      "key": "ui.smartPaintPanel.smartPaint"
+    },
+    "smart_paint_what_may_be_sent": {
+      "key": "ui.smartPaintPanel.whatMayBeSent"
+    },
+    "smart_paint_describe_prompt": {
+      "key": "ui.smartPaintPanel.describeTheRegionsYouWant"
+    },
+    "smart_paint_example_prompt": {
+      "key": "ui.smartPaintPanel.forExampleTheTopSurface"
+    },
+    "smart_paint_image_attached": {
+      "key": "ui.smartPaintPanel.aReferenceImageIsAttached"
+    },
+    "smart_paint_waiting": {
+      "key": "ui.smartPaintPanel.waitingForTheAssistantNothing"
+    },
+    "smart_paint_choose_destination": {
+      "key": "ui.smartPaintPanel.chooseADestinationForAt"
+    },
+    "smart_paint_leave_unpainted": {
+      "key": "ui.smartPaintPanel.leaveUnpainted"
+    },
+    "smart_paint_discarded": {
+      "key": "workspace.orcaWorkspace.smartPaintMaskDiscardedThe"
+    },
+    "smart_paint_cancelled": {
+      "key": "workspace.orcaWorkspace.smartPaintWasCancelledNothing"
+    },
+    "smart_paint_failed": {
+      "key": "workspace.orcaWorkspace.smartPaintFailed",
+      "arguments": [
+        "reason"
+      ]
+    },
+    "smart_paint_cancel": {
+      "key": "persistence.cancel"
     }
   },
   "english": [
@@ -2093,7 +2171,6 @@
     "assembly_center",
     "assembly_flip",
     "assembly_set_gap",
-    "assembly_turn",
     "assembly_turn_apply",
     "emboss_add",
     "emboss_update",
@@ -2222,7 +2299,16 @@
     "calib_history_record_success",
     "calib_history_apply_success",
     "calib_history_delete_confirm",
-    "calib_history_delete_title"
+    "calib_history_delete_title",
+    "smart_paint_consent_geometry",
+    "smart_paint_consent_image",
+    "smart_paint_attach_image",
+    "smart_paint_propose",
+    "smart_paint_apply",
+    "smart_paint_region_count",
+    "smart_paint_coverage",
+    "smart_paint_confidence",
+    "smart_paint_exclude"
   ],
   "kotlin": [
     {

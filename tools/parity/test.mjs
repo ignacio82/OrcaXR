@@ -378,7 +378,7 @@ function releaseReportTests() {
   assert.ok(c, "report has target classification for action catalog");
   assert.equal(c.webDom.implemented, 219);
   assert.equal(c.webXr.implemented, 198);
-  assert.equal(c.androidFlat.implemented, 147);
+  assert.equal(c.androidFlat.implemented, 153);
   assert.equal(c.androidXr.implemented, 0);
 }
 

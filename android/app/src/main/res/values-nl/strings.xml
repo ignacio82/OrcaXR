@@ -96,4 +96,5 @@
     <string name="help_setup_wizard">Installatiewizard</string>
     <string name="calib_send_printer_btn">Stuur naar printer</string>
     <string name="calib_history_delete_btn">Verwijderen</string>
+    <string name="smart_paint_cancel">Annuleren</string>
 </resources>

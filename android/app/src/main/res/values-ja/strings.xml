@@ -88,4 +88,5 @@
     <string name="presets_export_bundle">プリセットバンドルをエクスポート</string>
     <string name="calib_send_printer_btn">プリンタへ送信</string>
     <string name="calib_history_delete_btn">削除</string>
+    <string name="smart_paint_cancel">取消し</string>
 </resources>

@@ -103,4 +103,5 @@
     <string name="calib_input_shaping_frequency">Input shaping Frekansı</string>
     <string name="calib_send_printer_btn">Yazıcıya gönder</string>
     <string name="calib_history_delete_btn">Sil</string>
+    <string name="smart_paint_cancel">İptal</string>
 </resources>

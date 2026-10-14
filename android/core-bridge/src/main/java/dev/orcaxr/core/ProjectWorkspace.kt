@@ -2720,6 +2720,40 @@ class ProjectWorkspace(
     fun measure(first: MeasurePick, second: MeasurePick): ProjectIntents.MeasureResult? =
         (ProjectMeasureVolume.measure(ProjectIntents.MeasureRequest(first.feature, second.feature)) as? ProjectIntents.MeasureReply.Measured)?.value
 
+    // ---- Smart Paint: assistant proposal projection and batch intent planning ----
+
+    /** Describe geometry for Smart Paint (bounding extent and triangle count only). */
+    fun smartPaintDescribe(volumeId: String): CompletableFuture<String> =
+        inspect { session -> session.smartPaintDescribeGeometry(volumeId) }
+
+    /** Project an assistant proposal onto volume triangles. */
+    fun smartPaintProject(volumeId: String, proposalJson: String): CompletableFuture<String> =
+        inspect { session -> session.smartPaintProject(volumeId, proposalJson) }
+
+    /** Build an atomic batch intent string applying region assignments. */
+    fun smartPaintBuildBatch(
+        volumeId: String,
+        channel: String,
+        proposalJson: String,
+        assignmentsJson: String,
+    ): CompletableFuture<String> =
+        inspect { session -> session.smartPaintBuildBatch(volumeId, channel, proposalJson, assignmentsJson) }
+
+    /** Apply Smart Paint batch intent to the project as an undoable step. */
+    fun applySmartPaintBatch(batchIntentJson: String): CompletableFuture<Unit> {
+        val batch = ProjectIntents.decodeBatch(batchIntentJson)
+        return transaction(text(batch.label), batch.commands)
+    }
+
+    /** The first selected model part volume ID, or null. */
+    fun selectedVolumeId(): CompletableFuture<String?> = inspect { session ->
+        session.snapshot().use { snapshot ->
+            snapshot.query().use { root ->
+                simplifyTargets(session, root).firstOrNull()?.id
+            }
+        }
+    }
+
     // ---- Assembly: the browser workspace's alignments of two Measure picks ----
 
     /**
