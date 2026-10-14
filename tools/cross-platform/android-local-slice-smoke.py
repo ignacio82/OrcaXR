@@ -94,8 +94,10 @@ def running_progress(timeout=120):
 assert adb("shell", "getprop", "sys.boot_completed") == "1", "Emulator is not ready"
 adb("install", "-r", str(app_apk))
 adb("shell", "pm", "clear", PACKAGE)
-# Granted up front: the app asks for it once before its first local slice (a system dialog).
-adb("shell", "pm", "grant", PACKAGE, "android.permission.POST_NOTIFICATIONS")
+# Revoke notification permission to qualify slicing under notification denial:
+# the app asks once before its first local slice; denying it still lets the slice run.
+adb("shell", "pm", "revoke", PACKAGE, "android.permission.POST_NOTIFICATIONS")
+adb("shell", "pm", "clear-permission-flags", PACKAGE, "android.permission.POST_NOTIFICATIONS", "user-set", "user-fixed")
 screen.launch(PACKAGE)
 find("Import a model in the Project area to see it here.")
 editor = pid(PACKAGE)
@@ -114,10 +116,27 @@ slice_ready()
 route = find("Slicing route: this device's own engine", exact=False).get("text")
 assert "as external slicing is off" in route and "fit the memory this device has now" in route, route
 
-# The slice runs in the engine's own process; Preview shows its toolpaths.
+# The slice runs in the engine's own process under notification denial; Preview shows its toolpaths.
 tap("Slice")
+deadline = time.monotonic() + 5
+while time.monotonic() < deadline:
+    denied_tap = False
+    for node in screen.nodes():
+        val = node.get("text") or node.get("content-desc") or ""
+        if any(opt in val for opt in ("Don’t allow", "Don't allow", "Deny")):
+            tap(val)
+            denied_tap = True
+            break
+    if denied_tap:
+        break
+    time.sleep(0.3)
+
 find("Sliced in Prepare from the project as it stands.", timeout=240)
 find("Showing ", exact=False)
+if int(adb("shell", "getprop", "ro.build.version.sdk")) >= 33:
+    package_dump = adb("shell", "dumpsys", "package", PACKAGE)
+    assert "android.permission.POST_NOTIFICATIONS: granted=false" in package_dump, \
+        "Notification permission was granted; expected denial qualification"
 engine = pid(ENGINE)
 assert engine and engine != pid(PACKAGE), "The engine did not run in its own process"
 time.sleep(4)
@@ -148,7 +167,7 @@ assert int(summary.group(2)) == math.floor(len(gcode) / 1024 + 0.5), (summary.gr
 assert int(summary.group(3)) == lines, (summary.group(3), lines)
 assert int(summary.group(4)) == layers and layers >= 50, (summary.group(4), layers, markers)
 
-# A long slice: the engine's progress shows, the service is in the foreground, and Cancel Slice stops it.
+# A long slice: the engine's progress shows, the service is in the foreground, task switching and screen lock are survived, and Cancel Slice stops it.
 tap("Project")
 menu("Edit", "Scale to build volume")
 deadline = time.monotonic() + 60
@@ -167,6 +186,26 @@ while "isForeground=true" not in (services := adb("shell", "dumpsys", "activity"
         (output / "local-slice-services.txt").write_text(services)
         raise AssertionError("The engine's service was not in the foreground while slicing")
     time.sleep(0.5)
+
+# Task switching: press Home to put the app in the background. The service remains in the foreground.
+adb("shell", "input", "keyevent", "3")
+time.sleep(1)
+services = adb("shell", "dumpsys", "activity", "services", f"{PACKAGE}/.engine.LocalEngineService")
+assert "isForeground=true" in services, "The engine service stopped being foreground after task switch"
+assert pid(ENGINE), "The engine died during task switch"
+
+# Screen lock: turn screen off. The slice continues in the foreground service.
+adb("shell", "input", "keyevent", "26")
+time.sleep(1)
+services = adb("shell", "dumpsys", "activity", "services", f"{PACKAGE}/.engine.LocalEngineService")
+assert "isForeground=true" in services, "The engine service stopped being foreground during screen lock"
+assert pid(ENGINE), "The engine died during screen lock"
+adb("shell", "input", "keyevent", "26")
+adb("shell", "input", "keyevent", "82")
+
+# Bring editor back to foreground and cancel.
+adb("shell", "am", "start", "-n", f"{PACKAGE}/.MainActivity")
+find("Cancel Slice", timeout=20)
 tap("Cancel Slice")
 cancelled = find(CANCELLED, exact=False, timeout=60).get("text")
 
@@ -198,6 +237,54 @@ tap("Prepare")
 find("Sliced on this device", timeout=30)
 screen.absent(OUT_OF_DATE, timeout=10)
 
+# Mid-slice editor death: the editor process is killed while slicing; :engine receives owner death via Binder,
+# cancels native slicing, deletes the staged job directory, and demotes.
+# Scale the cube again for a long slice:
+tap("Project")
+menu("Edit", "Scale to build volume")
+find("Undo Transform instance", timeout=30)
+tap("Prepare")
+slice_ready()
+tap("Slice")
+running_progress()
+assert pid(ENGINE), "No engine process while slicing"
+jobs_staged = adb("shell", "run-as", PACKAGE, "ls no_backup/engine-jobs 2>/dev/null || true").split()
+assert jobs_staged, "Expected staged job directory in no_backup/engine-jobs"
+staged_dir = jobs_staged[0]
+
+# Kill the editor process mid-slice:
+victim_editor = pid(PACKAGE)
+assert victim_editor, "No editor process to kill"
+adb("shell", "run-as", PACKAGE, "kill", "-9", str(victim_editor))
+time.sleep(1)
+assert not pid(PACKAGE), "Editor process did not terminate"
+
+# Owner death cleanup: LocalEngineService receives binderDied on owner token,
+# cancels native slicing, discards the job directory, and demotes/stops.
+deadline = time.monotonic() + 15
+while time.monotonic() < deadline:
+    remaining_jobs = adb("shell", "run-as", PACKAGE, "ls no_backup/engine-jobs 2>/dev/null || true").split()
+    if staged_dir not in remaining_jobs:
+        break
+    time.sleep(0.5)
+remaining = adb("shell", "run-as", PACKAGE, "ls no_backup/engine-jobs 2>/dev/null || true").split()
+assert staged_dir not in remaining, f"Job directory {staged_dir} was not cleaned up after editor died"
+
+# Demoted / stopped:
+deadline = time.monotonic() + 10
+while time.monotonic() < deadline:
+    services = adb("shell", "dumpsys", "activity", "services", f"{PACKAGE}/.engine.LocalEngineService || true")
+    if "isForeground=true" not in services:
+        break
+    time.sleep(0.5)
+services = adb("shell", "dumpsys", "activity", "services", f"{PACKAGE}/.engine.LocalEngineService || true")
+assert "isForeground=true" not in services, "Engine service did not demote after editor died"
+
+# Reopen the app: starts cleanly.
+screen.launch(PACKAGE)
+editor = pid(PACKAGE)
+assert editor and editor != victim_editor, "Editor process did not restart"
+
 report = {
     "evidenceKind": "emulator-only",
     "api": adb("shell", "getprop", "ro.build.version.sdk"),
@@ -212,6 +299,11 @@ report = {
     "scaled": scaled,
     "progress": progress,
     "cancelled": cancelled,
+    "notificationDenialQualified": True,
+    "taskSwitchingQualified": True,
+    "screenLockQualified": True,
+    "editorDeathCleanupQualified": True,
+    "engineDeathRecoveryQualified": True,
 }
 (output / "android-local-slice-smoke.json").write_text(json.dumps(report, indent=2) + "\n")
 print(f"Local slicing passed on API {report['api']} {report['abi']} emulator ({layers} layers, {toolpaths} toolpath pixels)")

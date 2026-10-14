@@ -7308,11 +7308,12 @@ then a cube scaled to the build volume cancelled mid-slice; it takes the
 app's shared profile catalog, as the core admits four documents at a time)
 passes on the API 34 emulator. `android-local-slice-smoke.py` (in
 `emulator-smoke.py`: a cube from the Add menu, the local route and why, Slice
-in the `:engine` process, Preview's toolpaths, Prepare's size/lines/layers
+in the `:engine` process under notification denial, Preview's toolpaths, Prepare's size/lines/layers
 against the published file read back, a cube scaled to the build volume
-sliced with the service in the foreground and Cancel Slice, the engine
-process killed mid-slice with the editor surviving, and a fresh engine for
-the next slice) passes on both emulators. `emulator-slices.py --adapter`, which reruns the
+sliced with the service in the foreground, task switching (Home key) and screen lock (Power key) survived,
+Cancel Slice, the engine process killed mid-slice with the editor surviving and a fresh engine for
+the next slice, and the editor killed mid-slice with owner-token Binder cleanup of staged jobs in
+`no_backup/engine-jobs` and service demotion) passes on both emulators (API 34 and API 37 16 KB pages). `emulator-slices.py --adapter`, which reruns the
 eleven fixture comparisons through the adapter's C entry point (the one JNI
 calls) with its fixture driver, matches the browser engine's references in
 all eleven on the x86_64 emulator. Both routes now carry the plate's

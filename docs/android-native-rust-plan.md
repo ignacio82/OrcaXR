@@ -225,9 +225,11 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    `repair_model`, `mesh_boolean_union`, `mesh_boolean_subtract`, and
    `mesh_boolean_intersection`, raising `AppActions.PERFORMED` to 120 actions.
 5. Phase 6, emulator-reachable qualification: task switching, screen lock,
-   notification denial, Doze, the `dataSync` limit and reopening an interrupted
-   job; the engine-feature matrix (CC profiles, FullSpectrum modes, seam and
-   fuzzy-skin paint, layer events) through `tools/native-engine/emulator-slices.py`;
+   notification denial, engine process recovery, and editor death cleanup with
+   owner-token staged job removal are qualified on both emulators in
+   `android-local-slice-smoke.py`; remaining: Doze, the `dataSync` limit and reopening
+   an interrupted job; the engine-feature matrix (CC profiles, FullSpectrum modes, seam
+   and fuzzy-skin paint, layer events) through `tools/native-engine/emulator-slices.py`;
    the reproducible clean-source engine build.
 6. Phase 2: the flat renderer's open items, recorded with its selection
    ([§](engineering/native-core.md#flat-renderer-selection)): the baked
@@ -2223,7 +2225,7 @@ external slice routes, and verified output publication.
   `test-engine-adapter.py` mutates real packages), and the app build packages
   only its verified export. The engine recipe's own clean-source rebuild and a
   hosted run of both remain.
-- [ ] Implement the service/JNI contract described above, including bounded input
+- [x] Implement the service/JNI contract described above, including bounded input
   staging, one-job admission, progress, thread-safe callbacks, cooperative cancel,
   hard-stop escalation, process-death observation, and cleanup after editor death.
   Implemented ([native-core](engineering/native-core.md#android-local-slicing)):
@@ -2239,9 +2241,9 @@ external slice routes, and verified output publication.
   reruns the eleven fixture comparisons through the adapter's C entry point
   (the one JNI calls) and all eleven match the browser engine's references
   on the x86_64 emulator.
-  Status (2026-10-12): implemented and verified on both emulators as above.
-  Remains: a test of the cleanup after the editor dies (implemented through the
-  owner token; no recorded test exercises it) and ARM64 execution.
+  Status (2026-10-14): implemented and verified on both emulators as above,
+  including mid-slice editor death with owner-token cleanup of staged job
+  directories in `no_backup/engine-jobs` and service demotion. Remains: ARM64 execution.
 - [ ] Reuse canonical preflight and exact captured configuration. Exercise U1
   toolchanges, CC profiles, FullSpectrum modes, support/seam/fuzzy/color painting,
   layer events, scoped overrides, and every engine feature currently claimed.
@@ -2333,11 +2335,17 @@ external slice routes, and verified output publication.
   started; notification with progress and Cancel) only while a job runs,
   started while the app is in the foreground; Android 15's time limit cancels
   the job; the editor polls, so a cached or frozen editor delays nothing.
-  Status (2026-10-12): on both emulators `android-local-slice-smoke.py` checks
-  the service in the foreground while slicing, Cancel Slice, and the engine's
-  process killed mid-slice (the editor keeps its project; the next slice runs
-  in a fresh engine process). Untested: task switching, screen lock, thermal
-  pressure, notification denial, the `dataSync` daily limit, Doze, service
+  Status (2026-10-14): on both emulators (API 34 and API 37 16 KB pages)
+  `android-local-slice-smoke.py` checks notification denial (revoking
+  `POST_NOTIFICATIONS` up front and dismissing the prompt does not block
+  the `dataSync` foreground service or G-code output), task switching (Home key
+  backgrounds the app while `isForeground=true` continues), screen lock (Power
+  key turns screen off while slicing continues in foreground service), Cancel Slice,
+  the engine's process killed mid-slice (the editor survives, keeps its project,
+  and fresh engine process replaces it), and the editor process killed mid-slice
+  (engine receives owner death via Binder, cancels native slicing, cleans up
+  staged job directories in `no_backup/engine-jobs`, and demotes from foreground).
+  Untested: thermal pressure, the `dataSync` daily limit, Doze, service
   timeout, and reopening a job interrupted by process death (the slice is lost;
   the project is not).
 
