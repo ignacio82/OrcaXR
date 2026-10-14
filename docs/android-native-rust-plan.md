@@ -193,10 +193,14 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    printable boundary box in `FilamentScene`, the Add menu's calibration and
    library models (`add_calibration_cube`, `add_calibration_tower`,
    `add_handy_model`), the Help menu and its dialogs (`help_shortcuts`,
-   `help_docs`, `help_report_bug`, `help_about`, `help_language`), and the in-app
+   `help_docs`, `help_report_bug`, `help_about`, `help_language`, `help_tutorial`,
+   `help_tip_of_day`, `help_check_updates`, `help_setup_wizard`, `help_search`),
+   preset management (`presets_install_printer`, `presets_create_custom`,
+   `presets_update_custom`, `presets_delete_custom`, `presets_export_bundle`,
+   `presets_import_bundle`) with `PresetLibraryDialog`, and the in-app
    reduce-motion override (`MotionPreference`, `OrcaMotionScope`) are done
    ([§](engineering/native-core.md#android-view-menu-help-menu-calibration-models-and-reduce-motion)),
-   raising `AppActions.PERFORMED` to 105 actions. For the full gap,
+   raising `AppActions.PERFORMED` to 116 actions. For the full gap,
    compare `AppActions.PERFORMED` (`android/app/.../shell/AppActions.kt`, the
    actions the app performs) with the catalogue in
    `core/crates/orcaxr-contracts/src/capabilities/generated.rs`; some catalogue

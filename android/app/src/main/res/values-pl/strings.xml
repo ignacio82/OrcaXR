@@ -94,4 +94,9 @@
     <string name="project_help_menu">Pomoc</string>
     <string name="help_shortcuts">Skróty klawiszowe</string>
     <string name="help_language">Język…</string>
+    <string name="help_tutorial">Samouczek</string>
+    <string name="help_tip_of_day">Wyświetl poradę dnia</string>
+    <string name="help_check_updates">Sprawdź dostępność aktualizacji</string>
+    <string name="help_setup_wizard">Kreator konfiguracji</string>
+    <string name="presets_export_bundle">Eksportuj zestaw ustawień</string>
 </resources>

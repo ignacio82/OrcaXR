@@ -82,4 +82,8 @@
     <string name="project_help_menu">ヘルプ</string>
     <string name="help_shortcuts">ショートカット</string>
     <string name="help_language">言語…</string>
+    <string name="help_tip_of_day">「毎日のヒント」を表示</string>
+    <string name="help_check_updates">更新を確認</string>
+    <string name="help_setup_wizard">セットアップ ウィザード</string>
+    <string name="presets_export_bundle">プリセットバンドルをエクスポート</string>
 </resources>

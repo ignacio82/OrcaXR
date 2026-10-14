@@ -94,4 +94,9 @@
     <string name="project_help_menu">Aiuto</string>
     <string name="help_shortcuts">Scorciatoie da tastiera</string>
     <string name="help_language">Lingua…</string>
+    <string name="help_tutorial">Tutorial</string>
+    <string name="help_tip_of_day">Suggerimento del giorno</string>
+    <string name="help_check_updates">Verifica aggiornamenti</string>
+    <string name="help_setup_wizard">Configurazione Guidata</string>
+    <string name="presets_export_bundle">Esporta pacchetto profili</string>
 </resources>

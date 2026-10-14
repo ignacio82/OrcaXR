@@ -875,4 +875,49 @@
     <string name="about_close">Close</string>
     <string name="motion_reduce">Reduce motion</string>
     <string name="motion_reduce_hint">Suppress animations across the app</string>
+    <!-- Extended Help actions (web/src/actions/groups/help.ts). -->
+    <string name="help_tutorial">Tutorial</string>
+    <string name="action_hint_help_tutorial">Open the OrcaXR getting-started tutorial</string>
+    <string name="help_tip_of_day">Show Tip of the Day</string>
+    <string name="action_hint_help_tip_of_day">Show a rotating usage tip</string>
+    <string name="help_check_updates">Check for Update</string>
+    <string name="action_hint_help_check_updates">Check for a newer OrcaXR version</string>
+    <string name="help_setup_wizard">Setup Wizard</string>
+    <string name="action_hint_help_setup_wizard">Re-run the first-launch printer / filament setup</string>
+    <string name="help_search">Search Help</string>
+    <string name="action_hint_help_search">Search topics, error troubleshooting, and every action in one place</string>
+    <!-- Presets & profiles (web/src/actions/groups/presets.ts). -->
+    <string name="presets_install_printer">Install Printer</string>
+    <string name="action_hint_presets_install_printer">Choose which printers and nozzles this browser offers, from the pinned catalog</string>
+    <string name="presets_create_custom">Create Custom Preset</string>
+    <string name="action_hint_presets_create_custom">Author a printer, process, or filament preset as an overlay on a compatible base</string>
+    <string name="presets_update_custom">Edit Custom Preset</string>
+    <string name="action_hint_presets_update_custom">Change one of your own presets, its licence, or its version, keeping its creation record</string>
+    <string name="presets_delete_custom">Delete Custom Preset</string>
+    <string name="action_hint_presets_delete_custom">Remove one of your own presets, once nothing else inherits from it</string>
+    <string name="presets_export_bundle">Export Preset Bundle</string>
+    <string name="action_hint_presets_export_bundle">Write this setup — installed printers and your own presets — to one reviewable file</string>
+    <string name="presets_import_bundle">Import Preset Bundle</string>
+    <string name="action_hint_presets_import_bundle">Replace this setup from a bundle, or refuse it whole if it does not fit this build</string>
+    <!-- Dialog contents for Tutorial, Tips, Updates, Setup Wizard, and Presets. -->
+    <string name="tutorial_step_1">1. Import a 3D model (File → Import) or add a geometric shape from the Add menu.</string>
+    <string name="tutorial_step_2">2. Position, rotate, or scale models on the plate using Move, Rotate, Scale, or Auto-arrange.</string>
+    <string name="tutorial_step_3">3. Configure printer, process, and filament profiles in Prepare.</string>
+    <string name="tutorial_step_4">4. Slice the plate and review toolpaths and layer events in Preview.</string>
+    <string name="tutorial_step_5">5. Export G-code or send directly to your Klipper / Moonraker printer.</string>
+    <string name="tip_next">Next Tip</string>
+    <string name="check_updates_status">OrcaXR is up to date.</string>
+    <string name="check_updates_details">You are running OrcaXR %1$s with Snapmaker OrcaSlicer v2.3.4.</string>
+    <string name="setup_wizard_printers">Printers: Select Snapmaker U1 or Elegoo Centauri Carbon in Prepare, or discover printers via Moonraker in Devices.</string>
+    <string name="setup_wizard_filaments">Filaments: Assign materials, nozzle temperatures, and cooling speeds for each toolhead.</string>
+    <string name="setup_wizard_slicer">Slicing: Choose between the local on-device :engine service or an external attested slicer.</string>
+    <string name="setup_wizard_open_prepare">Open Prepare</string>
+    <string name="presets_title">Preset Library</string>
+    <string name="presets_installed_printers">Installed Printers</string>
+    <string name="presets_custom_presets">Custom Presets</string>
+    <string name="presets_no_custom">No custom presets authored.</string>
+    <string name="presets_tab_printers">Printers</string>
+    <string name="presets_tab_custom">Custom</string>
+    <string name="presets_tab_bundles">Bundles</string>
+    <string name="presets_bundle_desc">Export or import complete preset bundles to share setups between devices.</string>
 </resources>

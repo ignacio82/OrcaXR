@@ -94,4 +94,9 @@
     <string name="project_help_menu">幫助</string>
     <string name="help_shortcuts">快捷鍵</string>
     <string name="help_language">語言…</string>
+    <string name="help_tutorial">教學</string>
+    <string name="help_tip_of_day">顯示每日小提示</string>
+    <string name="help_check_updates">檢查新版本</string>
+    <string name="help_setup_wizard">設定精靈</string>
+    <string name="presets_export_bundle">匯出設定檔組</string>
 </resources>

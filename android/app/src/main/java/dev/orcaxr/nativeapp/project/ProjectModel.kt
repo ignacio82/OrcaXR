@@ -981,8 +981,13 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "help_shortcuts" -> showShortcutsDialog = true
             "help_about" -> showAboutDialog = true
             "help_language" -> showLanguageDialog = true
-            "help_docs" -> urlRequest = "https://github.com/SoftFever/OrcaSlicer/wiki"
-            "help_report_bug" -> urlRequest = "https://github.com/SoftFever/OrcaSlicer/issues"
+            "help_tutorial" -> showTutorialDialog = true
+            "help_tip_of_day" -> showTipOfTheDayDialog = true
+            "help_check_updates" -> showCheckUpdatesDialog = true
+            "help_setup_wizard" -> showSetupWizardDialog = true
+            "help_docs" -> urlRequest = "https://orcaxr.martinez.fyi"
+            "help_report_bug" -> urlRequest = "https://github.com/ignacio82/OrcaXR/issues/new"
+            in AppActions.PRESETS -> showPresetLibraryDialog = true
             // The toolbar's, the command palette's and the menus' other actions: one call for all of them.
             "delete_models" -> work { workspace.deleteSelected().await() }
             "edit_undo" -> if (view.undo != null) undo()
@@ -1103,12 +1108,27 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         private set
     var showLanguageDialog by mutableStateOf(false)
         private set
+    var showTutorialDialog by mutableStateOf(false)
+        private set
+    var showTipOfTheDayDialog by mutableStateOf(false)
+        private set
+    var showCheckUpdatesDialog by mutableStateOf(false)
+        private set
+    var showSetupWizardDialog by mutableStateOf(false)
+        private set
+    var showPresetLibraryDialog by mutableStateOf(false)
+        private set
     var urlRequest by mutableStateOf<String?>(null)
         private set
 
     fun dismissShortcutsDialog() { showShortcutsDialog = false }
     fun dismissAboutDialog() { showAboutDialog = false }
     fun dismissLanguageDialog() { showLanguageDialog = false }
+    fun dismissTutorialDialog() { showTutorialDialog = false }
+    fun dismissTipOfTheDayDialog() { showTipOfTheDayDialog = false }
+    fun dismissCheckUpdatesDialog() { showCheckUpdatesDialog = false }
+    fun dismissSetupWizardDialog() { showSetupWizardDialog = false }
+    fun dismissPresetLibraryDialog() { showPresetLibraryDialog = false }
     fun urlHandled() { urlRequest = null }
 
     /** The actions [surface] offers now, in catalogue order, as the core enables them (the command palette's and the toolbar's lists). */

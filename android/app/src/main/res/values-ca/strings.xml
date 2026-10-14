@@ -94,4 +94,9 @@
     <string name="project_help_menu">Ajuda</string>
     <string name="help_shortcuts">Dreceres de teclat</string>
     <string name="help_language">Idioma…</string>
+    <string name="help_tutorial">Tutorial</string>
+    <string name="help_tip_of_day">Mostra Consell del dia</string>
+    <string name="help_check_updates">Comprovar si hi ha actualitzacions</string>
+    <string name="help_setup_wizard">Assistent per a la instal·lació</string>
+    <string name="presets_export_bundle">Exportar el Paquet de Perfil</string>
 </resources>

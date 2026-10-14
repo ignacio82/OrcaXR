@@ -94,4 +94,9 @@
     <string name="project_help_menu">Aide</string>
     <string name="help_shortcuts">Raccourcis Clavier</string>
     <string name="help_language">Langue…</string>
+    <string name="help_tutorial">Didacticiel</string>
+    <string name="help_tip_of_day">Afficher l\'Astuce du Jour</string>
+    <string name="help_check_updates">Vérifier la mise à jour</string>
+    <string name="help_setup_wizard">Assistant de configuration</string>
+    <string name="presets_export_bundle">Exporter l’ensemble des préréglages</string>
 </resources>

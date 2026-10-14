@@ -89,4 +89,8 @@
     <string name="project_help_menu">Hjälp</string>
     <string name="help_shortcuts">Kortkommando</string>
     <string name="help_language">Språk…</string>
+    <string name="help_tutorial">Guide</string>
+    <string name="help_tip_of_day">Visa dagens tips</string>
+    <string name="help_check_updates">Sök efter Uppdatering</string>
+    <string name="help_setup_wizard">Installationsguide</string>
 </resources>

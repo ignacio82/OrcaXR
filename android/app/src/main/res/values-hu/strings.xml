@@ -89,4 +89,8 @@
     <string name="project_help_menu">Segítség</string>
     <string name="help_shortcuts">Gyorsbillentyűk</string>
     <string name="help_language">Nyelv…</string>
+    <string name="help_tutorial">Útmutató</string>
+    <string name="help_tip_of_day">A nap tippjének megjelenítése</string>
+    <string name="help_check_updates">Frissítés keresése</string>
+    <string name="help_setup_wizard">Beállítás varázsló</string>
 </resources>

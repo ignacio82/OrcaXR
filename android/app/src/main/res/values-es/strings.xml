@@ -94,4 +94,9 @@
     <string name="project_help_menu">Ayuda</string>
     <string name="help_shortcuts">Atajos de teclado</string>
     <string name="help_language">Idioma…</string>
+    <string name="help_tutorial">Tutorial</string>
+    <string name="help_tip_of_day">Mostrar Consejo Diario</string>
+    <string name="help_check_updates">Comprobar Actualizaciones</string>
+    <string name="help_setup_wizard">Asistente de Configuración</string>
+    <string name="presets_export_bundle">Exportar Paquete de Perfiles</string>
 </resources>

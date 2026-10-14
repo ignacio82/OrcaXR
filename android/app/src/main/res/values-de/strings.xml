@@ -94,4 +94,9 @@
     <string name="project_help_menu">Hilfe</string>
     <string name="help_shortcuts">Tastaturkürzel</string>
     <string name="help_language">Spache…</string>
+    <string name="help_tutorial">Anleitung</string>
+    <string name="help_tip_of_day">Tipp des Tages anzeigen</string>
+    <string name="help_check_updates">Nach Updates suchen</string>
+    <string name="help_setup_wizard">Einrichtungsassistent</string>
+    <string name="presets_export_bundle">Preset-Bundle exportieren</string>
 </resources>

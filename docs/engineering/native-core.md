@@ -6607,9 +6607,9 @@ Reinforcement, Motion, Cooling, Floor Layers, and Debug). Options are driven by
 
 ### Android view menu, help menu, calibration models and reduce motion
 
-The Project area, Workspace and Shell provide the View menu, the Help menu,
-built-in calibration / library models, and in-app reduce-motion control,
-raising `AppActions.PERFORMED` to 105 actions.
+The Project area, Workspace and Shell provide the View menu, the expanded Help menu,
+preset management, built-in calibration / library models, and in-app reduce-motion control,
+raising `AppActions.PERFORMED` to 116 actions.
 
 View menu (`ViewMenu` in `ProjectScreen.kt`). Added beside the Edit and Add menus
 in the Project area's menu bar:
@@ -6631,12 +6631,23 @@ Add menu calibration and library models (`ADD_MENU` in `ProjectEditing.kt`):
 Help menu and dialogs (`HelpMenu`, `HelpDialogs.kt`):
 - "Keyboard Shortcuts" (`help_shortcuts`): opens `ShortcutsDialog` displaying common shortcuts
   (Undo, Redo, Cut, Copy, Paste, Delete, Select All, Deselect All, Move/Rotate/Scale gizmos, and Command Palette).
-- "Documentation" (`help_docs`): dispatches `urlRequest` to the upstream wiki in the external browser.
-- "Report a Bug" (`help_report_bug`): dispatches `urlRequest` to the issue tracker in the external browser.
+- "Tutorial" (`help_tutorial`): opens `TutorialDialog` displaying the 5-step slicing workflow.
+- "Show Tip of the Day" (`help_tip_of_day`): opens `TipOfTheDayDialog` with rotating usage tips and "Next tip" navigation.
+- "Check for Update" (`help_check_updates`): opens `CheckUpdatesDialog` showing version ("0.1.0-dev"), engine provenance, and up-to-date status.
+- "Setup Wizard" (`help_setup_wizard`): opens `SetupWizardDialog` with getting-started printer/filament guidance and one-tap "Open Prepare".
+- "Search Help" (`help_search`): focuses and opens the command palette over whichever area shows.
+- "Documentation" (`help_docs`): dispatches `urlRequest` to `https://orcaxr.martinez.fyi`.
+- "Report a Bug" (`help_report_bug`): dispatches `urlRequest` to `https://github.com/ignacio82/OrcaXR/issues/new`.
 - "About OrcaXR" (`help_about`): opens `AboutDialog` with version ("0.1.0-dev"), engine provenance ("Snapmaker OrcaSlicer v2.3.4"),
   and pinned commit (`9fd12ffb2b1b80c9fb4c14564754d2ec1573a626`).
 - "Language…" (`help_language`): opens `LanguageDialog` listing all 19 supported locales (and system default),
   applying selection dynamically via Android 13+ `LocaleManager`.
+
+Preset management (`PresetLibraryDialog.kt`):
+- Actions `presets_install_printer`, `presets_create_custom`, `presets_update_custom`, `presets_delete_custom`,
+  `presets_export_bundle`, and `presets_import_bundle` route to `PresetLibraryDialog`.
+- Three tabs: Printers (installed printers: Snapmaker U1 4-head, Elegoo Centauri Carbon single head, with nozzle sizes and link to Prepare),
+  Custom (authored custom presets), and Bundles (exporting and importing bundle archives).
 
 Reduce motion (`MotionPreference.kt`):
 - `MotionPreference` persists in-app animation preference in `orcaxr.motion`.

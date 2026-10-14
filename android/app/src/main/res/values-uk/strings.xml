@@ -94,4 +94,9 @@
     <string name="project_help_menu">Допомога</string>
     <string name="help_shortcuts">Гарячі клавіші</string>
     <string name="help_language">Мова…</string>
+    <string name="help_tutorial">Посібник</string>
+    <string name="help_tip_of_day">Показати пораду дня</string>
+    <string name="help_check_updates">Перевірити оновлення</string>
+    <string name="help_setup_wizard">Майстер налаштувань</string>
+    <string name="presets_export_bundle">Експорт пакету профілів</string>
 </resources>

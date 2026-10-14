@@ -84,6 +84,8 @@ const APP_ACTIONS = [
   "view_show_wireframe", "view_show_printable_box", "view_show_labels", "view_show_overhang",
   "view_show_navigator", "view_show_outline", "view_perspective_toggle",
   "help_shortcuts", "help_docs", "help_report_bug", "help_about", "help_language",
+  "help_tutorial", "help_tip_of_day", "help_check_updates", "help_setup_wizard", "help_search",
+  "presets_install_printer", "presets_create_custom", "presets_update_custom", "presets_delete_custom", "presets_export_bundle", "presets_import_bundle",
   "add_calibration_cube", "add_calibration_tower", "add_handy_model",
 ];
 

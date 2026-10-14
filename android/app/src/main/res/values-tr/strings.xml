@@ -94,4 +94,9 @@
     <string name="project_help_menu">Yardım</string>
     <string name="help_shortcuts">Klavye kısayolları</string>
     <string name="help_language">Dil…</string>
+    <string name="help_tutorial">Öğretici</string>
+    <string name="help_tip_of_day">Günün İpucunu Göster</string>
+    <string name="help_check_updates">Güncellemeleri kontrol et</string>
+    <string name="help_setup_wizard">Kurulum sihirbazı</string>
+    <string name="presets_export_bundle">Ön Ayar Paketini Dışa Aktar</string>
 </resources>

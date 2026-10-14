@@ -90,4 +90,8 @@
     <string name="project_help_menu">Hulp</string>
     <string name="help_shortcuts">Sneltoesten</string>
     <string name="help_language">Taal…</string>
+    <string name="help_tutorial">Tutorial</string>
+    <string name="help_tip_of_day">Toon Tip van de dag</string>
+    <string name="help_check_updates">Zoeken naar updates</string>
+    <string name="help_setup_wizard">Installatiewizard</string>
 </resources>

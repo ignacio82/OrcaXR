@@ -67,11 +67,20 @@ object AppActions {
         "view_show_navigator", "view_show_outline", "view_perspective_toggle",
     )
 
-    /** The Help menu's documentation, shortcuts, bug reports and about actions. */
-    val HELP = listOf("help_shortcuts", "help_docs", "help_report_bug", "help_about", "help_language")
+    /** The Help menu's documentation, shortcuts, bug reports, about, tutorial, tip of the day, update check, setup wizard and help search. */
+    val HELP = listOf(
+        "help_shortcuts", "help_docs", "help_report_bug", "help_about", "help_language",
+        "help_tutorial", "help_tip_of_day", "help_check_updates", "help_setup_wizard", "help_search",
+    )
+
+    /** Preset management: installing printers, custom presets, and preset bundles. */
+    val PRESETS = listOf(
+        "presets_install_printer", "presets_create_custom", "presets_update_custom",
+        "presets_delete_custom", "presets_export_bundle", "presets_import_bundle",
+    )
 
     /** Every catalogue action the app performs. */
-    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PANELS + PREPARE + EXPORT + VIEW + HELP).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
+    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PANELS + PREPARE + EXPORT + VIEW + HELP + PRESETS).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
 
     /**
      * Whether running [id] needs the Workspace's 3D view on screen: a camera

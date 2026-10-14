@@ -83,12 +83,17 @@ import dev.orcaxr.nativeapp.project.ProjectScreen
 import dev.orcaxr.nativeapp.send.SendDialog
 import dev.orcaxr.nativeapp.shell.AboutDialog
 import dev.orcaxr.nativeapp.shell.AppActions
+import dev.orcaxr.nativeapp.shell.CheckUpdatesDialog
 import dev.orcaxr.nativeapp.shell.CommandPalette
 import dev.orcaxr.nativeapp.shell.LanguageDialog
 import dev.orcaxr.nativeapp.shell.LocalActionRunner
 import dev.orcaxr.nativeapp.shell.LocalActionStates
 import dev.orcaxr.nativeapp.shell.LocalCommandPalette
+import dev.orcaxr.nativeapp.shell.PresetLibraryDialog
+import dev.orcaxr.nativeapp.shell.SetupWizardDialog
 import dev.orcaxr.nativeapp.shell.ShortcutsDialog
+import dev.orcaxr.nativeapp.shell.TipOfTheDayDialog
+import dev.orcaxr.nativeapp.shell.TutorialDialog
 import dev.orcaxr.nativeapp.shell.FocusVisibleTheme
 import dev.orcaxr.nativeapp.theme.MotionPreference
 import dev.orcaxr.nativeapp.theme.OrcaMotionScope
@@ -167,6 +172,11 @@ class MainActivity : ComponentActivity() {
      * or a tool that takes its touch.
      */
     private fun runAction(id: String) {
+        if (id == "help_search") {
+            paletteFromKeys = false
+            palette = true
+            return
+        }
         if (AppActions.needsExport(id)) {
             // The File menu's exports: the system's picker takes the file over whichever area shows.
             exports.perform(id)
@@ -510,6 +520,17 @@ class MainActivity : ComponentActivity() {
                 if (project.showShortcutsDialog) ShortcutsDialog(project::dismissShortcutsDialog)
                 if (project.showAboutDialog) AboutDialog(project::dismissAboutDialog)
                 if (project.showLanguageDialog) LanguageDialog(project::dismissLanguageDialog)
+                if (project.showTutorialDialog) TutorialDialog(project::dismissTutorialDialog)
+                if (project.showTipOfTheDayDialog) TipOfTheDayDialog(project::dismissTipOfTheDayDialog)
+                if (project.showCheckUpdatesDialog) CheckUpdatesDialog(project::dismissCheckUpdatesDialog)
+                if (project.showSetupWizardDialog) SetupWizardDialog(project::dismissSetupWizardDialog, onGoToPrepare = {
+                    area = R.string.nav_prepare
+                    project.dismissSetupWizardDialog()
+                })
+                if (project.showPresetLibraryDialog) PresetLibraryDialog(project::dismissPresetLibraryDialog, onOpenPrepare = {
+                    area = R.string.nav_prepare
+                    project.dismissPresetLibraryDialog()
+                })
             } } } }
         }
     }

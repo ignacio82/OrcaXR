@@ -90,4 +90,8 @@
     <string name="project_help_menu">Nápověda</string>
     <string name="help_shortcuts">Klávesové zkratky</string>
     <string name="help_language">Jazyk…</string>
+    <string name="help_tutorial">Výukový program</string>
+    <string name="help_tip_of_day">Ukázat Tip Dne</string>
+    <string name="help_check_updates">Zkontrolovat aktualizace</string>
+    <string name="help_setup_wizard">Průvodce nastavením</string>
 </resources>

@@ -94,4 +94,9 @@
     <string name="project_help_menu">Pagalba</string>
     <string name="help_shortcuts">Klaviatūros nuorodos</string>
     <string name="help_language">Kalba…</string>
+    <string name="help_tutorial">Pamokos</string>
+    <string name="help_tip_of_day">Rodyti dienos patarimą</string>
+    <string name="help_check_updates">Patikrinti ar nėra atnaujinimų</string>
+    <string name="help_setup_wizard">Nustatymų vedlys</string>
+    <string name="presets_export_bundle">Eksportuoti parametrų rinkinį</string>
 </resources>

@@ -138,6 +138,17 @@ object ActionTexts {
         "add_calibration_cube" to R.string.add_calibration_cube,
         "add_calibration_tower" to R.string.add_calibration_tower,
         "add_handy_model" to R.string.add_handy_model,
+        "help_tutorial" to R.string.help_tutorial,
+        "help_tip_of_day" to R.string.help_tip_of_day,
+        "help_check_updates" to R.string.help_check_updates,
+        "help_setup_wizard" to R.string.help_setup_wizard,
+        "help_search" to R.string.help_search,
+        "presets_install_printer" to R.string.presets_install_printer,
+        "presets_create_custom" to R.string.presets_create_custom,
+        "presets_update_custom" to R.string.presets_update_custom,
+        "presets_delete_custom" to R.string.presets_delete_custom,
+        "presets_export_bundle" to R.string.presets_export_bundle,
+        "presets_import_bundle" to R.string.presets_import_bundle,
     )
 
     /** Each action the app performs, by catalogue id, with its hint. */
@@ -247,6 +258,17 @@ object ActionTexts {
         "add_calibration_cube" to R.string.action_hint_add_calibration_cube,
         "add_calibration_tower" to R.string.action_hint_add_calibration_tower,
         "add_handy_model" to R.string.action_hint_add_handy_model,
+        "help_tutorial" to R.string.action_hint_help_tutorial,
+        "help_tip_of_day" to R.string.action_hint_help_tip_of_day,
+        "help_check_updates" to R.string.action_hint_help_check_updates,
+        "help_setup_wizard" to R.string.action_hint_help_setup_wizard,
+        "help_search" to R.string.action_hint_help_search,
+        "presets_install_printer" to R.string.action_hint_presets_install_printer,
+        "presets_create_custom" to R.string.action_hint_presets_create_custom,
+        "presets_update_custom" to R.string.action_hint_presets_update_custom,
+        "presets_delete_custom" to R.string.action_hint_presets_delete_custom,
+        "presets_export_bundle" to R.string.action_hint_presets_export_bundle,
+        "presets_import_bundle" to R.string.action_hint_presets_import_bundle,
     )
 
     /** [action]'s label in the app's language; the core's English one for an action the app has no words for. */
