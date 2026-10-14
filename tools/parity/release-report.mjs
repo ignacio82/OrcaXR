@@ -39,12 +39,64 @@ const SURFACE_MAP_PATH = resolve(
   "parity",
   "surface-map.json",
 );
+const CAPABILITIES_PATH = resolve(
+  REPOSITORY_ROOT,
+  "core",
+  "crates",
+  "orcaxr-contracts",
+  "src",
+  "capabilities",
+  "generated.rs",
+);
+const ANDROID_ACTIONS_PATH = resolve(
+  REPOSITORY_ROOT,
+  "android",
+  "app",
+  "src",
+  "main",
+  "java",
+  "dev",
+  "orcaxr",
+  "nativeapp",
+  "shell",
+  "ActionTexts.kt",
+);
 export const REPORT_PATH = resolve(
   REPOSITORY_ROOT,
   "docs",
   "parity",
   "release-report.json",
 );
+
+export function readCatalog(capabilitiesPath = CAPABILITIES_PATH) {
+  if (!existsSync(capabilitiesPath)) return null;
+  const gen = readFileSync(capabilitiesPath, "utf8");
+  const actionRegex =
+    /Action\s*\{\s*id:\s*"([^"]+)",[\s\S]*?status:\s*Status::(\w+),[\s\S]*?xr_unsupported_reason:\s*(None|Some\([^)]+\)),/g;
+  const catalog = new Map();
+  let match;
+  while ((match = actionRegex.exec(gen)) !== null) {
+    catalog.set(match[1], {
+      id: match[1],
+      status: match[2].toLowerCase(),
+      xrExcluded: match[3] !== "None",
+    });
+  }
+  return catalog;
+}
+
+export function readAndroidActions(androidActionsPath = ANDROID_ACTIONS_PATH) {
+  if (!existsSync(androidActionsPath)) return new Set();
+  const text = readFileSync(androidActionsPath, "utf8");
+  const match = text.match(
+    /val LABELS: Map<String, Int> = mapOf\(([\s\S]*?)\n    \)/,
+  );
+  if (!match) return new Set();
+  return new Set(
+    [...match[1].matchAll(/"([a-z0-9_]+)"\s*to/g)].map((m) => m[1]),
+  );
+}
+
 
 /**
  * The four conditions §12 gates the parity claim on, none of which code can
@@ -183,6 +235,109 @@ function surfaceClassification() {
   };
 }
 
+/**
+ * Distinguish web DOM, WebXR, Android flat, and Android XR support and evidence.
+ * An implemented web handler cannot automatically mark Android implemented.
+ */
+export function targetClassification({
+  surfaceMapPath = SURFACE_MAP_PATH,
+  capabilitiesPath = CAPABILITIES_PATH,
+  androidActionsPath = ANDROID_ACTIONS_PATH,
+} = {}) {
+  if (!existsSync(surfaceMapPath)) return null;
+  const map = JSON.parse(readFileSync(surfaceMapPath, "utf8"));
+  const catalog = readCatalog(capabilitiesPath);
+  const androidActions = readAndroidActions(androidActionsPath);
+
+  const menuEntries = Object.entries(map.mappings);
+  const actionEntries = menuEntries.filter(([, entry]) => entry.kind === "action");
+
+  function evaluateTarget(isActionSupported) {
+    let supported = 0;
+    let unavailable = 0;
+    const absentItems = [];
+
+    for (const [key, entry] of menuEntries) {
+      if (entry.kind === "absent") {
+        absentItems.push({ item: key, owedBy: entry.task, reason: entry.reason });
+      } else if (entry.kind === "action") {
+        if (isActionSupported(entry.action)) {
+          supported++;
+        } else {
+          unavailable++;
+          absentItems.push({
+            item: key,
+            action: entry.action,
+            reason: "Action not supported on this target",
+          });
+        }
+      }
+    }
+    absentItems.sort((a, b) => a.item.localeCompare(b.item, "en"));
+    return { supported, unavailable, absentCount: absentItems.length, absent: absentItems };
+  }
+
+  const webDom = evaluateTarget((id) => {
+    const act = catalog?.get(id);
+    return act ? act.status === "implemented" || act.status === "partial" : false;
+  });
+
+  const webXr = evaluateTarget((id) => {
+    const act = catalog?.get(id);
+    return act
+      ? (act.status === "implemented" || act.status === "partial") && !act.xrExcluded
+      : false;
+  });
+
+  const androidFlat = evaluateTarget((id) => androidActions.has(id));
+
+  const androidXr = evaluateTarget(() => false);
+
+  let catWebDomImpl = 0, catWebDomUnavail = 0;
+  let catWebXrImpl = 0, catWebXrUnavail = 0;
+  let catAndroidFlatImpl = 0, catAndroidFlatUnavail = 0;
+  let catAndroidXrImpl = 0, catAndroidXrUnavail = 0;
+
+  if (catalog) {
+    for (const [id, act] of catalog) {
+      const isWeb = act.status === "implemented" || act.status === "partial";
+      if (isWeb) catWebDomImpl++; else catWebDomUnavail++;
+      if (isWeb && !act.xrExcluded) catWebXrImpl++; else catWebXrUnavail++;
+      if (androidActions.has(id)) catAndroidFlatImpl++; else catAndroidFlatUnavail++;
+      catAndroidXrUnavail++;
+    }
+  }
+
+  return {
+    upstreamMapped: {
+      total: menuEntries.length,
+      actionCount: actionEntries.length,
+      targets: {
+        webDom: { supported: webDom.supported, unavailable: webDom.unavailable, absentCount: webDom.absentCount },
+        webXr: { supported: webXr.supported, unavailable: webXr.unavailable, absentCount: webXr.absentCount },
+        androidFlat: { supported: androidFlat.supported, unavailable: androidFlat.unavailable, absentCount: androidFlat.absentCount },
+        androidXr: { supported: androidXr.supported, unavailable: androidXr.unavailable, absentCount: androidXr.absentCount },
+      },
+      absentByTarget: {
+        webDom: webDom.absent,
+        webXr: webXr.absent,
+        androidFlat: androidFlat.absent,
+        androidXr: androidXr.absent,
+      },
+    },
+    catalog: {
+      total: catalog ? catalog.size : 0,
+      targets: {
+        webDom: { implemented: catWebDomImpl, unavailable: catWebDomUnavail },
+        webXr: { implemented: catWebXrImpl, unavailable: catWebXrUnavail },
+        androidFlat: { implemented: catAndroidFlatImpl, unavailable: catAndroidFlatUnavail },
+        androidXr: { implemented: catAndroidXrImpl, unavailable: catAndroidXrUnavail },
+      },
+    },
+  };
+}
+
+
 export function buildReleaseReport() {
   const plan = readFileSync(PLAN_PATH, "utf8");
   const tasks = readTasks(plan);
@@ -237,6 +392,7 @@ export function buildReleaseReport() {
     },
     integrity: { claimedButUnrecorded },
     surfaces: surfaceClassification(),
+    targets: targetClassification(),
     evidence: { rows: evidence.length, tasksCovered: covered.size },
     upstream: {
       repository: UPSTREAM_REPOSITORY,
@@ -279,11 +435,18 @@ export function main(argv = process.argv.slice(2)) {
   } else {
     writeFileSync(REPORT_PATH, text);
   }
+  const t = report.targets?.upstreamMapped?.targets;
   console.log(
     `Release report: parity claim ${report.claim.parityClaimPermitted ? "PERMITTED" : "NOT permitted"}; ` +
       `${report.claim.humanGatesOutstanding.length} human gate(s) outstanding; ` +
       `${report.tasks.total} tasks (${report.tasks.byState.x ?? 0} complete, ${report.tasks.unstarted.length} unstarted); ` +
-      `${report.evidence.rows} evidence rows.`,
+      `${report.evidence.rows} evidence rows.` +
+      (t
+        ? `\nTargets (upstream menu actions): Web DOM ${t.webDom.supported}/${report.targets.upstreamMapped.actionCount}, ` +
+          `WebXR ${t.webXr.supported}/${report.targets.upstreamMapped.actionCount}, ` +
+          `Android Flat ${t.androidFlat.supported}/${report.targets.upstreamMapped.actionCount}, ` +
+          `Android XR ${t.androidXr.supported}/${report.targets.upstreamMapped.actionCount}.`
+        : ""),
   );
   if (report.integrity.claimedButUnrecorded.length > 0) {
     throw new Error(

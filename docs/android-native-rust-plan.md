@@ -3017,9 +3017,14 @@ Status (2026-10-12): not started as a phase; Phase 7 has carried much of the
 feature coverage. The open Android families are listed in *Resume here* items 2
 and 3.
 
-- [ ] Extend parity tooling to distinguish web DOM, WebXR, Android flat, and
+- [x] Extend parity tooling to distinguish web DOM, WebXR, Android flat, and
   Android XR support and evidence. Generate manifests/reports through tooling;
   an implemented web handler cannot automatically mark Android implemented.
+  `tools/parity/release-report.mjs` generates target matrix breakdowns in
+  `docs/parity/release-report.json` across all 4 targets (upstream mapped menu
+  actions: Web DOM 111/115, WebXR 107/115, Android Flat 85/115, Android XR 0/115;
+  catalog: Web DOM 219/226, WebXR 198/226, Android Flat 120/226, Android XR 0/226),
+  verified by `tools/parity/test.mjs`.
 - [ ] Close native UI and shared-core coverage for all current implemented
   feature families: object/part/instance tools, FullSpectrum, painting channels,
   preparation/geometry, settings/profiles, slicing/preview/statistics, calibration,

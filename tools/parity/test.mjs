@@ -360,6 +360,26 @@ function releaseReportTests() {
     report.claim.humanGatesOutstanding.every((gate) => gate.id && gate.what),
     "each gate says which it is and what it requires",
   );
+
+  // Per-target parity: distinguish web DOM, WebXR, Android flat, and Android XR.
+  // An implemented web handler cannot automatically mark Android implemented.
+  const t = report.targets?.upstreamMapped?.targets;
+  assert.ok(t, "report has target classification for upstream mapped actions");
+  assert.equal(t.webDom.supported, 111, "web DOM supports 111 mapped actions");
+  assert.equal(t.webXr.supported, 107, "webXR supports 107 mapped actions");
+  assert.equal(t.androidFlat.supported, 85, "android flat supports 85 mapped actions");
+  assert.equal(t.androidXr.supported, 0, "android XR has 0 mapped actions until Galaxy XR qualification");
+  assert.ok(
+    t.androidFlat.supported < t.webDom.supported,
+    "web implementation does not automatically mark Android implemented",
+  );
+
+  const c = report.targets?.catalog?.targets;
+  assert.ok(c, "report has target classification for action catalog");
+  assert.equal(c.webDom.implemented, 219);
+  assert.equal(c.webXr.implemented, 198);
+  assert.equal(c.androidFlat.implemented, 120);
+  assert.equal(c.androidXr.implemented, 0);
 }
 
 if (

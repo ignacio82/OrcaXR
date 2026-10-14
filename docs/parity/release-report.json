@@ -147,6 +147,1010 @@
     "family": "menuActions",
     "items": 162
   },
+  "targets": {
+    "catalog": {
+      "targets": {
+        "androidFlat": {
+          "implemented": 120,
+          "unavailable": 106
+        },
+        "androidXr": {
+          "implemented": 0,
+          "unavailable": 226
+        },
+        "webDom": {
+          "implemented": 219,
+          "unavailable": 7
+        },
+        "webXr": {
+          "implemented": 198,
+          "unavailable": 28
+        }
+      },
+      "total": 226
+    },
+    "upstreamMapped": {
+      "absentByTarget": {
+        "androidFlat": [
+          {
+            "item": "AuxiliaryList::on_context_menu::Delete",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::Import File",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::New Folder",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::Open",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::Rename",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "action": "view_auto_perspective",
+            "item": "MainFrame::init_menubar_as_editor::Auto Perspective",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_import_config",
+            "item": "MainFrame::init_menubar_as_editor::Import Configs",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_import_zip",
+            "item": "MainFrame::init_menubar_as_editor::Import Zip Archive",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_input_shaping_damping",
+            "item": "MainFrame::init_menubar_as_editor::Input Shaping Damping/zeta factor",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_input_shaping_frequency",
+            "item": "MainFrame::init_menubar_as_editor::Input Shaping Frequency",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_junction_deviation",
+            "item": "MainFrame::init_menubar_as_editor::Junction Deviation",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_max_flow",
+            "item": "MainFrame::init_menubar_as_editor::Max flowrate",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_flow_pass1",
+            "item": "MainFrame::init_menubar_as_editor::Pass 1",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_flow_pass2",
+            "item": "MainFrame::init_menubar_as_editor::Pass 2",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_pressure_advance",
+            "item": "MainFrame::init_menubar_as_editor::Pressure advance",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_retraction",
+            "item": "MainFrame::init_menubar_as_editor::Retraction test",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_show_gcode_window",
+            "item": "MainFrame::init_menubar_as_editor::Show &G-code Window",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_temperature",
+            "item": "MainFrame::init_menubar_as_editor::Temperature",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_vfa",
+            "item": "MainFrame::init_menubar_as_editor::VFA",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_flow_yolo_perfectionist",
+            "item": "MainFrame::init_menubar_as_editor::YOLO (perfectionist version)",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_flow_yolo",
+            "item": "MainFrame::init_menubar_as_editor::YOLO (Recommended)",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_open_gcode",
+            "item": "MainFrame::init_menubar_as_gcodeviewer::&Open G-code",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "item": "MainFrame::on_sys_color_changed::Check for Process Preset Updates",
+            "owedBy": "P6.3",
+            "reason": "System presets ship with the app; there is no update feed to check."
+          },
+          {
+            "action": "file_import_config",
+            "item": "MainFrame::on_sys_color_changed::Import Profile",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "help_config_folder",
+            "item": "MainFrame::on_sys_color_changed::Show Configuration Folder",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "objects_convert_volume_role",
+            "item": "MenuFactory::append_menu_item_change_type::Change type",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "add_height_range",
+            "item": "MenuFactory::append_menu_item_layers_editing::Height range Modifier",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "objects_rename",
+            "item": "MenuFactory::append_menu_item_rename::Rename",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "load_model_from_path",
+            "item": "MenuFactory::append_submenu_add_generic::Load...",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "filament_virtual_mutate",
+            "item": "MenuFactory::create_filament_action_menu::Delete",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "filament_virtual_mutate",
+            "item": "MenuFactory::create_filament_action_menu::Edit",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "filament_remap",
+            "item": "MenuFactory::create_filament_action_menu::Merge with",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "tool_face_detector",
+            "item": "MenuFactory::create_plate_menu::Auto Rotate",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "item": "MenuFactory::create_sla_object_menu::Auto orientation",
+            "owedBy": "P0.1",
+            "reason": "SLA-only menu. OrcaXR targets FFF machines, so this leaf is classified as out of scope rather than left unmapped."
+          },
+          {
+            "item": "MenuFactory::create_sla_object_menu::Split",
+            "owedBy": "P0.1",
+            "reason": "SLA-only menu. OrcaXR targets FFF machines, so this leaf is classified as out of scope rather than left unmapped."
+          },
+          {
+            "action": "filament_remap",
+            "item": "runtime::Merge with mixed filament target",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "filament_remap",
+            "item": "runtime::Merge with physical filament target",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_open_recent",
+            "item": "runtime::Open recent project entry",
+            "reason": "Action not supported on this target"
+          }
+        ],
+        "androidXr": [
+          {
+            "item": "AuxiliaryList::on_context_menu::Delete",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::Import File",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::New Folder",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::Open",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::Rename",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "action": "view_auto_perspective",
+            "item": "MainFrame::init_menubar_as_editor::Auto Perspective",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "edit_duplicate",
+            "item": "MainFrame::init_menubar_as_editor::Clone selected",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "edit_copy",
+            "item": "MainFrame::init_menubar_as_editor::Copy",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "edit_cut",
+            "item": "MainFrame::init_menubar_as_editor::Cut",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "edit_delete_all",
+            "item": "MainFrame::init_menubar_as_editor::Delete all",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "edit_delete_selected",
+            "item": "MainFrame::init_menubar_as_editor::Delete selected",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "edit_deselect_all",
+            "item": "MainFrame::init_menubar_as_editor::Deselect all",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "duplicate_plate",
+            "item": "MainFrame::init_menubar_as_editor::Duplicate Current Plate",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_export_stl",
+            "item": "MainFrame::init_menubar_as_editor::Export all objects as one STL",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_export_all_stls",
+            "item": "MainFrame::init_menubar_as_editor::Export all objects as STLs",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_export_all_plates",
+            "item": "MainFrame::init_menubar_as_editor::Export all plate sliced file",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_export_gcode",
+            "item": "MainFrame::init_menubar_as_editor::Export G-code",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_export_3mf",
+            "item": "MainFrame::init_menubar_as_editor::Export Generic 3MF",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_export_gcode",
+            "item": "MainFrame::init_menubar_as_editor::Export plate sliced file",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "presets_export_bundle",
+            "item": "MainFrame::init_menubar_as_editor::Export Preset Bundle",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_import_model",
+            "item": "MainFrame::init_menubar_as_editor::Import 3MF/STL/STEP/SVG/OBJ/AMF",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_import_config",
+            "item": "MainFrame::init_menubar_as_editor::Import Configs",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_import_zip",
+            "item": "MainFrame::init_menubar_as_editor::Import Zip Archive",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_input_shaping_damping",
+            "item": "MainFrame::init_menubar_as_editor::Input Shaping Damping/zeta factor",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_input_shaping_frequency",
+            "item": "MainFrame::init_menubar_as_editor::Input Shaping Frequency",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_junction_deviation",
+            "item": "MainFrame::init_menubar_as_editor::Junction Deviation",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_max_flow",
+            "item": "MainFrame::init_menubar_as_editor::Max flowrate",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_new_project",
+            "item": "MainFrame::init_menubar_as_editor::New Project",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_open_project",
+            "item": "MainFrame::init_menubar_as_editor::Open Project",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_flow_pass1",
+            "item": "MainFrame::init_menubar_as_editor::Pass 1",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_flow_pass2",
+            "item": "MainFrame::init_menubar_as_editor::Pass 2",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "edit_paste",
+            "item": "MainFrame::init_menubar_as_editor::Paste",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_pressure_advance",
+            "item": "MainFrame::init_menubar_as_editor::Pressure advance",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "edit_redo",
+            "item": "MainFrame::init_menubar_as_editor::Redo",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_retraction",
+            "item": "MainFrame::init_menubar_as_editor::Retraction test",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_save_project",
+            "item": "MainFrame::init_menubar_as_editor::Save Project",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_save_project_as",
+            "item": "MainFrame::init_menubar_as_editor::Save Project as",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "edit_select_all",
+            "item": "MainFrame::init_menubar_as_editor::Select all",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_show_gcode_window",
+            "item": "MainFrame::init_menubar_as_editor::Show &G-code Window",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_show_labels",
+            "item": "MainFrame::init_menubar_as_editor::Show &Labels",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_show_overhang",
+            "item": "MainFrame::init_menubar_as_editor::Show &Overhang",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_show_navigator",
+            "item": "MainFrame::init_menubar_as_editor::Show 3D Navigator",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_show_outline",
+            "item": "MainFrame::init_menubar_as_editor::Show Selected Outline (beta)",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_temperature",
+            "item": "MainFrame::init_menubar_as_editor::Temperature",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "help_tutorial",
+            "item": "MainFrame::init_menubar_as_editor::Tutorial",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "edit_undo",
+            "item": "MainFrame::init_menubar_as_editor::Undo",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_vfa",
+            "item": "MainFrame::init_menubar_as_editor::VFA",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_flow_yolo_perfectionist",
+            "item": "MainFrame::init_menubar_as_editor::YOLO (perfectionist version)",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "calib_flow_yolo",
+            "item": "MainFrame::init_menubar_as_editor::YOLO (Recommended)",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_open_gcode",
+            "item": "MainFrame::init_menubar_as_gcodeviewer::&Open G-code",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_export_obj",
+            "item": "MainFrame::init_menubar_as_gcodeviewer::Export &Toolpaths as OBJ",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_camera_bottom",
+            "item": "MainFrame::on_sys_color_changed::Bottom",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "item": "MainFrame::on_sys_color_changed::Check for Process Preset Updates",
+            "owedBy": "P6.3",
+            "reason": "System presets ship with the app; there is no update feed to check."
+          },
+          {
+            "action": "help_check_updates",
+            "item": "MainFrame::on_sys_color_changed::Check for Update",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_camera_default",
+            "item": "MainFrame::on_sys_color_changed::Default View",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_export_logs",
+            "item": "MainFrame::on_sys_color_changed::Export Logs",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_camera_front",
+            "item": "MainFrame::on_sys_color_changed::Front",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_import_config",
+            "item": "MainFrame::on_sys_color_changed::Import Profile",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "help_shortcuts",
+            "item": "MainFrame::on_sys_color_changed::Keyboard Shortcuts",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_camera_left",
+            "item": "MainFrame::on_sys_color_changed::Left",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_camera_rear",
+            "item": "MainFrame::on_sys_color_changed::Rear",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_camera_right",
+            "item": "MainFrame::on_sys_color_changed::Right",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "help_setup_wizard",
+            "item": "MainFrame::on_sys_color_changed::Setup Wizard",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "help_config_folder",
+            "item": "MainFrame::on_sys_color_changed::Show Configuration Folder",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "help_tip_of_day",
+            "item": "MainFrame::on_sys_color_changed::Show Tip of the Day",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_camera_top",
+            "item": "MainFrame::on_sys_color_changed::Top",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "center_on_plate",
+            "item": "MenuFactory::append_menu_item_center::Center",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "objects_convert_volume_role",
+            "item": "MenuFactory::append_menu_item_change_type::Change type",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "edit_duplicate",
+            "item": "MenuFactory::append_menu_item_clone::Clone",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "delete_models",
+            "item": "MenuFactory::append_menu_item_delete::Delete",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "drop_to_bed",
+            "item": "MenuFactory::append_menu_item_drop::Drop",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_export_stl",
+            "item": "MenuFactory::append_menu_item_export_stl::Export as one STL",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_export_all_stls",
+            "item": "MenuFactory::append_menu_item_export_stl::Export as STLs",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "fill_bed_with_instances",
+            "item": "MenuFactory::append_menu_item_fill_bed::Fill bed with copies",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "repair_model",
+            "item": "MenuFactory::append_menu_item_fix_through_netfabb::Fix model",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "instance_to_object",
+            "item": "MenuFactory::append_menu_item_instance_to_object::Set as an individual object",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "add_height_range",
+            "item": "MenuFactory::append_menu_item_layers_editing::Height range Modifier",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "mesh_boolean_union",
+            "item": "MenuFactory::append_menu_item_merge_parts_to_single_part::Mesh boolean",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "tool_assembly",
+            "item": "MenuFactory::append_menu_item_merge_to_multipart_object::Assemble",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "tool_assembly",
+            "item": "MenuFactory::append_menu_item_merge_to_single_object::Assemble",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "toggle_printable",
+            "item": "MenuFactory::append_menu_item_printable::Printable",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "objects_rename",
+            "item": "MenuFactory::append_menu_item_rename::Rename",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "scale_to_fit_volume",
+            "item": "MenuFactory::append_menu_item_scale_selection_to_fit_print_volume::Scale to build volume",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "toggle_printable",
+            "item": "MenuFactory::append_menu_item_set_visible::Hide",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "simplify_model",
+            "item": "MenuFactory::append_menu_item_simplify::Simplify Model",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "mirror_x",
+            "item": "MenuFactory::append_menu_items_mirror::Along X axis",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "mirror_y",
+            "item": "MenuFactory::append_menu_items_mirror::Along Y axis",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "mirror_z",
+            "item": "MenuFactory::append_menu_items_mirror::Along Z axis",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "add_primitive_cone",
+            "item": "MenuFactory::append_submenu_add_generic::Cone",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "add_primitive_cube",
+            "item": "MenuFactory::append_submenu_add_generic::Cube",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "add_primitive_cylinder",
+            "item": "MenuFactory::append_submenu_add_generic::Cylinder",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "add_primitive_disc",
+            "item": "MenuFactory::append_submenu_add_generic::Disc",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "load_model_from_path",
+            "item": "MenuFactory::append_submenu_add_generic::Load...",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "add_primitive_sphere",
+            "item": "MenuFactory::append_submenu_add_generic::Sphere",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "add_primitive_torus",
+            "item": "MenuFactory::append_submenu_add_generic::Torus",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "split_to_objects",
+            "item": "MenuFactory::create_bbl_part_menu::To objects",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "split_to_parts",
+            "item": "MenuFactory::create_bbl_part_menu::To parts",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "add_handy_model",
+            "item": "MenuFactory::create_default_menu::Add Handy models",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_import_model",
+            "item": "MenuFactory::create_default_menu::Add Models",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_show_labels",
+            "item": "MenuFactory::create_default_menu::Show Labels",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "split_to_objects",
+            "item": "MenuFactory::create_extra_object_menu::To objects",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "split_to_parts",
+            "item": "MenuFactory::create_extra_object_menu::To parts",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "filament_virtual_mutate",
+            "item": "MenuFactory::create_filament_action_menu::Delete",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "filament_virtual_mutate",
+            "item": "MenuFactory::create_filament_action_menu::Edit",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "filament_remap",
+            "item": "MenuFactory::create_filament_action_menu::Merge with",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "split_to_objects",
+            "item": "MenuFactory::create_object_menu::To objects",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "split_to_parts",
+            "item": "MenuFactory::create_object_menu::To parts",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "add_handy_model",
+            "item": "MenuFactory::create_plate_menu::Add Handy models",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_import_model",
+            "item": "MenuFactory::create_plate_menu::Add Models",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "arrange_all",
+            "item": "MenuFactory::create_plate_menu::Arrange",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "tool_face_detector",
+            "item": "MenuFactory::create_plate_menu::Auto Rotate",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "edit_delete_all",
+            "item": "MenuFactory::create_plate_menu::Delete All",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "delete_plate",
+            "item": "MenuFactory::create_plate_menu::Delete Plate",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "edit_select_all",
+            "item": "MenuFactory::create_plate_menu::Select All",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "item": "MenuFactory::create_sla_object_menu::Auto orientation",
+            "owedBy": "P0.1",
+            "reason": "SLA-only menu. OrcaXR targets FFF machines, so this leaf is classified as out of scope rather than left unmapped."
+          },
+          {
+            "item": "MenuFactory::create_sla_object_menu::Split",
+            "owedBy": "P0.1",
+            "reason": "SLA-only menu. OrcaXR targets FFF machines, so this leaf is classified as out of scope rather than left unmapped."
+          },
+          {
+            "action": "split_to_objects",
+            "item": "MenuFactory::multi_selection_menu::To objects",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "split_to_parts",
+            "item": "MenuFactory::multi_selection_menu::To parts",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "presets_update_custom",
+            "item": "PlaterPresetComboBox::show_edit_menu::Edit preset",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "help_about",
+            "item": "runtime::About application",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "filament_remap",
+            "item": "runtime::Merge with mixed filament target",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "filament_remap",
+            "item": "runtime::Merge with physical filament target",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "file_open_recent",
+            "item": "runtime::Open recent project entry",
+            "reason": "Action not supported on this target"
+          }
+        ],
+        "webDom": [
+          {
+            "item": "AuxiliaryList::on_context_menu::Delete",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::Import File",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::New Folder",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::Open",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::Rename",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "action": "view_auto_perspective",
+            "item": "MainFrame::init_menubar_as_editor::Auto Perspective",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_show_gcode_window",
+            "item": "MainFrame::init_menubar_as_editor::Show &G-code Window",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "item": "MainFrame::on_sys_color_changed::Check for Process Preset Updates",
+            "owedBy": "P6.3",
+            "reason": "System presets ship with the app; there is no update feed to check."
+          },
+          {
+            "action": "help_config_folder",
+            "item": "MainFrame::on_sys_color_changed::Show Configuration Folder",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "tool_face_detector",
+            "item": "MenuFactory::create_plate_menu::Auto Rotate",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "item": "MenuFactory::create_sla_object_menu::Auto orientation",
+            "owedBy": "P0.1",
+            "reason": "SLA-only menu. OrcaXR targets FFF machines, so this leaf is classified as out of scope rather than left unmapped."
+          },
+          {
+            "item": "MenuFactory::create_sla_object_menu::Split",
+            "owedBy": "P0.1",
+            "reason": "SLA-only menu. OrcaXR targets FFF machines, so this leaf is classified as out of scope rather than left unmapped."
+          }
+        ],
+        "webXr": [
+          {
+            "item": "AuxiliaryList::on_context_menu::Delete",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::Import File",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::New Folder",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::Open",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "item": "AuxiliaryList::on_context_menu::Rename",
+            "owedBy": "P1.3",
+            "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+          },
+          {
+            "action": "view_auto_perspective",
+            "item": "MainFrame::init_menubar_as_editor::Auto Perspective",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_show_gcode_window",
+            "item": "MainFrame::init_menubar_as_editor::Show &G-code Window",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "view_show_navigator",
+            "item": "MainFrame::init_menubar_as_editor::Show 3D Navigator",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "item": "MainFrame::on_sys_color_changed::Check for Process Preset Updates",
+            "owedBy": "P6.3",
+            "reason": "System presets ship with the app; there is no update feed to check."
+          },
+          {
+            "action": "file_export_logs",
+            "item": "MainFrame::on_sys_color_changed::Export Logs",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "help_config_folder",
+            "item": "MainFrame::on_sys_color_changed::Show Configuration Folder",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "tool_assembly",
+            "item": "MenuFactory::append_menu_item_merge_to_multipart_object::Assemble",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "tool_assembly",
+            "item": "MenuFactory::append_menu_item_merge_to_single_object::Assemble",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "action": "tool_face_detector",
+            "item": "MenuFactory::create_plate_menu::Auto Rotate",
+            "reason": "Action not supported on this target"
+          },
+          {
+            "item": "MenuFactory::create_sla_object_menu::Auto orientation",
+            "owedBy": "P0.1",
+            "reason": "SLA-only menu. OrcaXR targets FFF machines, so this leaf is classified as out of scope rather than left unmapped."
+          },
+          {
+            "item": "MenuFactory::create_sla_object_menu::Split",
+            "owedBy": "P0.1",
+            "reason": "SLA-only menu. OrcaXR targets FFF machines, so this leaf is classified as out of scope rather than left unmapped."
+          }
+        ]
+      },
+      "actionCount": 115,
+      "targets": {
+        "androidFlat": {
+          "absentCount": 38,
+          "supported": 85,
+          "unavailable": 30
+        },
+        "androidXr": {
+          "absentCount": 123,
+          "supported": 0,
+          "unavailable": 115
+        },
+        "webDom": {
+          "absentCount": 12,
+          "supported": 111,
+          "unavailable": 4
+        },
+        "webXr": {
+          "absentCount": 16,
+          "supported": 107,
+          "unavailable": 8
+        }
+      },
+      "total": 162
+    }
+  },
   "tasks": {
     "byState": {
       "unstarted": 5,
