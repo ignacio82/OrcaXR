@@ -7460,6 +7460,10 @@ transfers alive with a persistent status notification and cancel action so multi
 and extended pre-print calibration (such as Snapmaker U1's 169-point bed mesh probing) continue
 uninterrupted when the screen is locked, preventing WebSocket drops from cancelling the workflow
 and leaving the printer to time out into unhomed idle stepper shutdown (`M84`).
+During this preparation phase, both the Android Compose UI (and its ongoing notification) and the
+browser DOM workspace run an active elapsed timer ticking each second
+(`Preparing the printer with the confirmed options… (Xm YYs elapsed)`), providing continuous visual
+confirmation that calibration is actively progressing.
 Moonraker's `server.connection.identify` includes `url: "https://orcaxr.org"` per
 the Moonraker 1.0+ specification. Bed leveling pre-print preparation automatically
 homes the axes (`G28`) before running `BED_MESH_CALIBRATE` so probing succeeds

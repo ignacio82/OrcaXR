@@ -133,6 +133,11 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
     private fun string(resId: Int): String = getApplication<Application>().getString(resId)
     private fun string(resId: Int, vararg args: Any): String = getApplication<Application>().getString(resId, *args)
     private val app: Application get() = getApplication()
+    private var prepareTicker: Runnable? = null
+    private fun stopPrepareTicker() {
+        prepareTicker?.let { main.removeCallbacks(it) }
+        prepareTicker = null
+    }
 
     var state by mutableStateOf(DeviceState())
         private set
@@ -440,6 +445,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         PrintSendService.onCancel = { cancelSend() }
         sendState = SendState(busy = true)
         val finish = { status: String ->
+            stopPrepareTicker()
             PrintSendService.stop(app)
             PrintSendService.onCancel = null
             main.post { sendState = SendState(status = status) }
@@ -457,9 +463,28 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
                 onPhase = { phase ->
                     main.post {
                         if (sendState.busy) {
-                            val text = SendWords.phase(phase, slice.filename)
-                            sendState = sendState.copy(status = text)
-                            PrintSendService.update(app, text)
+                            stopPrepareTicker()
+                            val baseText = SendWords.phase(phase, slice.filename)
+                            sendState = sendState.copy(status = baseText)
+                            PrintSendService.update(app, baseText)
+
+                            if (phase == ProjectIntents.PrintSubmissionPhase.Preparing) {
+                                val started = System.currentTimeMillis()
+                                val ticker = object : Runnable {
+                                    override fun run() {
+                                        if (!sendState.busy) return
+                                        val elapsedMs = System.currentTimeMillis() - started
+                                        val seconds = elapsedMs / 1000
+                                        val clock = "${seconds / 60}m ${(seconds % 60).toString().padStart(2, '0')}s"
+                                        val text = "$baseText ($clock elapsed)"
+                                        sendState = sendState.copy(status = text)
+                                        PrintSendService.update(app, text)
+                                        main.postDelayed(this, 1000)
+                                    }
+                                }
+                                prepareTicker = ticker
+                                main.postDelayed(ticker, 1000)
+                            }
                         }
                     }
                 },
@@ -508,6 +533,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
     /** "Cancel send": what the send started stops, and it ends in the workflow's own outcome. */
     fun cancelSend() {
         if (!sendState.busy) return
+        stopPrepareTicker()
         sendState = sendState.copy(status = SendWords.CANCELLING)
         work { workspace.cancelSend() }
     }
@@ -755,6 +781,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        stopPrepareTicker()
         PrintSendService.stop(app)
         PrintSendService.onCancel = null
         worker.execute {

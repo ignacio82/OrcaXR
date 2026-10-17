@@ -674,6 +674,13 @@ function setupDomUI(
       return;
     }
     setPrinterSendBusy(true);
+    let prepareInterval: ReturnType<typeof setInterval> | null = null;
+    const stopPrepareTimer = () => {
+      if (prepareInterval !== null) {
+        clearInterval(prepareInterval);
+        prepareInterval = null;
+      }
+    };
     try {
       const result = await printWorkflow.run(intent, {
         onUploadElapsed: ({ elapsedMs, totalBytes }) => {
@@ -688,6 +695,7 @@ function setupDomUI(
           );
         },
         onPhase: (phase) => {
+          stopPrepareTimer();
           const messages = {
             checking: t('app.main.checkingPrinter', 'Checking the printer…'),
             confirming: t('app.main.confirmSend', 'Confirm the send options…'),
@@ -698,8 +706,17 @@ function setupDomUI(
             completed: t('app.main.sendCompleted', 'Send completed.'),
           };
           workspace.setStatus(messages[phase]);
+          if (phase === 'preparing') {
+            const started = Date.now();
+            prepareInterval = setInterval(() => {
+              const seconds = Math.floor((Date.now() - started) / 1000);
+              const clock = `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`;
+              workspace.setStatus(`${messages.preparing} (${clock} elapsed)`);
+            }, 1000);
+          }
         },
       });
+      stopPrepareTimer();
       if (!result) {
         workspace.setStatus(t('app.main.sendCancelledNothingWasUploaded', 'Send cancelled; nothing was uploaded.'));
         return;
@@ -718,8 +735,10 @@ function setupDomUI(
             ),
       );
     } catch (error) {
+      stopPrepareTimer();
       workspace.setStatus(t('app.main.sendFailure', 'Send failed: {reason}', { reason: (error as Error).message }));
     } finally {
+      stopPrepareTimer();
       setPrinterSendBusy(false);
     }
   });
