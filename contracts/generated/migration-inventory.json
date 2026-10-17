@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceCommit": "783aa403c2588672dbebe9ff69fa1c170deb3c96",
+  "sourceCommit": "a15b9ba70adf2cc2469554d82cd9b45cdb142fdc",
   "sources": {
     "docs/parity/release-report.json": "27e2d98ed3dea7027b815034a332265bd0f6bf02660ef66e0a89715a8c227f6a",
     "web/public/profiles/catalog.json": "19cfbf414f4b2c770b047da152b9b9e2e2101909d92f8fae3166685e7bf58fda",
