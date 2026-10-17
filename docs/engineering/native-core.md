@@ -7449,7 +7449,15 @@ session that ends withdraws it. Progress and outcomes are the browser's status
 lines (each phase, the upload's elapsed time, "Printing … verified on the
 printer.", "Uploaded … verified; start it from the printer when ready.", "Send
 cancelled; nothing was uploaded.", "Send failed: …"), and the button reads
-"Cancel send" while a send runs.
+"Cancel send" while a send runs. Send failures preserve unwrapped exception details
+and causes rather than collapsing to an empty string, and log to `OrcaXRSend`.
+`MainActivity` maintains `FLAG_KEEP_SCREEN_ON` on the window while foregrounded so
+long-running local slicing, large 3MF renders and multi-megabyte G-code uploads over
+slower Wi-Fi links are never severed by Android activity backgrounding or process freezing.
+Moonraker's `server.connection.identify` includes `url: "https://orcaxr.org"` per
+the Moonraker 1.0+ specification. Bed leveling pre-print preparation automatically
+homes the axes (`G28`) before running `BED_MESH_CALIBRATE` so probing succeeds
+even when the printer starts with unhomed axes.
 
 The platform-free flow has 9 JVM tests (`SendFlowTest`: the guard, every
 status line, sizes, the exact-name label with `toISOString` dates and

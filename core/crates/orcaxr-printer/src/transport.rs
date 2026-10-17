@@ -494,7 +494,7 @@ impl Shared {
     }
     fn send_identify(&mut self, socket: u64) -> Result<(), Fault> {
         let text = format!(
-            "{{\"jsonrpc\":\"2.0\",\"method\":\"server.connection.identify\",\"params\":{{\"client_name\":{},\"version\":{},\"type\":\"web\"}}}}",
+            "{{\"jsonrpc\":\"2.0\",\"method\":\"server.connection.identify\",\"params\":{{\"client_name\":{},\"version\":{},\"type\":\"web\",\"url\":\"https://orcaxr.org\"}}}}",
             quote(&self.config.client_name),
             quote(&self.config.client_version)
         );

@@ -439,7 +439,9 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
             val artifact = try {
                 PrintJobArtifacts.open(slice.file, slice.filename, slice.plateName, slice.isCurrent)
             } catch (failure: Exception) {
-                finish(SendWords.failed(failure.message ?: failure.javaClass.simpleName))
+                val msg = failure.message?.trim()?.ifEmpty { null } ?: failure.javaClass.simpleName
+                android.util.Log.e("OrcaXRSend", "Opening artifact failed: $msg", failure)
+                finish(SendWords.failed(msg))
                 return@work
             }
             val progress = PrintSendProgress(
@@ -456,9 +458,22 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
             sent.whenComplete { result, thrown ->
                 artifact.close()
                 val cause = (thrown as? CompletionException)?.cause ?: thrown
+                val errorMsg = cause?.let {
+                    val direct = it.message?.trim()?.ifEmpty { null }
+                    val inner = it.cause?.let { c -> c.message?.trim()?.ifEmpty { null } ?: c.javaClass.simpleName }
+                    when {
+                        direct != null && inner != null && direct != inner -> "$direct ($inner)"
+                        direct != null -> direct
+                        inner != null -> "${it.javaClass.simpleName}: $inner"
+                        else -> it.javaClass.simpleName
+                    }
+                }
+                if (cause != null) {
+                    android.util.Log.e("OrcaXRSend", "DeviceModel send failed: $errorMsg", cause)
+                }
                 finish(
                     when {
-                        cause != null -> SendWords.failed(cause.message ?: cause.javaClass.simpleName)
+                        cause != null -> SendWords.failed(errorMsg ?: "Unknown error")
                         result == null -> SendWords.DECLINED
                         else -> SendWords.result(result)
                     },

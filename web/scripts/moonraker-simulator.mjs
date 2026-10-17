@@ -367,7 +367,10 @@ export async function startMoonrakerSimulator(options = {}) {
     // so a surface that only reads the HTTP reply would show nothing at all.
     if (url.pathname === '/printer/gcode/script') {
       const script = url.searchParams.get('script') ?? '';
-      commands.push(`gcode:${script}`);
+      for (const line of script.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed) commands.push(`gcode:${trimmed}`);
+      }
       const response = state.gcodeResponses[script.split(/\s/)[0].toUpperCase()] ?? 'ok';
       notifyGcodeResponse(response);
       return json('ok');

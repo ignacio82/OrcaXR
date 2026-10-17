@@ -236,7 +236,11 @@ class PrintWorkflowClient(
                     post {
                         if (this.operation !== operation) return@post
                         if (thrown != null) {
-                            answer(id, ProjectIntents.PrintWorkflowOutcome.SessionFailed(ProjectIntents.PrinterText(units(unwrap(thrown).message ?: ""))))
+                            val unwrapped = unwrap(thrown)
+                            val message = unwrapped.message?.trim()?.ifEmpty { null }
+                                ?: (unwrapped.javaClass.simpleName + (unwrapped.cause?.let { " (${it.message?.trim()?.ifEmpty { null } ?: it.javaClass.simpleName})" } ?: ""))
+                            android.util.Log.e("OrcaXRSend", "CaptureSession failed: $message", unwrapped)
+                            answer(id, ProjectIntents.PrintWorkflowOutcome.SessionFailed(ProjectIntents.PrinterText(units(message))))
                             return@post
                         }
                         operation.lease = lease
@@ -335,8 +339,12 @@ class PrintWorkflowClient(
         when (state) {
             is ProjectIntents.PrintWorkflowState.Submitted -> current.future.complete(state.value)
             is ProjectIntents.PrintWorkflowState.Started -> current.future.complete(text(state.value.text))
-            is ProjectIntents.PrintWorkflowState.Failed ->
-                current.future.completeExceptionally(PrintSubmissionException(state.value.code, text(state.value.message)))
+            is ProjectIntents.PrintWorkflowState.Failed -> {
+                val rawMsg = text(state.value.message).trim()
+                val errorMsg = rawMsg.ifEmpty { "Workflow failed (${state.value.code.name})" }
+                android.util.Log.e("OrcaXRSend", "PrintWorkflowState.Failed code=${state.value.code}: $errorMsg")
+                current.future.completeExceptionally(PrintSubmissionException(state.value.code, errorMsg))
+            }
             else -> current.future.complete(null)
         }
     }

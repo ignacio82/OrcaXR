@@ -425,9 +425,13 @@ class MoonrakerClient(
         calls[fetch.id] = exchange
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) = post {
+                android.util.Log.e("OrcaXRSend", "MoonrakerClient HTTP call failed [${fetch.id}] ${text(fetch.url)}: ${e.message}", e)
                 if (!exchange.abandoned) input { transport.resolve(fetch.id, ProjectIntents.MoonrakerTransportOutcome.Failed(EMPTY), clock()) }
             }
             override fun onResponse(call: Call, response: Response) = post {
+                if (response.code >= 400) {
+                    android.util.Log.w("OrcaXRSend", "MoonrakerClient HTTP response [${fetch.id}] ${text(fetch.url)} status ${response.code}")
+                }
                 if (exchange.abandoned) {
                     response.close()
                     return@post

@@ -733,6 +733,7 @@ export class MoonrakerTransport implements MoonrakerConnection {
         client_name: this.clientName,
         version: this.clientVersion,
         type: 'web',
+        url: 'https://orcaxr.org',
       },
     });
   }

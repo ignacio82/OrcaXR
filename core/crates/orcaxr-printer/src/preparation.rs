@@ -146,9 +146,9 @@ pub fn start_options(report: &wire::PrinterCapabilityReport) -> Vec<wire::PrintS
             label: units("Calibrate the build plate first"),
             detail: units(&match leveling_command {
                 Some(c) => {
-                    format!("Runs {c} on the printer and waits for it before the print starts.")
+                    format!("Homes the printer and runs {c} before the print starts.")
                 }
-                None => "Probes the plate before the print starts.".into(),
+                None => "Homes the printer and probes the plate before the print starts.".into(),
             }),
             available: leveling_available,
             reason: units(&if !leveling_known {
@@ -277,9 +277,14 @@ pub fn preparation_send(step: &wire::PrintPreparationStep) -> wire::PrinterSend 
                 wire::OptionalText::Value(c) => c.clone(),
                 wire::OptionalText::Absent(_) => units("undefined"),
             };
-            // A lone surrogate cannot be URI-encoded: the browser throws, and
-            // no step names one.
-            let encoded = encode_uri_component(&command).unwrap_or_default();
+            let script = if command.starts_with(&units("G28")) {
+                command
+            } else {
+                let mut s = units("G28\n");
+                s.extend(command);
+                s
+            };
+            let encoded = encode_uri_component(&script).unwrap_or_default();
             wire::PrinterSend {
                 path: units(&format!("/printer/gcode/script?script={encoded}")),
                 method: units("POST"),

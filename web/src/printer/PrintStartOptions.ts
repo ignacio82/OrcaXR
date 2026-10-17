@@ -126,8 +126,8 @@ export function assessPrintStartOptions(report: PrinterCapabilityReport): readon
       id: 'bed-leveling' as const,
       label: 'Calibrate the build plate first',
       detail: levelingCommand
-        ? `Runs ${levelingCommand} on the printer and waits for it before the print starts.`
-        : 'Probes the plate before the print starts.',
+        ? `Homes the printer and runs ${levelingCommand} before the print starts.`
+        : 'Homes the printer and probes the plate before the print starts.',
       available: levelingAvailable,
       defaultEnabled: false,
       ...(levelingCommand ? { command: levelingCommand } : {}),
@@ -274,7 +274,8 @@ export async function executePrintPreparationStep(
         signal: context.signal,
       });
     } else {
-      await transport.request<unknown>(`/printer/gcode/script?script=${encodeURIComponent(step.command)}`, {
+      const script = step.command.startsWith('G28') ? step.command : `G28\n${step.command}`;
+      await transport.request<unknown>(`/printer/gcode/script?script=${encodeURIComponent(script)}`, {
         method: 'POST',
         operation: 'bed_leveling',
         timeoutMs: LEVELING_TIMEOUT_MS,

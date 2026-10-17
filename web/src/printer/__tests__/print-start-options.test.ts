@@ -165,7 +165,7 @@ test('choosing both writes the setting first and waits for the probe last', asyn
   assert.equal(calls.length, 2);
   assert.equal(calls[0].path, `${TIMELAPSE_SETTINGS_PATH}?enabled=true`);
   assert.equal(calls[0].method, 'POST');
-  assert.match(calls[1].path, /^\/printer\/gcode\/script\?script=BED_MESH_CALIBRATE$/);
+  assert.match(calls[1].path, /^\/printer\/gcode\/script\?script=G28%0ABED_MESH_CALIBRATE$/);
   assert.equal(calls[1].method, 'POST');
   assert.ok((calls[1].timeoutMs ?? 0) > 60_000, 'a mesh probe legitimately takes minutes');
 });
