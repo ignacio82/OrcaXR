@@ -777,6 +777,8 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     var recreateColorsBusy by mutableStateOf(false)
         private set
 
+    private var pendingRecreateSlots: List<ProjectIntents.MoonrakerFilamentSlot> = emptyList()
+
     /** Adopts loaded filaments from the printer into the project as one undoable command. */
     fun syncFilamentsFromPrinter(slots: List<ProjectIntents.MoonrakerFilamentSlot>) {
         if (slots.isEmpty()) {
@@ -793,12 +795,25 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
                     vendor = if (s.vendor.isEmpty()) ProjectIntents.OptionalText.Absent(ProjectIntents.Empty) else ProjectIntents.OptionalText.Value(s.vendor),
                 )
             }
-            val failure = runCatching { workspace.syncPhysicalFilaments(printerSlots).get() }.exceptionOrNull()?.let(::cause)
+            val newIds = List(32) { java.util.UUID.randomUUID().toString() }
+            val failure = runCatching { workspace.syncPhysicalFilaments(printerSlots, newIds).get() }.exceptionOrNull()?.let(::cause)
+            if (failure != null) {
+                main.post { message = failure.message ?: failure.javaClass.simpleName }
+                return@work
+            }
+            val rebound = profiles.adoptPrinterFilaments(workspace, slots)
             main.post {
-                if (failure == null) {
-                    message = "Synced filaments from printer: ${printerSlots.size} slot(s)."
+                val parts = mutableListOf<String>()
+                if (rebound.rebound.isNotEmpty()) {
+                    parts += "rebound ${rebound.rebound.size} preset(s)"
+                }
+                if (rebound.unmatched.isNotEmpty()) {
+                    parts += "unmatched: ${rebound.unmatched.joinToString { "${it.second} on tool ${it.first + 1}" }}"
+                }
+                message = if (parts.isEmpty()) {
+                    "Synced filaments from printer: ${slots.size} slot(s)."
                 } else {
-                    message = failure.message ?: failure.javaClass.simpleName
+                    "Synced filaments from printer: ${slots.size} slot(s) (${parts.joinToString("; ")})."
                 }
             }
         }
@@ -808,6 +823,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun openRecreateColors(printerSlots: List<ProjectIntents.MoonrakerFilamentSlot> = emptyList()) {
         if (recreateColorsBusy) return
         recreateColorsBusy = true
+        pendingRecreateSlots = printerSlots
         work {
             val json = runCatching { workspace.exportJson().get() }.getOrNull()
             if (json == null) {
@@ -841,16 +857,22 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     /** Closes the Recreate Model Colors dialog without applying. */
     fun closeRecreateColors() {
         recreateColorsPlan = null
+        pendingRecreateSlots = emptyList()
     }
 
     /** Applies the Recreate Model Colors plan with optional user overrides. */
     fun applyRecreateColors(overrides: Map<String, String>) {
         val plan = recreateColorsPlan ?: return
+        val adoptSlots = pendingRecreateSlots
         recreateColorsPlan = null
+        pendingRecreateSlots = emptyList()
         recreateColorsBusy = true
         work {
             val command = RecreateModelColorsEngine.buildRecreateCommand(plan, overrides)
             val failure = runCatching { workspace.recreateModelColors(command).get() }.exceptionOrNull()?.let(::cause)
+            if (failure == null && adoptSlots.isNotEmpty()) {
+                profiles.adoptPrinterFilaments(workspace, adoptSlots)
+            }
             main.post {
                 recreateColorsBusy = false
                 if (failure == null) {

@@ -2448,8 +2448,10 @@ storage journeys on phone, tablet, and desktop-sized windows.
   browser's own palette now follows undo too), "Sync Filaments From Printer"
   (`printer_inspect_filaments`) querying Moonraker slot metadata via
   `DeviceWorkspace.queryFilamentSlots` / `DeviceModel` and executing
-  `ProjectWorkspace.syncPhysicalFilaments` to match presets, update colors and
-  follow slot assignments, "Recreate Model Colors (Full-Spectrum)"
+  `ProjectWorkspace.syncPhysicalFilaments` to update physical slots and colors, followed
+  by `SlicingProfiles.adoptPrinterFilaments` (`FilamentPresetMatching`) re-binding head presets
+  in `SlicingProfiles` and staging slicer configuration so pickers and slicing preflight match the
+  synchronized physical materials, "Recreate Model Colors (Full-Spectrum)"
   (`recreate_model_colors_fullspectrum`) matching model geometry colors via
   `RecreateModelColorsEngine` (CIELAB ΔE 2000, `VirtualFilaments.search` blends,
   interactive Compose `RecreateModelColorsDialog`) and executing

@@ -4626,7 +4626,10 @@ Android filament management in the Prepare area (`FilamentPanels.kt`, `PrepareSc
    parsing tool and multi-extruder mappings, spool IDs, materials and hex colors into
    `ProjectIntents.MoonrakerFilamentSlot`. `ProjectWorkspace.syncPhysicalFilaments(slots, newFilamentIds)`
    submits `ProjectIntents.Command.SyncPhysicalFilaments` to the Rust core, updating project slot
-   configuration, binding compatible presets, and recording an undoable transaction.
+   configuration, materials and colors. `SlicingProfiles.adoptPrinterFilaments(workspace, slots)` then
+   matches each head slot against compatible catalog presets via `FilamentPresetMatching.matchFilamentPreset`
+   (matching vendor, grade, and material type) and re-binds `SlicingProfiles.heads`, staging updated
+   slicing configuration so preflight and profile pickers immediately reflect the synchronized materials.
 2. **Recreate Model Colors (Full-Spectrum)** (`recreate_model_colors_fullspectrum`):
    `RecreateModelColorsEngine` (`RecreateModelColors.kt`) inspects all model source colors across
    objects, volumes and facet color channels via `ProjectWorkspace.exportJson`. For each source color,

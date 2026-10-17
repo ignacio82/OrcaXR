@@ -175,6 +175,104 @@ class SlicingProfiles(context: Context, private val publish: (ProfilesView) -> U
         select(workspace, filaments = heads)
     }
 
+    data class RebindOutcome(
+        val rebound: List<Int> = emptyList(),
+        val unmatched: List<Pair<Int, String>> = emptyList(),
+    )
+
+    private var candidateCache: Pair<Pair<ProfileCatalog, SlicingProfile>, List<FilamentPresetCandidate>>? = null
+
+    /** Every filament preset candidate the active printer and process can actually use. */
+    fun filamentCandidates(): List<FilamentPresetCandidate> {
+        val loaded = catalog ?: return emptyList()
+        val profile = live.profile.takeUnless { authored } ?: return emptyList()
+        candidateCache?.takeIf { it.first.first === loaded && it.first.second == profile }?.let { return it.second }
+
+        val candidates = mutableListOf<FilamentPresetCandidate>()
+        for (position in 0 until loaded.profileCount()) {
+            val entry = loaded.profile(position)
+            if (text(entry.machinePresetId) == profile.machinePresetId && text(entry.processPresetId) == profile.processPresetId) {
+                val cfg = loaded.profileConfig(position)
+                val typeEntry = cfg.entries.firstOrNull { text(it.key) == "filament_type" }
+                val material = typeEntry?.let { text(it.value).trim() }.orEmpty()
+                if (material.isNotEmpty()) {
+                    val vendor = when (val v = entry.filamentVendor) {
+                        is ProjectIntents.OptionalText.Value -> text(v.value).trim().ifEmpty { null }
+                        is ProjectIntents.OptionalText.Absent -> null
+                    }
+                    candidates += FilamentPresetCandidate(
+                        presetId = text(entry.filamentPresetId),
+                        presetName = text(entry.filamentPresetName).ifEmpty { text(entry.filamentName) },
+                        material = material,
+                        vendor = vendor,
+                    )
+                }
+            }
+        }
+        candidateCache = (loaded to profile) to candidates
+        return candidates
+    }
+
+    /**
+     * Points each reported tool at a filament preset that actually declares the
+     * material the printer says is loaded, and adopts its colour and configuration.
+     */
+    fun adoptPrinterFilaments(
+        workspace: ProjectWorkspace,
+        slots: List<ProjectIntents.MoonrakerFilamentSlot>,
+    ): RebindOutcome {
+        val loaded = catalog ?: return RebindOutcome()
+        val profile = live.profile.takeUnless { authored } ?: return RebindOutcome()
+        val candidates = filamentCandidates()
+        if (candidates.isEmpty()) return RebindOutcome()
+
+        val choices = loaded.slicingChoices(profile.machinePresetId, profile.processPresetId)
+        val extruders = choices.extruders.coerceAtLeast(1)
+        val nextPresetIds = live.heads.map { it.presetId }.toMutableList()
+        while (nextPresetIds.size < extruders) nextPresetIds += null
+
+        var changed = false
+        val rebound = mutableListOf<Int>()
+        val unmatched = mutableListOf<Pair<Int, String>>()
+
+        for (slot in slots) {
+            val toolId = slot.slotIndex.toInt()
+            if (toolId < 0 || toolId >= nextPresetIds.size) continue
+            val material = text(slot.material).trim()
+            val subType = when (val s = slot.subType) {
+                is ProjectIntents.OptionalText.Value -> text(s.value).trim().ifEmpty { null }
+                is ProjectIntents.OptionalText.Absent -> null
+            }
+            val vendor = text(slot.vendor).trim().ifEmpty { null }
+            if (material.isEmpty()) continue
+
+            val reported = ReportedFilamentSlot(material = material, subType = subType, vendor = vendor)
+            val currentPresetId = nextPresetIds[toolId]
+            val bound = candidates.find { it.presetId == currentPresetId }
+            if (bound != null && FilamentPresetMatching.filamentPresetAgreesWithSlot(bound, reported)) {
+                continue
+            }
+            val match = FilamentPresetMatching.matchFilamentPreset(candidates, reported)
+            if (match == null) {
+                unmatched += toolId to material
+                continue
+            }
+            if (nextPresetIds[toolId] != match.presetId) {
+                nextPresetIds[toolId] = match.presetId
+                rebound += toolId
+                changed = true
+            }
+        }
+
+        if (changed) {
+            select(workspace, filaments = nextPresetIds)
+        } else {
+            live = adopted(workspace)
+            show()
+        }
+        return RebindOutcome(rebound, unmatched)
+    }
+
     /** The preflight target for a project of `toolCount` tools: its own configuration while it owns it, else the chosen profile's. */
     fun target(toolCount: Int): ProjectIntents.PreflightTarget {
         val loaded = catalog
@@ -184,6 +282,8 @@ class SlicingProfiles(context: Context, private val publish: (ProfilesView) -> U
 
     /** The catalog's profiles by their presets, for the catalog they were read from. */
     private var positions: Pair<ProfileCatalog, Map<SlicingProfile, Long>>? = null
+
+    private fun text(units: List<Int>) = String(CharArray(units.size) { units[it].toChar() })
 
     /**
      * File → Export Config… (`OrcaWorkspace.exportActiveConfig`): the chosen
@@ -195,7 +295,6 @@ class SlicingProfiles(context: Context, private val publish: (ProfilesView) -> U
         val loaded = catalog ?: return null
         val profile = live.profile.takeUnless { authored } ?: return null
         val known = positions?.takeIf { it.first === loaded }?.second ?: run {
-            fun text(units: List<Int>) = String(CharArray(units.size) { units[it].toChar() })
             val byPresets = HashMap<SlicingProfile, Long>()
             for (position in 0 until loaded.profileCount()) {
                 val entry = loaded.profile(position)
