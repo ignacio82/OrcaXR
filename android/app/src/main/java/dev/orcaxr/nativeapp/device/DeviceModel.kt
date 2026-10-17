@@ -161,6 +161,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
     /** The confirmation a send waits for, shown above every area. */
     var sendConfirmation by mutableStateOf<PendingSend?>(null)
         private set
+    var requestedTab by mutableStateOf<DeviceTab?>(null)
 
     // Worker-thread state: the client the transcript listens to, and the camera's routes.
     private var listened: dev.orcaxr.core.MoonrakerClient? = null

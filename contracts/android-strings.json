@@ -2401,7 +2401,21 @@
     "xr_action_recenter",
     "xr_action_pin",
     "xr_action_unpin",
-    "xr_panel_inspector"
+    "xr_panel_inspector",
+    "widget_camera_name",
+    "widget_camera_description",
+    "widget_camera_configure_title",
+    "widget_camera_select_printer",
+    "widget_camera_select_camera",
+    "widget_camera_loading",
+    "widget_camera_error",
+    "widget_camera_tap_to_refresh",
+    "widget_camera_refresh",
+    "widget_camera_updated_just_now",
+    "widget_camera_no_printers",
+    "widget_camera_no_cameras",
+    "widget_camera_add_widget",
+    "widget_camera_preview_header"
   ],
   "kotlin": [
     {

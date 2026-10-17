@@ -96,7 +96,13 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
         }
     }
     var adding by rememberSaveable { mutableStateOf(false) }
-    var tab by rememberSaveable { mutableStateOf(DeviceTab.Status) }
+    var tab by rememberSaveable { mutableStateOf(model.requestedTab ?: DeviceTab.Status) }
+    LaunchedEffect(model.requestedTab) {
+        model.requestedTab?.let {
+            tab = it
+            model.requestedTab = null
+        }
+    }
     var removing by rememberSaveable { mutableStateOf(false) }
 
     LazyColumn(

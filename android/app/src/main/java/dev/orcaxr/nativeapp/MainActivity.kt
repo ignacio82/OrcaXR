@@ -244,9 +244,24 @@ class MainActivity : ComponentActivity() {
         else -> null
     }
 
+    companion object {
+        const val EXTRA_NAV_AREA = "dev.orcaxr.nativeapp.NAV_AREA"
+        const val EXTRA_PRINTER_ID = "dev.orcaxr.nativeapp.PRINTER_ID"
+        const val EXTRA_DEVICE_TAB = "dev.orcaxr.nativeapp.DEVICE_TAB"
+    }
+
     /** Opens a handed-over document here — or, when another window already holds it, brings that
      * window forward instead (a window opened just for it then closes): one writer per document. */
     private fun handle(intent: Intent?, created: Boolean) {
+        if (intent?.getStringExtra(EXTRA_NAV_AREA) == "device") {
+            area = R.string.nav_device
+            intent.getStringExtra(EXTRA_PRINTER_ID)?.let { printerId ->
+                if (printerId.isNotEmpty()) device.activate(printerId)
+            }
+            if (intent.getStringExtra(EXTRA_DEVICE_TAB) == "camera") {
+                device.requestedTab = dev.orcaxr.nativeapp.device.DeviceTab.Camera
+            }
+        }
         val uri = incoming(intent) ?: return
         val holder = DocumentOwners.process.holder(uri.toString())
         if (holder != null && holder !== project.owner) {

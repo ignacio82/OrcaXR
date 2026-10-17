@@ -5213,6 +5213,15 @@ Rust, WASM in Node and Chrome, the printer core, JNI and 2,231 Kotlin
 checks reproduce every one. The polling lifecycle (stopping when hidden or
 disposed) and the route fallback state stay with each host's panel.
 
+### Android home screen printer camera widget
+
+Android home screens can host an interactive glanceable camera widget (`PrinterCameraWidgetProvider`, declared in `printer_camera_widget_info.xml` as a 3×2 resizable card) watching any configured printer:
+- **Configuration Activity (`PrinterCameraWidgetConfigureActivity`)**: Launched when placing a widget or tapping setup. It presents saved printers from `PrinterDirectory`, queries Moonraker `/server/webcams/list` to enumerate available cameras, and provides a live preview bitmap before saving preferences via `PrinterCameraWidgetPrefs`.
+- **URL Resolution (`PrinterCameraDiscovery`)**: Snapmaker U1 and Moonraker camera streamers often serve snapshots via reverse proxy (e.g. nginx on port 80) rather than Moonraker's daemon port 7125. `PrinterCameraDiscovery.resolveCandidateUrls` evaluates the web origin (default HTTP/HTTPS port) before trying Moonraker's direct host/port, ensuring snapshot streams (`/webcam/snapshot.jpg` and `/screen/snapshot`) resolve correctly regardless of reverse proxy topology.
+- **Binder Transaction Safety & Downsampling (`PrinterCameraWidgetFetcher`)**: Android enforces a strict 1MB Binder buffer limit on IPC transactions, including `RemoteViews`. `PrinterCameraWidgetFetcher` decodes snapshots with `inSampleSize` downsampling and `Bitmap.Config.RGB_565` (bounded to 800×600), then applies hardware rotation and horizontal/vertical flips to match Moonraker's camera definition.
+- **Interactivity & Deep Linking**: The widget includes an in-place refresh `ImageButton` that triggers an immediate background fetch with progress spinner without launching the application. Tapping the camera frame or card launches `MainActivity` with deep link extras (`EXTRA_NAV_AREA = "device"`, `EXTRA_PRINTER_ID`, `EXTRA_DEVICE_TAB = "camera"`), switching directly to the live camera tab for that printer.
+- **Unit Testing Without Android Mocks (`SimpleJson`)**: Local JVM tests (`PrinterCameraWidgetTest`) parse camera listings and resolve candidate URLs using `SimpleJson`, a zero-dependency pure Kotlin JSON parser that runs without Android SDK stubs or external library changes.
+
 ### Printer directory
 
 `orcaxr_printer::directory` ports `PrinterDirectory.ts`: named printers and

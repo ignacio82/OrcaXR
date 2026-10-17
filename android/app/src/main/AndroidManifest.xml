@@ -185,5 +185,26 @@
         <!-- Copies of projects the operator shares, read-only, granted once to the receiving app. -->
         <provider android:name=".project.SharedProjects" android:authorities="${applicationId}.shared"
             android:exported="false" android:grantUriPermissions="true" />
+        <!-- Home screen camera widget configuration activity -->
+        <activity
+            android:name=".widget.PrinterCameraWidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@style/Theme.OrcaXR">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <!-- Home screen camera widget provider -->
+        <receiver
+            android:name=".widget.PrinterCameraWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="dev.orcaxr.nativeapp.widget.ACTION_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/printer_camera_widget_info" />
+        </receiver>
     </application>
 </manifest>

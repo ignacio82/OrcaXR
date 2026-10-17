@@ -1126,4 +1126,18 @@
     <string name="the_printer_reported_no_loaded">The printer reported no loaded filament slots.</string>
     <string name="recreate_colors_no_colors">No model colors to match; add a model to the plate first.</string>
     <string name="recreate_colors_applied">Recreated model colors with available filaments.</string>
+    <string name="widget_camera_name">Printer Camera</string>
+    <string name="widget_camera_description">View live camera snapshot from your 3D printer</string>
+    <string name="widget_camera_configure_title">Configure Camera Widget</string>
+    <string name="widget_camera_select_printer">Select Printer</string>
+    <string name="widget_camera_select_camera">Select Camera</string>
+    <string name="widget_camera_loading">Loading camera snapshot…</string>
+    <string name="widget_camera_error">Unable to load snapshot</string>
+    <string name="widget_camera_tap_to_refresh">Tap to refresh</string>
+    <string name="widget_camera_refresh">Refresh</string>
+    <string name="widget_camera_updated_just_now">Just now</string>
+    <string name="widget_camera_no_printers">No printers configured. Add a printer in OrcaXR first.</string>
+    <string name="widget_camera_no_cameras">No cameras detected on this printer.</string>
+    <string name="widget_camera_add_widget">Add Widget</string>
+    <string name="widget_camera_preview_header">Camera Preview</string>
 </resources>

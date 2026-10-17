@@ -41,8 +41,8 @@ androidComponents.onVariants { variant ->
 dependencies {
     // The Moonraker host's HTTP and WebSocket client. Okio is pinned to the
     // version OkHttp's own is resolved to elsewhere in the build.
-    implementation(libs.okhttp)
-    implementation(libs.okio)
+    api(libs.okhttp)
+    api(libs.okio)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
