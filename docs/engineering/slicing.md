@@ -291,7 +291,7 @@ Local development evidence on 2026-10-05:
   SHA-256 `a4fc76dc65727549d8050ac879149d54310cf278c9ef6895843402c1b4cc9ada`.
   Evidence is published only after the owned emulator and its jobs have stopped.
   This supersedes the earlier incremental diagnostic for this fixture corpus;
-  ARM64 execution and application slicing are still unverified.
+  application slicing on ARM64 is verified on physical Galaxy XR via `FullWorkflowDeviceTest` and `LocalEngineServiceTest`, while standalone CLI fixture runner comparisons for ARM64 remain open.
 
 Reproduce after creating the [fixture and reference manifests](native-slice-fixtures.md):
 

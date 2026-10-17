@@ -69,7 +69,7 @@ engine (`libslic3r` via WASM) as the computational core.
   evidence before selecting an XR renderer.
   Current-engine Android tooling verifies TBB probes, both-ABI libslic3r builds
   and eleven x86_64 fixture comparisons against the published browser engine.
-  Application slicing and ARM64 execution remain unqualified; see the slicing document.
+  App slicing is Galaxy XR qualified; standalone ARM64 CLI fixtures remain; see slicing doc.
   [Canonical slice fixtures](docs/engineering/native-slice-fixtures.md) exercise eleven
   authored archives through the browser engine; these are reference inputs.
   Shared Rust G-code search is browser-qualified; rendering/device gates stay open; no PCVR.

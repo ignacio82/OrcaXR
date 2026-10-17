@@ -7374,7 +7374,7 @@ output keeps the JNI class and method names the library registers. The
 instrumented `LocalEngineServiceTest` (a cube sliced through the service,
 then a cube scaled to the build volume cancelled mid-slice; it takes the
 app's shared profile catalog, as the core admits four documents at a time)
-passes on the API 34 emulator. `android-local-slice-smoke.py` (in
+passes on the API 34 emulator and on physical Samsung Galaxy XR (`SM-I610`, ARM64 Snapdragon XR2+ Gen 2). `android-local-slice-smoke.py` (in
 `emulator-smoke.py`: a cube from the Add menu, the local route and why, Slice
 in the `:engine` process under notification denial, Preview's toolpaths, Prepare's size/lines/layers
 against the published file read back, a cube scaled to the build volume
@@ -7386,7 +7386,7 @@ eleven fixture comparisons through the adapter's C entry point (the one JNI
 calls) with its fixture driver, matches the browser engine's references in
 all eleven on the x86_64 emulator. Both routes now carry the plate's
 pictures and slice every plate ([slice outputs](#android-slice-outputs)).
-Still open: ARM64 execution and physical-device qualification. The summary line is the browser's, from the
+Physical device qualification for Phase 7 end-to-end local slicing and preview closed on Galaxy XR via `FullWorkflowDeviceTest`. Still open: ARM64 standalone CLI fixture execution and physical printer qualification. The summary line is the browser's, from the
 shared core ([above](#g-code-artifact-summary)), on both routes.
 
 ### Android send to printer

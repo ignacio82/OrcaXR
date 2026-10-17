@@ -72,7 +72,7 @@ physical-device gate below is still open.
   hosted run, the full engine-feature matrix,
   the full statistics artifact, background-execution qualification, device
   memory measurements for the route rule, and ARM64 execution.
-- **Phase 7, the adaptive Android application: largely done.** Workspace,
+- **Phase 7, the adaptive Android application: exit gate qualified on Galaxy XR.** Workspace,
   Prepare, Preview, Device and Project areas; selection and object edits,
   creation, placement and the transform inspector, filaments and the virtual
   filament library, painting, split, simplify, measure, assembly and the
@@ -84,8 +84,9 @@ physical-device gate below is still open.
   its keys G, R and S, the semantic editor's volume roles with Set as
   Negative Part, and the File menu's exports (slice output, STLs, the 3MF,
   the configuration, the toolpaths as OBJ and diagnostics) with Download
-  (all verified across both emulator suites: API 34 4 KB and API 37 16 KB).
-  Remains: *Resume here* items 2 to 4, and physical devices for the exit gate.
+  (all verified across both emulator suites: API 34 4 KB and API 37 16 KB;
+  Phase 7 exit gate qualified on physical Samsung Galaxy XR SM-I610 via FullWorkflowDeviceTest).
+  Remains: *Resume here* items 2 to 4; Googlebook physical hardware remains.
 - **Phase 8, Android XR: fully qualified on Samsung Galaxy XR.** `XrCapabilityAdapter`
   and spatial Full Space cockpit (`SpatialMenuBar`, `SpatialToolRail`, `SpatialInspector`,
   `SpatialPreviewScrubber`, `SpatialCockpit`) implemented with 58 mm physical touch floor targets,
@@ -2744,7 +2745,14 @@ storage journeys on phone, tablet, and desktop-sized windows.
 
 **Exit gate:** open a large painted project, edit it, undo/redo, save/reopen,
 slice locally or externally, inspect toolpaths, and recover after process death
-on physical Android devices. Desktop resizing/input is verified separately from
+on physical Android devices. Qualified on physical Samsung Galaxy XR (`SM-I610`,
+Android 14 API 34) via `FullWorkflowDeviceTest`: opened/created project with
+cube on default profile, assigned filaments and palette, edited plates, verified
+undo/redo round trip, saved canonical 3MF package, sliced on Snapdragon SXR2230P
+in `:engine` service with progress and verification, inspected G-code toolpaths
+across all 6 preview modes, validated `ProjectRecovery` unsaved state capture,
+and verified clean reopen of canonical 3MF. All 11 `:app` instrumented tests pass
+on-device (0 failed, 0 skipped). Desktop resizing/input is verified separately from
 touch behavior; Googlebook remains unqualified until tested on real hardware.
 
 ## Phase 8 Build complete Android XR workflows
