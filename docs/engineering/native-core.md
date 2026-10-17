@@ -7454,6 +7454,12 @@ and causes rather than collapsing to an empty string, and log to `OrcaXRSend`.
 `MainActivity` maintains `FLAG_KEEP_SCREEN_ON` on the window while foregrounded so
 long-running local slicing, large 3MF renders and multi-megabyte G-code uploads over
 slower Wi-Fi links are never severed by Android activity backgrounding or process freezing.
+During print sends, `PrintSendService` runs as a foreground service (`dataSync`) holding a
+`PowerManager.PARTIAL_WAKE_LOCK` and low-latency `WifiLock`, keeping CPU execution and Wi-Fi
+transfers alive with a persistent status notification and cancel action so multi-minute uploads
+and extended pre-print calibration (such as Snapmaker U1's 169-point bed mesh probing) continue
+uninterrupted when the screen is locked, preventing WebSocket drops from cancelling the workflow
+and leaving the printer to time out into unhomed idle stepper shutdown (`M84`).
 Moonraker's `server.connection.identify` includes `url: "https://orcaxr.org"` per
 the Moonraker 1.0+ specification. Bed leveling pre-print preparation automatically
 homes the axes (`G28`) before running `BED_MESH_CALIBRATE` so probing succeeds

@@ -96,7 +96,7 @@ fun RecreateModelColorsDialog(
                 val maxStr = String.format(Locale.US, "%.1f", plan.maxDeltaE2000)
                 val count = plan.matches.size
                 Text(
-                    "Avg ΔE: $avgStr (Max: $maxStr) across $count color(s)",
+                    stringResource(R.string.dialog_recreate_model_colors_summary_stats, avgStr, maxStr, count),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -159,7 +159,7 @@ private fun MatchRow(
             )
             val label = match.source.sourceMaterialName
                 ?: match.source.sampleNames.firstOrNull()
-                ?: "${match.source.usageCount} refs"
+                ?: stringResource(R.string.dialog_recreate_model_colors_refs_count, match.source.usageCount)
             Text(
                 label,
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
@@ -206,7 +206,9 @@ private fun MatchRow(
                 // Physical choices
                 library?.physical?.filter { it.enabled }?.forEach { phys ->
                     DropdownMenuItem(
-                        text = { Text("Physical: ${phys.name} (T${phys.toolId + 1}) - ${phys.color}") },
+                        text = {
+                            Text(stringResource(R.string.dialog_recreate_model_colors_physical_option, phys.name, phys.toolId + 1, phys.color))
+                        },
                         onClick = {
                             onSelectOverride(phys.id)
                             expanded = false
@@ -217,7 +219,9 @@ private fun MatchRow(
                 // Existing virtual choices
                 library?.rows?.filter { it.enabled }?.forEach { row ->
                     DropdownMenuItem(
-                        text = { Text("Virtual: ${row.name} - ${row.displayColor}") },
+                        text = {
+                            Text(stringResource(R.string.dialog_recreate_model_colors_virtual_option, row.name, row.displayColor))
+                        },
                         onClick = {
                             onSelectOverride(row.id)
                             expanded = false

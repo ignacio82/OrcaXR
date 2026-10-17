@@ -58,6 +58,7 @@
     <!-- The send action's name (web/src/actions/groups/output.ts), and the browser's button while a send runs (web/src/main.ts). -->
     <string name="send_action">Send to Printer</string>
     <string name="send_cancel">Cancel send</string>
+    <string name="send_channel">Sending to printer</string>
     <string name="preview_sliced">Sliced in Prepare from the project as it stands.</string>
     <!-- The browser's G-code viewer wording (web/src/ui/dom/GcodePreviewPanel.ts). -->
     <string name="preview_heading">G-code preview</string>
@@ -1118,6 +1119,10 @@
     <string name="dialog_recreate_model_colors_description">Match colors from the current model to the closest available physical filaments or synthesize Full-Spectrum dithering recipes.</string>
     <string name="dialog_recreate_model_colors_apply">Apply Matches</string>
     <string name="dialog_recreate_model_colors_cancel">Cancel</string>
+    <string name="dialog_recreate_model_colors_summary_stats">Avg ΔE: %1$s (Max: %2$s) across %3$s color(s)</string>
+    <string name="dialog_recreate_model_colors_refs_count">%1$s refs</string>
+    <string name="dialog_recreate_model_colors_physical_option">Physical: %1$s (T%2$s) - %3$s</string>
+    <string name="dialog_recreate_model_colors_virtual_option">Virtual: %1$s - %2$s</string>
     <string name="the_printer_reported_no_loaded">The printer reported no loaded filament slots.</string>
     <string name="recreate_colors_no_colors">No model colors to match; add a model to the plate first.</string>
     <string name="recreate_colors_applied">Recreated model colors with available filaments.</string>

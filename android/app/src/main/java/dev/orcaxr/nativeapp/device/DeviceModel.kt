@@ -27,6 +27,7 @@ import dev.orcaxr.core.PrintSendProgress
 import dev.orcaxr.core.PrinterExchanges
 import dev.orcaxr.core.ProjectIntents
 import dev.orcaxr.nativeapp.R
+import dev.orcaxr.nativeapp.send.PrintSendService
 import dev.orcaxr.nativeapp.send.SendDialogView
 import dev.orcaxr.nativeapp.send.SendState
 import dev.orcaxr.nativeapp.send.SendWords
@@ -131,6 +132,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
     private var subscription: AutoCloseable? = null
     private fun string(resId: Int): String = getApplication<Application>().getString(resId)
     private fun string(resId: Int, vararg args: Any): String = getApplication<Application>().getString(resId, *args)
+    private val app: Application get() = getApplication()
 
     var state by mutableStateOf(DeviceState())
         private set
@@ -433,8 +435,15 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
             sendState = SendState(status = SendWords.SLICE_FIRST)
             return
         }
+        val printerLabel = state.activeId?.let { id -> state.printers.firstOrNull { it.id == id }?.name } ?: "Printer"
+        PrintSendService.start(app, printerLabel, slice.filename)
+        PrintSendService.onCancel = { cancelSend() }
         sendState = SendState(busy = true)
-        val finish = { status: String -> main.post { sendState = SendState(status = status) } }
+        val finish = { status: String ->
+            PrintSendService.stop(app)
+            PrintSendService.onCancel = null
+            main.post { sendState = SendState(status = status) }
+        }
         work {
             val artifact = try {
                 PrintJobArtifacts.open(slice.file, slice.filename, slice.plateName, slice.isCurrent)
@@ -445,9 +454,23 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
                 return@work
             }
             val progress = PrintSendProgress(
-                onPhase = { phase -> main.post { if (sendState.busy) sendState = sendState.copy(status = SendWords.phase(phase, slice.filename)) } },
+                onPhase = { phase ->
+                    main.post {
+                        if (sendState.busy) {
+                            val text = SendWords.phase(phase, slice.filename)
+                            sendState = sendState.copy(status = text)
+                            PrintSendService.update(app, text)
+                        }
+                    }
+                },
                 onUploadElapsed = { elapsed, total ->
-                    main.post { if (sendState.busy) sendState = sendState.copy(status = SendWords.uploadElapsed(slice.filename, elapsed, total)) }
+                    main.post {
+                        if (sendState.busy) {
+                            val text = SendWords.uploadElapsed(slice.filename, elapsed, total)
+                            sendState = sendState.copy(status = text)
+                            PrintSendService.update(app, text)
+                        }
+                    }
                 },
             )
             val sent = try {
@@ -732,6 +755,8 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        PrintSendService.stop(app)
+        PrintSendService.onCancel = null
         worker.execute {
             listening?.close()
             subscription?.close()

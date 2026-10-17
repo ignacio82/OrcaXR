@@ -1928,6 +1928,35 @@
     "dialog_recreate_model_colors_cancel": {
       "key": "dialog.recreateModelColors.cancel"
     },
+    "dialog_recreate_model_colors_summary_stats": {
+      "key": "dialog.recreateModelColors.summaryStats",
+      "arguments": [
+        "avg",
+        "max",
+        "count"
+      ]
+    },
+    "dialog_recreate_model_colors_refs_count": {
+      "key": "dialog.recreateModelColors.refsCount",
+      "arguments": [
+        "count"
+      ]
+    },
+    "dialog_recreate_model_colors_physical_option": {
+      "key": "dialog.recreateModelColors.physicalOption",
+      "arguments": [
+        "name",
+        "toolId",
+        "color"
+      ]
+    },
+    "dialog_recreate_model_colors_virtual_option": {
+      "key": "dialog.recreateModelColors.virtualOption",
+      "arguments": [
+        "name",
+        "color"
+      ]
+    },
     "the_printer_reported_no_loaded": {
       "key": "app.main.thePrinterReportedNoLoaded"
     },
@@ -1966,6 +1995,7 @@
     "engine_channel",
     "engine_notification",
     "send_cancel",
+    "send_channel",
     "preview_sliced",
     "preview_showing",
     "preview_showing_layers",
