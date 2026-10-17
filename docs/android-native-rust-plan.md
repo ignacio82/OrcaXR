@@ -207,7 +207,7 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    reduce-motion override (`MotionPreference`, `OrcaMotionScope`), and extraction of
    all Android-only words previously literal in Kotlin to managed string resources are done
    ([§](engineering/native-core.md#android-view-menu-help-menu-calibration-models-and-reduce-motion)),
-   raising `AppActions.PERFORMED` to 120 actions (with Repair and mesh Booleans). For the full gap,
+   raising `AppActions.PERFORMED` to 153 actions (with Calibration, Smart Paint, Repair, and mesh Booleans). For the full gap,
    compare `AppActions.PERFORMED` (`android/app/.../shell/AppActions.kt`, the
    actions the app performs) with the catalogue in
    `core/crates/orcaxr-contracts/src/capabilities/generated.rs`; some catalogue
@@ -227,7 +227,7 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    under `TopologyGuard` and `BooleanGuard`, decoding output meshes into `AssetPayload`s
    and committing undoable `ReplaceVolumeMesh` and `MeshBoolean` commands. Wired to
    `repair_model`, `mesh_boolean_union`, `mesh_boolean_subtract`, and
-   `mesh_boolean_intersection`, raising `AppActions.PERFORMED` to 120 actions.
+   `mesh_boolean_intersection`.
 5. Phase 6, emulator-reachable qualification: task switching, screen lock,
    notification denial, engine process recovery, and editor death cleanup with
    owner-token staged job removal are qualified on both emulators in
@@ -241,16 +241,14 @@ Phase notes below that say "part of the round-2 suites" refer to that line.
    `Point3(0.4, -0.55, 0.75)` in `PacketMesh.kt`), the bed includes an origin
    indicator in the theme's origin token colour, 3D solid plate fill is done (6 mm box below z = 0 with polygon offset `(1f, 1f)`), and anti-aliasing is qualified as disabled on GLES 3.0 (Filament 1.77.1 `blitLow` GLSL compiler abort); remaining:
    `FilamentScene`'s own frame time, draw calls, memory and paint/pick latency on
-   the large fixture; transparent sort; context loss. The SceneCore comparison needs XR hardware.
+   the large fixture; transparent sort; context loss. The SceneCore comparison on Galaxy XR is completed: SceneCore rc01 is rejected for the interactive 3D model viewport; hybrid architecture selected.
 7. Phases 10 and 11 work that needs no hardware: per-target parity tooling
-   (web DOM, WebXR, Android flat, Android XR), Smart Paint port (calibration is landed
-   in commit 986a0a63), and the release checklist items that are not device-bound.
+   (web DOM, WebXR, Android flat, Android XR), Smart Paint port (commit 6882acbc) and calibration subsystem (commit 986a0a63) are fully landed and qualified across Rust, JNI, and Android Compose shell.
 
 ### Needs the user
 
 - Physical devices: an ARM64 phone or tablet for the device gates of Phases 0,
-  2, 3, 6 and 7; the Galaxy XR for Phase 8 (automated tests never run on it;
-  ask before any use); Googlebook and glasses hardware for Phase 10.
+  2, 3, 6 and 7 (Galaxy XR qualified for Phase 8, ARM64 local engine slicing, and core connected suites); Googlebook and glasses hardware for Phase 10.
 - Supervised U1 and Centauri Carbon print trials (Phases 9 and 11).
 - A design decision: the design-tokens unit (commit "wear the browser's design
   tokens and make the app accessible") changed the browser's own colours in
