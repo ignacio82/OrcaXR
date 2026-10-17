@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "sourceCommit": "f782d2fb414bcfc3822be34de92e08517d3fd892",
+  "sourceCommit": "783aa403c2588672dbebe9ff69fa1c170deb3c96",
   "sources": {
-    "docs/parity/release-report.json": "6d1291ca3afbf912c22ff8f7401698f23e6f54f8ef8cdca69a50d1ece216dd3a",
+    "docs/parity/release-report.json": "27e2d98ed3dea7027b815034a332265bd0f6bf02660ef66e0a89715a8c227f6a",
     "web/public/profiles/catalog.json": "19cfbf414f4b2c770b047da152b9b9e2e2101909d92f8fae3166685e7bf58fda",
     "web/public/profiles/manifest.json": "980db93551c0541928061f0edc35d61b434f82161a6db55a352b8e67dee0b958",
     "web/src/actions/ActionContext.ts": "968d0a9f63ad8ea44b4225a75d0a147a5d048e4ab20c94d59a42eb6871a9a5e8",
@@ -27,7 +27,7 @@
     "web/src/actions/groups/view.ts": "28bb16722b6fa0205d6fc79ee57ba21e8938e435bba524b2e1998d510902e15a",
     "web/src/actions/helpContent.ts": "44007cd49fa446d016805cbc29ac2c0d34ecf5ec86033e5f58790ca33b72d1fd",
     "web/src/actions/upstreamSurfaces.ts": "0f4acdfefe6412436c12ed70326a8682eeece89b7b0e836db6f3f8a7d14b0949",
-    "web/src/l10n/generated/catalog-manifest.json": "79c523c7f802ad602bdc6434d879ee769ec9f35b06dc2ed33564e264f9db420f",
+    "web/src/l10n/generated/catalog-manifest.json": "1622561432f00840f51a877a31a1d50f907b38968ba8f9b50d1b6cce872e5a08",
     "web/src/settings/generated/engine-options.schema.json": "d7f762afd27ec3981618e70ff79cf859381adb936482ae99ecba92724762e743"
   },
   "policy": "Metadata inventory only. Existing partial web and hardware gates remain open; this does not establish native support.",
