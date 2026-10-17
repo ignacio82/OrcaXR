@@ -273,7 +273,7 @@ pub fn record_calibration_run(
 
         match &measurement.value {
             Value::Number(n) => {
-                if !n.as_f64().map_or(false, |f| f.is_finite()) {
+                if !n.as_f64().is_some_and(|f| f.is_finite()) {
                     issues.push(issue("invalid-record", &path, "A measured value must be finite.", "error"));
                     continue;
                 }

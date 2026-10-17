@@ -97,4 +97,6 @@
     <string name="calib_send_printer_btn">Odeslat do tiskárny</string>
     <string name="calib_history_delete_btn">Smazat</string>
     <string name="smart_paint_cancel">Zrušit</string>
+    <string name="xr_rail_group_paint">Malovat</string>
+    <string name="xr_rail_group_plate">Podložka</string>
 </resources>

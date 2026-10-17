@@ -96,4 +96,6 @@
     <string name="calib_send_printer_btn">Skicka till skrivare</string>
     <string name="calib_history_delete_btn">Radera</string>
     <string name="smart_paint_cancel">Avbryt</string>
+    <string name="xr_rail_group_paint">Färglägga</string>
+    <string name="xr_rail_group_plate">Platta</string>
 </resources>

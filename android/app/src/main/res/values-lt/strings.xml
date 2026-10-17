@@ -102,4 +102,6 @@
     <string name="calib_send_printer_btn">Siųsti į spausdintuvą</string>
     <string name="calib_history_delete_btn">Ištrinti</string>
     <string name="smart_paint_cancel">Atšaukti</string>
+    <string name="xr_rail_group_paint">Piešti</string>
+    <string name="xr_rail_group_plate">Plokštė</string>
 </resources>

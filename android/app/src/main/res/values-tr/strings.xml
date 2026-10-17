@@ -104,4 +104,6 @@
     <string name="calib_send_printer_btn">Yazıcıya gönder</string>
     <string name="calib_history_delete_btn">Sil</string>
     <string name="smart_paint_cancel">İptal</string>
+    <string name="xr_rail_group_paint">Boyama</string>
+    <string name="xr_rail_group_plate">Plaka</string>
 </resources>

@@ -36,10 +36,13 @@ class SceneCoreViewport private constructor(
     private class OwnedChunk(val first: Int, val facets: Int, val bytes: Long,
         val buffer: MeshBuffer, val mesh: CustomMesh, val entities: List<MeshEntity>) : AutoCloseable {
         override fun close() {
-            // Entity.dispose is restricted in rc01. Detach and release references;
-            // these counters cannot establish when runtime/driver memory is freed.
-            try { entities.forEach { it.parent = null } }
-            finally { try { mesh.close() } finally { buffer.close() } }
+            // In SceneCore rc01, imp::Mesh OwnedPtr aborts in owned_ptr.h if CustomMesh.close()
+            // is called while MeshEntity borrowers still exist. Entity.dispose is library-restricted
+            // in rc01, so detach and disable entities to remove them from the scene graph.
+            entities.forEach {
+                it.setEnabled(false)
+                it.parent = null
+            }
         }
     }
     private val root = Entity.create(session, "OrcaXR fixture", parent = session.scene.activitySpace,
@@ -47,6 +50,7 @@ class SceneCoreViewport private constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var work: Job? = null
     private val chunks = linkedMapOf<Int, OwnedChunk>()
+    private val tombstonedChunks = mutableListOf<OwnedChunk>()
     private var source: TriangleMesh? = null
     private var closed = false
     private var translucent = false
@@ -57,7 +61,12 @@ class SceneCoreViewport private constructor(
     private fun assertOwner() { check(Looper.myLooper() == Looper.getMainLooper()); check(!closed) }
     private fun report(next: Metrics) { metrics = next; publish(next) }
     private fun releaseChunks() {
-        chunks.values.forEach { it.close() }; chunks.clear(); source = null
+        chunks.values.forEach {
+            it.close()
+            tombstonedChunks.add(it)
+        }
+        chunks.clear()
+        source = null
     }
     fun loadGrid(cells: Int) {
         assertOwner(); require(cells in 1..1000)
@@ -77,13 +86,14 @@ class SceneCoreViewport private constructor(
                     report(metrics.copy(facets = metrics.facets + chunk.facets,
                         entities = chunks.size * if (instances) 2 else 1,
                         bufferPayloadBytes = metrics.bufferPayloadBytes + chunk.bytes))
-                    // Yield between synchronous copies; the metric records each chunk's
-                    // payload, not allocator residency during cancellation/GC.
-                    yield()
+                    // Yield between synchronous copies; giving CPM time to settle subspaces.
+                    delay(16)
                 }
                 report(metrics.copy(state = "Ready"))
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { if (isActive) { releaseChunks(); report(metrics.copy(state = "Unavailable", facets = 0,
+            catch (failure: Exception) {
+                android.util.Log.e("SceneCoreViewport", "loadGrid failed for $cells cells", failure)
+                if (isActive) { releaseChunks(); report(metrics.copy(state = "Unavailable", facets = 0,
                 entities = 0, sourceBytes = 0, bufferPayloadBytes = 0)) } }
         }
     }
@@ -114,8 +124,12 @@ class SceneCoreViewport private constructor(
                 maxSubmissionMs = max(metrics.maxSubmissionMs, (System.nanoTime() - started) / 1e6)))
             return OwnedChunk(packed.firstFacet, packed.facetCount, packed.bytes, buffer, mesh, entities)
         } catch (failure: Exception) {
-            try { entities.forEach { it.parent = null } }
-            finally { try { mesh?.close() } finally { buffer?.close() } }
+            try { entities.forEach { it.setEnabled(false); it.parent = null } }
+            finally {
+                if (entities.isEmpty()) {
+                    try { mesh?.close() } finally { buffer?.close() }
+                }
+            }
             throw failure
         }
     }
@@ -131,14 +145,19 @@ class SceneCoreViewport private constructor(
             try {
                 for (first in chunks.keys.toList().filter { it < end && it + MeshPacking.FACETS_PER_CHUNK > start }) {
                     val packed = withContext(Dispatchers.Default) { samplePaintChunk(mesh, first) }
-                    ensureActive()
                     val replacement = upload(packed, paint = true)
-                    chunks.put(first, replacement)?.close()
-                    yield()
+                    chunks.put(first, replacement)?.let { old ->
+                        old.close()
+                        tombstonedChunks.add(old)
+                    }
+                    delay(16)
                 }
                 report(metrics.copy(state = "Ready"))
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { if (isActive) report(metrics.copy(state = "Paint unavailable")) }
+            catch (failure: Exception) {
+                android.util.Log.e("SceneCoreViewport", "paintSample failed", failure)
+                if (isActive) report(metrics.copy(state = "Paint unavailable"))
+            }
         }
     }
     fun setInstances(value: Boolean) {

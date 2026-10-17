@@ -96,4 +96,6 @@
     <string name="calib_send_printer_btn">Nyomtatóra küldés</string>
     <string name="calib_history_delete_btn">Törlés</string>
     <string name="smart_paint_cancel">Mégse</string>
+    <string name="xr_rail_group_paint">Festés</string>
+    <string name="xr_rail_group_plate">Tálca</string>
 </resources>

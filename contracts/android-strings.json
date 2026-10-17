@@ -1879,6 +1879,30 @@
     },
     "smart_paint_cancel": {
       "key": "persistence.cancel"
+    },
+    "xr_rail_group_transform": {
+      "key": "ui.xrToolRail.group.transform"
+    },
+    "xr_rail_group_paint": {
+      "key": "ui.xrToolRail.group.paint"
+    },
+    "xr_rail_group_mesh": {
+      "key": "ui.xrToolRail.group.mesh"
+    },
+    "xr_rail_group_plate": {
+      "key": "ui.xrToolRail.group.plate"
+    },
+    "xr_preview_scrubber_title": {
+      "key": "ui.xrPreviewScrubber.title"
+    },
+    "xr_panel_drag_hint": {
+      "key": "ui.xrPanelHost.hint"
+    },
+    "xr_panel_pinned_hint": {
+      "key": "ui.xrPanelHost.pinnedHint"
+    },
+    "xr_panel_tools": {
+      "key": "menuSection.tools.label"
     }
   },
   "english": [
@@ -2308,7 +2332,13 @@
     "smart_paint_region_count",
     "smart_paint_coverage",
     "smart_paint_confidence",
-    "smart_paint_exclude"
+    "smart_paint_exclude",
+    "xr_action_full_space",
+    "xr_action_home_space",
+    "xr_action_recenter",
+    "xr_action_pin",
+    "xr_action_unpin",
+    "xr_panel_inspector"
   ],
   "kotlin": [
     {

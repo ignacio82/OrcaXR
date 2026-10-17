@@ -98,6 +98,27 @@ internal fun StripActions(model: ProjectModel, wide: Boolean, compact: Boolean) 
             }
         }
     }
+    val xrAdapter = dev.orcaxr.nativeapp.xr.LocalXrAdapter.current
+    val xrCaps = dev.orcaxr.nativeapp.xr.LocalXrCapabilities.current
+    if (xrCaps.isSpatialSupported && xrAdapter != null) {
+        val inFullSpace = xrCaps.spaceMode == dev.orcaxr.nativeapp.xr.XrSpaceMode.FULL_SPACE
+        val spaceHint = stringResource(if (inFullSpace) R.string.xr_action_home_space else R.string.xr_action_full_space)
+        ActionTooltip(spaceHint) {
+            IconButton(
+                onClick = {
+                    if (inFullSpace) xrAdapter.requestHomeSpace() else xrAdapter.requestFullSpace()
+                },
+                modifier = Modifier.pointerHoverIcon(PointerIcon.Hand).semantics { contentDescription = spaceHint }
+            ) {
+                Icon(
+                    painterResource(R.drawable.ic_symbol_view_in_ar),
+                    contentDescription = null,
+                    tint = if (inFullSpace) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
 }
 
 /**

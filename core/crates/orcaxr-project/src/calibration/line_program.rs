@@ -34,7 +34,7 @@ pub fn extrusion_for_line(
     filament_diameter_mm: f64,
 ) -> Result<f64, String> {
     let filament_area = std::f64::consts::PI * (filament_diameter_mm / 2.0).powi(2);
-    if !(filament_area > 0.0) {
+    if filament_area <= 0.0 || filament_area.is_nan() {
         return Err("Filament diameter must be positive".to_string());
     }
     Ok((length_mm * line_width_mm * layer_height_mm) / filament_area)

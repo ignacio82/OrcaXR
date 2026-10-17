@@ -48,11 +48,10 @@ fn translation_column(index: usize, count: usize, extent: f64) -> f64 {
 }
 
 fn selected_tower_envelope(parameters: &BTreeMap<String, CalibrationParameterValue>) -> [f64; 3] {
-    if let Some(CalibrationParameterValue::String(m)) = parameters.get("testModel") {
-        if m == "Fast Tower" {
+    if let Some(CalibrationParameterValue::String(m)) = parameters.get("testModel")
+        && m == "Fast Tower" {
             return [40.282, 40.261, 60.001];
         }
-    }
     [120.001, 120.0, 60.0]
 }
 
@@ -76,7 +75,7 @@ fn volumetric_wall_speed(value: f64, prerequisites: &CalibrationJobPrerequisites
 fn validate_job_id(job_id: &str, issues: &mut Vec<CalibrationJobValidationIssue>) {
     let valid = !job_id.is_empty()
         && job_id.starts_with("calibration:")
-        && job_id[12..].chars().next().map_or(false, |c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        && job_id[12..].chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
         && job_id[12..].chars().all(|c| {
             c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '_' || c == ':' || c == '-'
         })
@@ -257,15 +256,14 @@ pub fn compile_calibration_job(
                     }
                     "number-list" => {
                         if let CalibrationParameterValue::NumberList(list) = val {
-                            if let Some(max_items) = param.max_items {
-                                if list.len() > max_items as usize {
+                            if let Some(max_items) = param.max_items
+                                && list.len() > max_items as usize {
                                     issues.push(CalibrationJobValidationIssue {
                                         code: "number-list-count".to_string(),
                                         path: path.clone(),
                                         message: format!("Expected at most {max_items} values"),
                                     });
                                 }
-                            }
                             for (idx, entry) in list.iter().enumerate() {
                                 let item_path = format!("{path}[{idx}]");
                                 if !entry.is_finite() {
@@ -579,15 +577,14 @@ fn validate_cross_field_parameters(
     let end = parameters.get("end").and_then(|v| v.as_f64());
     let step = parameters.get("step").and_then(|v| v.as_f64());
 
-    if let (Some(s), Some(e)) = (start, end) {
-        if definition.id != "temperature-tower" && e <= s {
+    if let (Some(s), Some(e)) = (start, end)
+        && definition.id != "temperature-tower" && e <= s {
             issues.push(CalibrationJobValidationIssue {
                 code: "sweep-order".to_string(),
                 path: "$.parameters.end".to_string(),
                 message: "End must be greater than start".to_string(),
             });
         }
-    }
 
     if let (Some(s), Some(e), Some(st)) = (start, end, step) {
         if definition.id == "temperature-tower" {
@@ -611,8 +608,8 @@ fn validate_cross_field_parameters(
         }
     }
 
-    if definition.id == "temperature-tower" {
-        if let (Some(s), Some(e)) = (start, end) {
+    if definition.id == "temperature-tower"
+        && let (Some(s), Some(e)) = (start, end) {
             let safe_min = prereqs.nozzle.min_temperature_c.max(prereqs.filament.min_temperature_c);
             let safe_max = prereqs.nozzle.max_temperature_c.min(prereqs.filament.max_temperature_c);
             if e < safe_min || s > safe_max {
@@ -623,7 +620,6 @@ fn validate_cross_field_parameters(
                 });
             }
         }
-    }
 
     if definition.id.starts_with("pressure-advance-") {
         if let Some(CalibrationParameterValue::NumberList(speeds)) = parameters.get("speeds") {
@@ -650,29 +646,26 @@ fn validate_cross_field_parameters(
         }
     }
 
-    if definition.id == "vfa" {
-        if let Some(e) = end {
-            if e > prereqs.printer.max_print_speed_mm_per_s {
+    if definition.id == "vfa"
+        && let Some(e) = end
+            && e > prereqs.printer.max_print_speed_mm_per_s {
                 issues.push(CalibrationJobValidationIssue {
                     code: "motion-limit".to_string(),
                     path: "$.parameters.end".to_string(),
                     message: "VFA end speed exceeds the printer maximum".to_string(),
                 });
             }
-        }
-    }
 
     if definition.id == "input-shaping-frequency" {
         for key in &["freqEndX", "freqEndY"] {
-            if let Some(val) = parameters.get(*key).and_then(|v| v.as_f64()) {
-                if val > prereqs.firmware.max_input_shaping_frequency_hz {
+            if let Some(val) = parameters.get(*key).and_then(|v| v.as_f64())
+                && val > prereqs.firmware.max_input_shaping_frequency_hz {
                     issues.push(CalibrationJobValidationIssue {
                         code: "firmware-frequency".to_string(),
                         path: format!("$.parameters.{key}"),
                         message: "Frequency exceeds the firmware maximum".to_string(),
                     });
                 }
-            }
         }
         let sx = parameters.get("freqStartX").and_then(|v| v.as_f64()).unwrap_or(0.0);
         let ex = parameters.get("freqEndX").and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -696,20 +689,19 @@ fn validate_cross_field_parameters(
 
     if definition.id == "input-shaping-damping" {
         for key in &["frequencyX", "frequencyY"] {
-            if let Some(val) = parameters.get(*key).and_then(|v| v.as_f64()) {
-                if val > prereqs.firmware.max_input_shaping_frequency_hz {
+            if let Some(val) = parameters.get(*key).and_then(|v| v.as_f64())
+                && val > prereqs.firmware.max_input_shaping_frequency_hz {
                     issues.push(CalibrationJobValidationIssue {
                         code: "firmware-frequency".to_string(),
                         path: format!("$.parameters.{key}"),
                         message: "Frequency exceeds the firmware maximum".to_string(),
                     });
                 }
-            }
         }
     }
 
-    if definition.id == "max-volumetric-speed" {
-        if let Some(e) = end {
+    if definition.id == "max-volumetric-speed"
+        && let Some(e) = end {
             let max_wall_speed = volumetric_wall_speed(e, prereqs);
             if max_wall_speed > prereqs.printer.max_print_speed_mm_per_s {
                 issues.push(CalibrationJobValidationIssue {
@@ -719,10 +711,9 @@ fn validate_cross_field_parameters(
                 });
             }
         }
-    }
 
-    if definition.id == "tolerance-extension" {
-        if let Some(CalibrationParameterValue::NumberList(clearances)) = parameters.get("testClearances") {
+    if definition.id == "tolerance-extension"
+        && let Some(CalibrationParameterValue::NumberList(clearances)) = parameters.get("testClearances") {
             let expected = [0.0, 0.05, 0.1, 0.2, 0.3, 0.4];
             let same = clearances.len() == expected.len()
                 && clearances.iter().zip(&expected).all(|(a, b)| (a - b).abs() < 1e-9);
@@ -734,10 +725,9 @@ fn validate_cross_field_parameters(
                 });
             }
         }
-    }
 
     let predicted_count = predicted_effect_count(definition, parameters, prereqs);
-    if predicted_count < 1 || predicted_count > MAX_CALIBRATION_EFFECTS {
+    if !(1..=MAX_CALIBRATION_EFFECTS).contains(&predicted_count) {
         issues.push(CalibrationJobValidationIssue {
             code: "effect-count".to_string(),
             path: "$.parameters".to_string(),
@@ -1224,6 +1214,7 @@ fn input_shaping_damping_effects(
     effects
 }
 
+#[allow(clippy::too_many_arguments)]
 fn make_effect(
     definition: &CalibrationJobDefinition,
     order: u32,
@@ -1409,11 +1400,10 @@ fn build_slice_assertions(
     for effect in effects {
         if let Some(code) = &effect.custom_gcode {
             let trimmed = code.trim();
-            if !trimmed.is_empty() && !trimmed.starts_with(';') {
-                if let Some(prefix) = trimmed.split_whitespace().next() {
+            if !trimmed.is_empty() && !trimmed.starts_with(';')
+                && let Some(prefix) = trimmed.split_whitespace().next() {
                     gcode_prefixes_set.insert(prefix.to_string());
                 }
-            }
         }
     }
     let mut gcode_prefixes: Vec<String> = gcode_prefixes_set.into_iter().collect();
@@ -1504,13 +1494,11 @@ fn plan_warnings(
     ) {
         warnings.push("Vendor automatic measurement is not inherited; this plan is manual-only.".to_string());
     }
-    if definition.id == "junction-deviation" {
-        if let Some(end) = parameters.get("end").and_then(|v| v.as_f64()) {
-            if end > 0.3 {
+    if definition.id == "junction-deviation"
+        && let Some(end) = parameters.get("end").and_then(|v| v.as_f64())
+            && end > 0.3 {
                 warnings.push("The pinned dialog warns that junction deviation above 0.3 mm may cause layer shifts.".to_string());
             }
-        }
-    }
     if definition.id == "max-volumetric-speed" {
         warnings.push("Wall-speed overrides use the pinned line-width/layer-height flow conversion and require slice-oracle verification.".to_string());
     }

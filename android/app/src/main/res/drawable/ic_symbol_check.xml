@@ -9,6 +9,6 @@
     <group android:translateY="960">
         <path
             android:fillColor="#FF000000"
-            android:pathData="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z" />
+            android:pathData="M378-246 154-470l43-43 181 181 384-384 43 43-427 427Z" />
     </group>
 </vector>

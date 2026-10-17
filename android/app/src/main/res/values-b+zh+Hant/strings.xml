@@ -104,4 +104,6 @@
     <string name="calib_send_printer_btn">傳送到列印設備</string>
     <string name="calib_history_delete_btn">刪除</string>
     <string name="smart_paint_cancel">取消</string>
+    <string name="xr_rail_group_paint">繪製</string>
+    <string name="xr_rail_group_plate">列印板</string>
 </resources>

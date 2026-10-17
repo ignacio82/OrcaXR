@@ -1096,4 +1096,18 @@
     <string name="smart_paint_coverage">Coverage: %1$.1f%%</string>
     <string name="smart_paint_confidence">Confidence: %1$.0f%%</string>
     <string name="smart_paint_exclude">Exclude region</string>
+    <string name="xr_action_full_space">Enter Full Space</string>
+    <string name="xr_action_home_space">Return to Home Space</string>
+    <string name="xr_rail_group_transform">Transform</string>
+    <string name="xr_rail_group_paint">Paint</string>
+    <string name="xr_rail_group_mesh">Mesh</string>
+    <string name="xr_rail_group_plate">Plate</string>
+    <string name="xr_preview_scrubber_title">Toolpath</string>
+    <string name="xr_panel_drag_hint">Drag to place, pin to keep it there</string>
+    <string name="xr_panel_pinned_hint">Pinned — recentre leaves it here</string>
+    <string name="xr_action_recenter">Recenter Cockpit</string>
+    <string name="xr_action_pin">Pin Panel</string>
+    <string name="xr_action_unpin">Unpin Panel</string>
+    <string name="xr_panel_tools">Tools</string>
+    <string name="xr_panel_inspector">Inspector</string>
 </resources>

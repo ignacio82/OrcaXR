@@ -102,4 +102,6 @@
     <string name="calib_send_printer_btn">Enviar a la impresora</string>
     <string name="calib_history_delete_btn">Borrar</string>
     <string name="smart_paint_cancel">Cancelar</string>
+    <string name="xr_rail_group_paint">Pintar</string>
+    <string name="xr_rail_group_plate">Bandeja</string>
 </resources>

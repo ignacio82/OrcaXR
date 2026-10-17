@@ -89,4 +89,6 @@
     <string name="calib_send_printer_btn">プリンタへ送信</string>
     <string name="calib_history_delete_btn">削除</string>
     <string name="smart_paint_cancel">取消し</string>
+    <string name="xr_rail_group_paint">ペイント</string>
+    <string name="xr_rail_group_plate">プレート</string>
 </resources>

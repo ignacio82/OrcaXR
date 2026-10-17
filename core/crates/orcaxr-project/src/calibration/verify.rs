@@ -59,15 +59,12 @@ fn actual_for(plan: &CalibrationJobPlan, assertion: &CalibrationSliceAssertion) 
         }
         "z-range" => Value::from(plan.geometry.required_envelope_mm[2]),
         "resource-blob" => {
-            if let Some(prefix) = assertion.path.strip_prefix("$.geometry.resources[") {
-                if let Some(idx_str) = prefix.strip_suffix("].blob") {
-                    if let Ok(idx) = idx_str.parse::<usize>() {
-                        if let Some(res) = plan.geometry.resources.get(idx) {
+            if let Some(prefix) = assertion.path.strip_prefix("$.geometry.resources[")
+                && let Some(idx_str) = prefix.strip_suffix("].blob")
+                    && let Ok(idx) = idx_str.parse::<usize>()
+                        && let Some(res) = plan.geometry.resources.get(idx) {
                             return Value::String(res.blob.clone());
                         }
-                    }
-                }
-            }
             Value::Null
         }
         "override-key" => {

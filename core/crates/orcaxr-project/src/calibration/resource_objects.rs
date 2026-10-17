@@ -68,11 +68,10 @@ pub fn match_flow_patches(
 
         let mut candidates = Vec::new();
         for (index, effect) in effects.iter().enumerate() {
-            if let Some(val) = effect.value.as_f64() {
-                if same_ratio(val, ratio) {
+            if let Some(val) = effect.value.as_f64()
+                && same_ratio(val, ratio) {
                     candidates.push((index, effect));
                 }
-            }
         }
 
         if candidates.is_empty() {

@@ -102,4 +102,6 @@
     <string name="calib_send_printer_btn">프린터로 전송</string>
     <string name="calib_history_delete_btn">삭제</string>
     <string name="smart_paint_cancel">취소</string>
+    <string name="xr_rail_group_paint">칠하기</string>
+    <string name="xr_rail_group_plate">플레이트</string>
 </resources>

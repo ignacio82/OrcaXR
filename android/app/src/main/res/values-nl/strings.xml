@@ -97,4 +97,6 @@
     <string name="calib_send_printer_btn">Stuur naar printer</string>
     <string name="calib_history_delete_btn">Verwijderen</string>
     <string name="smart_paint_cancel">Annuleren</string>
+    <string name="xr_rail_group_paint">Tekenen</string>
+    <string name="xr_rail_group_plate">Printbed</string>
 </resources>

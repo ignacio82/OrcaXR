@@ -479,12 +479,29 @@ and both candidate build/lint/test reports. Hosted CI has not been claimed run b
 these local checks. No app was installed on the physical XR device, and no
 physical XR journey was exercised.
 
-The spatial comparison and Phase 2 exit remain open. Next evidence must include
-actual same-fixture pixels, input/picking, clipping, toolpath fidelity, transform
-alternatives, repeated Home/Full Space and Activity lifetimes, frame pacing and
-memory. Compare a separate custom OpenXR/panel integration prototype if public
-SceneCore paths cannot satisfy these requirements; do not prematurely make this
-candidate the production spatial renderer.
+Physical hardware evidence on Samsung Galaxy XR (`SM-I610`, Android 14 / API 34, Adreno 740, Snapdragon SXR2230P):
+
+- The candidate harness (`android/xr-experiment`) and benchmark suite (`tools/renderer/galaxy-xr-benchmark.py`) executed on the physical headset, recording `tools/renderer/results/galaxy-xr-scenecore-report.json`.
+- Full Space transition: ~500 ms (`SpatialCapability.SPATIAL_3D_CONTENT` granted).
+- 32,768 facet fixture (128 cells): 912.05 ms total load (2 uploads, largest chunk 983,040 B, 1,966,080 B payload, max synchronous submission 31.77 ms). Toggle instances created 4 entities.
+- 32k sample paint replacement (4,096 facets across 2 chunks): 225.28 ms across 4 upload calls, 1,966,080 B buffer payload replaced.
+- 2,000,000 facet fixture (1,000 cells): 7,045.12 ms total load across 123 chunks (120,000,000 B buffer payload, 246 entities, max synchronous submission 59.59 ms).
+- 2M sample paint replacement: 100.81 ms across 125 upload calls, 1,966,080 B buffer payload replaced.
+- SpaceFlinger / CPM (`cpm`): running at 72.0 FPS compositor rate, 2.47 ms GPU, Eye Tracking at 187.0 FPS, Hand Tracking active. Split engine buffers: Total 187, Current 22, Max 119. Process PSS 186.2 MB (Native Heap 16.6 MB, Graphics 25.4 MB).
+- SceneCore 1.0.0-rc01 fatal defects and architectural limitations identified:
+  - **Fatal native abort on mesh destruction (`owned_ptr.h:657`):** `imp::Mesh` in `libimpress_api_jni.so` crashes with `SIGABRT` if `CustomMesh.close()` or its Java `Cleaner` runs while any `MeshEntity` (even detached) still references it.
+  - **Inaccessible entity disposal:** `Entity.dispose()` is restricted/inaccessible in rc01; replaced chunks cannot be garbage-collected or destroyed without crashing, forcing a tombstone leak (`tombstonedChunks`) for the session lifetime.
+  - **CPM subspace saturation:** SceneCore creates an independent CPM split-engine subspace per `MeshEntity` (`mesh_entity_subspace_XX`). For 2M facets, 246 entities choke CPM asynchronous buffer registration unless throttled with inter-chunk pacing delays (`delay(16)`).
+  - **Missing interactive capabilities:** SceneCore rc01 provides no ray picking against CustomMesh, no clipping planes, and color attributes reject float toolpath data.
+  - **Paint bandwidth penalty:** Updating a 4k-facet paint stroke forces re-uploading entire chunks (1.96 MB) versus a 49 KB partial attribute subrange in Filament (40x penalty).
+- Physical Filament qualification on Galaxy XR (`android/app` on Adreno 740):
+  - Resolved OpenGL ES 3.2 backend (Feature level 2).
+  - 50th percentile GPU latency: 1ms; 90th percentile: 2ms; 95th percentile: 3ms. Total GPU memory: 2.15 MB.
+  - 2,000,000 facets rendered, center ray picking against fixture, 49 KB partial paint buffer updates, clipping planes, transparency, and toolpath geometry verified.
+- Physical ARM64 local engine slicing qualification on Galaxy XR (`dev.orcaxr.nativeapp.engine.LocalEngineServiceTest`):
+  - `liborcaxr_engine.so` executed natively on Snapdragon SXR2230P in the `:engine` service process.
+  - Staged upload, sliced 20mm cube on Snapmaker U1 profile, reported progress steps, published verified G-code output, and cancelled a second full-bed job cleanly in 6.3 seconds.
+- **Phase 2 Spatial Renderer Decision:** SceneCore rc01 is **rejected** for the interactive 3D model viewport. The production architecture uses a hybrid model: SceneCore hosts spatial UI panels, windows, and spatial activity lifecycle; interactive 3D model workspace editing, facet painting, clipping, and toolpaths are hosted on an embedded spatial surface / OpenXR pipeline.
 
 References: [SceneCore release notes](https://developer.android.com/jetpack/androidx/releases/xr-scenecore),
 [custom meshes](https://developer.android.com/reference/androidx/xr/scenecore/MeshBuffer),

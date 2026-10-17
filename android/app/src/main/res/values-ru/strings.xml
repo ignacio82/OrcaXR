@@ -103,4 +103,6 @@
     <string name="calib_send_printer_btn">Отправить на принтер</string>
     <string name="calib_history_delete_btn">Удалить</string>
     <string name="smart_paint_cancel">Отмена</string>
+    <string name="xr_rail_group_paint">Рисовать</string>
+    <string name="xr_rail_group_plate">Стол</string>
 </resources>

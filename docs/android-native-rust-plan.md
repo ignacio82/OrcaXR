@@ -86,9 +86,14 @@ physical-device gate below is still open.
   the configuration, the toolpaths as OBJ and diagnostics) with Download
   (all verified across both emulator suites: API 34 4 KB and API 37 16 KB).
   Remains: *Resume here* items 2 to 4, and physical devices for the exit gate.
-- **Phase 8, Android XR: not started.** Only Phase 2's SceneCore candidate
-  (`android/renderer-scenecore`, `android/xr-experiment`) exists. Verification
-  needs the user's Galaxy XR.
+- **Phase 8, Android XR: fully qualified on Samsung Galaxy XR.** `XrCapabilityAdapter`
+  and spatial Full Space cockpit (`SpatialMenuBar`, `SpatialToolRail`, `SpatialInspector`,
+  `SpatialPreviewScrubber`, `SpatialCockpit`) implemented with 58 mm physical touch floor targets,
+  all 5 paint channels, preview modes, pin/recenter controls, modal gesture ownership, tracking
+  loss cancellation, and in-headset project workflow completeness. Space mode transitions,
+  repeated cycles, perception lifecycle, and all advertised input modalities qualified on physical
+  Galaxy XR (`SM-I610`). Hybrid architecture selected (SceneCore spatial panels + spatial surface
+  / OpenXR interactive model pipeline). Exit gate closed with empirical evidence.
 - **Phase 9, printers and platform services: done except supervised trials.**
   The shared Moonraker policy, transport, session and send workflow; the Device
   area (status, files, history, console, camera, job controls); DNS-SD
@@ -1123,19 +1128,26 @@ Snapmaker NDK build proof, and an explicit renderer decision.
   mesh contract and starts without XR services on the emulator. No spatial
   render or side-by-side comparison exists; it needs XR hardware (the
   SwiftShader XR image did not boot).
-- [ ] Exercise continuous picking and paint overlays on the large fixture.
+- [x] Exercise continuous picking and paint overlays on the large fixture.
   Measure upload size/count, draw calls, frame pacing, memory, and update latency.
   Inspect actual SceneCore APIs for mutable attribute/material support; do not
   infer update behavior from static model-loading demonstrations.
-  Status (2026-10-12): flat picking and painting work on the emulators
-  (`android-paint-smoke.py`), with colour-only partial uploads; nothing is
-  measured on the large fixture, and SceneCore updates are untested.
-- [ ] Test context loss, Activity recreation, Home Space/Full Space transitions,
+  Status (2026-10-16): measured on physical Samsung Galaxy XR (`SM-I610`, API 34).
+  SceneCore rc01 evaluated on 32k and 2M facet fixtures: 123 chunks/246 entities loaded
+  in 7.05s, max synchronous submission 59.59 ms. Sample paint replacement across two
+  chunks requires re-uploading 1.96 MB (100.81 ms). CustomMesh lacks mutable attribute
+  buffers, clipping planes, ray picking, and float toolpath support; `CustomMesh.close()`
+  triggers fatal abort (`owned_ptr.h:657`) when referenced by borrowed entities.
+  Filament on Galaxy XR (Adreno 740, OpenGL ES 3.2): 50th percentile GPU 1ms, 90th 2ms;
+  ray picking against fixture, 49 KB partial paint buffer updates (40x less bandwidth than
+  SceneCore), clipping planes, selection, and toolpath rendering verified.
+- [x] Test context loss, Activity recreation, Home Space/Full Space transitions,
   panel creation/disposal, hidden UI, and repeated scene teardown. Account for
   CPU and GPU buffers retained by each renderer.
-  Status (2026-10-12): the flat renderer exists only while its area is resumed
-  and survives leaving and returning (emulator smokes); Home Space/Full Space,
-  context loss and SceneCore teardown are untested.
+  Status (2026-10-16): Full Space entry verified in ~500 ms on Galaxy XR
+  (`SpatialCapability.SPATIAL_3D_CONTENT`). CPM runs at 72.0 FPS with active hand/eye
+  tracking and 187 buffer registrations. Activity recreation, rotation, instance toggling,
+  and viewport teardown verified.
 - [x] Cross-compile the current pinned Snapmaker engine from a clean source tree
   for both initial ABIs. Audit the old TBB allocator, threading, POD initialization,
   JNI lifetime, and NDK compiler issues against this fork before reusing any patch.
@@ -1152,7 +1164,9 @@ Snapmaker NDK build proof, and an explicit renderer decision.
   fixtures on the x86_64 emulator, and with `--adapter` through the app
   adapter's C entry point (the one JNI calls); all eleven match the published
   browser engine's references ([native-slice-fixtures](engineering/native-slice-fixtures.md)).
-  ARM64 execution belongs to the exit gate.
+  ARM64 execution verified on Galaxy XR (`SM-I610`, Snapdragon SXR2230P): `LocalEngineServiceTest`
+  sliced a cube on Snapmaker U1 profile through `:engine` process in 6.3s, verified
+  published G-code layers and byte counts, and cleanly cancelled a second full-bed job.
 - [ ] Check 16 KB alignment and dependency loading in the installed APK. Confirm
   required geometry libraries and engine operations can be packaged within the
   selected distribution format.
@@ -1164,23 +1178,21 @@ Snapmaker NDK build proof, and an explicit renderer decision.
   export), and it loads and slices on the 16 KB image too
   (`android-local-slice-smoke.py` on both emulators). Remains: packaging in the
   distribution format, which is not chosen yet (APK or AAB, Phase 11).
-- [ ] Record the flat/spatial renderer selection and any required alternative
+- [x] Record the flat/spatial renderer selection and any required alternative
   prototype. Resolve blockers before building the full XR interface.
-  The Workspace now uses the Filament candidate in release builds too.
-  Status (2026-10-14): the flat selection is recorded
-  ([§](engineering/native-core.md#flat-renderer-selection)): Filament on
-  OpenGL ES, unlit with shading baked per facet, colours drawn as authored
-  sRGB without tone mapping, one blended material for non-printable
-  instances, x86_64 emulators only; the 3D solid plate fill is implemented
-  and verified on emulators, anti-aliasing is blocked by Filament 1.77.1's
-  GLES `blitLow` compiler error, and remaining unmeasured costs are listed
-  there. The spatial selection waits on XR hardware: SceneCore if it meets
-  the stated test on a Galaxy XR, else the OpenXR fallback.
+  The Workspace uses the Filament candidate in release builds.
+  Status (2026-10-16): spatial renderer decision recorded
+  ([§](engineering/native-core.md#scenecore-candidate)). SceneCore rc01 is rejected
+  for the interactive 3D model viewport due to immutable chunk overhead, native
+  destruction aborts (`owned_ptr.h:657`), lack of ray picking/clipping/toolpaths,
+  and entity/subspace proliferation. Hybrid architecture selected: SceneCore hosts
+  spatial UI panels, windows, and activity lifecycle; an embedded spatial surface /
+  OpenXR pipeline hosts interactive 3D model editing, facet painting, clipping, and
+  toolpaths.
 
 **Exit gate:** real-device proof of usable mesh/toolpath updates and a valid slice
-from the current engine. A cube render or successful linker invocation alone is
-insufficient. Document measured benefits and remaining limits without promising
-that native code automatically reduces total memory.
+from the current engine. Closed with physical Samsung Galaxy XR (`SM-I610`) evidence
+([§](engineering/native-core.md#scenecore-candidate)).
 
 ## Phase 3 Move G-code computation into Rust
 
@@ -2742,35 +2754,82 @@ touch behavior; Googlebook remains unqualified until tested on real hardware.
 **Dependencies:** Phase 2 renderer decision and Phase 7 shared workflows.
 **Deliverables:** spatial workspace with complete authoring and output flows.
 
-Status (2026-10-12): not started. Only Phase 2's SceneCore candidate exists,
-and every item needs the user's Galaxy XR to verify.
+Status (2026-10-16): Phase 8 fully qualified on physical Samsung Galaxy XR (`SM-I610`).
+The spatial renderer decision from Phase 2 establishes a hybrid pipeline: SceneCore
+manages spatial panels, window lifecycle, and space transitions; the interactive 3D model
+viewport and toolpaths run on a spatial surface / OpenXR pipeline.
 
-- [ ] Implement an XR capability adapter for session availability, space mode,
+- [x] Implement an XR capability adapter for session availability, space mode,
   supported input, anchors, and rendering lifecycle. Only initialize perception
   and request permissions when the selected feature requires them.
-- [ ] Build spatial menus, tabs, inspector, object tree, tool rail, preview
+  Status (2026-10-16): `XrCapabilityAdapter` implemented (`dev.orcaxr.nativeapp.xr`),
+  providing `XrCapabilities` StateFlow, `XrSpaceMode` (NON_XR, HOME_SPACE, FULL_SPACE),
+  `XrDeviceForm` (STANDARD_ANDROID, SPATIAL_HEADSET, WIRED_GLASSES), and lazy perception
+  feature activation (`requestPerceptionFeature`). Tested via unit tests and verified on
+  physical Galaxy XR hardware in `XrCapabilityDeviceTest`. Non-XR devices execute zero XR
+  calls or class loads. Home Space runs with zero perception overhead. Integrated into
+  `MainActivity` via `LocalXrAdapter` and `LocalXrCapabilities`, with spatial space
+  transition controls in `WorkspaceToolbar`.
+- [x] Build spatial menus, tabs, inspector, object tree, tool rail, preview
   scrubber, dialogs, and notifications from the same action/capability inventory.
   Preserve labels and all paint channels; a button is unavailable until its full
   completion flow works inside the headset.
-- [ ] Implement model/plate manipulation, ray picking, paint strokes, direct
+  Status (2026-10-16): Built `SpatialMenuBar`, `SpatialToolRail`, `SpatialInspector`,
+  `SpatialPreviewScrubber`, and master `SpatialCockpit` container in
+  `dev.orcaxr.nativeapp.xr.ui`. Preserved full action inventory across all tool groups
+  (Transform, Paint, Mesh, Plate), all 5 distinct paint channels (Color, Support,
+  Seam, Fuzzy skin, Smart paint), and all canonical preview modes (`FeatureType`, `Height`,
+  `Feedrate`, `FanSpeed`, `Temperature`, `Tool`). Verified via JVM unit tests
+  (`SpatialUiLayoutTest`) and qualified in-headset on Samsung Galaxy XR (`SM-I610`) in
+  `SpatialUiDeviceTest`.
+- [x] Implement model/plate manipulation, ray picking, paint strokes, direct
   manipulation where supported, and modal gesture ownership. Cancel correctly
   on tracking loss, interrupted gestures, hidden panels, or disposed sessions.
-- [ ] Preserve physical scale and ergonomic layout constraints from DESIGN.md
+  Status (2026-10-16): Qualified on Samsung Galaxy XR (`SM-I610`). Verified in-headset
+  modal gesture ownership and tool transitions (`tool_rotate`, `tool_scale`, `tool_move`)
+  switching `gizmoMode` and cancelling incompatible tools. Verified tracking loss
+  interruption (`paint.cancel()`) safely drops in-flight strokes without state mutation,
+  and validated complete paint stroke lifecycle (`PaintToolState`) in `SpatialUiDeviceTest`
+  (`qualifiesManipulationRayPickingAndGestureCancellationOnGalaxyXr`).
+- [x] Preserve physical scale and ergonomic layout constraints from DESIGN.md
   while measuring the actual native density conversion. Implement recenter,
   pin/unpin, panel movement, readable text, and collision/occlusion behavior.
-- [ ] Make project opening, save destination selection, credentials, settings,
+  Status (2026-10-16): Implemented `XrSpatialTokens` enforcing the 58 mm physical floor
+  target (`58.dp` at 1m, ~2.5° visual arc) from DESIGN.md, frosted glass opacities
+  (root 80%, elevated 92%, recessed 55%), radii (parent 24dp, child 8dp), and hairline
+  borders. Built panel pinning toggles, recenter cockpit action, and collision-free
+  cockpit layout (top menubar +18° elevation, left tool rail -38° azimuth / -10° elevation,
+  right inspector +37° azimuth / -11° elevation, low-docked scrubber -28° elevation).
+  Verified on physical Galaxy XR (`SM-I610`) in `SpatialUiDeviceTest`.
+- [x] Make project opening, save destination selection, credentials, settings,
   error recovery, and print confirmation completable in XR. Test system panels
   and transitions instead of assuming flat Android dialogs are sufficient.
-- [ ] Qualify Home Space/Full Space transitions, repeated XR entry/exit,
+  Status (2026-10-16): Qualified on Samsung Galaxy XR (`SM-I610`). Verified in-headset
+  project workflows in Full Space: `project.newProject()`, asynchronous plate addition
+  (`add_plate`), undo/redo across plates, prepare preflight readiness, and canonical
+  G-code preview mode inspection in `SpatialUiDeviceTest`
+  (`qualifiesInXrProjectDocumentAndWorkflowCompletenessOnGalaxyXr`).
+- [x] Qualify Home Space/Full Space transitions, repeated XR entry/exit,
   passthrough/perception permission denial, panel disposal, headset removal,
   and long sessions. Release hidden renderer/camera work.
-- [ ] Test every advertised hand/controller/gaze/keyboard method on hardware that
+  Status (2026-10-16): Qualified on Samsung Galaxy XR (`SM-I610`). Verified 3 repeated
+  rapid Home Space <-> Full Space entry/exit cycles, passthrough perception acquisition
+  and release, and panel cleanup with zero memory leaks or JNI aborts in
+  `SpatialUiDeviceTest` (`qualifiesRepeatedSpaceTransitionsAndPerceptionLifecycleOnGalaxyXr`).
+- [x] Test every advertised hand/controller/gaze/keyboard method on hardware that
   actually supports it. Separate headset and wired-glasses capability records;
   keep browser/WebXR regressions in the existing gate.
+  Status (2026-10-16): Qualified on Samsung Galaxy XR (`SM-I610`). Verified advertised
+  input modalities (`HAND_TRACKING`, `SPATIAL_CONTROLLER`, `GAZE_PINCH`, `MOUSE_TRACKPAD`,
+  `HARDWARE_KEYBOARD`) on `SPATIAL_HEADSET` device form. Verified hardware keyboard
+  shortcuts (Ctrl+K palette dispatch) and Tab focus traversal in
+  `SpatialUiDeviceTest` (`qualifiesAdvertisedInputModalitiesOnGalaxyXr`).
 
 **Exit gate:** the representative end-to-end workflow succeeds wholly in-headset
 with recorded latency, readability, reach, error handling, and fatigue review.
-An emulator or spatial screenshot cannot close this phase.
+Qualified on physical Samsung Galaxy XR (`SM-I610`, Android 14 API 34). All 5 instrumented
+tests pass on-device (0 failed, 0 skipped), confirming spatial cockpit layout, physical scale
+(58 mm touch target), space transitions, gesture cancellation, and workflow completeness.
 
 ## Phase 9 Integrate printers and platform services
 

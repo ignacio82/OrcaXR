@@ -97,10 +97,10 @@ fn parses_only_bounded_fully_stated_proposals() {
     }
 
     // Too many regions
-    let mut many_regions = Vec::new();
-    for _ in 0..(AI_PAINT_MAX_REGIONS + 1) {
-        many_regions.push(r#"{"label": "r", "confidence": 0.5, "shape": {"kind": "box", "min": [0,0,0], "max": [1,1,1]}}"#);
-    }
+    let many_regions = vec![
+        r#"{"label": "r", "confidence": 0.5, "shape": {"kind": "box", "min": [0,0,0], "max": [1,1,1]}}"#;
+        AI_PAINT_MAX_REGIONS + 1
+    ];
     let too_many_json = format!(
         r#"{{"schemaVersion": 1, "regions": [{}]}}"#,
         many_regions.join(",")

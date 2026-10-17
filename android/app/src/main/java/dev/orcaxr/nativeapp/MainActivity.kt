@@ -40,7 +40,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -164,6 +166,7 @@ class MainActivity : ComponentActivity() {
     private var paletteFromKeys = false
     /** Whether the window's arrangement shows the Workspace's 3D view now. */
     private var workspaceShown = true
+    private val xrAdapter by lazy { dev.orcaxr.nativeapp.xr.XrCapabilityAdapter.create(this, lifecycleScope) }
 
     /**
      * Runs catalogue action [id] as the menus run it (`ProjectModel.perform`),
@@ -175,6 +178,14 @@ class MainActivity : ComponentActivity() {
         if (id == "help_search") {
             paletteFromKeys = false
             palette = true
+            return
+        }
+        if (id == "spatial_toggle_space") {
+            if (xrAdapter.capabilities.value.spaceMode == dev.orcaxr.nativeapp.xr.XrSpaceMode.FULL_SPACE) {
+                xrAdapter.requestHomeSpace()
+            } else {
+                xrAdapter.requestFullSpace()
+            }
             return
         }
         if (AppActions.needsExport(id)) {
@@ -289,6 +300,11 @@ class MainActivity : ComponentActivity() {
         } catch (_: TimeoutException) {
         } catch (_: ExecutionException) {
         }
+    }
+
+    override fun onDestroy() {
+        xrAdapter.close()
+        super.onDestroy()
     }
 
     /**
@@ -422,7 +438,10 @@ class MainActivity : ComponentActivity() {
                     themeChoice = chosen
                 }
             }
+            val xrCapabilities by xrAdapter.capabilities.collectAsState()
             OrcaTheme(dark) { CompositionLocalProvider(
+                dev.orcaxr.nativeapp.xr.LocalXrAdapter provides xrAdapter,
+                dev.orcaxr.nativeapp.xr.LocalXrCapabilities provides xrCapabilities,
                 LocalThemeSwitch provides switch,
                 LocalCommandPalette provides {
                     paletteFromKeys = false
@@ -469,33 +488,45 @@ class MainActivity : ComponentActivity() {
                         .onPreviewKeyEvent { event -> windowKey(event.nativeKeyEvent) }
                         .dragAndDropTarget(shouldStartDragAndDrop = { ready }, target = target),
                 ) {
-                    Scaffold(
-                        bottomBar = {
-                            // Every area's whole name: a second row when they do not fit one (enlarged text, a long language).
-                            if (ready && layout.navigation == Navigation.Bar) ShellBar(AREAS, area) { area = it }
-                        },
-                        snackbarHost = { SnackbarHost(snackbar) },
-                        // Clear of the system bars, a display cutout and (without a bottom bar) the keyboard.
-                        contentWindowInsets = WindowInsets.safeDrawing,
-                    ) { scaffolded ->
-                        // What the Scaffold kept clear is consumed; the keyboard's height beyond it lifts the work area,
-                        // so a focused field stays above the keyboard (the bar, if any, stays under it).
-                        val padding = Modifier.padding(scaffolded).consumeWindowInsets(scaffolded).imePadding()
-                        if (!ready) {
-                            Column(Modifier.fillMaxSize().then(padding),
-                                verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
-                                Text(stringResource(state), style = MaterialTheme.typography.bodyLarge)
+                    if (xrCapabilities.spaceMode == dev.orcaxr.nativeapp.xr.XrSpaceMode.FULL_SPACE) {
+                        dev.orcaxr.nativeapp.xr.ui.SpatialCockpit(
+                            activeArea = area,
+                            onSelectArea = { area = it },
+                            projectModel = project,
+                            previewModel = preview,
+                            modifier = Modifier.fillMaxSize()
+                        ) { contentModifier ->
+                            Work(layout, contentModifier)
+                        }
+                    } else {
+                        Scaffold(
+                            bottomBar = {
+                                // Every area's whole name: a second row when they do not fit one (enlarged text, a long language).
+                                if (ready && layout.navigation == Navigation.Bar) ShellBar(AREAS, area) { area = it }
+                            },
+                            snackbarHost = { SnackbarHost(snackbar) },
+                            // Clear of the system bars, a display cutout and (without a bottom bar) the keyboard.
+                            contentWindowInsets = WindowInsets.safeDrawing,
+                        ) { scaffolded ->
+                            // What the Scaffold kept clear is consumed; the keyboard's height beyond it lifts the work area,
+                            // so a focused field stays above the keyboard (the bar, if any, stays under it).
+                            val padding = Modifier.padding(scaffolded).consumeWindowInsets(scaffolded).imePadding()
+                            if (!ready) {
+                                Column(Modifier.fillMaxSize().then(padding),
+                                    verticalArrangement = Arrangement.Center,
+                                    horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
+                                    Text(stringResource(state), style = MaterialTheme.typography.bodyLarge)
+                                }
+                            } else if (layout.navigation == Navigation.Rail) {
+                                Row(Modifier.fillMaxSize().then(padding)) {
+                                    // The Scaffold's padding already keeps it clear of the system bars.
+                                    ShellRail(AREAS, area, { area = it })
+                                    Work(layout, Modifier.weight(1f).fillMaxHeight())
+                                }
+                            } else {
+                                Work(layout, Modifier.fillMaxSize().then(padding))
                             }
-                        } else if (layout.navigation == Navigation.Rail) {
-                            Row(Modifier.fillMaxSize().then(padding)) {
-                                // The Scaffold's padding already keeps it clear of the system bars.
-                                ShellRail(AREAS, area, { area = it })
-                                Work(layout, Modifier.weight(1f).fillMaxHeight())
-                            }
-                        } else {
-                            Work(layout, Modifier.fillMaxSize().then(padding))
                         }
                     }
                     if (over) DropPrompt()

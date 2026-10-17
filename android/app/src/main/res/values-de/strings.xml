@@ -104,4 +104,6 @@
     <string name="calib_send_printer_btn">Zum Drucker senden</string>
     <string name="calib_history_delete_btn">Löschen</string>
     <string name="smart_paint_cancel">Abbrechen</string>
+    <string name="xr_rail_group_paint">Malen</string>
+    <string name="xr_rail_group_plate">Aktuelle Platte drucken</string>
 </resources>

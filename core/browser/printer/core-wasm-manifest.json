@@ -5,7 +5,7 @@
     "printer"
   ],
   "inputs": {
-    "contracts/android-strings.json": "92dcd1a8c378e3c477bc75dfdb74de41c1beffba37f1776d849cb35e9d1d6a1b",
+    "contracts/android-strings.json": "cf84a6b90c070e6aff98be7e2f0e7ddd329dca7857e5fc227dbc62fee2417105",
     "contracts/calibration-definitions.json": "659b5ffd9730299c615acf318c8a6fc1172c2e55c2ae0f89cd41568fa11af855",
     "contracts/core-protocol.json": "63e7ed821d0da12f863004109a41f5dbfd00b73a2c29584ae2b3a3a6b1320f7a",
     "contracts/gcode-buffer.json": "237797f7310f4eb9cd1fe14bedc5c1bce31e2b2fb7b6995056c98da975c7f716",
