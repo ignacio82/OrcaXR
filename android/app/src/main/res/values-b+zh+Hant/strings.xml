@@ -106,4 +106,5 @@
     <string name="smart_paint_cancel">取消</string>
     <string name="xr_rail_group_paint">繪製</string>
     <string name="xr_rail_group_plate">列印板</string>
+    <string name="dialog_recreate_model_colors_cancel">取消</string>
 </resources>

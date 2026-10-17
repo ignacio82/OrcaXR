@@ -186,6 +186,8 @@ object ActionTexts {
         "calib_session_discard" to R.string.calib_session_discard,
         "calib_session_keep" to R.string.calib_session_keep,
         "calib_export_history" to R.string.calib_export_history,
+        "printer_inspect_filaments" to R.string.action_printer_inspect_filaments,
+        "recreate_model_colors_fullspectrum" to R.string.action_recreate_model_colors_fullspectrum,
     )
 
     /** Each action the app performs, by catalogue id, with its hint. */
@@ -343,6 +345,8 @@ object ActionTexts {
         "calib_session_discard" to R.string.action_hint_calib_session_discard,
         "calib_session_keep" to R.string.action_hint_calib_session_keep,
         "calib_export_history" to R.string.action_hint_calib_export_history,
+        "printer_inspect_filaments" to R.string.action_hint_printer_inspect_filaments,
+        "recreate_model_colors_fullspectrum" to R.string.action_hint_recreate_model_colors_fullspectrum,
     )
 
     /** [action]'s label in the app's language; the core's English one for an action the app has no words for. */

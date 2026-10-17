@@ -146,6 +146,8 @@ object OrcaActionGlyphs {
         "calib_export_history" to OrcaActionGlyph(R.drawable.ic_symbol_output),
         "add_magnet" to OrcaActionGlyph(R.drawable.ic_symbol_commit),
         "auto_place_wipe" to OrcaActionGlyph(R.drawable.ic_symbol_cleaning_services),
+        "printer_inspect_filaments" to OrcaActionGlyph(R.drawable.ic_symbol_water_drop),
+        "recreate_model_colors_fullspectrum" to OrcaActionGlyph(R.drawable.ic_symbol_palette),
         "presets_install_printer" to OrcaActionGlyph(R.drawable.ic_symbol_add_circle),
         "presets_create_custom" to OrcaActionGlyph(R.drawable.ic_symbol_add),
         "presets_update_custom" to OrcaActionGlyph(R.drawable.ic_symbol_edit),

@@ -303,6 +303,34 @@ class DeviceWorkspace(
         return session.connect()
     }
 
+    /** Reads loaded filament slots from the connected printer over Moonraker (`/printer/objects/query?print_task_config=&filament_detect=`). */
+    fun queryFilamentSlots(): CompletableFuture<List<ProjectIntents.MoonrakerFilamentSlot>> {
+        val printer = active ?: return CompletableFuture.failedFuture(DeviceRefusal("Add a printer first."))
+        if (localNetworkBlocked()) {
+            return CompletableFuture.failedFuture(DeviceRefusal(LocalNetworkDeniedException(text(printer.host)).message.orEmpty()))
+        }
+        return connect().thenCompose {
+            val client = session.client ?: return@thenCompose CompletableFuture.failedFuture(DeviceRefusal("Printer not connected."))
+            val future = CompletableFuture<List<ProjectIntents.MoonrakerFilamentSlot>>()
+            val call = client.request(
+                "/printer/objects/query?print_task_config=&filament_detect=",
+                MoonrakerRequestOptions(operation = "query_filament_slots"),
+            )
+            call.result.whenComplete { text, error ->
+                if (error != null) {
+                    future.completeExceptionally(error)
+                } else {
+                    when (val reply = PrinterTools.filamentSlots(text)) {
+                        is ProjectIntents.FilamentSlotsReply.Slots -> future.complete(reply.value)
+                        is ProjectIntents.FilamentSlotsReply.InvalidResponse ->
+                            future.completeExceptionally(DeviceRefusal("The printer reported no loaded filament slots."))
+                    }
+                }
+            }
+            future
+        }
+    }
+
     /** Ends the connection; the printer stays selected, so recovery stays reachable. */
     fun disconnect() = reselect()
 

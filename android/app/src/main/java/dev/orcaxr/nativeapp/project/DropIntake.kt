@@ -103,14 +103,21 @@ object DropIntake {
     private val MIME_KINDS = mapOf(
         "model/3mf" to Kind.Project,
         "application/vnd.ms-package.3dmanufacturing-3dmodel+xml" to Kind.Project,
+        "application/3mf" to Kind.Project,
+        "application/x-3mf" to Kind.Project,
         "model/stl" to Kind.Model,
         "model/x.stl-binary" to Kind.Model,
         "model/x.stl-ascii" to Kind.Model,
         "application/sla" to Kind.Model,
         "application/vnd.ms-pki.stl" to Kind.Model,
+        "application/x-stl" to Kind.Model,
         "model/obj" to Kind.Model,
+        "model/wavefront-obj" to Kind.Model,
         "model/amf" to Kind.Model,
+        "application/x-amf" to Kind.Model,
         "application/zip" to Kind.Model,
         "text/x-gcode" to Kind.Gcode,
+        "text/gcode" to Kind.Gcode,
+        "application/x-gcode" to Kind.Gcode,
     )
 }

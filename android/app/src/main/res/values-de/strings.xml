@@ -106,4 +106,5 @@
     <string name="smart_paint_cancel">Abbrechen</string>
     <string name="xr_rail_group_paint">Malen</string>
     <string name="xr_rail_group_plate">Aktuelle Platte drucken</string>
+    <string name="dialog_recreate_model_colors_cancel">Abbrechen</string>
 </resources>

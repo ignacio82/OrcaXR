@@ -188,6 +188,22 @@ class MainActivity : ComponentActivity() {
             }
             return
         }
+        if (id == "printer_inspect_filaments") {
+            device.queryFilamentSlots().whenComplete { slots, err ->
+                if (err != null) {
+                    project.reportMessage(err.message ?: "Printer query failed")
+                } else {
+                    project.syncFilamentsFromPrinter(slots)
+                }
+            }
+            return
+        }
+        if (id == "recreate_model_colors_fullspectrum") {
+            device.queryFilamentSlots().whenComplete { slots, _ ->
+                project.openRecreateColors(slots ?: emptyList())
+            }
+            return
+        }
         if (AppActions.needsExport(id)) {
             // The File menu's exports: the system's picker takes the file over whichever area shows.
             exports.perform(id)
@@ -237,8 +253,22 @@ class MainActivity : ComponentActivity() {
             if (created) finish()
             return
         }
-        area = R.string.nav_project
-        project.openIncoming(uri)
+        val shared = uri.scheme == ContentResolver.SCHEME_CONTENT
+        val name = displayName(uri, shared)
+        val type = intent?.type ?: if (shared) mimeType(uri) else null
+        val plan = DropIntake.plan(listOf(DropIntake.Dropped(uri.toString(), name, type, shared)))
+        if (plan.refusals.isNotEmpty()) {
+            project.reportMessage(plan.refusals.joinToString("\n"))
+            return
+        }
+        plan.gcode?.let {
+            area = R.string.nav_preview
+            preview.open(uri)
+        }
+        if (plan.project.isNotEmpty()) {
+            area = R.string.nav_project
+            project.intake(plan.project)
+        }
     }
 
     /**

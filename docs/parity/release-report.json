@@ -151,8 +151,8 @@
     "catalog": {
       "targets": {
         "androidFlat": {
-          "implemented": 153,
-          "unavailable": 73
+          "implemented": 155,
+          "unavailable": 71
         },
         "androidXr": {
           "implemented": 0,

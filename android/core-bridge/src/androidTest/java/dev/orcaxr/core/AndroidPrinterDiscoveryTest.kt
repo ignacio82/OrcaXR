@@ -51,7 +51,7 @@ class AndroidPrinterDiscoveryTest {
                 override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) = Unit
             }
             val service = NsdServiceInfo().apply {
-                serviceName = "OrcaXR test printer"
+                serviceName = "OrcaXR test printer ${server.localPort}"
                 serviceType = AndroidPrinterDiscovery.SERVICE_TYPE
                 port = server.localPort
             }
@@ -85,6 +85,78 @@ class AndroidPrinterDiscoveryTest {
             } finally {
                 nsd.unregisterService(registration)
             }
+        }
+    }
+
+    @Test fun aSnapmakerServiceOnTheNetworkIsOfferedAtMoonrakerDefaultPort() {
+        grantLocalNetwork()
+        val nsd = context.getSystemService(NsdManager::class.java)
+        val registered = CountDownLatch(1)
+        var name = ""
+        val registration = object : NsdManager.RegistrationListener {
+            override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
+                name = serviceInfo.serviceName
+                registered.countDown()
+            }
+            override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) = Unit
+            override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) = Unit
+            override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) = Unit
+        }
+        val service = NsdServiceInfo().apply {
+            serviceName = "OrcaXR test snapmaker ${System.nanoTime()}"
+            serviceType = "_snapmaker._tcp"
+            port = 1884
+        }
+        nsd.registerService(service, NsdManager.PROTOCOL_DNS_SD, registration)
+        try {
+            assertTrue("registered", registered.await(15, TimeUnit.SECONDS))
+            val offered = LinkedBlockingQueue<DiscoveryCandidate>()
+            val discovery = PrinterDiscovery { candidate ->
+                offered.add(candidate)
+                CompletableFuture.completedFuture(DiscoveryProbe.Moonraker("test-snapmaker"))
+            }
+            AndroidPrinterDiscovery(context, discovery).use { finder ->
+                finder.start()
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
+                var ours: DiscoveryCandidate? = null
+                while (ours == null) {
+                    val next = offered.poll(deadline - System.nanoTime(), TimeUnit.NANOSECONDS) ?: break
+                    if (next.name == name && next.port == AndroidPrinterDiscovery.DEFAULT_PORT) ours = next
+                }
+                assertNotNull("offered at Moonraker default port", ours)
+                assertEquals(AndroidPrinterDiscovery.DEFAULT_PORT, ours!!.port)
+                assertTrue(ours.host, InetAddress.getByName(ours.host) is Inet4Address)
+                while (discovery.proposals.none { it.candidate == ours } && System.nanoTime() < deadline) Thread.sleep(20)
+                assertTrue(discovery.proposals.any { it.candidate == ours })
+            }
+        } finally {
+            nsd.unregisterService(registration)
+        }
+    }
+
+    @Test
+    fun discoversRealPrinterOnNetworkIfPresent() {
+        grantLocalNetwork()
+        val offered = LinkedBlockingQueue<DiscoveryCandidate>()
+        val discovery = PrinterDiscovery { candidate ->
+            offered.add(candidate)
+            CompletableFuture.completedFuture(DiscoveryProbe.Moonraker("real-printer"))
+        }
+        AndroidPrinterDiscovery(context, discovery).use { finder ->
+            finder.start()
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+            var realSnapmaker: DiscoveryCandidate? = null
+            while (System.nanoTime() < deadline) {
+                val next = offered.poll(1, TimeUnit.SECONDS) ?: continue
+                if (next.host == "192.168.1.228" || next.name.contains("U1", ignoreCase = true)) {
+                    realSnapmaker = next
+                    break
+                }
+            }
+            android.util.Log.i("OrcaXR:RealDiscovery", "Found real candidate: $realSnapmaker")
+            assertNotNull("Real Snapmaker should be discovered on network", realSnapmaker)
+            assertEquals("192.168.1.228", realSnapmaker!!.host)
+            assertEquals(AndroidPrinterDiscovery.DEFAULT_PORT, realSnapmaker.port)
         }
     }
 }

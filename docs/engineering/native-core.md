@@ -4616,6 +4616,28 @@ exports answer every reply ([6, 27, 197, 12, 12, 51, 13, 20]); and
 `ProjectVirtualFilamentChecks` (105 checks) replays the journey on a real
 `ProjectWorkspace`.
 
+### Filament sync and model color recreation
+
+Android filament management in the Prepare area (`FilamentPanels.kt`, `PrepareScreen.kt`,
+`dev.orcaxr.nativeapp.project`) implements two primary operations aligned with the browser:
+
+1. **Sync Filaments From Printer** (`printer_inspect_filaments`): `DeviceWorkspace.queryFilamentSlots`
+   queries Moonraker filament/slot state (`/printer/objects/query?webhooks&extruder...`),
+   parsing tool and multi-extruder mappings, spool IDs, materials and hex colors into
+   `ProjectIntents.MoonrakerFilamentSlot`. `ProjectWorkspace.syncPhysicalFilaments(slots, newFilamentIds)`
+   submits `ProjectIntents.Command.SyncPhysicalFilaments` to the Rust core, updating project slot
+   configuration, binding compatible presets, and recording an undoable transaction.
+2. **Recreate Model Colors (Full-Spectrum)** (`recreate_model_colors_fullspectrum`):
+   `RecreateModelColorsEngine` (`RecreateModelColors.kt`) inspects all model source colors across
+   objects, volumes and facet color channels via `ProjectWorkspace.exportJson`. For each source color,
+   it computes perceptual distance against physical filaments using `ColorMath.srgbToLab` and
+   `ColorMath.deltaE2000`. Matches within threshold (ΔE ≤ 2.0) are bound directly; unmatched colors
+   query `VirtualFilaments.search` across compatible physical heads to synthesize CMYK-White-Clear
+   mixed blend recipes. `RecreateModelColorsDialog.kt` presents an interactive Compose modal displaying
+   source and destination swatches, computed ΔE values, and physical/virtual override selectors.
+   Applying matches executes `ProjectIntents.Command.RecreateModelColors` through
+   `ProjectWorkspace.recreateModelColors`, atomically binding color mappings across the project graph.
+
 ### Printer policy
 
 `orcaxr-printer` holds Moonraker workflow policy shared by every host, with
@@ -8110,10 +8132,12 @@ unusable version is not. `DeviceWorkspace.addDiscovered` saves a proposal as
 any typed-in printer (under the hostname the printer gives itself, else its
 advertised name), and `savedAs` recognises a proposal already saved under
 another spelling of its address. `AndroidPrinterDiscovery` feeds a run from
-the platform's DNS-SD browse for `_moonraker._tcp` (what Moonraker's
-zeroconf component advertises) for 15 s — Android 14+ resolving each service
+the platform's DNS-SD browse across `_moonraker._tcp`, `_snapmaker._tcp` and `_octoprint._tcp`
+(mapping Snapmaker MQTT port 1884 to Moonraker port 7125) for 15 s — Android 14+ resolving each service
 with a `ServiceInfoCallback`, earlier releases one `resolveService` at a
-time — preferring an IPv4 address and never a link-local IPv6 one; no
+time — alongside direct UDP broadcast DNS-SD PTR queries (`DirectDnsParser`) with a Wi-Fi `MulticastLock`
+to ensure rapid response and tolerate platform mDNS daemon parser crashes on malformed NSEC records or packet size limits;
+preferring an IPv4 address and never a link-local IPv6 one; no
 address range is ever scanned. On Android 17 the Device screen asks for the
 local-network permission before it searches (the system picker of
 `DiscoveryRequest` is not used: verifying and connecting need the permission
@@ -8162,12 +8186,18 @@ which Material draws no focus, get `focusRing`. The multi-line Console field
 passes Tab on (`tabMovesFocus`) instead of typing a tab, as a browser
 textarea does; single-line and read-only fields already do.
 
-Files dropped on the window (desktop windowing, ChromeOS, Samsung DeX) load
-as the browser's drop does (`intakeFiles`): `DropIntake` (platform-free)
+Files dropped on the window (desktop windowing, ChromeOS, Samsung DeX) or opened/shared
+from other applications (`ACTION_VIEW`, `ACTION_SEND` from Files by Google, Chrome downloads, cloud storage, messengers)
+load as the browser's drop does (`intakeFiles`): `DropIntake` (platform-free)
 decides each by its name — the extensions of the pinned dialogs, or for an
 extension the browser does not know the type the provider reports, where the
-browser would read the content — and plans the drop in order. Models (STL,
-OBJ, AMF, ZIP) import through the Project area's preview and 3MF projects
+browser would read the content — and plans the intake in order. The Android manifest
+declares `ACTION_VIEW` and `ACTION_SEND` intent filters covering specific MIME types for 3MF (`model/3mf`, `application/vnd.ms-package.3dmanufacturing-3dmodel+xml`, `application/3mf`, `application/x-3mf`),
+STL (`model/stl`, `application/sla`, `application/vnd.ms-pki.stl`, `application/x-stl`),
+OBJ (`model/obj`, `model/wavefront-obj`), AMF (`model/amf`, `application/x-amf`), and G-code (`text/x-gcode`, `text/gcode`, `application/x-gcode`),
+generic binary streams (`application/octet-stream`) to match files indexed by Android MediaStore/DownloadManager where extensions are unmapped in the OS MIME table,
+and explicit extension filters (`.3mf`, `.stl`, `.obj`, `.amf`, `.gcode`, `.gco`, `.g`, `.nc`) with both `*/*` and untyped URIs, all marked `CATEGORY_BROWSABLE`.
+Models (STL, OBJ, AMF, ZIP) import through the Project area's preview and 3MF projects
 open through its Open, guarded for unsaved changes and refused as any
 handed-over document when not `content:`; `ProjectModel.intake` takes them
 one at a time, the next once nothing runs and no question waits (a project

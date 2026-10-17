@@ -1110,4 +1110,15 @@
     <string name="xr_action_unpin">Unpin Panel</string>
     <string name="xr_panel_tools">Tools</string>
     <string name="xr_panel_inspector">Inspector</string>
+    <string name="action_printer_inspect_filaments">Sync Filaments From Printer</string>
+    <string name="action_hint_printer_inspect_filaments">Adopt the filaments the connected printer reports as loaded, as one undoable change</string>
+    <string name="action_recreate_model_colors_fullspectrum">Recreate Model Colors (Full-Spectrum)</string>
+    <string name="action_hint_recreate_model_colors_fullspectrum">Recreate model colors using printer filaments via Full-Spectrum dithering</string>
+    <string name="dialog_recreate_model_colors_title">Recreate Model Colors (Full-Spectrum)</string>
+    <string name="dialog_recreate_model_colors_description">Match colors from the current model to the closest available physical filaments or synthesize Full-Spectrum dithering recipes.</string>
+    <string name="dialog_recreate_model_colors_apply">Apply Matches</string>
+    <string name="dialog_recreate_model_colors_cancel">Cancel</string>
+    <string name="the_printer_reported_no_loaded">The printer reported no loaded filament slots.</string>
+    <string name="recreate_colors_no_colors">No model colors to match; add a model to the plate first.</string>
+    <string name="recreate_colors_applied">Recreated model colors with available filaments.</string>
 </resources>

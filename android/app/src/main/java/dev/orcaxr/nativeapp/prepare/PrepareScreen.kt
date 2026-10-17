@@ -59,6 +59,7 @@ import dev.orcaxr.nativeapp.shell.ActionTooltip
 import dev.orcaxr.nativeapp.pluralMessage
 import dev.orcaxr.nativeapp.project.FilamentList
 import dev.orcaxr.nativeapp.project.ProjectModel
+import dev.orcaxr.nativeapp.project.RecreateModelColorsDialog
 import dev.orcaxr.nativeapp.project.VirtualFilamentAuthorDialog
 import dev.orcaxr.nativeapp.project.VirtualFilamentDeleteDialog
 import dev.orcaxr.nativeapp.project.VirtualFilamentLibraryPanel
@@ -276,6 +277,20 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                     onColor = project::recolorFilament,
                     onNozzle = project::setFilamentNozzle,
                     onOpenLibrary = { scope.launch { list.animateScrollToItem(LIBRARY_ITEM + if (state.result != null) 1 else 0) } },
+                    onSyncFilaments = {
+                        device.queryFilamentSlots().whenComplete { slots, err ->
+                            if (err != null) {
+                                project.reportMessage(err.message ?: "Printer query failed")
+                            } else {
+                                project.syncFilamentsFromPrinter(slots)
+                            }
+                        }
+                    },
+                    onRecreateColors = {
+                        device.queryFilamentSlots().whenComplete { slots, _ ->
+                            project.openRecreateColors(slots ?: emptyList())
+                        }
+                    },
                 )
             }
             item(key = "virtual-filaments") {
@@ -376,6 +391,15 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
     }
     project.virtualDelete?.let { dialog ->
         VirtualFilamentDeleteDialog(dialog, view.revision, onConfirm = project::deleteVirtualFilament, onClose = project::closeDeleteVirtualFilament)
+    }
+
+    project.recreateColorsPlan?.let { plan ->
+        RecreateModelColorsDialog(
+            plan = plan,
+            library = (view.virtualFilaments as? dev.orcaxr.core.VirtualFilamentLibraryResult.Shown)?.library,
+            onApply = project::applyRecreateColors,
+            onDismiss = project::closeRecreateColors,
+        )
     }
 
     state.consentFor?.let { endpoint ->

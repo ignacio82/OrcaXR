@@ -106,4 +106,5 @@
     <string name="smart_paint_cancel">İptal</string>
     <string name="xr_rail_group_paint">Boyama</string>
     <string name="xr_rail_group_plate">Plaka</string>
+    <string name="dialog_recreate_model_colors_cancel">İptal</string>
 </resources>

@@ -2,6 +2,7 @@ package dev.orcaxr.core
 
 import java.io.File
 import java.time.ZoneId
+import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -767,6 +768,25 @@ class ProjectWorkspace(
     fun export(output: ProjectDocumentOutput): CompletableFuture<Unit> = run({ guard, record ->
         actor.exportDocument(guard, EXPORT) { _, source -> capturing(record) { ProjectDocuments.save(source, output, ARCHIVE) } }
     }) { result -> if (result is ProjectOutcome.Exported) Unit else null }
+
+    /** Exports the project's canonical state as JSON. */
+    fun exportJson(maxBytes: Long = 8_388_608L): CompletableFuture<String> = inspect { session ->
+        session.snapshot().use { snapshot ->
+            snapshot.exportJson(maxBytes).use { pb ->
+                val total = pb.length()
+                val chunk = 65536
+                val out = java.io.ByteArrayOutputStream(total.toInt().coerceAtLeast(1024))
+                var offset = 0L
+                while (offset < total) {
+                    val toRead = minOf(chunk.toLong(), total - offset)
+                    val part = pb.read(offset, toRead)
+                    out.write(part)
+                    offset += toRead
+                }
+                String(out.toByteArray(), Charsets.UTF_8)
+            }
+        }
+    }
 
     /**
      * File → Export as 3MF…: the project as it stands once every queued edit
@@ -1724,6 +1744,24 @@ class ProjectWorkspace(
                 ),
             )
         }.thenApply { },
+    )
+
+    /** Adopts reported printer slots as loaded physical filaments (`sync-physical-filaments-from-printer`). */
+    fun syncPhysicalFilaments(
+        slots: List<ProjectIntents.PrinterSlot>,
+        newFilamentIds: List<String> = List(slots.size) { UUID.randomUUID().toString() },
+    ): CompletableFuture<Unit> = execute(
+        ProjectIntents.Command.SyncPhysicalFilaments(
+            ProjectIntents.SyncPhysicalFilaments(
+                slots,
+                ProjectIntents.OptionalIds.Value(newFilamentIds.map(::units)),
+            ),
+        ),
+    )
+
+    /** Recreates model colors using physical filaments and/or synthesized Full-Spectrum recipes (`recreate-model-colors`). */
+    fun recreateModelColors(command: ProjectIntents.RecreateModelColors): CompletableFuture<Unit> = execute(
+        ProjectIntents.Command.RecreateModelColors(command),
     )
 
     private fun instanceOf(snapshot: ProjectSnapshot, id: String): InstanceFacts =

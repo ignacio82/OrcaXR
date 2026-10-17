@@ -98,4 +98,5 @@
     <string name="smart_paint_cancel">Avbryt</string>
     <string name="xr_rail_group_paint">Färglägga</string>
     <string name="xr_rail_group_plate">Platta</string>
+    <string name="dialog_recreate_model_colors_cancel">Avbryt</string>
 </resources>

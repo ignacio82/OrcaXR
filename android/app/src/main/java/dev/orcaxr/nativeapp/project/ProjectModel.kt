@@ -185,6 +185,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     private val dropped = ArrayDeque<DropIntake.Item>()
     var message by mutableStateOf<String?>(null)
         private set
+    fun reportMessage(text: String) {
+        message = text
+    }
     var recent by mutableStateOf(recentStore.entries)
         private set
     var pendingImport by mutableStateOf<PendingImport?>(null)
@@ -767,7 +770,100 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         }
     }
 
+    // ---- Sync filaments from printer & Recreate model colors ----
+
+    var recreateColorsPlan by mutableStateOf<RecreateModelColorsPlan?>(null)
+        private set
+    var recreateColorsBusy by mutableStateOf(false)
+        private set
+
+    /** Adopts loaded filaments from the printer into the project as one undoable command. */
+    fun syncFilamentsFromPrinter(slots: List<ProjectIntents.MoonrakerFilamentSlot>) {
+        if (slots.isEmpty()) {
+            message = getApplication<Application>().getString(R.string.the_printer_reported_no_loaded)
+            return
+        }
+        work {
+            val printerSlots = slots.map { s ->
+                ProjectIntents.PrinterSlot(
+                    toolId = s.slotIndex,
+                    color = s.colorHex,
+                    material = s.material,
+                    subType = s.subType,
+                    vendor = if (s.vendor.isEmpty()) ProjectIntents.OptionalText.Absent(ProjectIntents.Empty) else ProjectIntents.OptionalText.Value(s.vendor),
+                )
+            }
+            val failure = runCatching { workspace.syncPhysicalFilaments(printerSlots).get() }.exceptionOrNull()?.let(::cause)
+            main.post {
+                if (failure == null) {
+                    message = "Synced filaments from printer: ${printerSlots.size} slot(s)."
+                } else {
+                    message = failure.message ?: failure.javaClass.simpleName
+                }
+            }
+        }
+    }
+
+    /** Opens the Recreate Model Colors confirmation dialog with planned matches. */
+    fun openRecreateColors(printerSlots: List<ProjectIntents.MoonrakerFilamentSlot> = emptyList()) {
+        if (recreateColorsBusy) return
+        recreateColorsBusy = true
+        work {
+            val json = runCatching { workspace.exportJson().get() }.getOrNull()
+            if (json == null) {
+                main.post {
+                    recreateColorsBusy = false
+                    message = "Could not read project state for color matching."
+                }
+                return@work
+            }
+            val convertedSlots = printerSlots.map { s ->
+                ProjectIntents.PrinterSlot(
+                    toolId = s.slotIndex,
+                    color = s.colorHex,
+                    material = s.material,
+                    subType = s.subType,
+                    vendor = if (s.vendor.isEmpty()) ProjectIntents.OptionalText.Absent(ProjectIntents.Empty) else ProjectIntents.OptionalText.Value(s.vendor),
+                )
+            }
+            val plan = RecreateModelColorsEngine.planRecreateModelColors(view, json, convertedSlots)
+            main.post {
+                recreateColorsBusy = false
+                if (plan.matches.isEmpty()) {
+                    message = getApplication<Application>().getString(R.string.recreate_colors_no_colors)
+                } else {
+                    recreateColorsPlan = plan
+                }
+            }
+        }
+    }
+
+    /** Closes the Recreate Model Colors dialog without applying. */
+    fun closeRecreateColors() {
+        recreateColorsPlan = null
+    }
+
+    /** Applies the Recreate Model Colors plan with optional user overrides. */
+    fun applyRecreateColors(overrides: Map<String, String>) {
+        val plan = recreateColorsPlan ?: return
+        recreateColorsPlan = null
+        recreateColorsBusy = true
+        work {
+            val command = RecreateModelColorsEngine.buildRecreateCommand(plan, overrides)
+            val failure = runCatching { workspace.recreateModelColors(command).get() }.exceptionOrNull()?.let(::cause)
+            main.post {
+                recreateColorsBusy = false
+                if (failure == null) {
+                    message = getApplication<Application>().getString(R.string.recreate_colors_applied)
+                } else {
+                    message = failure.message ?: failure.javaClass.simpleName
+                }
+            }
+        }
+    }
+
     // ---- The virtual filament library ----
+
 
     /** The shared core's dialog exchanges. */
     private val dialogs = object : VirtualFilamentDialogs.Exchange {
@@ -1021,6 +1117,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "mesh_boolean_union" -> booleanNow("UNION")
             "mesh_boolean_subtract" -> booleanNow("A_NOT_B")
             "mesh_boolean_intersection" -> booleanNow("INTERSECTION")
+            "recreate_model_colors_fullspectrum" -> openRecreateColors()
             "tool_measure" -> if (measuring && !assembling) measure(false) else measure(true)
             "tool_assembly" -> if (measuring && assembling) measure(false) else assembly()
             // The palette's Align and Explode: the Assembly tool's panel holds their faces and factor.

@@ -105,8 +105,11 @@ object AppActions {
 
     val CALIBRATION = CALIBRATION_WORKFLOWS + CALIBRATION_HISTORY + CALIBRATION_SESSION
 
+    /** Advanced actions: syncing filaments from the printer and full-spectrum color recreation. */
+    val ADVANCED = listOf("printer_inspect_filaments", "recreate_model_colors_fullspectrum")
+
     /** Every catalogue action the app performs. */
-    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PANELS + PREPARE + EXPORT + VIEW + HELP + PRESETS + CALIBRATION).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
+    val PERFORMED: Set<String> = (DOCUMENT + HISTORY + CAMERA + TOOLBAR + PANELS + PREPARE + EXPORT + VIEW + HELP + PRESETS + CALIBRATION + ADVANCED).toSet() + ProjectEditing.PERFORMED + ProjectEditing.CREATED
 
     /**
      * Whether running [id] needs the Workspace's 3D view on screen: a camera

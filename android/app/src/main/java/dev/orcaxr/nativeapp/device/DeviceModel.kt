@@ -697,6 +697,25 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Queries loaded filament slots from the connected printer. */
+    fun queryFilamentSlots(): CompletableFuture<List<ProjectIntents.MoonrakerFilamentSlot>> {
+        val future = CompletableFuture<List<ProjectIntents.MoonrakerFilamentSlot>>()
+        worker.execute {
+            try {
+                workspace.queryFilamentSlots().whenComplete { slots, error ->
+                    if (error != null) {
+                        main.post { future.completeExceptionally(error) }
+                    } else {
+                        main.post { future.complete(slots) }
+                    }
+                }
+            } catch (t: Throwable) {
+                main.post { future.completeExceptionally(t) }
+            }
+        }
+        return future
+    }
+
     override fun onCleared() {
         worker.execute {
             listening?.close()

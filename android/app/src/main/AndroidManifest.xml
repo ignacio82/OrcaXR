@@ -8,6 +8,7 @@
          clients check before every exchange (LocalNetworkAccess). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- A slice on this device's own engine keeps running when the operator switches tasks or locks
          the screen: its service is in the foreground (dataSync: local file processing the operator
          started, with progress and Cancel in its notification) only while a job runs. -->
@@ -31,19 +32,146 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- A 3MF project another app opens or shares: read as untrusted input. -->
+            <!-- Documents opened from other apps (Files, Downloads, Chrome, Cloud, etc.): read as untrusted input. -->
+            <!-- 1. Specific MIME types for 3MF, STL, OBJ, AMF, G-code -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="content" />
+                <data android:scheme="file" />
                 <data android:mimeType="model/3mf" />
                 <data android:mimeType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml" />
+                <data android:mimeType="application/3mf" />
+                <data android:mimeType="application/x-3mf" />
+                <data android:mimeType="model/stl" />
+                <data android:mimeType="model/x.stl-binary" />
+                <data android:mimeType="model/x.stl-ascii" />
+                <data android:mimeType="application/sla" />
+                <data android:mimeType="application/vnd.ms-pki.stl" />
+                <data android:mimeType="application/x-stl" />
+                <data android:mimeType="model/obj" />
+                <data android:mimeType="model/wavefront-obj" />
+                <data android:mimeType="model/amf" />
+                <data android:mimeType="application/x-amf" />
+                <data android:mimeType="text/x-gcode" />
+                <data android:mimeType="text/gcode" />
+                <data android:mimeType="application/x-gcode" />
             </intent-filter>
+            <!-- 2. Generic binary stream (used by MediaStore and DownloadManager when extension is unmapped in OS) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <!-- 3. Explicit file extensions with wildcard MIME type (*/*) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.3mf" />
+                <data android:pathPattern=".*\\.3MF" />
+                <data android:pathPattern=".*\\.stl" />
+                <data android:pathPattern=".*\\.STL" />
+                <data android:pathPattern=".*\\.obj" />
+                <data android:pathPattern=".*\\.OBJ" />
+                <data android:pathPattern=".*\\.amf" />
+                <data android:pathPattern=".*\\.AMF" />
+                <data android:pathPattern=".*\\.amfz" />
+                <data android:pathPattern=".*\\.AMFZ" />
+                <data android:pathPattern=".*\\.gcode" />
+                <data android:pathPattern=".*\\.GCODE" />
+                <data android:pathPattern=".*\\.gco" />
+                <data android:pathPattern=".*\\.GCO" />
+                <data android:pathPattern=".*\\.g" />
+                <data android:pathPattern=".*\\.G" />
+                <data android:pathSuffix=".3mf" />
+                <data android:pathSuffix=".3MF" />
+                <data android:pathSuffix=".stl" />
+                <data android:pathSuffix=".STL" />
+                <data android:pathSuffix=".obj" />
+                <data android:pathSuffix=".OBJ" />
+                <data android:pathSuffix=".amf" />
+                <data android:pathSuffix=".AMF" />
+                <data android:pathSuffix=".amfz" />
+                <data android:pathSuffix=".AMFZ" />
+                <data android:pathSuffix=".gcode" />
+                <data android:pathSuffix=".GCODE" />
+                <data android:pathSuffix=".gco" />
+                <data android:pathSuffix=".GCO" />
+                <data android:pathSuffix=".g" />
+                <data android:pathSuffix=".G" />
+            </intent-filter>
+            <!-- 4. Explicit file extensions without MIME type -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.3mf" />
+                <data android:pathPattern=".*\\.3MF" />
+                <data android:pathPattern=".*\\.stl" />
+                <data android:pathPattern=".*\\.STL" />
+                <data android:pathPattern=".*\\.obj" />
+                <data android:pathPattern=".*\\.OBJ" />
+                <data android:pathPattern=".*\\.amf" />
+                <data android:pathPattern=".*\\.AMF" />
+                <data android:pathPattern=".*\\.amfz" />
+                <data android:pathPattern=".*\\.AMFZ" />
+                <data android:pathPattern=".*\\.gcode" />
+                <data android:pathPattern=".*\\.GCODE" />
+                <data android:pathPattern=".*\\.gco" />
+                <data android:pathPattern=".*\\.GCO" />
+                <data android:pathPattern=".*\\.g" />
+                <data android:pathPattern=".*\\.G" />
+                <data android:pathSuffix=".3mf" />
+                <data android:pathSuffix=".3MF" />
+                <data android:pathSuffix=".stl" />
+                <data android:pathSuffix=".STL" />
+                <data android:pathSuffix=".obj" />
+                <data android:pathSuffix=".OBJ" />
+                <data android:pathSuffix=".amf" />
+                <data android:pathSuffix=".AMF" />
+                <data android:pathSuffix=".amfz" />
+                <data android:pathSuffix=".AMFZ" />
+                <data android:pathSuffix=".gcode" />
+                <data android:pathSuffix=".GCODE" />
+                <data android:pathSuffix=".gco" />
+                <data android:pathSuffix=".GCO" />
+                <data android:pathSuffix=".g" />
+                <data android:pathSuffix=".G" />
+            </intent-filter>
+            <!-- 5. Files shared to OrcaXR via Android Share sheet -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="model/3mf" />
                 <data android:mimeType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml" />
+                <data android:mimeType="application/3mf" />
+                <data android:mimeType="application/x-3mf" />
+                <data android:mimeType="model/stl" />
+                <data android:mimeType="model/x.stl-binary" />
+                <data android:mimeType="model/x.stl-ascii" />
+                <data android:mimeType="application/sla" />
+                <data android:mimeType="application/vnd.ms-pki.stl" />
+                <data android:mimeType="application/x-stl" />
+                <data android:mimeType="model/obj" />
+                <data android:mimeType="model/wavefront-obj" />
+                <data android:mimeType="model/amf" />
+                <data android:mimeType="application/x-amf" />
+                <data android:mimeType="text/x-gcode" />
+                <data android:mimeType="text/gcode" />
+                <data android:mimeType="application/x-gcode" />
+                <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
         <!-- The slicing engine, alone in its own process so an engine crash leaves the editor running

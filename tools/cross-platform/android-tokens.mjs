@@ -94,6 +94,7 @@ const APP_ACTIONS = [
   "add_magnet", "auto_place_wipe",
   "presets_install_printer", "presets_create_custom", "presets_update_custom", "presets_delete_custom",
   "presets_export_bundle", "presets_import_bundle",
+  "printer_inspect_filaments", "recreate_model_colors_fullspectrum",
   "help_setup_wizard", "help_search", "help_shortcuts", "help_tutorial", "help_docs",
   "help_report_bug", "help_tip_of_day", "help_check_updates", "help_language", "help_about",
 ];

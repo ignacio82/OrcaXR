@@ -104,4 +104,5 @@
     <string name="smart_paint_cancel">Atšaukti</string>
     <string name="xr_rail_group_paint">Piešti</string>
     <string name="xr_rail_group_plate">Plokštė</string>
+    <string name="dialog_recreate_model_colors_cancel">Atšaukti</string>
 </resources>

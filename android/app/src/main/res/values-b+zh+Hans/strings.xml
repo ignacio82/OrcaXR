@@ -106,4 +106,5 @@
     <string name="smart_paint_cancel">取消</string>
     <string name="xr_rail_group_paint">绘制</string>
     <string name="xr_rail_group_plate">盘</string>
+    <string name="dialog_recreate_model_colors_cancel">取消</string>
 </resources>

@@ -91,4 +91,5 @@
     <string name="smart_paint_cancel">取消し</string>
     <string name="xr_rail_group_paint">ペイント</string>
     <string name="xr_rail_group_plate">プレート</string>
+    <string name="dialog_recreate_model_colors_cancel">取消し</string>
 </resources>

@@ -77,6 +77,8 @@ fun FilamentList(
     onColor: (Int, String) -> Unit,
     onNozzle: (Int, String) -> Unit,
     onOpenLibrary: () -> Unit,
+    onSyncFilaments: (() -> Unit)? = null,
+    onRecreateColors: (() -> Unit)? = null,
 ) {
     if (!profiles.ready) return
     val editable = enabled && profiles.machine != null && !profiles.authored
@@ -86,6 +88,31 @@ fun FilamentList(
             Text(stringResource(R.string.filament_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             val add = stringResource(R.string.filament_add)
             OutlinedButton(onClick = onAdd, enabled = editable, modifier = Modifier.semantics { contentDescription = add }) { Text("+") }
+        }
+        if (onSyncFilaments != null || onRecreateColors != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (onSyncFilaments != null) {
+                    OutlinedButton(
+                        onClick = onSyncFilaments,
+                        enabled = enabled,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(stringResource(R.string.action_printer_inspect_filaments), maxLines = 1)
+                    }
+                }
+                if (onRecreateColors != null) {
+                    OutlinedButton(
+                        onClick = onRecreateColors,
+                        enabled = enabled,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(stringResource(R.string.action_recreate_model_colors_fullspectrum), maxLines = 1)
+                    }
+                }
+            }
         }
         for (slot in Filaments.slots(view, profiles.extruders)) {
             Row(
@@ -117,7 +144,7 @@ fun FilamentList(
             }
         }
         // The heads panel's last control: the virtual filament library, where mixed recipes are authored.
-        OutlinedButton(onClick = onOpenLibrary) { Text(stringResource(R.string.vf_open_library)) }
+        OutlinedButton(onClick = onOpenLibrary, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.vf_open_library)) }
     }
     editing?.let { slot -> ColourDialog(slot, onClose = { editing = null }) { onColor(slot.index, it) } }
 }

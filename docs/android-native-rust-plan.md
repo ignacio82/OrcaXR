@@ -2445,7 +2445,15 @@ storage journeys on phone, tablet, and desktop-sized windows.
   Filament tab (H-n heads, A-n extra palette colours; "+", Del, colour and
   nozzle, each one undoable "Update slicing configuration", sixteen at
   most, adopted from the project so undo never resurrects a slot — the
-  browser's own palette now follows undo too), and the Project area's
+  browser's own palette now follows undo too), "Sync Filaments From Printer"
+  (`printer_inspect_filaments`) querying Moonraker slot metadata via
+  `DeviceWorkspace.queryFilamentSlots` / `DeviceModel` and executing
+  `ProjectWorkspace.syncPhysicalFilaments` to match presets, update colors and
+  follow slot assignments, "Recreate Model Colors (Full-Spectrum)"
+  (`recreate_model_colors_fullspectrum`) matching model geometry colors via
+  `RecreateModelColorsEngine` (CIELAB ΔE 2000, `VirtualFilaments.search` blends,
+  interactive Compose `RecreateModelColorsDialog`) and executing
+  `ProjectWorkspace.recreateModelColors`, and the Project area's
   selection filament bar assigns the selection's objects, parts and ranges
   ("Assign filament", "Assign n scopes") with the tree's filament badges (a
   76-check JNI journey). The virtual filament library is the browser's
@@ -2473,11 +2481,11 @@ storage journeys on phone, tablet, and desktop-sized windows.
   the browser's sidebar beside its viewport; Device fills the work area as the
   browser's page. Every control is reached with Tab/Shift+Tab and operated
   with Enter/Space, its focus drawn visibly; dialogs keep, wrap and return the
-  focus. Files dropped on the window load as the browser's drop (`DropIntake`):
-  models through the import preview, a 3MF through the guarded Open (it can
-  only open as the project: geometry-only 3MF import is still browser-only),
-  G-code in Preview, anything else refused in the browser's words. JVM tests
-  cover the layouts and the drop; `android-adaptive-smoke.py` resizes the
+  focus. Files dropped on the window or opened/shared via `ACTION_VIEW`/`ACTION_SEND` load as the browser's drop (`DropIntake`):
+  models (STL, OBJ, AMF, ZIP) through the import preview, a 3MF through guarded Open / geometry choice,
+  G-code in Preview, anything else refused in the browser's words. The manifest exposes intent filters across
+  specific MIME types, generic `application/octet-stream` (matching MediaStore/Downloads indexing), and explicit extensions. JVM tests
+  cover the layouts, drop and intake routing; `android-adaptive-smoke.py` resizes the
   emulator for the bar, rail and panels and drives the keyboard (adb cannot
   drag and drop) and passes on both emulators. The transform inspector sits
   under the Project area's tree (beside the Workspace from 840 dp). So do the
@@ -2932,14 +2940,15 @@ credential storage, and explicit permission/error flows.
   removed, each with its own key, remember switch and forget, verified by 30
   host checks and an owned-emulator smoke against the simulator. Discovery
   (`PrinterDiscovery`, `MoonrakerProbe`, `AndroidPrinterDiscovery`) only
-  proposes: the platform's DNS-SD browse for `_moonraker._tcp` finds
-  candidates, each is verified by the keyless Moonraker handshake, a probe
+  proposes: the platform's DNS-SD browse for `_moonraker._tcp`, `_snapmaker._tcp` and `_octoprint._tcp`
+  alongside direct UDP broadcast DNS-SD queries (`DirectDnsParser`) with Wi-Fi multicast locking finds
+  candidates (mapping Snapmaker MQTT port 1884 to Moonraker port 7125), each is verified by the keyless Moonraker handshake, a probe
   for an earlier or stopped run is dropped, and a printer is saved only when
   the operator adds a proposal. 27 host checks cover verification (open,
   key-requiring, not Moonraker, nothing there, local network denied) and
   stale, duplicate and bounded runs, including a probe completing after the
-  operator added another printer; an instrumented test finds a service
-  advertised on the emulator, and the emulator smoke finds, adds and
+  operator added another printer; instrumented tests find a service
+  advertised on the emulator (including Snapmaker port mapping) and real LAN devices, and the emulator smoke finds, adds and
   connects to the simulator through an advertised port.
 - [x] Support intentional HTTP LAN connections through an explicit transport
   policy. Android configuration must allow the intended user-entered endpoints;

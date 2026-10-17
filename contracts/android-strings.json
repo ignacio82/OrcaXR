@@ -1903,6 +1903,39 @@
     },
     "xr_panel_tools": {
       "key": "menuSection.tools.label"
+    },
+    "action_printer_inspect_filaments": {
+      "key": "action.printer_inspect_filaments.label"
+    },
+    "action_hint_printer_inspect_filaments": {
+      "key": "action.printer_inspect_filaments.hint"
+    },
+    "action_recreate_model_colors_fullspectrum": {
+      "key": "action.recreate_model_colors_fullspectrum.label"
+    },
+    "action_hint_recreate_model_colors_fullspectrum": {
+      "key": "action.recreate_model_colors_fullspectrum.hint"
+    },
+    "dialog_recreate_model_colors_title": {
+      "key": "dialog.recreateModelColors.title"
+    },
+    "dialog_recreate_model_colors_description": {
+      "key": "dialog.recreateModelColors.description"
+    },
+    "dialog_recreate_model_colors_apply": {
+      "key": "dialog.recreateModelColors.apply"
+    },
+    "dialog_recreate_model_colors_cancel": {
+      "key": "dialog.recreateModelColors.cancel"
+    },
+    "the_printer_reported_no_loaded": {
+      "key": "app.main.thePrinterReportedNoLoaded"
+    },
+    "recreate_colors_no_colors": {
+      "key": "workspace.orcaWorkspace.noColorsToRecreate"
+    },
+    "recreate_colors_applied": {
+      "key": "workspace.orcaWorkspace.recreateColorsApplied"
     }
   },
   "english": [
