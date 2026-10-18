@@ -771,6 +771,13 @@ function buildProjectSettings(
   };
   if (state.printer.profileId) config.printer_settings_id = state.printer.profileId;
   if (
+    config.curr_bed_type === undefined &&
+    typeof config.default_bed_type === 'string' &&
+    config.default_bed_type.length > 0
+  ) {
+    config.curr_bed_type = config.default_bed_type;
+  }
+  if (
     state.filaments.physical.length > 0 &&
     state.filaments.physical.every((filament) => filament.nozzleDiameterMm !== undefined)
   ) {
