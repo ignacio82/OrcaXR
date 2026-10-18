@@ -324,6 +324,15 @@ Completed slice(const orcaxr_engine_request& request, Stage& stage) {
         if (!it.value().is_string()) throw Failure("configuration", "A plate override is not engine text.");
         if (!config.set_deserialize_nothrow(it.key(), it.value().get<std::string>(), substitutions)) ++rejected;
     }
+    // If curr_bed_type was not explicitly set in the loaded project or plate overrides,
+    // synchronize it from default_bed_type (as OrcaSlicer does in Plater.cpp / PartPlate.cpp),
+    // rather than letting full_print_config()'s fallback default (btPC / "Cool Plate", 35°C) take effect.
+    if (!loaded.has("curr_bed_type") && values.find("curr_bed_type") == values.end() && config.has("default_bed_type")) {
+        const std::string default_bed = config.opt_string("default_bed_type");
+        if (!default_bed.empty()) {
+            config.set_deserialize_nothrow("curr_bed_type", default_bed, substitutions);
+        }
+    }
     // The command-line route normalizes before Print::apply.
     config.normalize_fdm();
     check_cancel();

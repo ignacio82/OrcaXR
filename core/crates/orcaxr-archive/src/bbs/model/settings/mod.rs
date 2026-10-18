@@ -193,6 +193,17 @@ impl<'m, 'a> Authoring<'m, 'a> {
         ] {
             s.set(k, Projection::Scalar(Atom::Literal(v)), &mut budget)?;
         }
+        if s.get("curr_bed_type").is_none() {
+            if let Some(Value::String(default_bed)) = s.source("default_bed_type") {
+                if !default_bed.is_empty() {
+                    s.set(
+                        "curr_bed_type",
+                        Projection::Scalar(Atom::Text(default_bed)),
+                        &mut budget,
+                    )?;
+                }
+            }
+        }
         for key in [
             "filament_colour",
             "filament_settings_id",

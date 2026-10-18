@@ -187,6 +187,13 @@ std::string finish_slice(Slic3r::Model &model, const std::string &overrides_json
     cfg.set_key_value("use_relative_e_distances", new Slic3r::ConfigOptionBool(true));
 
     apply_overrides_json(cfg, overrides_json);
+    if (!cfg.has("curr_bed_type") && cfg.has("default_bed_type")) {
+        const std::string default_bed = cfg.opt_string("default_bed_type");
+        if (!default_bed.empty()) {
+            Slic3r::ConfigSubstitutionContext subs(Slic3r::ForwardCompatibilitySubstitutionRule::Enable);
+            cfg.set_deserialize_nothrow("curr_bed_type", default_bed, subs);
+        }
+    }
     // The absolute-E fallback stays for profile-less slicing.
     if (overrides_json.empty())
         cfg.set_key_value("use_relative_e_distances", new Slic3r::ConfigOptionBool(false));
@@ -379,6 +386,22 @@ std::string slice_project_inner(const std::string &bytes,
     fixup_enum_keys_map(cfg);
     cfg.apply(loaded, /*ignore_nonexistent=*/true);
     apply_overrides_json(cfg, overrides_json);
+    if (!loaded.has("curr_bed_type") && cfg.has("default_bed_type")) {
+        bool has_override = false;
+        if (!overrides_json.empty()) {
+            try {
+                auto j = nlohmann::json::parse(overrides_json);
+                has_override = j.contains("curr_bed_type");
+            } catch (...) {}
+        }
+        if (!has_override) {
+            const std::string default_bed = cfg.opt_string("default_bed_type");
+            if (!default_bed.empty()) {
+                Slic3r::ConfigSubstitutionContext subs(Slic3r::ForwardCompatibilitySubstitutionRule::Enable);
+                cfg.set_deserialize_nothrow("curr_bed_type", default_bed, subs);
+            }
+        }
+    }
     // The CLI normalizes before Print::apply (OrcaSlicer.cpp
     // m_print_config.normalize_fdm()).
     cfg.normalize_fdm();
