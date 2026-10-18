@@ -20,6 +20,7 @@
     <!-- The languages offered (system settings' per-app language): those the browser offers that
          carry any of the app's words, generated with their resources by android-strings.mjs. -->
     <application android:allowBackup="false" android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:networkSecurityConfig="@xml/network_security_config"
         android:localeConfig="@xml/locales_config"
