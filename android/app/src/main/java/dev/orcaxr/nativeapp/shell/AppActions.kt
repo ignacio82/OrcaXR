@@ -76,6 +76,7 @@ object AppActions {
     val HELP = listOf(
         "help_shortcuts", "help_docs", "help_report_bug", "help_about", "help_language",
         "help_tutorial", "help_tip_of_day", "help_check_updates", "help_setup_wizard", "help_search",
+        "help_mcp_settings", "help_ai_assistant",
     )
 
     /** Preset management: installing printers, custom presets, and preset bundles. */

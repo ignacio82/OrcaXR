@@ -17,6 +17,14 @@
     <!-- That notification, from Android 13: asked once, before the first slice on this device. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Voice interaction with local on-device AI assistant -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
     <!-- The languages offered (system settings' per-app language): those the browser offers that
          carry any of the app's words, generated with their resources by android-strings.mjs. -->
     <application android:allowBackup="false" android:icon="@mipmap/ic_launcher"

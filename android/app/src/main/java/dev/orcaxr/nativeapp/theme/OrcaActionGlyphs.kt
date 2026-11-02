@@ -164,6 +164,8 @@ object OrcaActionGlyphs {
         "help_check_updates" to OrcaActionGlyph(R.drawable.ic_symbol_update),
         "help_language" to OrcaActionGlyph(R.drawable.ic_symbol_language),
         "help_about" to OrcaActionGlyph(R.drawable.ic_symbol_info),
+        "help_mcp_settings" to OrcaActionGlyph(R.drawable.ic_symbol_deployed_code),
+        "help_ai_assistant" to OrcaActionGlyph(R.drawable.ic_symbol_wand_stars),
     )
 
     /** The browser's search symbol, on the command palette's trigger. */

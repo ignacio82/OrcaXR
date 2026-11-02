@@ -1,20 +1,26 @@
 package dev.orcaxr.nativeapp.preview
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.SurfaceView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -24,16 +30,21 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,12 +58,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -60,7 +74,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.orcaxr.core.GcodeArtifactText
+import dev.orcaxr.nativeapp.device.DeviceModel
+import dev.orcaxr.nativeapp.exports.ExportCommands
+import dev.orcaxr.nativeapp.prepare.PrepareCommands
+import dev.orcaxr.nativeapp.prepare.PrepareModel
 import dev.orcaxr.nativeapp.project.ProjectModel
+import dev.orcaxr.nativeapp.send.SendWords
+import dev.orcaxr.nativeapp.shell.LocalActionRunner
 import dev.orcaxr.nativeapp.theme.LocalOrcaTheme
 import dev.orcaxr.nativeapp.theme.OrcaThemeTokens
 import dev.orcaxr.nativeapp.workspace.ViewDescription
@@ -92,9 +112,8 @@ import kotlin.math.abs
  * end, as the browser's sidebar sits at the start of its viewport. The
  * toolpaths sit on the project's [bed], grown to reach them.
  *
- * The view wears the theme's viewport wash and plate lines; to an
- * accessibility service it is the browser's "Build plate", says what the
- * status line says, and offers the browser's View menu camera views.
+ * Slices from Prepare can be directly inspected, downloaded, re-sliced, or
+ * dispatched directly to the active Moonraker printer via [device].
  */
 @Composable
 fun PreviewScreen(
@@ -103,10 +122,55 @@ fun PreviewScreen(
     panelWidth: Dp? = null,
     bed: WorkspaceBed = WorkspaceBed.DEFAULT,
     project: ProjectModel? = null,
+    prepare: PrepareModel? = null,
+    device: DeviceModel? = null,
+    onNavigateToArea: ((Int) -> Unit)? = null,
 ) {
     val state = model.state
+    val context = LocalContext.current
     // Any document: providers often report G-code only as bytes or text.
     val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(model::open) }
+    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { prepare?.slice() }
+    val slice: () -> Unit = {
+        val ask = prepare != null && Build.VERSION.SDK_INT >= 33 &&
+            prepare.state.connection.endpoint.isEmpty() &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+            prepare.askNotifications()
+        if (ask) {
+            notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            prepare?.slice()
+        }
+    }
+
+    val viewData = project?.view
+    val plate = viewData?.activePlate
+    val revision = viewData?.revision
+    val result = prepare?.state?.result
+    val hasSlice = result != null || state.slice != null
+    val isOutOfDate = state.withdrawn || (result != null && revision != null && result.revision != revision)
+    val isConnected = device?.state?.connected == true
+    val sendState = device?.sendState
+    val isSending = sendState?.busy == true
+    val activePrinterName = device?.state?.activeId?.let { id ->
+        device.state.printers.firstOrNull { it.id == id }?.name
+    } ?: stringResource(R.string.prepare_printer)
+
+    val facts = if (prepare != null && revision != null) {
+        PrepareCommands.Facts.of(
+            state = prepare.state,
+            activePlateId = plate?.id,
+            plateObjects = plate?.objects,
+            revision = revision,
+            connected = isConnected,
+            sending = isSending,
+        )
+    } else null
+    val canSend = facts?.let { PrepareCommands.canSend(it) } ?: (isConnected && !isSending && !isOutOfDate && prepare?.sendable() != null)
+    val canSlice = facts?.let { PrepareCommands.canSlice(it) } ?: false
+    val slicingJob = prepare?.state?.job
+    val runAction = LocalActionRunner.current
+
     val renderer = remember { PreviewRenderer() }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
@@ -134,33 +198,352 @@ fun PreviewScreen(
     val cameras = ViewDescription.cameraActions(renderer::show)
 
     val view = @Composable { place: Modifier ->
-        AndroidView(
-            factory = { context -> PreviewSurface(context).also(renderer::attach) },
-            place,
-            update = { surface -> ViewDescription.describe(surface, label, described, cameras) },
-        )
+        Box(place) {
+            AndroidView(
+                factory = { ctx -> PreviewSurface(ctx).also(renderer::attach) },
+                modifier = Modifier.fillMaxSize(),
+                update = { surface -> ViewDescription.describe(surface, label, described, cameras) },
+            )
+            // Floating Quick-Action Pill over the 3D toolpath viewport
+            if (hasSlice) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    shadowElevation = 6.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        val shortSummary = state.summary?.totals ?: result?.summary
+                        if (!shortSummary.isNullOrBlank()) {
+                            Text(
+                                text = shortSummary,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                            )
+                        }
+                        if (isSending) {
+                            LinearProgressIndicator(modifier = Modifier.width(64.dp))
+                            TextButton(
+                                onClick = { device?.cancelSend() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            ) {
+                                Text(stringResource(R.string.send_cancel), style = MaterialTheme.typography.labelSmall)
+                            }
+                        } else if (isOutOfDate) {
+                            FilledTonalButton(
+                                onClick = slice,
+                                enabled = canSlice,
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_symbol_update),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp).padding(end = 4.dp),
+                                )
+                                Text(stringResource(R.string.preview_reslice), style = MaterialTheme.typography.labelSmall)
+                            }
+                        } else if (canSend) {
+                            Button(
+                                onClick = { device?.send(prepare?.sendable()) },
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_symbol_send),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp).padding(end = 4.dp),
+                                )
+                                Text(
+                                    stringResource(R.string.send_action),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        } else if (!isConnected) {
+                            FilledTonalButton(
+                                onClick = {
+                                    if (device?.state?.activeId != null) device.connect()
+                                    else onNavigateToArea?.invoke(R.string.nav_device)
+                                },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            ) {
+                                Text(
+                                    stringResource(R.string.preview_connect_printer),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     val controls = @Composable { place: Modifier ->
         Column(
             place.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(stringResource(R.string.preview_heading), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
-            OutlinedButton(onClick = { open.launch(arrayOf("*/*")) }, enabled = !state.loading) {
-                Text(stringResource(R.string.preview_open))
+            // Dedicated Slice & Print Card when a slice is present
+            if (hasSlice) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f, fill = false),
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_symbol_layers),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    text = result?.plateName?.ifEmpty { null } ?: plate?.name ?: result?.name ?: stringResource(R.string.preview_heading),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            if (isOutOfDate) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                    shape = RoundedCornerShape(8.dp),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.preview_modified_warning),
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    )
+                                }
+                            } else if (canSend) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(8.dp),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.preview_ready_to_print),
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    )
+                                }
+                            }
+                        }
+
+                        val totalsText = state.summary?.totals ?: result?.summary
+                        if (!totalsText.isNullOrBlank()) {
+                            Text(
+                                text = totalsText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        if (slicingJob != null) {
+                            val percent = slicingJob.percent
+                            if (percent != null) {
+                                LinearProgressIndicator(
+                                    progress = { (percent / 100).toFloat().coerceIn(0f, 1f) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            } else {
+                                LinearProgressIndicator(Modifier.fillMaxWidth())
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = PrepareWords.progress(slicingJob.message),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                TextButton(onClick = { prepare.cancel() }) {
+                                    Text(stringResource(R.string.prepare_cancel))
+                                }
+                            }
+                        }
+
+                        if (isSending || sendState?.status != null) {
+                            val statusText = sendState?.status.orEmpty()
+                            if (isSending) {
+                                LinearProgressIndicator(Modifier.fillMaxWidth())
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = statusText,
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                if (isSending) {
+                                    TextButton(onClick = { device.cancelSend() }) {
+                                        Text(stringResource(R.string.send_cancel))
+                                    }
+                                } else {
+                                    TextButton(onClick = { device.dismissSend() }) {
+                                        Text(stringResource(R.string.device_dismiss))
+                                    }
+                                }
+                            }
+                        }
+
+                        if (isOutOfDate) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Button(
+                                    onClick = slice,
+                                    enabled = canSlice,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_symbol_update),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp).padding(end = 6.dp),
+                                    )
+                                    Text(stringResource(R.string.preview_reslice))
+                                }
+                                OutlinedButton(
+                                    onClick = { onNavigateToArea?.invoke(R.string.nav_prepare) },
+                                ) {
+                                    Text(stringResource(R.string.preview_back_to_prepare))
+                                }
+                            }
+                        } else {
+                            if (canSend) {
+                                Button(
+                                    onClick = { device?.send(prepare?.sendable()) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_symbol_send),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp).padding(end = 6.dp),
+                                    )
+                                    Text(
+                                        if (isConnected) "Send to $activePrinterName" else stringResource(R.string.send_action),
+                                        style = MaterialTheme.typography.labelLarge,
+                                    )
+                                }
+                            } else if (!isConnected && !isSending) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            if (device?.state?.activeId != null) device.connect()
+                                            else onNavigateToArea?.invoke(R.string.nav_device)
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_symbol_send),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp).padding(end = 6.dp),
+                                        )
+                                        Text(stringResource(R.string.preview_connect_printer))
+                                    }
+                                    OutlinedButton(
+                                        onClick = { onNavigateToArea?.invoke(R.string.nav_device) },
+                                    ) {
+                                        Text(stringResource(R.string.nav_device))
+                                    }
+                                }
+                                Text(
+                                    text = SendWords.CONNECT_FIRST,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                OutlinedButton(
+                                    onClick = { runAction(ExportCommands.DOWNLOAD) },
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_symbol_download),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp).padding(end = 6.dp),
+                                    )
+                                    Text(stringResource(R.string.export_download))
+                                }
+                                OutlinedButton(
+                                    onClick = { onNavigateToArea?.invoke(R.string.nav_prepare) },
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_symbol_tune),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp).padding(end = 6.dp),
+                                    )
+                                    Text(stringResource(R.string.preview_back_to_prepare))
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text(stringResource(R.string.preview_heading), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = { open.launch(arrayOf("*/*")) }, enabled = !state.loading, modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.preview_open))
+                    }
+                    if (onNavigateToArea != null) {
+                        Button(onClick = { onNavigateToArea(R.string.nav_prepare) }) {
+                            Text(stringResource(R.string.nav_prepare))
+                        }
+                    }
+                }
+                Text(status(state), style = MaterialTheme.typography.bodySmall)
             }
+
             if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-            Text(status(state), style = MaterialTheme.typography.bodySmall)
-            if (state.slice != null) Text(stringResource(R.string.preview_sliced), style = MaterialTheme.typography.bodySmall)
-            // The slice shown was withdrawn; the next one read replaces this notice, so a fresh slice never shows under it.
-            if (state.withdrawn) {
-                Card(Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(PrepareWords.OUT_OF_DATE, Modifier.weight(1f))
-                        TextButton(onClick = model::dismissWithdrawn) { Text(stringResource(R.string.device_dismiss)) }
+
+            if (hasSlice) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(status(state), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { open.launch(arrayOf("*/*")) }, enabled = !state.loading) {
+                        Text(stringResource(R.string.preview_open), style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
+
             model.message?.let { message ->
                 Card(Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -235,7 +618,25 @@ private fun LayerControls(state: PreviewState, bounds: Pair<Int, Int>, model: Pr
     val (low, high) = state.layerRange ?: bounds
     LayerSlider(stringResource(R.string.preview_top_layer), high, bounds, state.topZMm, !state.loading, model::setTopLayer)
     LayerSlider(stringResource(R.string.preview_bottom_layer), low, bounds, state.bottomZMm, !state.loading, model::setBottomLayer)
-    LabelledCheckbox(stringResource(R.string.preview_single_layer), state.singleLayer, !state.loading, model::setSingleLayer)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        LabelledCheckbox(stringResource(R.string.preview_single_layer), state.singleLayer, !state.loading, model::setSingleLayer)
+        if (state.singleLayer || low != bounds.first || high != bounds.second) {
+            TextButton(
+                onClick = {
+                    if (state.singleLayer) model.setSingleLayer(false)
+                    model.setBottomLayer(bounds.first)
+                    model.setTopLayer(bounds.second)
+                },
+                enabled = !state.loading,
+            ) {
+                Text(stringResource(R.string.preview_reset_layers), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
     val topZ = state.topZMm
     if (project != null && topZ != null) {
         LayerEventsSection(project, topZ)

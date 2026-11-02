@@ -29,11 +29,14 @@ object DiagnosticsLog {
             entries.addLast(entry)
             while (entries.size > Diagnostics.MAX_LOG_ENTRIES) entries.removeFirst()
         }
+        dev.orcaxr.nativeapp.mcp.McpLogBuffer.log("OrcaXRDiagnostics", "[$scope] $entry")
     }
 
     /** A failure reaching a boundary, as the browser records an error: its kind and its message. */
-    fun recordError(scope: String, error: Throwable) =
+    fun recordError(scope: String, error: Throwable) {
+        dev.orcaxr.nativeapp.mcp.McpLogBuffer.log("OrcaXRDiagnostics", "[$scope] ERROR: ${error.javaClass.simpleName}: ${error.message}")
         record(Diagnostics.Level.ERROR, scope, "${error.javaClass.simpleName}: ${error.message.orEmpty()}")
+    }
 
     /** The kept events, oldest first. */
     fun snapshot(): List<String> = synchronized(entries) { entries.toList() }

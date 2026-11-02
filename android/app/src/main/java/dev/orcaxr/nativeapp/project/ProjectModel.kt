@@ -18,6 +18,8 @@ import androidx.compose.runtime.neverEqualPolicy
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import java.util.Locale
+import dev.orcaxr.nativeapp.prepare.PrintProcessSettings
+import dev.orcaxr.nativeapp.prepare.ProcessSettings
 import dev.orcaxr.nativeapp.prepare.WaveOverhangs
 import dev.orcaxr.nativeapp.prepare.WaveSettingsState
 import dev.orcaxr.core.ActionArrangement
@@ -153,7 +155,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     private val recovery = ProjectRecovery(File(application.filesDir, "recovery"))
     private val engine = LocalEngineClient(application)
     private val engineJobs = File(application.noBackupFilesDir, "engine_jobs")
-    private lateinit var workspace: ProjectWorkspace
+    internal lateinit var workspace: ProjectWorkspace
     /** The workspace, once the worker made it. */
     private val started = CompletableFuture<ProjectWorkspace>()
     private var subscription: AutoCloseable? = null
@@ -277,6 +279,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
                 main.post { show(workspace.view) }
                 sync.request()
                 refreshToolbar()
+                refreshPrintSettings()
                 // The Prepare pickers follow the project's filaments through edits, undo and redo.
                 val slots = workspace.view.filamentSlots
                 if (slots != followed) {
@@ -291,6 +294,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             main.post { show(workspace.view) }
             // The browser's new document starts from the remembered or default catalog profile.
             profiles.start(workspace)
+            refreshPrintSettings()
         }
     }
 
@@ -770,6 +774,13 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         }
     }
 
+    /**
+     * Remaps filament assignments according to [mapping] across the selection (or active plate),
+     * committed atomically in a single undoable step.
+     */
+    fun remapFilaments(mapping: Map<String, String>): java.util.concurrent.CompletableFuture<Int?> =
+        workspace.remapFilaments(mapping)
+
     // ---- Sync filaments from printer & Recreate model colors ----
 
     var recreateColorsPlan by mutableStateOf<RecreateModelColorsPlan?>(null)
@@ -1170,6 +1181,8 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "help_tip_of_day" -> showTipOfTheDayDialog = true
             "help_check_updates" -> showCheckUpdatesDialog = true
             "help_setup_wizard" -> showSetupWizardDialog = true
+            "mcp_settings", "help_mcp_settings" -> showMcpSettingsDialog = true
+            "ai_assistant", "help_ai_assistant" -> showAiAssistantDialog = true
             "help_docs" -> urlRequest = "https://orcaxr.martinez.fyi"
             "help_report_bug" -> urlRequest = "https://github.com/ignacio82/OrcaXR/issues/new"
             in AppActions.PRESETS -> showPresetLibraryDialog = true
@@ -1338,6 +1351,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         private set
     var showPresetLibraryDialog by mutableStateOf(false)
         private set
+    var showMcpSettingsDialog by mutableStateOf(false)
+        private set
+    var showAiAssistantDialog by mutableStateOf(false)
+        private set
     var urlRequest by mutableStateOf<String?>(null)
         private set
 
@@ -1348,6 +1365,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun dismissTipOfTheDayDialog() { showTipOfTheDayDialog = false }
     fun dismissCheckUpdatesDialog() { showCheckUpdatesDialog = false }
     fun dismissSetupWizardDialog() { showSetupWizardDialog = false }
+    fun dismissMcpSettingsDialog() { showMcpSettingsDialog = false }
+    fun openMcpSettingsDialog() { showMcpSettingsDialog = true }
+    fun dismissAiAssistantDialog() { showAiAssistantDialog = false }
+    fun openAiAssistantDialog() { showAiAssistantDialog = true }
     fun dismissPresetLibraryDialog() { showPresetLibraryDialog = false }
     fun urlHandled() { urlRequest = null }
 
@@ -1584,73 +1605,13 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         smartPaintSession = current.copy(prompt = prompt, referenceImageUri = imageUri, requesting = true, error = null)
         work {
             try {
-                val geomDescJson = workspace.smartPaintDescribe(current.volumeId).await()
-                val proposal = JSONObject().apply {
-                    put("schemaVersion", 1)
-                    val regions = JSONArray()
-                    val lower = prompt.lowercase()
-                    if (lower.contains("top") || lower.contains("roof") || lower.contains("upper")) {
-                        regions.put(JSONObject().apply {
-                            put("id", "region_top")
-                            put("label", "Top / Upper Surface")
-                            put("confidence", 0.95)
-                            put("shape", JSONObject().apply {
-                                put("kind", "box")
-                                put("min", JSONArray(listOf(0.0, 0.0, 0.7)))
-                                put("max", JSONArray(listOf(1.0, 1.0, 1.0)))
-                            })
-                        })
-                    }
-                    if (lower.contains("bottom") || lower.contains("base") || lower.contains("lower")) {
-                        regions.put(JSONObject().apply {
-                            put("id", "region_bottom")
-                            put("label", "Base / Lower Surface")
-                            put("confidence", 0.90)
-                            put("shape", JSONObject().apply {
-                                put("kind", "box")
-                                put("min", JSONArray(listOf(0.0, 0.0, 0.0)))
-                                put("max", JSONArray(listOf(1.0, 1.0, 0.3)))
-                            })
-                        })
-                    }
-                    if (lower.contains("overhang") || lower.contains("support")) {
-                        regions.put(JSONObject().apply {
-                            put("id", "region_overhang")
-                            put("label", "Downward Overhangs")
-                            put("confidence", 0.88)
-                            put("shape", JSONObject().apply {
-                                put("kind", "direction")
-                                put("axis", JSONArray(listOf(0.0, 0.0, -1.0)))
-                                put("maxAngleDeg", 45.0)
-                            })
-                        })
-                    }
-                    if (regions.length() == 0) {
-                        regions.put(JSONObject().apply {
-                            put("id", "region_1")
-                            put("label", "Top Region")
-                            put("confidence", 0.92)
-                            put("shape", JSONObject().apply {
-                                put("kind", "box")
-                                put("min", JSONArray(listOf(0.0, 0.0, 0.5)))
-                                put("max", JSONArray(listOf(1.0, 1.0, 1.0)))
-                            })
-                        })
-                        regions.put(JSONObject().apply {
-                            put("id", "region_2")
-                            put("label", "Bottom Region")
-                            put("confidence", 0.89)
-                            put("shape", JSONObject().apply {
-                                put("kind", "box")
-                                put("min", JSONArray(listOf(0.0, 0.0, 0.0)))
-                                put("max", JSONArray(listOf(1.0, 1.0, 0.5)))
-                            })
-                        })
-                    }
-                    put("regions", regions)
-                }
-
-                val proposalJson = proposal.toString()
+                val proposalJson = SmartPaintHelper.generateProposal(
+                    context = getApplication(),
+                    volumeId = current.volumeId,
+                    prompt = prompt,
+                    imageUri = imageUri,
+                    workspace = workspace,
+                )
                 val validationJson = ProjectSmartPaint.validateProposal(proposalJson)
                 val validation = JSONObject(validationJson)
                 if (!validation.optBoolean("valid", false)) {
@@ -1684,11 +1645,17 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         val proposalJson = current.proposalJson ?: return
         work {
             try {
+                val filaments = view.filaments.options.filter { !it.mixed }
                 val assignmentsArr = JSONArray()
                 for ((regionId, value) in assignments) {
+                    val resolvedValue = if (current.channel == PaintChannel.COLOR) {
+                        dev.orcaxr.nativeapp.ai.ColorNames.findFilamentIdByColorOrNumber(value, filaments) ?: value
+                    } else {
+                        value
+                    }
                     assignmentsArr.put(JSONObject().apply {
                         put("regionId", regionId)
-                        put("value", value)
+                        put("value", resolvedValue)
                         put("excludedTriangles", JSONArray())
                     })
                 }
@@ -2536,9 +2503,15 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         val fromProfile = !profilesView.authored
         wipeTowerAuto = on
         work {
-            if (on) placeTower(fromProfile)
+            if (on) placeTower(fromProfile) else workspace.disableWipeTower().await()
             towerStatus(words(if (on) R.string.wipe_tower_auto_on else R.string.wipe_tower_auto_off))
         }
+    }
+
+    /** Disables or removes the prime/wipe tower from the active plate. */
+    fun disableWipeTower() = work {
+        workspace.disableWipeTower().await()
+        towerStatus("Wipe tower disabled")
     }
 
     /** The active plate's wipe tower as the Workspace draws it (the browser's ghost); none without an enabled tower. */
@@ -2613,6 +2586,56 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             sourceHash = snapshot.sourceHash,
         ).await()
         refreshWaveSettings()
+    }
+
+    /** The project's essential print and process settings (Brim, Supports, Infill, Walls). */
+    var printSettings by mutableStateOf(PrintProcessSettings())
+        private set
+
+    /** Re-resolves print settings against current project overrides and profile config. */
+    fun refreshPrintSettings() = quietly {
+        val snapshot = workspace.projectSettingsOverrideSnapshot().await()
+        val state = ProcessSettings.resolve(snapshot)
+        main.post { printSettings = state }
+    }
+
+    /** Sets one print setting as a canonical project settings override. */
+    fun setPrintSetting(key: String, value: Any) = work {
+        val snapshot = workspace.projectSettingsOverrideSnapshot().await()
+        val nextOverrides = ProcessSettings.withValue(snapshot.overridesJson, key, value)
+        workspace.applyProjectSettingsOverrides(
+            inheritedConfigJson = snapshot.inheritedConfigJson,
+            overridesJson = nextOverrides,
+            sourceRevision = snapshot.sourceRevision,
+            sourceHash = snapshot.sourceHash,
+        ).await()
+        refreshPrintSettings()
+    }
+
+    /** Clears one print setting override, returning to inherited profile default. */
+    fun clearPrintSetting(key: String) = work {
+        val snapshot = workspace.projectSettingsOverrideSnapshot().await()
+        val nextOverrides = ProcessSettings.withoutValue(snapshot.overridesJson, key)
+        workspace.applyProjectSettingsOverrides(
+            inheritedConfigJson = snapshot.inheritedConfigJson,
+            overridesJson = nextOverrides,
+            sourceRevision = snapshot.sourceRevision,
+            sourceHash = snapshot.sourceHash,
+        ).await()
+        refreshPrintSettings()
+    }
+
+    /** Resets all process setting overrides for the project. */
+    fun resetPrintSettings() = work {
+        val snapshot = workspace.projectSettingsOverrideSnapshot().await()
+        val nextOverrides = ProcessSettings.withoutOverrides(snapshot.overridesJson)
+        workspace.applyProjectSettingsOverrides(
+            inheritedConfigJson = snapshot.inheritedConfigJson,
+            overridesJson = nextOverrides,
+            sourceRevision = snapshot.sourceRevision,
+            sourceHash = snapshot.sourceHash,
+        ).await()
+        refreshPrintSettings()
     }
 
     /** Renames an object or part (the Objects panel's Rename). */

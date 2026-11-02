@@ -104,7 +104,7 @@ class PrintSendService : Service() {
     }
 
     override fun onTimeout(startId: Int, fgsType: Int) {
-        onCancel?.invoke()
+        android.util.Log.w("OrcaXRSend", "PrintSendService onTimeout for startId $startId, fgsType $fgsType; demoting service without cancelling active send")
         demote()
     }
 

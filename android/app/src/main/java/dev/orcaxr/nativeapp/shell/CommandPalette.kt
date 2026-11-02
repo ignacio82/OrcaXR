@@ -109,7 +109,14 @@ fun CommandPalette(model: ProjectModel, fromKeys: Boolean, onDismiss: () -> Unit
     // The core's list, read again whenever the project, its selection or its enablement changes.
     LaunchedEffect(view) {
         actions = runCatching {
-            withContext(Dispatchers.IO) { AppActions.performed(model.surfaceActions(ProjectIntents.ActionSurface.CommandPalette).get()) }
+            withContext(Dispatchers.IO) {
+                val core = model.surfaceActions(ProjectIntents.ActionSurface.CommandPalette).get()
+                val appInjected = listOf(
+                    ProjectActionState("help_mcp_settings", "help_mcp_settings", enabled = true),
+                    ProjectActionState("help_ai_assistant", "help_ai_assistant", enabled = true),
+                )
+                AppActions.performed(core + appInjected)
+            }
         }.getOrDefault(actions)
     }
     var query by remember { mutableStateOf("") }

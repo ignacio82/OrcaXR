@@ -98,6 +98,36 @@ internal fun StripActions(model: ProjectModel, wide: Boolean, compact: Boolean) 
             }
         }
     }
+    val mcpLabel = stringResource(R.string.help_mcp_settings)
+    val mcpHint = stringResource(R.string.mcp_toolbar_hint)
+    ActionTooltip(mcpHint) {
+        IconButton(
+            onClick = { run("help_mcp_settings") },
+            modifier = Modifier.pointerHoverIcon(PointerIcon.Hand).semantics { contentDescription = mcpLabel },
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_symbol_deployed_code),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+    val aiAssistantLabel = stringResource(R.string.help_ai_assistant)
+    val aiAssistantHint = stringResource(R.string.ai_assistant_toolbar_hint)
+    ActionTooltip(aiAssistantHint) {
+        IconButton(
+            onClick = { run("help_ai_assistant") },
+            modifier = Modifier.pointerHoverIcon(PointerIcon.Hand).semantics { contentDescription = aiAssistantLabel },
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_symbol_wand_stars),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
     val xrAdapter = dev.orcaxr.nativeapp.xr.LocalXrAdapter.current
     val xrCaps = dev.orcaxr.nativeapp.xr.LocalXrCapabilities.current
     if (xrCaps.isSpatialSupported && xrAdapter != null) {

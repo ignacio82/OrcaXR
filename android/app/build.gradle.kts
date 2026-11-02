@@ -105,6 +105,9 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.xr.scenecore)
+    // On-device LLM: LiteRT-LM (Gemma 4 / Gemma 3 / Gemma 2 with OpenAPI tools) and ML Kit GenAI (Google AICore / Gemini Nano on Tensor TPU)
+    implementation(libs.litertlm.android)
+    implementation(libs.mlkit.genai.prompt)
     // Prepare's platform-free flow (connection, consent, the browser's words) on the JVM.
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.ext.junit)

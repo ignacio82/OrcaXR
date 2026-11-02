@@ -36,6 +36,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,7 +44,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
@@ -63,6 +66,8 @@ import dev.orcaxr.nativeapp.project.RecreateModelColorsDialog
 import dev.orcaxr.nativeapp.project.VirtualFilamentAuthorDialog
 import dev.orcaxr.nativeapp.project.VirtualFilamentDeleteDialog
 import dev.orcaxr.nativeapp.project.VirtualFilamentLibraryPanel
+import dev.orcaxr.nativeapp.project.inspectorPanel
+import dev.orcaxr.nativeapp.project.settingsSideBySide
 import kotlinx.coroutines.launch
 import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.nativeapp.device.DeviceModel
@@ -159,6 +164,8 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
 
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    var widthDp by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
     Column(modifier.fillMaxWidth()) {
         // Slice and its progress stay above the list, as the browser keeps Slice in its toolbar: the
         // profiles, filaments and the virtual library run to several screens before the slice's own words.
@@ -205,7 +212,7 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
             }
         }
         LazyColumn(
-            Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+            Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp).onSizeChanged { widthDp = with(density) { it.width.toDp().value.toInt() } },
             state = list,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -263,6 +270,10 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                     onFilament = project::chooseFilament,
                 )
             }
+            // The essential print and process settings (Brim, Supports, Infill, Walls), matching desktop OrcaSlicer.
+            item(key = "process-settings") { ProcessSettingsCard(project) }
+            // The data-driven Settings Inspector (when opened via "All Process Settings..." or "Settings for").
+            inspectorPanel(project.inspector, settingsSideBySide(widthDp))
             // The browser's Process card's "Auto-position wipe tower" (its title the action's hint).
             item(key = "wipe-tower-auto") { WipeTowerAuto(project) }
             // The browser's Process card's "Wave overhangs" section.

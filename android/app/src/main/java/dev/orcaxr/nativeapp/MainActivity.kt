@@ -2,12 +2,17 @@ package dev.orcaxr.nativeapp
 
 import android.content.ContentResolver
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.OpenableColumns
 import android.view.DragEvent
 import android.view.KeyEvent
+import android.view.PixelCopy
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
@@ -84,7 +89,12 @@ import dev.orcaxr.nativeapp.project.DropIntake
 import dev.orcaxr.nativeapp.project.ProjectModel
 import dev.orcaxr.nativeapp.project.ProjectScreen
 import dev.orcaxr.nativeapp.send.SendDialog
+import dev.orcaxr.nativeapp.mcp.McpContext
+import dev.orcaxr.nativeapp.mcp.McpManager
+import dev.orcaxr.nativeapp.mcp.UiInspector
+import dev.orcaxr.nativeapp.ai.FloatingVoiceAssistant
 import dev.orcaxr.nativeapp.shell.AboutDialog
+import dev.orcaxr.nativeapp.shell.AiAssistantDialog
 import dev.orcaxr.nativeapp.shell.AppActions
 import dev.orcaxr.nativeapp.shell.CheckUpdatesDialog
 import dev.orcaxr.nativeapp.shell.CommandPalette
@@ -92,12 +102,16 @@ import dev.orcaxr.nativeapp.shell.LanguageDialog
 import dev.orcaxr.nativeapp.shell.LocalActionRunner
 import dev.orcaxr.nativeapp.shell.LocalActionStates
 import dev.orcaxr.nativeapp.shell.LocalCommandPalette
+import dev.orcaxr.nativeapp.shell.McpSettingsDialog
 import dev.orcaxr.nativeapp.shell.PresetLibraryDialog
 import dev.orcaxr.nativeapp.shell.SetupWizardDialog
 import dev.orcaxr.nativeapp.shell.ShortcutsDialog
 import dev.orcaxr.nativeapp.shell.TipOfTheDayDialog
 import dev.orcaxr.nativeapp.shell.TutorialDialog
 import dev.orcaxr.nativeapp.shell.FocusVisibleTheme
+import java.io.ByteArrayOutputStream
+import java.util.Base64
+import java.util.concurrent.CompletableFuture
 import dev.orcaxr.nativeapp.theme.MotionPreference
 import dev.orcaxr.nativeapp.theme.OrcaMotionScope
 import dev.orcaxr.nativeapp.shell.Navigation
@@ -348,7 +362,208 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun initMcp() {
+        McpManager.initialize(
+            appContext = applicationContext,
+            mcpContext = object : McpContext {
+                override val project: ProjectModel get() = this@MainActivity.project
+                override val prepare: PrepareModel get() = this@MainActivity.prepare
+                override val device: DeviceModel get() = this@MainActivity.device
+                override val preview: PreviewModel get() = this@MainActivity.preview
+
+                override val activeArea: String
+                    get() = when (this@MainActivity.area) {
+                        R.string.nav_prepare -> "prepare"
+                        R.string.nav_preview -> "preview"
+                        R.string.nav_device -> "device"
+                        R.string.nav_project -> "project"
+                        else -> "workspace"
+                    }
+
+                override fun navigateTo(area: String): Boolean {
+                    val resId = when (area.lowercase().trim()) {
+                        "workspace", "model", "3d" -> R.string.nav_workspace
+                        "prepare", "slice", "slicing" -> R.string.nav_prepare
+                        "preview", "gcode", "layers" -> R.string.nav_preview
+                        "device", "printer", "printers" -> R.string.nav_device
+                        "project", "files", "documents" -> R.string.nav_project
+                        else -> return false
+                    }
+                    runOnUiThread { this@MainActivity.area = resId }
+                    return true
+                }
+
+                override val activeDialog: String?
+                    get() = when {
+                        this@MainActivity.device.sendConfirmation != null -> "send_confirmation"
+                        this@MainActivity.palette -> "command_palette"
+                        this@MainActivity.project.showMcpSettingsDialog -> "mcp_settings"
+                        this@MainActivity.project.showAiAssistantDialog -> "ai_assistant"
+                        this@MainActivity.project.showShortcutsDialog -> "shortcuts"
+                        this@MainActivity.project.showAboutDialog -> "about"
+                        this@MainActivity.project.showLanguageDialog -> "language"
+                        this@MainActivity.project.showTutorialDialog -> "tutorial"
+                        this@MainActivity.project.showTipOfTheDayDialog -> "tip_of_the_day"
+                        this@MainActivity.project.showCheckUpdatesDialog -> "check_updates"
+                        this@MainActivity.project.showSetupWizardDialog -> "setup_wizard"
+                        this@MainActivity.project.showPresetLibraryDialog -> "preset_library"
+                        this@MainActivity.project.showCalibrationParametersDialog -> "calibration_parameters"
+                        this@MainActivity.project.showCalibrationInstructionsDialog -> "calibration_instructions"
+                        this@MainActivity.project.showCalibrationHistoryDialog -> "calibration_history"
+                        this@MainActivity.project.showCalibrationRecordDialog -> "calibration_record"
+                        this@MainActivity.project.showCalibrationCompareDialog -> "calibration_compare"
+                        this@MainActivity.project.smartPaintSession != null -> "smart_paint"
+                        else -> null
+                    }
+
+                override fun dismissActiveDialog(): String? {
+                    val current = activeDialog ?: return null
+                    runOnUiThread {
+                        when (current) {
+                            "send_confirmation" -> this@MainActivity.device.answerSend(dev.orcaxr.nativeapp.send.SendDialogView.CANCEL)
+                            "command_palette" -> this@MainActivity.palette = false
+                            "mcp_settings" -> this@MainActivity.project.dismissMcpSettingsDialog()
+                            "ai_assistant" -> this@MainActivity.project.dismissAiAssistantDialog()
+                            "shortcuts" -> this@MainActivity.project.dismissShortcutsDialog()
+                            "about" -> this@MainActivity.project.dismissAboutDialog()
+                            "language" -> this@MainActivity.project.dismissLanguageDialog()
+                            "tutorial" -> this@MainActivity.project.dismissTutorialDialog()
+                            "tip_of_the_day" -> this@MainActivity.project.dismissTipOfTheDayDialog()
+                            "check_updates" -> this@MainActivity.project.dismissCheckUpdatesDialog()
+                            "setup_wizard" -> this@MainActivity.project.dismissSetupWizardDialog()
+                            "preset_library" -> this@MainActivity.project.dismissPresetLibraryDialog()
+                            "calibration_parameters" -> this@MainActivity.project.dismissCalibrationParametersDialog()
+                            "calibration_instructions" -> this@MainActivity.project.dismissCalibrationInstructionsDialog()
+                            "calibration_history" -> this@MainActivity.project.dismissCalibrationHistoryDialog()
+                            "calibration_record" -> this@MainActivity.project.dismissCalibrationRecordDialog()
+                            "calibration_compare" -> this@MainActivity.project.dismissCalibrationCompareDialog()
+                            "smart_paint" -> this@MainActivity.project.cancelSmartPaint()
+                        }
+                    }
+                    return current
+                }
+
+                override fun runAction(actionId: String): Boolean {
+                    val future = java.util.concurrent.CompletableFuture<Boolean>()
+                    runOnUiThread {
+                        try {
+                            runAction(actionId)
+                            future.complete(true)
+                        } catch (t: Throwable) {
+                            future.complete(false)
+                        }
+                    }
+                    return try { future.get(5, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) { false }
+                }
+
+                override fun captureScreenshot(width: Int, height: Int, format: String): CompletableFuture<String> =
+                    captureWindowScreenshot(width, height, format)
+
+                override fun runOnMain(block: () -> Unit) {
+                    runOnUiThread(block)
+                }
+
+                override fun getRecentLogs(filter: String?, limit: Int): List<String> =
+                    dev.orcaxr.nativeapp.mcp.McpLogBuffer.get(filter, limit)
+
+                override fun getUiTree(): Map<String, Any?> {
+                    val future = CompletableFuture<Map<String, Any?>>()
+                    runOnUiThread {
+                        try {
+                            future.complete(UiInspector.dumpTree(window.decorView))
+                        } catch (t: Throwable) {
+                            future.complete(mapOf("error" to (t.message ?: t.javaClass.simpleName)))
+                        }
+                    }
+                    return try {
+                        future.get(5, java.util.concurrent.TimeUnit.SECONDS)
+                    } catch (t: Throwable) {
+                        mapOf("error" to (t.message ?: "timeout"))
+                    }
+                }
+
+                override fun getInteractiveElements(): List<Map<String, Any?>> {
+                    val future = CompletableFuture<List<Map<String, Any?>>>()
+                    runOnUiThread {
+                        try {
+                            future.complete(UiInspector.getInteractiveElements(window.decorView))
+                        } catch (t: Throwable) {
+                            future.complete(emptyList())
+                        }
+                    }
+                    return try {
+                        future.get(5, java.util.concurrent.TimeUnit.SECONDS)
+                    } catch (t: Throwable) {
+                        emptyList()
+                    }
+                }
+
+                override fun clickElement(target: String, role: String?): Boolean {
+                    val future = CompletableFuture<Boolean>()
+                    runOnUiThread {
+                        try {
+                            future.complete(UiInspector.clickElement(window.decorView, target, role))
+                        } catch (t: Throwable) {
+                            future.complete(false)
+                        }
+                    }
+                    return try {
+                        future.get(5, java.util.concurrent.TimeUnit.SECONDS)
+                    } catch (t: Throwable) {
+                        false
+                    }
+                }
+
+                override fun setTextInput(text: String, target: String?): Boolean {
+                    val future = CompletableFuture<Boolean>()
+                    runOnUiThread {
+                        try {
+                            future.complete(UiInspector.setTextInput(window.decorView, text, target))
+                        } catch (t: Throwable) {
+                            future.complete(false)
+                        }
+                    }
+                    return try {
+                        future.get(5, java.util.concurrent.TimeUnit.SECONDS)
+                    } catch (t: Throwable) {
+                        false
+                    }
+                }
+            },
+        )
+    }
+
+    private fun captureWindowScreenshot(width: Int, height: Int, format: String): CompletableFuture<String> {
+        val future = CompletableFuture<String>()
+        val view = window.decorView
+        val w = view.width.coerceAtLeast(1)
+        val h = view.height.coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val location = IntArray(2)
+        view.getLocationInWindow(location)
+        val rect = Rect(location[0], location[1], location[0] + w, location[1] + h)
+
+        PixelCopy.request(window, rect, bitmap, { copyResult ->
+            if (copyResult == PixelCopy.SUCCESS) {
+                val finalBitmap = if (width > 0 && height > 0 && (width != w || height != h)) {
+                    Bitmap.createScaledBitmap(bitmap, width, height, true)
+                } else {
+                    bitmap
+                }
+                val baos = ByteArrayOutputStream()
+                val compressFormat = if (format == "jpeg" || format == "jpg") Bitmap.CompressFormat.JPEG else Bitmap.CompressFormat.PNG
+                finalBitmap.compress(compressFormat, 85, baos)
+                val base64 = Base64.getEncoder().encodeToString(baos.toByteArray())
+                future.complete(base64)
+            } else {
+                future.completeExceptionally(RuntimeException("PixelCopy failed with error code $copyResult"))
+            }
+        }, Handler(Looper.getMainLooper()))
+        return future
+    }
+
     override fun onDestroy() {
+        McpManager.close()
         xrAdapter.close()
         super.onDestroy()
     }
@@ -437,6 +652,7 @@ class MainActivity : ComponentActivity() {
         project.taskId = taskId
         prepare.bind(project)
         exports.bind(project, prepare, device::diagnosticsPrinter)
+        initMcp()
         if (savedInstanceState == null) handle(intent, created = true) else area = savedInstanceState.getInt(AREA, area)
         setContent {
             // Back with unsaved changes, from any area, asks in the Project area first.
@@ -551,6 +767,13 @@ class MainActivity : ComponentActivity() {
                                 // Every area's whole name: a second row when they do not fit one (enlarged text, a long language).
                                 if (ready && layout.navigation == Navigation.Bar) ShellBar(AREAS, area) { area = it }
                             },
+                            floatingActionButton = {
+                                if (ready) {
+                                    FloatingVoiceAssistant(
+                                        onOpenFullAssistant = { project.openAiAssistantDialog() },
+                                    )
+                                }
+                            },
                             snackbarHost = { SnackbarHost(snackbar) },
                             // Clear of the system bars, a display cutout and (without a bottom bar) the keyboard.
                             contentWindowInsets = WindowInsets.safeDrawing,
@@ -597,6 +820,8 @@ class MainActivity : ComponentActivity() {
                 }
                 if (project.showShortcutsDialog) ShortcutsDialog(project::dismissShortcutsDialog)
                 if (project.showAboutDialog) AboutDialog(project::dismissAboutDialog)
+                if (project.showMcpSettingsDialog) McpSettingsDialog(project::dismissMcpSettingsDialog)
+                if (project.showAiAssistantDialog) AiAssistantDialog(project::dismissAiAssistantDialog)
                 if (project.showLanguageDialog) LanguageDialog(project::dismissLanguageDialog)
                 if (project.showTutorialDialog) TutorialDialog(project::dismissTutorialDialog)
                 if (project.showTipOfTheDayDialog) TipOfTheDayDialog(project::dismissTipOfTheDayDialog)
@@ -662,6 +887,7 @@ class MainActivity : ComponentActivity() {
                 project.smartPaintSession?.let { session ->
                     dev.orcaxr.nativeapp.project.SmartPaintDialog(
                         session = session,
+                        filaments = project.view.filaments.options.filter { !it.mixed },
                         onDismiss = project::cancelSmartPaint,
                         onPropose = project::requestSmartPaintProposal,
                         onApply = project::applySmartPaint,
@@ -684,12 +910,29 @@ class MainActivity : ComponentActivity() {
                 }
                 WorkspaceScreen(project, Modifier.weight(1f).fillMaxHeight())
             }
-            Viewport.Toolpath -> PreviewScreen(preview, modifier, panelWidth = layout.panelWidthDp.dp, bed = project.view.bed, project = project)
+            Viewport.Toolpath -> PreviewScreen(
+                model = preview,
+                modifier = modifier,
+                panelWidth = layout.panelWidthDp.dp,
+                bed = project.view.bed,
+                project = project,
+                prepare = prepare,
+                device = device,
+                onNavigateToArea = { area = it },
+            )
             null -> when (area) {
                 R.string.nav_device -> DeviceScreen(device, modifier)
                 R.string.nav_project -> ProjectScreen(project, prepare, modifier)
                 R.string.nav_prepare -> PrepareScreen(prepare, project, device, modifier)
-                R.string.nav_preview -> PreviewScreen(preview, modifier, bed = project.view.bed, project = project)
+                R.string.nav_preview -> PreviewScreen(
+                    model = preview,
+                    modifier = modifier,
+                    bed = project.view.bed,
+                    project = project,
+                    prepare = prepare,
+                    device = device,
+                    onNavigateToArea = { area = it },
+                )
                 else -> WorkspaceScreen(project, modifier)
             }
         }

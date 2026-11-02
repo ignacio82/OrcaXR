@@ -197,6 +197,7 @@ fun parseSmartPaintProjection(jsonStr: String): SmartPaintProjectionData {
 @Composable
 fun SmartPaintDialog(
     session: SmartPaintSessionState,
+    filaments: List<dev.orcaxr.core.FilamentOption> = emptyList(),
     onDismiss: () -> Unit,
     onPropose: (prompt: String, imageUri: Uri?) -> Unit,
     onApply: (assignments: Map<String, String>) -> Unit,
@@ -217,10 +218,11 @@ fun SmartPaintDialog(
     // regionId -> filament ID (or state)
     var assignments by remember(session.projection) {
         val initial = mutableMapOf<String, String>()
+        val initialFilament = filaments.firstOrNull()?.id ?: "1"
         session.projection?.regions?.forEachIndexed { index, region ->
             // Default first region to first filament/state
             if (index == 0) {
-                initial[region.id] = if (session.channel == PaintChannel.COLOR) "1" else "enforce"
+                initial[region.id] = if (session.channel == PaintChannel.COLOR) initialFilament else "enforce"
             }
         }
         mutableStateOf<Map<String, String>>(initial)
@@ -381,6 +383,7 @@ fun SmartPaintDialog(
                             RegionAssignmentCard(
                                 region = region,
                                 channel = session.channel,
+                                filaments = filaments,
                                 currentAssignment = assignments[region.id],
                                 onAssign = { dest ->
                                     assignments = if (dest != null) {
@@ -415,13 +418,24 @@ fun SmartPaintDialog(
 private fun RegionAssignmentCard(
     region: SmartPaintRegionData,
     channel: PaintChannel,
+    filaments: List<dev.orcaxr.core.FilamentOption>,
     currentAssignment: String?,
     onAssign: (String?) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     val options = when (channel) {
-        PaintChannel.COLOR -> (1..8).map { "$it" to "Filament $it" }
+        PaintChannel.COLOR -> {
+            if (filaments.isNotEmpty()) {
+                filaments.mapIndexed { idx, fil ->
+                    val colorName = dev.orcaxr.nativeapp.ai.ColorNames.nameOf(fil.color)
+                    val label = fil.name.ifBlank { "Filament ${idx + 1}" } + " ($colorName)"
+                    fil.id to label
+                }
+            } else {
+                (1..8).map { "$it" to "Filament $it" }
+            }
+        }
         PaintChannel.SUPPORT -> listOf("enforce" to "Enforce Support", "block" to "Block Support")
         PaintChannel.SEAM -> listOf("prefer" to "Prefer Seam", "avoid" to "Avoid Seam")
         PaintChannel.FUZZY_SKIN -> listOf("true" to "Fuzzy Skin")

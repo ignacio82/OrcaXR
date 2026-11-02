@@ -12,6 +12,7 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.Dispatcher
 import okhttp3.Headers.Companion.headersOf
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -130,6 +131,10 @@ class MoonrakerClient(
         // Plain HTTP only to a local address, judged where the connection landed.
         .addNetworkInterceptor(LanTransportPolicy.cleartextGuard)
         .connectionPool(LanTransportPolicy.idleConnections())
+        .dispatcher(Dispatcher().apply {
+            maxRequests = 32
+            maxRequestsPerHost = 2
+        })
         .followRedirects(false)
         .followSslRedirects(false)
         .retryOnConnectionFailure(false)
@@ -511,8 +516,12 @@ class MoonrakerClient(
                     runCatching { webSocket.close(code, null) }.onFailure { webSocket.close(1000, null) }
                     post { closed(id) }
                 }
-                override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = post { closed(id) }
+                override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = post {
+                    runCatching { android.util.Log.d("OrcaXRPrinter", "WebSocket onClosed [$id] code $code: $reason") }
+                    closed(id)
+                }
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = post {
+                    runCatching { android.util.Log.e("OrcaXRPrinter", "WebSocket onFailure [$id]: ${t.message}", t) }
                     if (sockets.remove(id) != null) input { transport.socketError(id, clock()) }
                 }
             })

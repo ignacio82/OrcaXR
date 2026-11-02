@@ -7126,6 +7126,17 @@ from the "Layer ranges (0)" row, applies its own wall count ("Undo Update
 height range settings") and undoes it. It passes on both emulators (API 34,
 and API 37 with 16 KB pages).
 
+### Android prepare process settings and MCP tools
+
+The Prepare area (`PrepareScreen.kt`) exposes the `ProcessSettingsCard` (`ProcessSettings.kt`, `ProcessSettingsCard.kt`), providing direct parity with desktop OrcaSlicer's Process tab and the browser's Process card for critical print preparation controls:
+
+1. **Brim & Bed Adhesion**: A 1-tap "Disable Brim" / "Enable Brim" button switches between `no_brim` and `auto_brim`, accompanied by a Brim type dropdown (`auto_brim`, `no_brim`, `outer_only`, `inner_only`, `outer_and_inner`, `brim_ears`), brim width (mm), and brim-object gap (mm) fields.
+2. **Support Generation**: An enable/disable toggle switch, Support type dropdown (`normal(auto)`, `tree(auto)`, `normal(manual)`, `tree(manual)`), Support style dropdown (`default`, `snug`, `tree_slim`, `tree_strong`, `tree_hybrid`, `organic`), "On build plate only" toggle, and support threshold angle field.
+3. **Quality & Infill**: Infill density (e.g. 15%) and wall loops count fields.
+4. **All Settings Inspector**: An "All Settings..." button launches the full scoped `InspectorPanel.Settings("project")` directly within `PrepareScreen` (stacked on narrow foldables/phones, side-by-side on wide screens >= 600 dp). An explicit "Project Settings" entry point in `ProjectScreen.kt` also opens the project-level settings inspector alongside object/part node rows.
+5. **AI and MCP Automation**: `PrintSettingsTools.kt` registers `get_print_settings` and `update_print_settings` tools with `McpManager`, enabling external MCP agents and the local on-device voice assistant to query effective parameters and update brim, support, infill, and wall settings with atomic project override commits.
+
+
 ### Android volume roles
 
 The browser's semantic editor shows its "Volume role" section for whatever
@@ -8639,10 +8650,23 @@ automation adapters, and browser-only platform integrations:
      settings overrides, Filament swaps, slicing preflight) on both standard 4 KB page architectures (API 34)
      and 16 KB page architectures (API 37).
 
-3. Browser-Only Integrations (Documented Non-Portable Boundaries):
-   - **WebMCP (`WorkspaceTools.ts`, `webmcp-client.ts`)**: In-browser Model Context Protocol server/client
-     adapter for external web AI agents over WebSocket/SSE. Not ported to Android; native automation uses
-     Android Accessibility, test intents, and Compose test rules.
+3. Automation and Platform-Specific Integrations:
+   - **Android Model Context Protocol (MCP) Server (`dev.orcaxr.nativeapp.mcp`, `tools/mcp/adb-mcp-bridge.mjs`)**:
+     On-device embedded HTTP/SSE & WebSocket JSON-RPC 2.0 server (port 8765) backed by a Keystore/preferences Bearer
+     capability token. Exposes system info, workspace state, project hierarchy, preflight diagnostics, canonical action
+     invocations, transform and scaling controls (`scale_model`, `transform_model` with automatic primary model selection fallback), model duplication and bed nesting (`duplicate_model`, `delete_model`, `arrange_bed`), filament assignments and atomic remapping (`remap_filaments`), filament synchronization (`sync_filaments`), rich Moonraker printer telemetry querying (`get_printer_status`), smart painting (`smart_paint_describe`, `smart_paint_propose`, `smart_paint_apply`, `smart_paint` with automatic missing-color filament provisioning and volume fallback), slicing jobs, Moonraker printer commands, and Filament
+     PixelCopy viewport screenshots. The host-side bridge `tools/mcp/adb-mcp-bridge.mjs` maps standard desktop agent
+     `stdio` to the device server over `adb forward`.
+   - **On-Device Local LLM Assistant & Voice UI (`dev.orcaxr.nativeapp.ai`)**:
+     On-device AI engine combining Google Tensor TPU acceleration via Google AICore / Gemini Nano (`com.google.mlkit:genai-prompt`)
+     and standalone LiteRT-LM (`com.google.ai.edge.litertlm:litertlm-android`) for Gemma 4 / Gemma 3 / Gemma 2 with OpenAPI tool calling.
+     Directly binds to `McpToolRegistry` to execute slicer, filament, and project mutations entirely offline on-device without cloud dependencies.
+     Accessible through `help_ai_assistant` in the Command Palette, Help menu, and WorkspaceToolbar button.
+     Includes hands-free floating voice assistant (`FloatingVoiceAssistant.kt`) positioned via Material 3 Scaffold with animated RMS audio level pulsation,
+     live inline speech-to-text transcriptions, spoken Text-to-Speech replies sanitized via `VoiceInputManager.sanitizeForTts` (regex filter removing emojis, markdown punctuation, and expanding units like `%` -> `percent`, `mm` -> `millimeters`, `°C` -> `degrees Celsius`, and duration formatting for natural speech synthesis), and lazy offline on-device speech recognition (`VoiceInputManager.kt`).
+     Connects on-device multimodal LLM inference directly to P4.9 Smart Paint proposal generation and projection via `SmartPaintHelper.kt`, multi-turn conversational context memory, tactile haptic feedback, semantic character painting via `SemanticCharacterPainter.kt` (`semantic_paint_model`: pre-tuned iconic presets and dynamic LLM plans for Pikachu, pumpkin, frog, fox, benchy, or arbitrary themes in available-only ΔE 2000 or auto-provisioned full-spectrum modes), conversational model resizing (`scale_model`), bed positioning (`transform_model`), model duplication (`duplicate_model`), plate clearing/deletion (`delete_model`), bed auto-arrangement (`arrange_bed`), resilient printer telemetry voice query handling (`get_printer_status` vs `get_slice_summary` disambiguation, speech recognition typo normalization like "how kong" -> "how long", and natural plain-English duration/progress/layer speech synthesis), and spoken slice estimation.
+   - **WebMCP (`WorkspaceTools.ts`, `webmcp-client.ts`)**: In-browser Model Context Protocol client
+     adapter for external web AI agents over WebSocket/SSE.
    - **Browser MediaPipe & Web Speech API**: Web-based speech recognition and vision models for multimodal
      command experiments. Android leaves voice and camera features to lazy native Android APIs (SpeechRecognizer,
      CameraX), ensuring optional external services never gate core startup or session readiness.
@@ -10002,3 +10026,21 @@ Read-only inventory of a connected Samsung SM-I610 on 2026-10-04 reports Android
 No native app was installed or exercised on that headset for this foundation
 evidence. Refresh rate, supported input methods, and native performance still
 need a recorded qualification run; available RAM is not an editor memory budget.
+
+## Physical Android device and Moonraker / Klipper qualification (Pixel Fold & Snapmaker U1)
+
+Physical testing on Google Pixel 11 Pro Fold (`yogi`, Android 16 / API 36, connected over ADB Wi-Fi) with live network connection to Snapmaker U1 (`lava`, Klipper + Moonraker at `192.168.1.228:7125`):
+- **Process and Print Settings Parity (`ProcessSettingsCard.kt`)**:
+  - Exposes 1-tap Brim enable/disable, Brim type (`auto_brim`, `no_brim`, `outer_only`, `inner_only`, `outer_and_inner`, `brim_ears`), width, and object gap.
+  - Exposes Support enable toggle, Support type (`normal(auto)`, `tree(auto)`, `normal(manual)`, `tree(manual)`), style (`default`, `snug`, `tree_slim`, `tree_strong`, `tree_hybrid`, `organic`), build-plate-only, threshold angle, and top Z distance.
+  - Initialized non-null `printSettings = PrintProcessSettings()` and resolved asynchronously on project load/subscription so the card always renders on the Prepare tab without depending on delayed project state snapshots.
+- **Snapmaker U1 Moonraker / Klipper Serialization & Timing**:
+  - Sequential Klipper socket queries dispatched during `read_facts()` (`query_filament_slots`, `printer_objects`, `gcode_help`) require ~35–37s each (~110s aggregate) on low-power quad-core printer controllers.
+  - Configured `requestTimeoutMs` and `heartbeatTimeoutMs` to 240,000 ms (4 minutes) in `DeviceWorkspace.kt`, and capped OkHttp dispatcher concurrency to `maxRequestsPerHost = 2` in `MoonrakerClient.kt` to prevent Tornado server thread starvation.
+  - Disabled low-level OkHttp WebSocket ping deadlines; the shared OrcaXR transport manages session health via protocol-level JSON-RPC `server.info` heartbeats with generous timeouts.
+  - Prevented Android 14+ foreground service timeouts in `PrintSendService.onTimeout` from aborting active network send operations.
+  - Verified end-to-end send: sliced `setzkasten.3mf` (Plate 1) in 2,539 ms, executed pre-flight confirmation check, presented send dialog with verified bed leveling and timelapse start options, answered upload confirmation, and completed upload of 4,111,015 bytes (4015 KB) to `Type_Case_Display_Art_Jewellery_Sea_Shells_Plate_1.gcode` on the printer.
+- **Embedded MCP Headless UI Inspection & Interaction (`UiInspector.kt`)**:
+  - Traverses Jetpack Compose's in-memory `SemanticsNode` tree (`AndroidComposeView.semanticsOwner.rootSemanticsNode`) directly on the UI thread without relying on Android `AccessibilityNodeInfo` (avoiding unsealed instance exceptions) or screen coordinate calculations.
+  - Registered tools: `get_ui_tree` (full semantics hierarchy), `get_interactive_elements` (flat list of buttons, switches, checkboxes, text fields, tabs with bounds and states), `click_ui_element` (executes Compose `OnClick` action or touch dispatch), `input_ui_text` (executes `SetText`), and `get_device_diagnostics`.
+

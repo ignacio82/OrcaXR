@@ -2010,6 +2010,13 @@
     "preview_layers",
     "preview_ticks_heading",
     "preview_ticks_heading_single",
+    "preview_reslice",
+    "preview_back_to_prepare",
+    "preview_connect_printer",
+    "preview_printer_offline",
+    "preview_ready_to_print",
+    "preview_modified_warning",
+    "preview_reset_layers",
     "project_saved",
     "project_guard_save",
     "project_share",
@@ -2415,7 +2422,50 @@
     "widget_camera_no_printers",
     "widget_camera_no_cameras",
     "widget_camera_add_widget",
-    "widget_camera_preview_header"
+    "widget_camera_preview_header",
+    "help_mcp_settings",
+    "action_hint_help_mcp_settings",
+    "mcp_toolbar_hint",
+    "help_ai_assistant",
+    "action_hint_help_ai_assistant",
+    "ai_assistant_toolbar_hint",
+    "prepare_process_settings",
+    "settings_group_brim",
+    "settings_brim_type",
+    "settings_brim_disable",
+    "settings_brim_enable",
+    "settings_brim_width",
+    "settings_brim_gap",
+    "settings_brim_type_auto",
+    "settings_brim_type_no_brim",
+    "settings_brim_type_outer_only",
+    "settings_brim_type_inner_only",
+    "settings_brim_type_outer_and_inner",
+    "settings_brim_type_mouse_ears",
+    "settings_group_support",
+    "settings_support_enable",
+    "settings_support_type",
+    "settings_support_style",
+    "settings_support_on_plate_only",
+    "settings_support_threshold_angle",
+    "settings_support_type_normal_auto",
+    "settings_support_type_tree_auto",
+    "settings_support_type_normal_manual",
+    "settings_support_type_tree_manual",
+    "settings_support_style_default",
+    "settings_support_style_snug",
+    "settings_support_style_tree_slim",
+    "settings_support_style_tree_strong",
+    "settings_support_style_tree_hybrid",
+    "settings_support_style_organic",
+    "settings_group_quality_infill",
+    "settings_infill_density",
+    "settings_wall_loops",
+    "prepare_all_settings",
+    "settings_badge_overrides",
+    "settings_badge_profile",
+    "settings_reset_overrides",
+    "project_settings_title"
   ],
   "kotlin": [
     {
@@ -2684,6 +2734,26 @@
       "resource": "device_model_delete_confirm",
       "key": "action.delete_models.label",
       "reason": "The storage delete confirmation's Delete button deletes a file from the printer's storage, not the canvas Delete Models action."
+    },
+    {
+      "resource": "settings_support_style_default",
+      "key": "ui.selectionFilamentBar.default",
+      "reason": "ProcessSettings support style choice names default pattern style, not default filament."
+    },
+    {
+      "resource": "settings_support_style_default",
+      "key": "workspace.orcaWorkspace.defaultFilament",
+      "reason": "ProcessSettings support style choice names default pattern style, not default filament."
+    },
+    {
+      "resource": "settings_reset_overrides",
+      "key": "ui.waveOverhangs.reset",
+      "reason": "ProcessSettings card reset button resets process overrides, not wave overhangs."
+    },
+    {
+      "resource": "settings_reset_overrides",
+      "key": "ui.xrWaveOverhangs.reset",
+      "reason": "ProcessSettings card reset button resets process overrides, not wave overhangs."
     }
   ]
 }

@@ -180,10 +180,12 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
                 AppCredentialVault.shared(application),
                 AndroidLocalNetwork.permission(application),
                 // The transport's diagnostics (redacted by the core) reach logcat in debuggable builds only.
-                logger = if (application.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
-                    { log -> android.util.Log.d("OrcaXRPrinter", log.toString()) }
-                } else {
-                    null
+                logger = { log ->
+                    val text = log.toString()
+                    if (application.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                        android.util.Log.d("OrcaXRPrinter", text)
+                    }
+                    dev.orcaxr.nativeapp.mcp.McpLogBuffer.log("OrcaXRPrinter", text)
                 },
                 confirmSend = ::confirmSend,
             )
@@ -466,6 +468,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
                         if (sendState.busy) {
                             stopPrepareTicker()
                             val baseText = SendWords.phase(phase, slice.filename)
+                            dev.orcaxr.nativeapp.mcp.McpLogBuffer.log("OrcaXRSend", "Phase: $phase - $baseText")
                             sendState = sendState.copy(status = baseText)
                             PrintSendService.update(app, baseText)
 
@@ -493,6 +496,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
                     main.post {
                         if (sendState.busy) {
                             val text = SendWords.uploadElapsed(slice.filename, elapsed, total)
+                            dev.orcaxr.nativeapp.mcp.McpLogBuffer.log("OrcaXRSend", "Upload progress: $text")
                             sendState = sendState.copy(status = text)
                             PrintSendService.update(app, text)
                         }
@@ -519,14 +523,15 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
                 }
                 if (cause != null) {
                     android.util.Log.e("OrcaXRSend", "DeviceModel send failed: $errorMsg", cause)
+                    dev.orcaxr.nativeapp.mcp.McpLogBuffer.log("OrcaXRSend", "Send failed: $errorMsg")
                 }
-                finish(
-                    when {
-                        cause != null -> SendWords.failed(errorMsg ?: "Unknown error")
-                        result == null -> SendWords.DECLINED
-                        else -> SendWords.result(result)
-                    },
-                )
+                val finishStatus = when {
+                    cause != null -> SendWords.failed(errorMsg ?: "Unknown error")
+                    result == null -> SendWords.DECLINED
+                    else -> SendWords.result(result)
+                }
+                dev.orcaxr.nativeapp.mcp.McpLogBuffer.log("OrcaXRSend", "Send completed: $finishStatus")
+                finish(finishStatus)
             }
         }
     }

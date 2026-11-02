@@ -1038,6 +1038,58 @@ class ProjectWorkspace(
     }
 
     /**
+     * Remaps filament assignments according to [mapping] (source filamentId to target filamentId)
+     * across the project, including objects, volumes, layer ranges, wipe towers, and facet paint annotations.
+     * Evaluated against a single snapshot and executed as one atomic undoable step.
+     * Answers how many assignment changes were committed.
+     */
+    fun remapFilaments(mapping: Map<String, String>): CompletableFuture<Int?> = edit { session, snapshot ->
+        val activeMappings = mapping.filter { (src, dst) -> src != dst && src.isNotBlank() && dst.isNotBlank() }
+        if (activeMappings.isEmpty()) return@edit null
+
+        val assignment = when (val resolved = snapshot.filamentAssignment(emptyList())) {
+            is FilamentAssignmentResult.Refused -> throw ProjectFailure(resolved.message)
+            is FilamentAssignmentResult.Resolved -> resolved.assignment
+        }
+        val allOptionIds = assignment.options.map { it.id }.toSet()
+
+        // Order mappings so that destinations that are also sources are executed first (post-order).
+        // If a cycle is detected, use an unused filament as a bridge to break the cycle.
+        val remaining = activeMappings.toMutableMap()
+        val ordered = mutableListOf<Pair<String, String>>()
+        while (remaining.isNotEmpty()) {
+            val safeEntry = remaining.entries.firstOrNull { (_, dst) -> dst !in remaining.keys }
+            if (safeEntry != null) {
+                ordered.add(safeEntry.key to safeEntry.value)
+                remaining.remove(safeEntry.key)
+            } else {
+                val cycleEntry = remaining.entries.first()
+                val tempBridgeId = allOptionIds.firstOrNull { it !in remaining.keys && it !in remaining.values }
+                if (tempBridgeId != null) {
+                    val (cycleSrc, cycleDst) = cycleEntry
+                    ordered.add(cycleSrc to tempBridgeId)
+                    remaining.remove(cycleSrc)
+                    remaining[tempBridgeId] = cycleDst
+                } else {
+                    ordered.add(cycleEntry.key to cycleEntry.value)
+                    remaining.remove(cycleEntry.key)
+                }
+            }
+        }
+
+        val commands = ordered.map { (src, dst) ->
+            ProjectIntents.Command.RemapFilaments(
+                ProjectIntents.RemapFilaments(
+                    sourceIds = listOf(units(src)),
+                    destinationId = units(dst),
+                )
+            )
+        }
+
+        Edit(commands, commands.size, label = "Remap filaments")
+    }
+
+    /**
      * One edit of the virtual filament library (`filament_virtual_mutate`,
      * the browser's `VirtualFilamentLibrary` through its canonical adapter):
      * add, edit or duplicate a recipe from a validated draft, enable or
@@ -2783,11 +2835,19 @@ class ProjectWorkspace(
         return transaction(text(batch.label), batch.commands)
     }
 
-    /** The first selected model part volume ID, or null. */
+    /** The first selected model part volume ID, or the first model part on the active plate, or null. */
     fun selectedVolumeId(): CompletableFuture<String?> = inspect { session ->
         session.snapshot().use { snapshot ->
             snapshot.query().use { root ->
                 simplifyTargets(session, root).firstOrNull()?.id
+                    ?: (ProjectFacts.plates(root).firstOrNull { it.active } ?: ProjectFacts.plates(root).firstOrNull())?.let { plate ->
+                        ProjectFacts.objects(root, plate.id)
+                            .firstOrNull { it.instances.isNotEmpty() && it.volumes.any { v -> v.model } }
+                            ?.volumes?.firstOrNull { v -> v.model }?.id
+                    }
+                    ?: ProjectFacts.objects(root)
+                        .firstOrNull { it.instances.isNotEmpty() && it.volumes.any { v -> v.model } }
+                        ?.volumes?.firstOrNull { v -> v.model }?.id
             }
         }
     }
@@ -3129,6 +3189,20 @@ class ProjectWorkspace(
                 ),
             )
         }
+    }
+
+    /** Disables or removes the wipe tower from the active plate. */
+    fun disableWipeTower(): CompletableFuture<Boolean> = answer { _, snapshot ->
+        val plate = snapshot.query().use { root -> ProjectFacts.plates(root).firstOrNull { it.active } }
+            ?: throw ProjectFailure("No active plate found")
+        val command = ProjectIntents.Command.SetPlateWipeTower(
+            ProjectIntents.SetPlateWipeTower(
+                units(plate.id),
+                ProjectIntents.OptionalWipeTower.Absent(ProjectIntents.Empty),
+                ProjectIntents.OptionalText.Value(units("Disable wipe tower")),
+            )
+        )
+        Answer(true, command)
     }
 
     /**

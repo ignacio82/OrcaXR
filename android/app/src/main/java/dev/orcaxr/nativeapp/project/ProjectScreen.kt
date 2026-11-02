@@ -192,8 +192,13 @@ fun ProjectScreen(model: ProjectModel, prepare: PrepareModel, modifier: Modifier
             PlateRow(plate, index, view, model) { renaming = Renaming.Plate(plate.id, plate.name) }
         }
         item {
-            OutlinedButton(onClick = { model.perform("add_plate") }, enabled = !model.busy && ProjectEditing.enabled(view, "add_plate")) {
-                Text(stringResource(R.string.project_add_plate))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { model.perform("add_plate") }, enabled = !model.busy && ProjectEditing.enabled(view, "add_plate")) {
+                    Text(stringResource(R.string.project_add_plate))
+                }
+                OutlinedButton(onClick = { model.inspector.open(InspectorPanel.Settings("project")) }, enabled = !model.busy && view.ready) {
+                    Text(stringResource(R.string.project_settings_title))
+                }
             }
         }
         item { Text(stringResource(R.string.project_objects), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium) }

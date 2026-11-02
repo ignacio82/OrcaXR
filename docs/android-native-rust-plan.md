@@ -2502,7 +2502,12 @@ storage journeys on phone, tablet, and desktop-sized windows.
   settings) — the panel model and the range editor ported to the shared
   core from production TypeScript (669 panel steps and 525 range answers in
   Rust, WASM in Node and JNI; 1,363 JNI checks; the emulator settings smoke,
-  part of the round-2 suites). Layer events stay with Preview, where the
+  part of the round-2 suites). The Prepare area (`PrepareScreen.kt`) features
+  the `ProcessSettingsCard` with 1-tap brim enable/disable, brim type/width/gap
+  controls, support enable/type/style/build-plate-only/threshold-angle controls,
+  infill/wall controls, and direct embedding of the scoped project settings inspector.
+  `PrintSettingsTools.kt` exposes these controls to external MCP agents and on-device
+  voice assistants via `get_print_settings` and `update_print_settings`. Layer events stay with Preview, where the
   browser's live.
   The browser's command palette (Ctrl/⌘ K, and a search button) lists the 61
   catalogue actions the app performs, in catalogue order with the core's
@@ -3154,8 +3159,10 @@ and 3.
   Status (2026-10-14): documented in `docs/engineering/native-core.md#automation-and-platform-specific-integrations`.
   Preserves canonical action IDs byte-for-byte across all 153 native performed actions in
   `AppActions.kt` without divergent platform aliases. Documents explicit browser-only boundaries
-  (WebMCP server/client, browser MediaPipe/Web Speech, WebXR/XRBlocks, Web File System Access OPFS)
-  and native counterparts (Android UI Automator/Accessibility test harnesses on 4 KB / 16 KB
+  (WebMCP client, browser MediaPipe/Web Speech, WebXR/XRBlocks, Web File System Access OPFS)
+  and native counterparts (Android embedded MCP server in `dev.orcaxr.nativeapp.mcp` with `tools/mcp/adb-mcp-bridge.mjs`,
+  on-device local LLM, floating voice assistant, and smart paint automation in `dev.orcaxr.nativeapp.ai`,
+  Android UI Automator/Accessibility test harnesses on 4 KB / 16 KB
   architectures, lazy Android SpeechRecognizer/CameraX, Storage Access Framework). Shared
   offline Moonraker printer client contracts remain unified without proprietary cloud services.
 - [ ] Qualify Googlebook file, window, keyboard, trackpad, DPI, and lifecycle

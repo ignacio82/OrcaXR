@@ -57,7 +57,7 @@ object ProjectEditing {
 
     val HELP_MENU = listOf(
         "help_shortcuts", "help_tutorial", "help_tip_of_day", "help_check_updates", "help_setup_wizard", "help_search",
-        "help_docs", "help_report_bug", "help_about", "help_language",
+        "help_docs", "help_report_bug", "help_about", "help_language", "help_mcp_settings", "help_ai_assistant",
     )
 
     /** The catalogue actions the app performs, by ID. */

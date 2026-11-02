@@ -89,7 +89,12 @@ class DeviceWorkspace(
      * as a cancel.
      */
     private val workflow = PrintWorkflowClient(
-        captureSession = { _ -> connect().thenApply { session.captureLease() } },
+        captureSession = { _ ->
+            runCatching { session.captureLease() }.fold(
+                onSuccess = { CompletableFuture.completedFuture(it) },
+                onFailure = { connect().thenApply { session.captureLease() } },
+            )
+        },
         confirm = confirmSend,
     )
 
@@ -309,12 +314,15 @@ class DeviceWorkspace(
         if (localNetworkBlocked()) {
             return CompletableFuture.failedFuture(DeviceRefusal(LocalNetworkDeniedException(text(printer.host)).message.orEmpty()))
         }
-        return connect().thenCompose {
-            val client = session.client ?: return@thenCompose CompletableFuture.failedFuture(DeviceRefusal("Printer not connected."))
+        val clientReady = session.client?.takeIf { runCatching { session.captureLease() }.isSuccess }?.let {
+            CompletableFuture.completedFuture(it)
+        } ?: connect().thenApply { session.client ?: error("Printer not connected.") }
+
+        return clientReady.thenCompose { client ->
             val future = CompletableFuture<List<ProjectIntents.MoonrakerFilamentSlot>>()
             val call = client.request(
                 "/printer/objects/query?print_task_config=&filament_detect=",
-                MoonrakerRequestOptions(operation = "query_filament_slots"),
+                MoonrakerRequestOptions(operation = "query_filament_slots", timeoutMs = 30_000.0),
             )
             call.result.whenComplete { text, error ->
                 if (error != null) {
@@ -361,7 +369,10 @@ class DeviceWorkspace(
                 selection.endpoint, ProjectIntents.OptionalFinite.Value(selection.port.toDouble()), absentText, absentText,
                 ProjectIntents.MoonrakerVersionPolicyInput(ProjectIntents.OptionalMoonrakerApiVersionInput.Absent(ProjectIntents.Empty), absentFinite),
                 ProjectIntents.OptionalText.Value(units("OrcaXR Android")), absentText,
-                absentFinite, absentFinite, absentFinite, absentFinite,
+                ProjectIntents.OptionalFinite.Value(240_000.0),
+                ProjectIntents.OptionalFinite.Value(30_000.0),
+                ProjectIntents.OptionalFinite.Value(60_000.0),
+                ProjectIntents.OptionalFinite.Value(240_000.0),
                 ProjectIntents.MoonrakerReconnectPolicyInput(absentFinite, absentFinite, absentFinite, absentFinite),
             ),
             http,
