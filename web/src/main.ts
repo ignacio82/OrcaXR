@@ -415,12 +415,18 @@ function setupDomUI(
   // A configured printer is likely to be used: have its core ready first.
   if (printerCfg.host.trim()) void printerConnections.prepare();
   const openPrinterTransport = (selection: PrinterSelection): MoonrakerConnection => {
-    const transport = printerConnections.create({
-      endpoint: selection.endpoint,
-      defaultPort: selection.port,
-      clientName: 'OrcaXR Web',
-      clientVersion: window.ORCAXR_VERSION,
-    });
+    const transport = printerConnections.create(
+      {
+        endpoint: selection.endpoint,
+        defaultPort: selection.port,
+        clientName: 'OrcaXR Web',
+        clientVersion: window.ORCAXR_VERSION,
+      },
+      {
+        requestTimeoutMs: 240_000,
+        heartbeatTimeoutMs: 240_000,
+      },
+    );
     transport.setSessionCredentials({ apiKey: selection.apiKey });
     return transport;
   };
