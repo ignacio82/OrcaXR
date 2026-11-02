@@ -14,6 +14,7 @@
          started, with progress and Cancel in its notification) only while a job runs. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <!-- That notification, from Android 13: asked once, before the first slice on this device. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -190,7 +191,7 @@
             android:foregroundServiceType="dataSync" />
         <!-- Foreground service for sending G-code and holding wake/wifi locks during upload and pre-print calibration. -->
         <service android:name=".send.PrintSendService" android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="connectedDevice|dataSync" />
         <!-- Copies of projects the operator shares, read-only, granted once to the receiving app. -->
         <provider android:name=".project.SharedProjects" android:authorities="${applicationId}.shared"
             android:exported="false" android:grantUriPermissions="true" />

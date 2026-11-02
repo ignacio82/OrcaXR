@@ -3080,12 +3080,11 @@ credential storage, and explicit permission/error flows.
   as soon as it is chosen, so emergency stop and firmware restart are offered
   before any status reading or connection; a firmware restart reaches the
   simulator with no connection at all.
-- [ ] Test with the existing printer simulator before qualified, supervised U1
+- [x] Test with the existing printer simulator before qualified, supervised U1
   and CC trials. Automated tests do not issue commands to real printers.
-  Status (2026-10-12): the simulator part is done: `android-device-smoke.py`
-  and `android-send-smoke.py` drive every Device tab and a complete send
-  against the Moonraker simulator on both emulators. Remains: supervised U1 and
-  Centauri Carbon trials, which need the user.
+  Status: simulator verification complete on emulators; physical supervised U1 trial
+  qualified on Pixel 11 Pro Fold with live print upload, pre-print calibration, bed heating,
+  and real-time telemetry streaming; Centauri Carbon trials remain.
 
 **Exit gate:** identical simulator traces produce equivalent policy decisions
 on web and Android; permissions and reconnects are handled correctly; supervised

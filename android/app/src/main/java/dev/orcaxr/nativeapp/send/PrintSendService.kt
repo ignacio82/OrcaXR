@@ -104,8 +104,11 @@ class PrintSendService : Service() {
     }
 
     override fun onTimeout(startId: Int, fgsType: Int) {
-        android.util.Log.w("OrcaXRSend", "PrintSendService onTimeout for startId $startId, fgsType $fgsType; demoting service without cancelling active send")
-        demote()
+        android.util.Log.w("OrcaXRSend", "PrintSendService onTimeout for startId $startId, fgsType $fgsType; demoting foreground notification while retaining active locks")
+        if (foreground) {
+            foreground = false
+            stopForeground(STOP_FOREGROUND_DETACH)
+        }
     }
 
     private fun promote() {
@@ -115,7 +118,13 @@ class PrintSendService : Service() {
             manager?.createNotificationChannel(
                 NotificationChannel(CHANNEL, getString(R.string.send_channel), NotificationManager.IMPORTANCE_LOW),
             )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification(currentStatus),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(NOTIFICATION_ID, notification(currentStatus), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
             } else {
                 startForeground(NOTIFICATION_ID, notification(currentStatus))

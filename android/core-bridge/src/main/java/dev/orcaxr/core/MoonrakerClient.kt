@@ -142,6 +142,7 @@ class MoonrakerClient(
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .writeTimeout(0, TimeUnit.MILLISECONDS)
         .callTimeout(0, TimeUnit.MILLISECONDS)
+        .pingInterval(15, TimeUnit.SECONDS)
         .build()
     private val textBound = MoonrakerTransport.maxTextUnits
     private val transport = MoonrakerTransport(config)

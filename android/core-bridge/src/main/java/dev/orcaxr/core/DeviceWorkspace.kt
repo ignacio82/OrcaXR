@@ -371,7 +371,7 @@ class DeviceWorkspace(
                 ProjectIntents.OptionalText.Value(units("OrcaXR Android")), absentText,
                 ProjectIntents.OptionalFinite.Value(240_000.0),
                 ProjectIntents.OptionalFinite.Value(30_000.0),
-                ProjectIntents.OptionalFinite.Value(60_000.0),
+                ProjectIntents.OptionalFinite.Value(15_000.0),
                 ProjectIntents.OptionalFinite.Value(240_000.0),
                 ProjectIntents.MoonrakerReconnectPolicyInput(absentFinite, absentFinite, absentFinite, absentFinite),
             ),
