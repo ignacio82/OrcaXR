@@ -5,7 +5,7 @@
     "printer"
   ],
   "inputs": {
-    "contracts/android-strings.json": "cf84a6b90c070e6aff98be7e2f0e7ddd329dca7857e5fc227dbc62fee2417105",
+    "contracts/android-strings.json": "0933363ffc823c78656f73406e96c380efdb294eb622c87d95afed5b8a19fa38",
     "contracts/calibration-definitions.json": "659b5ffd9730299c615acf318c8a6fc1172c2e55c2ae0f89cd41568fa11af855",
     "contracts/core-protocol.json": "63e7ed821d0da12f863004109a41f5dbfd00b73a2c29584ae2b3a3a6b1320f7a",
     "contracts/gcode-buffer.json": "237797f7310f4eb9cd1fe14bedc5c1bce31e2b2fb7b6995056c98da975c7f716",
@@ -85,7 +85,7 @@
     "core/crates/orcaxr-archive/src/bbs/model/settings/filament_keys.rs": "959dddc0b5b697385cc7564328839222db493a14b721b94fa6a38289e801b2f2",
     "core/crates/orcaxr-archive/src/bbs/model/settings/json.rs": "c862491e4fd3ca8f7ec473f198a2032c34b820bd8769e5defc089c2828fd27ec",
     "core/crates/orcaxr-archive/src/bbs/model/settings/mixed.rs": "4efc2a56ef23efb8cb5d2f8c89efaf4f9b9226fce24c006eae8a1e379bb28106",
-    "core/crates/orcaxr-archive/src/bbs/model/settings/mod.rs": "82ca43b92df5590ecac9d0ef8567c8008e72bf66e850e26859d0db4a83642bc8",
+    "core/crates/orcaxr-archive/src/bbs/model/settings/mod.rs": "4b60690e14f37bf78d32f38baed120502759c68235baa6378603bc11c0001960",
     "core/crates/orcaxr-archive/src/bbs/model/settings/reset.rs": "78bf5500de48b8d1d463f1b6ecbed8d03a9c28a3a6d7b664e2d758687d49fb7f",
     "core/crates/orcaxr-archive/src/bbs/model/settings/write.rs": "8b2ea896d727ef77f77202f0ad6cb2e7e373d3df57d779401b1c75f16ad81f30",
     "core/crates/orcaxr-archive/src/bbs/model/write.rs": "23962e612e04ceff07fda4e41c0175b49e247afd26cb24e402d1ee18e80ba630",
@@ -226,7 +226,7 @@
     "core/crates/orcaxr-printer/src/history.rs": "c432bee08981d84b3a912eaf4fe83d5ae10084a37503fe916fa9f3629b15a36a",
     "core/crates/orcaxr-printer/src/lib.rs": "08f0d2ecda50c748e8ffe74af29282636bffbcaaf8ff41921b4634b77b2bd0ec",
     "core/crates/orcaxr-printer/src/moonraker.rs": "bd0cf20cc49067b072f3b7a02078a3c9a13c99900424a5b8a44340e7599c597b",
-    "core/crates/orcaxr-printer/src/preparation.rs": "c3a4c5c05944d8a2da6a3b09a6b61a1e2c9a57b3cdf956ebb45aed4003867b8b",
+    "core/crates/orcaxr-printer/src/preparation.rs": "0b4190233742e3f3820947bc8200e0faede435e21716be40047759d7ef75d425",
     "core/crates/orcaxr-printer/src/reply.rs": "4bee825414080ba1d7aa257a4bb1968aaa7918ea4f9a280899cfe79cc4244aea",
     "core/crates/orcaxr-printer/src/session.rs": "e024c37067a1a45fe9f4dc15ee5f89006305327e1b6d8c01f3adfc204b5e2cc3",
     "core/crates/orcaxr-printer/src/slicer.rs": "1c2da80885a2e37859c6952c119627fd57bd68117fbbb997c0d633d0b7475a42",
@@ -234,7 +234,7 @@
     "core/crates/orcaxr-printer/src/storage.rs": "bc762f395dbe783dd660cefa05ab09510b444bd06cece740e2b782073181a5e4",
     "core/crates/orcaxr-printer/src/summary.rs": "0e81eb498ec17da4e95574f024190e042a6744b0ead9a76cb28af16b352e6b14",
     "core/crates/orcaxr-printer/src/tools.rs": "479b3a98963260ca8143fcf78c9870ccba041f487940a4ad7c3f4cb33c0236ef",
-    "core/crates/orcaxr-printer/src/transport.rs": "d4092c99f1a73b78c21e82d7b2cc4ca5a1c7985240f2cd9bc8b5d96c0f565102",
+    "core/crates/orcaxr-printer/src/transport.rs": "f4d76ef1379aca47a4d2ec8c172d2a8a3a2fd4af13db7d4233308ebc6d23341e",
     "core/crates/orcaxr-printer/src/workflow.rs": "bdbda630df4e826241b88c169856d53357b82ed3016ab138c5e5255e05188339",
     "core/crates/orcaxr-printer/tests/camera.rs": "63bb54ac0c88194c59f07fc440e4e682969a8a1dc12263f1a686b0bc0e6e20d6",
     "core/crates/orcaxr-printer/tests/console.rs": "c8e1c79bec980d8a24579bc94e2628f7f1c296bdf3636953b9cd145316263956",
@@ -564,7 +564,7 @@
   "outputs": {
     "orcaxr_core.d.ts": "5488610f5ca21d701d612882dd0a2737a3efec840854e18a2a06807c804da529",
     "orcaxr_core.js": "39d450db24b5ac25a106ecb537fad64f04d495ee6b83100155a7e00c455bedcd",
-    "orcaxr_core_bg.wasm": "9f1f1962c0e5a10424cd174da1369c09859e4c7264905c6881b93314d2e6a255",
+    "orcaxr_core_bg.wasm": "6ff27fc8ff07e50b268db88f38bb5e855fb1f902e47ae84af1915855ca5dee07",
     "orcaxr_core_bg.wasm.d.ts": "b7e51b1836049210c6aaa262af6d5807c9a8ee89c9a17281f4811c57002f2ba8"
   },
   "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",

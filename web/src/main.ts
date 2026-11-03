@@ -687,6 +687,14 @@ function setupDomUI(
         prepareInterval = null;
       }
     };
+    let wakeLockSentinel: { release: () => Promise<void> } | null = null;
+    if ('wakeLock' in navigator && typeof navigator.wakeLock?.request === 'function') {
+      try {
+        wakeLockSentinel = await navigator.wakeLock.request('screen');
+      } catch {
+        // Ignored: wake lock request may be refused if tab is not active or supported.
+      }
+    }
     try {
       const result = await printWorkflow.run(intent, {
         onUploadElapsed: ({ elapsedMs, totalBytes }) => {
@@ -746,6 +754,11 @@ function setupDomUI(
     } finally {
       stopPrepareTimer();
       setPrinterSendBusy(false);
+      try {
+        await wakeLockSentinel?.release();
+      } catch {
+        // Ignored.
+      }
     }
   });
 
